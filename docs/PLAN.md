@@ -13,7 +13,7 @@ Status: **Phase 0** (workspace, themes and CI in place; Spike A results in [ADR 
 
 | # | Decision | Why | Revisit if |
 |---|---|---|---|
-| D1 | **GPUI** (Zed's GPU UI framework, Rust) for the whole UI. No webview, no Electron. | Rendered page bitmaps go straight to the GPU. One language. Sumatra-class start-up is plausible only without a browser engine. | The Phase 0 spike misses the start-up or scroll budgets (§6), or Windows support proves unstable. |
+| D1 | **GPUI** (Zed's GPU UI framework, Rust) for the whole UI. No webview, no Electron. | Rendered page bitmaps go straight to the GPU. One language. Sumatra-class start-up is plausible only without a browser engine. | The Phase 0 spike misses the start-up or scroll budgets (§6), or Windows support proves unstable. Spike A missed S1 by about 2×; kept with a start-up plan, see [ADR 0002](adr/0002-keep-gpui-fix-startup.md). |
 | D2 | **MuPDF** for PDF, XPS, EPUB, MOBI, FB2, CBZ, SVG and images, through the `mupdf` crate. | Same engine as Sumatra. One engine lays out reflowable books **and** fixed pages, and gives structured text with character boxes for search, selection and highlights in every format. | Never cheaply: the licence follows from it (D3). |
 | D3 | **AGPL-3.0-or-later** for all of Kitab. | MuPDF is AGPL. Compatible with GPL-3 code (Zed crates) and permissive crates. | A commercial MuPDF licence is bought. |
 | D4 | **Markdown is rendered natively** in GPUI (parse, then GPUI elements), not through MuPDF's HTML engine. | Crisp UI text, live reload, copy buttons on code, collapsible blocks, later editing. MuPDF's CSS support is too limited for GitHub-like rendering. | |
