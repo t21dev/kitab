@@ -16,5 +16,20 @@ mupdf = { version = "0.8.0", default-features = false, features = ["base14-fonts
 image = { version = "0.25", default-features = false }
 kitab-theme = { path = "../../crates/kitab-theme" }
 
+[target.'cfg(windows)'.dependencies]
+# The same windows crate gpui 0.2.2 uses, for the GDI splash (src/splash.rs).
+windows = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Gdi",
+    "Win32_Graphics_Dwm",
+    "Win32_System_LibraryLoader",
+    "Win32_UI_HiDpi",
+    "Win32_UI_WindowsAndMessaging",
+] }
+
 [profile.release]
 debug = false
+
+# Kitab start-up patches (ADR 0002). Create the copy with `python patch_gpui.py`.
+[patch.crates-io]
+gpui = { path = "vendor/gpui-0.2.2" }

@@ -9,7 +9,7 @@
 //! measured from process start. These are not the black-box S1/S2 numbers
 //! (PLAN.md §6.1); they say whether the stack is in the right ballpark.
 //!
-//! Usage: spike-a <file.pdf> [pages=40] [--theme <id>] [--zoom <f>] [--exit-after-first-paint]
+//! Usage: spike-a <file.pdf> [pages=40] [--theme <id>] [--zoom <f>] [--splash] [--exit-after-first-paint]
 
 use gpui::{
     App, Application, Bounds, Context, ImageSource, RenderImage, SharedString, Window,
@@ -18,6 +18,9 @@ use gpui::{
 use image::{Frame, RgbaImage};
 use std::sync::{Arc, OnceLock};
 use std::time::Instant;
+
+#[cfg(windows)]
+mod splash;
 
 static START: OnceLock<Instant> = OnceLock::new();
 /// Theme id from `--theme <id>` (default "dark"), for captures in each theme.
@@ -41,9 +44,13 @@ struct PageImage {
     height_pt: f32,
 }
 
-/// Render one page at `scale` (device pixels per point). Errors are strings:
-/// the spike only reports them.
-fn render_page(doc: &mupdf::Document, index: i32, scale: f32) -> Result<PageImage, String> {
+/// Render one page at `scale` (device pixels per point) to BGRA on white paper,
+/// top-down: what GPUI's image and a GDI DIB both take. Returns (w, h, pixels, w pt, h pt).
+fn render_bgra(
+    doc: &mupdf::Document,
+    index: i32,
+    scale: f32,
+) -> Result<(u32, u32, Vec<u8>, f32, f32), String> {
     let page = doc.load_page(index).map_err(|e| e.to_string())?;
     let bounds = page.bounds().map_err(|e| e.to_string())?;
     let matrix = mupdf::Matrix::new_scale(scale, scale);
@@ -69,11 +76,17 @@ fn render_page(doc: &mupdf::Document, index: i32, scale: f32) -> Result<PageImag
             bgra.extend_from_slice(&[px[2] + paper, px[1] + paper, px[0] + paper, 255]);
         }
     }
+    Ok((w, h, bgra, bounds.x1 - bounds.x0, bounds.y1 - bounds.y0))
+}
+
+/// Render one page for GPUI. Errors are strings: the spike only reports them.
+fn render_page(doc: &mupdf::Document, index: i32, scale: f32) -> Result<PageImage, String> {
+    let (w, h, bgra, width_pt, height_pt) = render_bgra(doc, index, scale)?;
     let buffer = RgbaImage::from_raw(w, h, bgra).ok_or("pixel buffer size mismatch")?;
     Ok(PageImage {
         image: Arc::new(RenderImage::new([Frame::new(buffer)])),
-        width_pt: bounds.x1 - bounds.x0,
-        height_pt: bounds.y1 - bounds.y0,
+        width_pt,
+        height_pt,
     })
 }
 
@@ -101,7 +114,12 @@ impl Render for Reader {
         if !self.painted && !self.pages.is_empty() {
             self.painted = true;
             // The frame being built now is the first with a page in it.
-            window.on_next_frame(|_, _| mark("first_page_painted"));
+            window.on_next_frame(|_, _| {
+                mark("first_page_painted");
+                // GPUI now shows the page itself: hand over from the GDI splash.
+                #[cfg(windows)]
+                splash::close();
+            });
             if self.exit_after_first_paint {
                 window.on_next_frame(|_, cx| cx.quit());
             }
@@ -159,6 +177,41 @@ fn main() {
         .and_then(|n| n.parse().ok())
         .unwrap_or(40);
     let exit_after_first_paint = args.iter().any(|a| a == "--exit-after-first-paint");
+
+    // Window first (ADR 0002 step 3): with --splash, a GDI window shows page 1 while
+    // GPUI sets up its GPU device and fonts on this thread.
+    #[cfg(windows)]
+    if args.iter().any(|a| a == "--splash") {
+        splash::set_dpi_aware();
+        let theme_id = THEME.get().map_or("dark", String::as_str).to_string();
+        let desk = kitab_theme::builtin(&theme_id)
+            .map(|t| t.colors.desk)
+            .map(|c| {
+                (
+                    (c.r * 255.0) as u8,
+                    (c.g * 255.0) as u8,
+                    (c.b * 255.0) as u8,
+                )
+            })
+            .unwrap_or((15, 15, 16));
+        let dark = !matches!(theme_id.as_str(), "light" | "paper");
+        let zoom = *ZOOM.get().unwrap_or(&1.0);
+        let file = path.clone();
+        splash::show(
+            move |scale| {
+                let doc = mupdf::Document::open(file.as_str()).ok()?;
+                let (width, height, bgra, ..) = render_bgra(&doc, 0, scale * zoom).ok()?;
+                Some(splash::Page {
+                    width,
+                    height,
+                    bgra,
+                })
+            },
+            desk,
+            1000.0,
+            dark,
+        );
+    }
 
     let app = Application::new();
     mark("application_new");

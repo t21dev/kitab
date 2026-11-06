@@ -9,6 +9,8 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use xcap::Window;
 
 const TIMEOUT: Duration = Duration::from_secs(15);
+/// How long to let the app settle after its page is on screen before reading memory and idle CPU.
+const SETTLE: Duration = Duration::from_secs(2);
 /// A pixel counts as content when it differs from the region's dominant colour by more than this (0–255 per channel).
 const INK_DELTA: u8 = 40;
 /// The region counts as non-blank when at least this share of its pixels is content.
@@ -36,6 +38,13 @@ struct Run {
     page_ms: f64,
     captures: u32,
     capture_ms_avg: f64,
+    /// CPU time (user + kernel, all threads) used up to the moment the page was found.
+    cpu_ms_to_page: f64,
+    /// Working set and private bytes after settling, in MB.
+    working_set_mb: f64,
+    private_mb: f64,
+    /// CPU used while idle during the settle period, as % of one core.
+    idle_cpu_pct: f64,
 }
 
 #[derive(Serialize)]
@@ -55,6 +64,10 @@ struct AppResult {
     page_ms: Stats,
     page_lo_ms: Stats,
     page_hi_ms: Stats,
+    cpu_ms_to_page: Stats,
+    working_set_mb: Stats,
+    private_mb: Stats,
+    idle_cpu_pct: Stats,
     capture_interval_ms: f64,
 }
 
@@ -124,13 +137,15 @@ pub fn run(args: Vec<String>) -> i32 {
                 Ok(r) => {
                     let tag = if i < opts.warmup { "warm-up" } else { "run" };
                     eprintln!(
-                        "  {tag:7} {:>2}: window {:>6.1} ms, page between {:>6.1} and {:>6.1} ms ({} captures, ~{:.1} ms each)",
+                        "  {tag:7} {:>2}: window {:>6.1} ms, page {:>6.1}–{:<6.1} ms, cpu {:>5.0} ms, ws {:>5.1} MB, private {:>5.1} MB, idle {:>4.1} %",
                         i + 1,
                         r.window_ms,
                         r.page_lo_ms,
                         r.page_hi_ms,
-                        r.captures,
-                        r.capture_ms_avg
+                        r.cpu_ms_to_page,
+                        r.working_set_mb,
+                        r.private_mb,
+                        r.idle_cpu_pct
                     );
                     if i >= opts.warmup {
                         runs.push(r);
@@ -153,6 +168,10 @@ pub fn run(args: Vec<String>) -> i32 {
             page_ms: stats(runs.iter().map(|r| r.page_ms).collect()),
             page_lo_ms: stats(runs.iter().map(|r| r.page_lo_ms).collect()),
             page_hi_ms: stats(runs.iter().map(|r| r.page_hi_ms).collect()),
+            cpu_ms_to_page: stats(runs.iter().map(|r| r.cpu_ms_to_page).collect()),
+            working_set_mb: stats(runs.iter().map(|r| r.working_set_mb).collect()),
+            private_mb: stats(runs.iter().map(|r| r.private_mb).collect()),
+            idle_cpu_pct: stats(runs.iter().map(|r| r.idle_cpu_pct).collect()),
             capture_interval_ms: interval,
             runs,
         });
@@ -222,9 +241,38 @@ fn one_run(exe: &Path, args: &[String], save: Option<&Path>) -> Result<Run, Stri
         .spawn()
         .map_err(|e| format!("could not start {}: {e}", exe.display()))?;
     let pid = child.id();
-    let result = measure(pid, start, save);
+    let result = measure(pid, start, save).and_then(|mut run| {
+        let (cpu_at_page, _, _) =
+            sample(pid).ok_or("the app exited before its page could be measured")?;
+        std::thread::sleep(SETTLE);
+        let (cpu_after, ws, private) = sample(pid).ok_or("the app exited while settling")?;
+        run.cpu_ms_to_page = cpu_at_page;
+        run.working_set_mb = ws;
+        run.private_mb = private;
+        run.idle_cpu_pct = (cpu_after - cpu_at_page) / ms(SETTLE) * 100.0;
+        Ok(run)
+    });
     stop(&mut child);
     result
+}
+
+/// (CPU ms, working set MB, private MB) for one process.
+fn sample(pid: u32) -> Option<(f64, f64, f64)> {
+    use sysinfo::{Pid, ProcessRefreshKind, ProcessesToUpdate, System};
+    let mut sys = System::new().ok()?;
+    let pid = Pid::from_u32(pid);
+    sys.refresh_processes_specifics(
+        ProcessesToUpdate::Some(&[pid]),
+        true,
+        ProcessRefreshKind::nothing().with_memory().with_cpu(),
+    );
+    let p = sys.process(pid)?;
+    let mb = |b: u64| b as f64 / (1024.0 * 1024.0);
+    Some((
+        p.accumulated_cpu_time() as f64,
+        mb(p.memory()),
+        mb(p.virtual_memory()),
+    ))
 }
 
 fn measure(pid: u32, start: Instant, save: Option<&Path>) -> Result<Run, String> {
@@ -303,6 +351,10 @@ fn measure(pid: u32, start: Instant, save: Option<&Path>) -> Result<Run, String>
                         page_lo_ms: lo,
                         page_hi_ms: prev_end,
                         page_ms: (lo + prev_end) / 2.0,
+                        cpu_ms_to_page: 0.0,
+                        working_set_mb: 0.0,
+                        private_mb: 0.0,
+                        idle_cpu_pct: 0.0,
                         captures,
                         capture_ms_avg: ms(capture_total) / f64::from(captures),
                     });
@@ -387,6 +439,28 @@ fn print_table(results: &[AppResult]) {
     println!(
         "A page time is a bracket: the last capture without the page, and the first one with it."
     );
+    println!();
+    println!(
+        "Resources (median). CPU to page: user + kernel time of all threads until the page was found."
+    );
+    println!(
+        "Memory and idle CPU are read {} s after the page.",
+        SETTLE.as_secs()
+    );
+    println!(
+        "{:<10} {:>14} {:>16} {:>14} {:>12}",
+        "app", "CPU to page", "working set", "private", "idle CPU"
+    );
+    for r in results {
+        println!(
+            "{:<10} {:>11.0} ms {:>13.1} MB {:>11.1} MB {:>10.1} %",
+            r.app,
+            r.cpu_ms_to_page.median,
+            r.working_set_mb.median,
+            r.private_mb.median,
+            r.idle_cpu_pct.median
+        );
+    }
 }
 
 fn write_report(dir: &Path, report: &Report) -> std::io::Result<()> {

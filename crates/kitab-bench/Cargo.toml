@@ -19,6 +19,8 @@ serde_json = { workspace = true }
 # draws once. Never capture the screen: it reads other apps' content and gives false results.
 # Windows-only: the benchmark runs on the Windows reference machine (PLAN.md §6.4). Apache-2.0.
 xcap = { version = "0.9.8", default-features = false }
+# Process memory and CPU time (working set, private bytes, user + kernel time). MIT.
+sysinfo = { version = "0.40", default-features = false, features = ["system"] }
 
 [lints]
 workspace = true
