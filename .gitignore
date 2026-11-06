@@ -28,3 +28,6 @@ desktop.ini
 
 # Local-only reference PDFs (copyrighted, never committed; see tests/fixtures/local/README.md)
 tests/fixtures/local/*.json
+
+# Patched third-party copies made by tools/ scripts (never committed)
+/vendor/

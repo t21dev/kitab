@@ -2,8 +2,12 @@
 
 //! The document model shared by every format (PLAN.md §3.3).
 //!
-//! Phase 0 holds only the format and layout enums. The `Document` trait,
-//! locators and the text model land with Phase 1.
+//! Plain data shared by the engine (`kitab-mupdf`), the store (`kitab-store`)
+//! and the UI (`kitab-ui`): formats, page sizes, outline, permissions, render
+//! requests, locators and reading state.
+
+mod model;
+pub use model::*;
 
 /// A file format Kitab can open.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
