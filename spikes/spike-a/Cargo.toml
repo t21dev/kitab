@@ -1,4 +1,4 @@
-[package]
+﻿[package]
 name = "spike-a"
 description = "Phase 0 Spike A: GPUI window showing MuPDF-rendered pages"
 version = "0.0.0"
@@ -12,7 +12,7 @@ publish = false
 
 [dependencies]
 gpui = "0.2.2"
-mupdf = { version = "0.8.0", default-features = false }
+mupdf = { version = "0.8.0", default-features = false, features = ["base14-fonts"] }  # PDFs may use the 14 standard fonts without embedding them
 image = { version = "0.25", default-features = false }
 kitab-theme = { path = "../../crates/kitab-theme" }
 

@@ -22,7 +22,17 @@ It builds and runs on Windows x64. Two things were needed:
 1. **libclang** for `mupdf-sys`'s bindgen step. LLVM is not installed on the dev machine; the `libclang` 18.1.1 wheel from PyPI was used (`LIBCLANG_PATH=<venv>/Lib/site-packages/clang/native`).
 2. That libclang ships without clang's resource headers, so the MSVC C headers are used, and they don't define `max_align_t` in C mode. `mupdf` 0.8.0 then fails with `E0425: cannot find type max_align_t` (`src/device/native.rs:599`). Workaround: `BINDGEN_EXTRA_CLANG_ARGS="-include max_align_t.h"` with `typedef double max_align_t;` (clang's own definition for MSVC targets). A full LLVM install should not need this; CI must install LLVM (or set the same flags) before Phase 1 adds MuPDF to the workspace.
 
-Clean release build of `mupdf-sys` + `gpui` + spike: about 2–3 minutes on this machine. `spike-a.exe` is 17.1 MB (release, symbols not stripped, base-14 fonts only). The installer size (budget 15 MB, compressed) was not measured.
+Clean release build of `mupdf-sys` + `gpui` + spike: about 2–3 minutes on this machine. `spike-a.exe` is 17.1 MB without fonts and 17.6 MB with the `base14-fonts` feature (release, symbols not stripped). The installer size (budget 15 MB, compressed) was not measured.
+
+## Correction: the first version drew blank pages
+
+The first run of the spike painted no visible page, which the timings above could not show. Screenshots found three bugs, all fixed in the spike:
+
+1. The page images sat in a scrolling flex column and were allowed to shrink, so they collapsed to zero height. Pages now use `flex_none()`. Phase 1 must lay out page sheets at their own size and never let the container squeeze them.
+2. MuPDF renders onto a transparent background with premultiplied alpha. Black text on the dark `desk` was invisible. Pages are now composited onto white paper (`c + (255 - a)`) during the BGRA conversion. Page colour modes (PLAN.md §3.3) must replace this step, not sit on top of it.
+3. `mupdf` was built with `default-features = false`, which drops MuPDF's base-14 fonts, and `01-text-outline.pdf` uses non-embedded Helvetica, like many real PDFs. Every glyph was skipped. The spike now enables `base14-fonts`, and Phase 1 must too: it is not optional for a PDF reader.
+
+Lesson for Phase 1: the engine tests must render fixtures and assert on pixels (non-blank coverage against `expected.json`), not only on page counts and trace marks.
 
 ## Measurements
 

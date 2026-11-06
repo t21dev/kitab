@@ -58,7 +58,11 @@ fn render_page(doc: &mupdf::Document, index: i32, scale: f32) -> Result<PageImag
             .get(row * stride..row * stride + w as usize * 4)
             .ok_or("pixmap shorter than its size")?;
         for px in line.as_chunks::<4>().0 {
-            bgra.extend_from_slice(&[px[2], px[1], px[0], px[3]]);
+            // MuPDF's alpha is premultiplied and the page background is
+            // transparent: composite onto white paper, or black text lands
+            // on the dark desk and the page looks empty.
+            let paper = 255 - px[3];
+            bgra.extend_from_slice(&[px[2] + paper, px[1] + paper, px[0] + paper, 255]);
         }
     }
     let buffer = RgbaImage::from_raw(w, h, bgra).ok_or("pixel buffer size mismatch")?;
@@ -113,7 +117,10 @@ impl Render for Reader {
             .py(px(22.0))
             .children(self.error.clone().map(|e| div().child(e)))
             .children(self.pages.iter().map(|p| {
+                // flex_none: in a scrolling flex column, children may shrink
+                // to fit the viewport; pages must keep their own size.
                 img(ImageSource::Render(p.image.clone()))
+                    .flex_none()
                     .w(px(p.width_pt * zoom))
                     .h(px(p.height_pt * zoom))
             }))
