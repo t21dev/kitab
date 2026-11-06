@@ -1,0 +1,53 @@
+{
+  "id": "nord",
+  "name": "Nord",
+  "appearance": "dark",
+  "colors": {
+    "bg": "#2E3440",
+    "panel": "#2A303B",
+    "desk": "#292E39",
+    "raised": "#3B4252",
+    "hover": "#343A47",
+    "line": "#434C5E",
+    "text": "#ECEFF4",
+    "read": "#E5E9F0",
+    "muted": "#C3CAD6",
+    "faint": "#A3ACBC",
+    "ring": "#4C566A",
+    "accent": "#88C0D0",
+    "highlight": "rgba(235,203,139,.30)",
+    "ok": "#A3BE8C",
+    "warn": "#EBCB8B",
+    "bad": "#BF616A",
+    "scrim": "rgba(0,0,0,.45)"
+  },
+  "depth": {
+    "elev": [
+      {"inset": true, "x": 0, "y": 1, "blur": 0, "spread": 0, "color": "rgba(255,255,255,.07)"},
+      {"inset": false, "x": 0, "y": 0, "blur": 0, "spread": 1, "color": "rgba(0,0,0,.5)"},
+      {"inset": false, "x": 0, "y": 2, "blur": 6, "spread": 0, "color": "rgba(0,0,0,.35)"}
+    ],
+    "well": [
+      {"inset": true, "x": 0, "y": 1, "blur": 2, "spread": 0, "color": "rgba(0,0,0,.45)"},
+      {"inset": true, "x": 0, "y": 0, "blur": 0, "spread": 1, "color": "rgba(255,255,255,.05)"}
+    ],
+    "float": [
+      {"inset": true, "x": 0, "y": 1, "blur": 0, "spread": 0, "color": "rgba(255,255,255,.08)"},
+      {"inset": false, "x": 0, "y": 0, "blur": 0, "spread": 1, "color": "rgba(0,0,0,.6)"},
+      {"inset": false, "x": 0, "y": 8, "blur": 20, "spread": 0, "color": "rgba(0,0,0,.4)"},
+      {"inset": false, "x": 0, "y": 24, "blur": 48, "spread": 0, "color": "rgba(0,0,0,.35)"}
+    ],
+    "sheet": [
+      {"inset": true, "x": 0, "y": 0, "blur": 0, "spread": 1, "color": "rgba(255,255,255,.06)"},
+      {"inset": false, "x": 0, "y": 0, "blur": 0, "spread": 1, "color": "rgba(0,0,0,.6)"},
+      {"inset": false, "x": 0, "y": 4, "blur": 10, "spread": 0, "color": "rgba(0,0,0,.35)"},
+      {"inset": false, "x": 0, "y": 16, "blur": 32, "spread": 0, "color": "rgba(0,0,0,.3)"}
+    ],
+    "modal": [
+      {"inset": true, "x": 0, "y": 1, "blur": 0, "spread": 0, "color": "rgba(255,255,255,.08)"},
+      {"inset": false, "x": 0, "y": 0, "blur": 0, "spread": 1, "color": "rgba(0,0,0,.6)"},
+      {"inset": false, "x": 0, "y": 8, "blur": 20, "spread": 0, "color": "rgba(0,0,0,.4)"},
+      {"inset": false, "x": 0, "y": 40, "blur": 80, "spread": 0, "color": "rgba(0,0,0,.35)"}
+    ]
+  }
+}

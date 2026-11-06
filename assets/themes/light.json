@@ -1,0 +1,50 @@
+{
+  "id": "light",
+  "name": "Light",
+  "appearance": "light",
+  "colors": {
+    "bg": "#FFFFFF",
+    "panel": "#FAFAFB",
+    "desk": "#F2F2F4",
+    "raised": "#FFFFFF",
+    "hover": "#F3F3F5",
+    "line": "#E8E8EC",
+    "text": "#18181B",
+    "read": "#232326",
+    "muted": "#55555D",
+    "faint": "#6B6B73",
+    "ring": "#B5B5BC",
+    "accent": "#B7791F",
+    "highlight": "#FBE2A6",
+    "ok": "#1F9D63",
+    "warn": "#B7791F",
+    "bad": "#D33B3B",
+    "scrim": "rgba(20,20,30,.28)"
+  },
+  "depth": {
+    "elev": [
+      {"inset": false, "x": 0, "y": 0, "blur": 0, "spread": 1, "color": "rgba(20,20,40,.08)"},
+      {"inset": false, "x": 0, "y": 1, "blur": 2, "spread": 0, "color": "rgba(20,20,40,.08)"},
+      {"inset": false, "x": 0, "y": 2, "blur": 6, "spread": 0, "color": "rgba(20,20,40,.05)"}
+    ],
+    "well": [
+      {"inset": true, "x": 0, "y": 1, "blur": 2, "spread": 0, "color": "rgba(20,20,40,.06)"},
+      {"inset": true, "x": 0, "y": 0, "blur": 0, "spread": 1, "color": "rgba(20,20,40,.08)"}
+    ],
+    "float": [
+      {"inset": false, "x": 0, "y": 0, "blur": 0, "spread": 1, "color": "rgba(20,20,40,.08)"},
+      {"inset": false, "x": 0, "y": 4, "blur": 12, "spread": 0, "color": "rgba(20,20,40,.08)"},
+      {"inset": false, "x": 0, "y": 20, "blur": 40, "spread": 0, "color": "rgba(20,20,40,.10)"}
+    ],
+    "sheet": [
+      {"inset": false, "x": 0, "y": 0, "blur": 0, "spread": 1, "color": "rgba(20,20,40,.08)"},
+      {"inset": false, "x": 0, "y": 2, "blur": 6, "spread": 0, "color": "rgba(20,20,40,.08)"},
+      {"inset": false, "x": 0, "y": 12, "blur": 28, "spread": 0, "color": "rgba(20,20,40,.10)"}
+    ],
+    "modal": [
+      {"inset": false, "x": 0, "y": 0, "blur": 0, "spread": 1, "color": "rgba(20,20,40,.08)"},
+      {"inset": false, "x": 0, "y": 4, "blur": 12, "spread": 0, "color": "rgba(20,20,40,.08)"},
+      {"inset": false, "x": 0, "y": 32, "blur": 64, "spread": 0, "color": "rgba(20,20,40,.10)"}
+    ]
+  }
+}
