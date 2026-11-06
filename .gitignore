@@ -1,0 +1,27 @@
+# Rust
+/target/
+**/target/
+**/*.rs.bk
+
+# Fixtures that are built or fetched, not committed
+tests/fixtures/pdf/06-large-20mb.pdf
+tests/fixtures/real/
+tests/fixtures/tools/.venv/
+__pycache__/
+*.pyc
+
+# e2e and bench output
+/crates/kitab-e2e/.artifacts/
+/docs/perf/runs/
+
+# Editors and OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Local tooling
+.claude/
+.hallmark/

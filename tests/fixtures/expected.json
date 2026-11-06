@@ -1,0 +1,870 @@
+{
+  "pdf": {
+    "01-text-outline.pdf": {
+      "opens": true,
+      "needs_pass": false,
+      "is_repaired": false,
+      "pages": 40,
+      "page_sizes_pt": [
+        [
+          595,
+          842,
+          0
+        ],
+        [
+          595,
+          842,
+          0
+        ],
+        [
+          595,
+          842,
+          0
+        ],
+        [
+          595,
+          842,
+          0
+        ],
+        [
+          595,
+          842,
+          0
+        ],
+        [
+          595,
+          842,
+          0
+        ],
+        [
+          595,
+          842,
+          0
+        ],
+        [
+          595,
+          842,
+          0
+        ],
+        [
+          595,
+          842,
+          0
+        ],
+        [
+          595,
+          842,
+          0
+        ],
+        [
+          595,
+          842,
+          0
+        ],
+        [
+          595,
+          842,
+          0
+        ]
+      ],
+      "outline": 24,
+      "title": "Kitab fixture: text and outline",
+      "permissions_print": true,
+      "permissions_copy": true,
+      "text_chars_page1": 1849,
+      "annots_page1": 0,
+      "images_page2": 0,
+      "widgets": 0,
+      "links_page1": 2,
+      "search": {
+        "lantern (case-insensitive, substring)": 10,
+        "Lantern (case-sensitive)": 1,
+        "kitab-needle-17": 1
+      }
+    },
+    "02-mixed-page-sizes.pdf": {
+      "opens": true,
+      "needs_pass": false,
+      "is_repaired": false,
+      "pages": 6,
+      "page_sizes_pt": [
+        [
+          595,
+          842,
+          0
+        ],
+        [
+          842,
+          595,
+          0
+        ],
+        [
+          420,
+          595,
+          0
+        ],
+        [
+          612,
+          792,
+          0
+        ],
+        [
+          227,
+          1134,
+          0
+        ],
+        [
+          842,
+          595,
+          90
+        ]
+      ],
+      "outline": 0,
+      "title": "Kitab fixture: mixed page sizes",
+      "permissions_print": true,
+      "permissions_copy": true,
+      "text_chars_page1": 40,
+      "annots_page1": 0,
+      "images_page2": 0,
+      "widgets": 0,
+      "links_page1": 0
+    },
+    "03-forms.pdf": {
+      "opens": true,
+      "needs_pass": false,
+      "is_repaired": false,
+      "pages": 1,
+      "page_sizes_pt": [
+        [
+          595,
+          842,
+          0
+        ]
+      ],
+      "outline": 0,
+      "title": "Kitab fixture: form fields",
+      "permissions_print": true,
+      "permissions_copy": true,
+      "text_chars_page1": 142,
+      "annots_page1": 0,
+      "images_page2": 0,
+      "widgets": 7,
+      "links_page1": 0
+    },
+    "04a-encrypted-password-kitab.pdf": {
+      "opens": true,
+      "needs_pass": true,
+      "is_repaired": false,
+      "unlocks_with_kitab": true,
+      "pages": 5,
+      "page_sizes_pt": [
+        [
+          595,
+          842,
+          0
+        ],
+        [
+          595,
+          842,
+          0
+        ],
+        [
+          595,
+          842,
+          0
+        ],
+        [
+          595,
+          842,
+          0
+        ],
+        [
+          595,
+          842,
+          0
+        ]
+      ],
+      "outline": 0,
+      "title": "Kitab fixture: password kitab",
+      "permissions_print": true,
+      "permissions_copy": true,
+      "text_chars_page1": 1849,
+      "annots_page1": 0,
+      "images_page2": 0,
+      "widgets": 0,
+      "links_page1": 2
+    },
+    "04b-owner-restricted.pdf": {
+      "opens": true,
+      "needs_pass": false,
+      "is_repaired": false,
+      "pages": 5,
+      "page_sizes_pt": [
+        [
+          595,
+          842,
+          0
+        ],
+        [
+          595,
+          842,
+          0
+        ],
+        [
+          595,
+          842,
+          0
+        ],
+        [
+          595,
+          842,
+          0
+        ],
+        [
+          595,
+          842,
+          0
+        ]
+      ],
+      "outline": 0,
+      "title": "Kitab fixture: opens without password, print and copy restricted",
+      "permissions_print": false,
+      "permissions_copy": false,
+      "text_chars_page1": 1849,
+      "annots_page1": 0,
+      "images_page2": 0,
+      "widgets": 0,
+      "links_page1": 2
+    },
+    "05a-damaged-truncated.pdf": {
+      "opens": true,
+      "needs_pass": false,
+      "is_repaired": true,
+      "pages": 40,
+      "page_sizes_pt": [
+        [
+          595,
+          842,
+          0
+        ],
+        [
+          595,
+          842,
+          0
+        ],
+        [
+          595,
+          842,
+          0
+        ],
+        [
+          595,
+          842,
+          0
+        ],
+        [
+          595,
+          842,
+          0
+        ],
+        [
+          595,
+          842,
+          0
+        ],
+        [
+          595,
+          842,
+          0
+        ],
+        [
+          595,
+          842,
+          0
+        ],
+        [
+          595,
+          842,
+          0
+        ],
+        [
+          595,
+          842,
+          0
+        ],
+        [
+          595,
+          842,
+          0
+        ],
+        [
+          595,
+          842,
+          0
+        ]
+      ],
+      "outline": 24,
+      "title": "Kitab fixture: text and outline",
+      "permissions_print": true,
+      "permissions_copy": true,
+      "text_chars_page1": 1849,
+      "annots_page1": 0,
+      "images_page2": 0,
+      "widgets": 0,
+      "links_page1": 2
+    },
+    "05b-damaged-bad-xref.pdf": {
+      "opens": true,
+      "needs_pass": false,
+      "is_repaired": true,
+      "pages": 40,
+      "page_sizes_pt": [
+        [
+          595,
+          842,
+          0
+        ],
+        [
+          595,
+          842,
+          0
+        ],
+        [
+          595,
+          842,
+          0
+        ],
+        [
+          595,
+          842,
+          0
+        ],
+        [
+          595,
+          842,
+          0
+        ],
+        [
+          595,
+          842,
+          0
+        ],
+        [
+          595,
+          842,
+          0
+        ],
+        [
+          595,
+          842,
+          0
+        ],
+        [
+          595,
+          842,
+          0
+        ],
+        [
+          595,
+          842,
+          0
+        ],
+        [
+          595,
+          842,
+          0
+        ],
+        [
+          595,
+          842,
+          0
+        ]
+      ],
+      "outline": 24,
+      "title": "Kitab fixture: text and outline",
+      "permissions_print": true,
+      "permissions_copy": true,
+      "text_chars_page1": 1849,
+      "annots_page1": 0,
+      "images_page2": 0,
+      "widgets": 0,
+      "links_page1": 2
+    },
+    "05c-not-a-pdf.pdf": {
+      "opens": false,
+      "error": "FileDataError"
+    },
+    "06-large-20mb.pdf": {
+      "opens": true,
+      "needs_pass": false,
+      "is_repaired": false,
+      "pages": 300,
+      "page_sizes_pt": [
+        [
+          595,
+          842,
+          0
+        ],
+        [
+          595,
+          842,
+          0
+        ],
+        [
+          595,
+          842,
+          0
+        ],
+        [
+          595,
+          842,
+          0
+        ],
+        [
+          595,
+          842,
+          0
+        ],
+        [
+          595,
+          842,
+          0
+        ],
+        [
+          595,
+          842,
+          0
+        ],
+        [
+          595,
+          842,
+          0
+        ],
+        [
+          595,
+          842,
+          0
+        ],
+        [
+          595,
+          842,
+          0
+        ],
+        [
+          595,
+          842,
+          0
+        ],
+        [
+          595,
+          842,
+          0
+        ]
+      ],
+      "outline": 0,
+      "title": "Kitab fixture: 300 pages, about 20 MB",
+      "permissions_print": true,
+      "permissions_copy": true,
+      "text_chars_page1": 36,
+      "annots_page1": 0,
+      "images_page2": 1,
+      "widgets": 0,
+      "links_page1": 0
+    },
+    "07-unicode-rtl.pdf": {
+      "opens": true,
+      "needs_pass": false,
+      "is_repaired": false,
+      "pages": 1,
+      "page_sizes_pt": [
+        [
+          595,
+          842,
+          0
+        ]
+      ],
+      "outline": 0,
+      "title": "Kitab fixture: Unicode and RTL",
+      "permissions_print": true,
+      "permissions_copy": true,
+      "text_chars_page1": 200,
+      "annots_page1": 0,
+      "images_page2": 0,
+      "widgets": 0,
+      "links_page1": 0
+    },
+    "08-lease-unsigned.pdf": {
+      "opens": true,
+      "needs_pass": false,
+      "is_repaired": false,
+      "pages": 2,
+      "page_sizes_pt": [
+        [
+          595,
+          842,
+          0
+        ],
+        [
+          595,
+          842,
+          0
+        ]
+      ],
+      "outline": 0,
+      "title": "Kitab fixture: lease agreement (test)",
+      "permissions_print": true,
+      "permissions_copy": true,
+      "text_chars_page1": 312,
+      "annots_page1": 0,
+      "images_page2": 0,
+      "widgets": 0,
+      "links_page1": 0
+    },
+    "08a-signed-valid.pdf": {
+      "opens": true,
+      "needs_pass": false,
+      "is_repaired": false,
+      "pages": 2,
+      "page_sizes_pt": [
+        [
+          595,
+          842,
+          0
+        ],
+        [
+          595,
+          842,
+          0
+        ]
+      ],
+      "outline": 0,
+      "title": "Kitab fixture: lease agreement (test)",
+      "permissions_print": true,
+      "permissions_copy": true,
+      "text_chars_page1": 399,
+      "annots_page1": 0,
+      "images_page2": 0,
+      "widgets": 2,
+      "links_page1": 0,
+      "signatures": [
+        {
+          "field": "Landlord",
+          "intact": true,
+          "valid": true,
+          "trusted": true,
+          "coverage": "ENTIRE_FILE",
+          "modification": "NONE",
+          "signer": "Organization: Kitab Test Suite, Common Name: R. Haque (test landlord)"
+        }
+      ]
+    },
+    "08b-signed-two-signers.pdf": {
+      "opens": true,
+      "needs_pass": false,
+      "is_repaired": false,
+      "pages": 2,
+      "page_sizes_pt": [
+        [
+          595,
+          842,
+          0
+        ],
+        [
+          595,
+          842,
+          0
+        ]
+      ],
+      "outline": 0,
+      "title": "Kitab fixture: lease agreement (test)",
+      "permissions_print": true,
+      "permissions_copy": true,
+      "text_chars_page1": 475,
+      "annots_page1": 0,
+      "images_page2": 0,
+      "widgets": 2,
+      "links_page1": 0,
+      "signatures": [
+        {
+          "field": "Landlord",
+          "intact": true,
+          "valid": true,
+          "trusted": true,
+          "coverage": "ENTIRE_REVISION",
+          "modification": "FORM_FILLING",
+          "signer": "Organization: Kitab Test Suite, Common Name: R. Haque (test landlord)"
+        },
+        {
+          "field": "Tenant",
+          "intact": true,
+          "valid": true,
+          "trusted": true,
+          "coverage": "ENTIRE_FILE",
+          "modification": "NONE",
+          "signer": "Organization: Kitab Test Suite, Common Name: A. Rahman (test tenant)"
+        }
+      ]
+    },
+    "08c-signed-then-modified.pdf": {
+      "opens": true,
+      "needs_pass": false,
+      "is_repaired": false,
+      "pages": 2,
+      "page_sizes_pt": [
+        [
+          595,
+          842,
+          0
+        ],
+        [
+          595,
+          842,
+          0
+        ]
+      ],
+      "outline": 0,
+      "title": "Kitab fixture: lease agreement (test)",
+      "permissions_print": true,
+      "permissions_copy": true,
+      "text_chars_page1": 399,
+      "annots_page1": 1,
+      "images_page2": 0,
+      "widgets": 2,
+      "links_page1": 0,
+      "signatures": [
+        {
+          "field": "Landlord",
+          "intact": true,
+          "valid": true,
+          "trusted": true,
+          "coverage": "ENTIRE_REVISION",
+          "modification": "OTHER",
+          "signer": "Organization: Kitab Test Suite, Common Name: R. Haque (test landlord)"
+        }
+      ]
+    },
+    "08d-signed-tampered.pdf": {
+      "opens": true,
+      "needs_pass": false,
+      "is_repaired": false,
+      "pages": 2,
+      "page_sizes_pt": [
+        [
+          595,
+          842,
+          0
+        ],
+        [
+          595,
+          842,
+          0
+        ]
+      ],
+      "outline": 0,
+      "title": "Kitab fixture: lease agreement (test)",
+      "permissions_print": true,
+      "permissions_copy": true,
+      "text_chars_page1": 399,
+      "annots_page1": 0,
+      "images_page2": 0,
+      "widgets": 2,
+      "links_page1": 0,
+      "signatures": [
+        {
+          "field": "Landlord",
+          "intact": false,
+          "valid": true,
+          "trusted": false,
+          "coverage": "ENTIRE_FILE",
+          "modification": "NONE",
+          "signer": "Organization: Kitab Test Suite, Common Name: R. Haque (test landlord)"
+        }
+      ]
+    },
+    "09-annotations.pdf": {
+      "opens": true,
+      "needs_pass": false,
+      "is_repaired": false,
+      "pages": 3,
+      "page_sizes_pt": [
+        [
+          595,
+          842,
+          0
+        ],
+        [
+          595,
+          842,
+          0
+        ],
+        [
+          595,
+          842,
+          0
+        ]
+      ],
+      "outline": 2,
+      "title": "Kitab fixture: existing annotations",
+      "permissions_print": true,
+      "permissions_copy": true,
+      "text_chars_page1": 1863,
+      "annots_page1": 7,
+      "images_page2": 0,
+      "widgets": 0,
+      "links_page1": 1
+    },
+    "10-scanned-and-images.pdf": {
+      "opens": true,
+      "needs_pass": false,
+      "is_repaired": false,
+      "pages": 2,
+      "page_sizes_pt": [
+        [
+          595,
+          842,
+          0
+        ],
+        [
+          595,
+          842,
+          0
+        ]
+      ],
+      "outline": 0,
+      "title": "Kitab fixture: scanned page and embedded images",
+      "permissions_print": true,
+      "permissions_copy": true,
+      "text_chars_page1": 0,
+      "annots_page1": 0,
+      "images_page2": 3,
+      "widgets": 0,
+      "links_page1": 0
+    }
+  },
+  "epub": {
+    "01-epub3-basic.epub": {
+      "opens": true,
+      "pages_at_400x600_11pt": 20,
+      "outline": 5,
+      "title": "Kitab fixture: EPUB 3 basic"
+    },
+    "02-epub2-ncx.epub": {
+      "opens": true,
+      "pages_at_400x600_11pt": 12,
+      "outline": 4,
+      "title": "Kitab fixture: EPUB 2 with NCX"
+    },
+    "03-footnotes-images.epub": {
+      "opens": true,
+      "pages_at_400x600_11pt": 4,
+      "outline": 2,
+      "title": "Kitab fixture: footnotes, images, table"
+    },
+    "04-rtl-arabic.epub": {
+      "opens": true,
+      "pages_at_400x600_11pt": 3,
+      "outline": 3,
+      "title": "كتاب: اختبار من اليمين إلى اليسار"
+    },
+    "05-bangla-cjk.epub": {
+      "opens": true,
+      "pages_at_400x600_11pt": 3,
+      "outline": 3,
+      "title": "Kitab fixture: Bangla and CJK"
+    },
+    "06-large-300-chapters.epub": {
+      "opens": true,
+      "pages_at_400x600_11pt": 1200,
+      "outline": 300,
+      "title": "Kitab fixture: 300 chapters"
+    },
+    "07a-broken-no-container.epub": {
+      "opens": false,
+      "error": "FileDataError"
+    },
+    "07b-broken-missing-chapter.epub": {
+      "opens": true,
+      "pages_at_400x600_11pt": 3,
+      "outline": 3,
+      "title": "Broken: spine points at a missing file"
+    },
+    "07c-not-a-zip.epub": {
+      "opens": false,
+      "error": "FileDataError"
+    },
+    "08-fixed-layout.epub": {
+      "opens": true,
+      "pages_at_400x600_11pt": 12,
+      "outline": 6,
+      "title": "Kitab fixture: fixed layout"
+    },
+    "09-no-toc.epub": {
+      "opens": true,
+      "pages_at_400x600_11pt": 8,
+      "outline": 0,
+      "title": "Kitab fixture: no table of contents"
+    }
+  },
+  "md": {
+    "01-gfm-kitchen-sink.md": {
+      "bytes": 2723,
+      "lines": 121,
+      "mermaid_blocks": 0,
+      "headings": 19
+    },
+    "02-mermaid.md": {
+      "bytes": 2844,
+      "lines": 150,
+      "mermaid_blocks": 12,
+      "headings": 13
+    },
+    "03-code-highlighting.md": {
+      "bytes": 2173,
+      "lines": 99,
+      "mermaid_blocks": 0,
+      "headings": 3
+    },
+    "04-frontmatter.md": {
+      "bytes": 455,
+      "lines": 19,
+      "mermaid_blocks": 0,
+      "headings": 1
+    },
+    "05-frontmatter-invalid.md": {
+      "bytes": 264,
+      "lines": 9,
+      "mermaid_blocks": 0,
+      "headings": 1
+    },
+    "06-math.md": {
+      "bytes": 578,
+      "lines": 24,
+      "mermaid_blocks": 0,
+      "headings": 1
+    },
+    "07-unicode-rtl.md": {
+      "bytes": 1502,
+      "lines": 50,
+      "mermaid_blocks": 0,
+      "headings": 8
+    },
+    "08-links-and-anchors.md": {
+      "bytes": 1087,
+      "lines": 38,
+      "mermaid_blocks": 0,
+      "headings": 6
+    },
+    "09-hostile.md": {
+      "bytes": 1263,
+      "lines": 37,
+      "mermaid_blocks": 0,
+      "headings": 1
+    },
+    "10-large.md": {
+      "bytes": 1164071,
+      "lines": 8192,
+      "mermaid_blocks": 4,
+      "headings": 401
+    }
+  }
+}
