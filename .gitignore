@@ -25,3 +25,6 @@ desktop.ini
 # Local tooling
 .claude/
 .hallmark/
+
+# Local-only reference PDFs (copyrighted, never committed; see tests/fixtures/local/README.md)
+tests/fixtures/local/*.json
