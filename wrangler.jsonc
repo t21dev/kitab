@@ -5,6 +5,8 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "kitab-landing",
   "compatibility_date": "2026-11-01",
+  // Build before every deploy (local or Workers Builds), so dist/ is never stale or missing.
+  "build": { "command": "npm run build" },
   "assets": {
     "directory": "./dist",
     "html_handling": "drop-trailing-slash",
