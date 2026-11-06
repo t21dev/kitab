@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Settings (Ctrl+,) with Appearance and Reading sections and live previews for themes, density, page navigator and page corners, saved to `settings.json`.
+- Page navigator styles (Scrubber, Stepper, Counter, Hidden); the page number is a field you can type into (or press Ctrl+G); the scrubber track can be clicked and dragged.
+- Optional rounded page corners (Square, Soft, Round).
+- The ⋯ menu, and right-click menus for pages, tabs, Home cards and contents entries (copy file path, show in folder, close others, and more).
+- Keyboard and mouse: Alt+←/→ and the mouse back/forward buttons for history, Ctrl+wheel zoom, Alt+1…9 tabs, Ctrl+PgUp/PgDn, Ctrl+F4, Ctrl+Shift+T reopen closed tab, F12 contents, middle-click to close a tab.
+- Opening and closing motion for menus, Settings, the sidebar and its rows, tabs and Home cards, with a setting to turn it off.
 - The reader opens PDFs through MuPDF, remembers each book's place, lists recent books on Home and restores the last session's tabs.
 - Theme files for Dark, Light, Paper, Nord, Noctua and Vampire (`assets/themes/`), checked against DESIGN.md's contrast rules in tests.
 - Project plan, design system and contributor rules (`docs/PLAN.md`, `DESIGN.md`, `AGENTS.md`).

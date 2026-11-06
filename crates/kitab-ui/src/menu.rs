@@ -1,0 +1,205 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
+//! Menus: the ⋯ menu and every right-click menu (DESIGN.md § Menus). A `float`
+//! panel of rows with an icon, a label and the shortcut, separators between
+//! groups. Opening fades and slides 4 px from the side it is anchored to;
+//! choosing a row or clicking outside closes it.
+
+use crate::icons::icon;
+use crate::style::Style;
+use gpui::{
+    AnyElement, App, InteractiveElement, IntoElement, ParentElement, Pixels, Point, SharedString,
+    StatefulInteractiveElement, Styled, Window, div, prelude::FluentBuilder, px, svg,
+};
+use std::rc::Rc;
+
+pub type Handler = Rc<dyn Fn(&mut Window, &mut App)>;
+/// Draws a custom row with the current style.
+pub type RowBuilder = Rc<dyn Fn(&Style, &mut App) -> AnyElement>;
+
+#[derive(Clone)]
+pub enum MenuItem {
+    Row {
+        icon: Option<&'static str>,
+        label: SharedString,
+        shortcut: Option<&'static str>,
+        /// Shown with a check (a toggle that is on, the current choice).
+        checked: bool,
+        disabled: bool,
+        run: Handler,
+    },
+    Separator,
+    /// A small heading over a group.
+    Heading(SharedString),
+    /// A custom row (icon rows for themes and density in the ⋯ menu).
+    Custom(RowBuilder),
+}
+
+impl MenuItem {
+    pub fn new(
+        label: impl Into<SharedString>,
+        run: impl Fn(&mut Window, &mut App) + 'static,
+    ) -> Self {
+        Self::Row {
+            icon: None,
+            label: label.into(),
+            shortcut: None,
+            checked: false,
+            disabled: false,
+            run: Rc::new(run),
+        }
+    }
+
+    pub fn icon(mut self, name: &'static str) -> Self {
+        if let Self::Row { icon, .. } = &mut self {
+            *icon = Some(name);
+        }
+        self
+    }
+
+    pub fn key(mut self, keys: &'static str) -> Self {
+        if let Self::Row { shortcut, .. } = &mut self {
+            *shortcut = Some(keys);
+        }
+        self
+    }
+
+    pub fn checked(mut self, on: bool) -> Self {
+        if let Self::Row { checked, .. } = &mut self {
+            *checked = on;
+        }
+        self
+    }
+
+    pub fn disabled(mut self, off: bool) -> Self {
+        if let Self::Row { disabled, .. } = &mut self {
+            *disabled = off;
+        }
+        self
+    }
+}
+
+/// An open menu: where, what, and a serial so each opening animates afresh.
+#[derive(Clone)]
+pub struct OpenMenu {
+    pub at: Point<Pixels>,
+    /// Anchor the menu's right edge at `at` (the ⋯ button) instead of its left.
+    pub align_right: bool,
+    pub items: Vec<MenuItem>,
+    pub serial: u64,
+    pub width: f32,
+}
+
+/// The menu panel. `close` runs after a row's action.
+pub fn panel(menu: &OpenMenu, st: &Style, close: Handler, cx: &mut App) -> AnyElement {
+    let mut rows: Vec<AnyElement> = Vec::new();
+    for (i, item) in menu.items.iter().enumerate() {
+        match item {
+            MenuItem::Separator => rows.push(
+                div()
+                    .my(px(4.0))
+                    .mx(px(6.0))
+                    .h(px(1.0))
+                    .bg(st.c(|c| c.line))
+                    .into_any_element(),
+            ),
+            MenuItem::Heading(t) => rows.push(
+                div()
+                    .px(px(10.0))
+                    .pt(px(6.0))
+                    .pb(px(4.0))
+                    .text_size(px(11.0))
+                    .text_color(st.c(|c| c.faint))
+                    .child(t.clone())
+                    .into_any_element(),
+            ),
+            MenuItem::Custom(f) => rows.push(f(st, cx)),
+            MenuItem::Row {
+                icon: ic,
+                label,
+                shortcut,
+                checked,
+                disabled,
+                run,
+            } => {
+                let run = run.clone();
+                let close = close.clone();
+                let disabled = *disabled;
+                let fg = if disabled {
+                    st.c(|c| c.faint)
+                } else {
+                    st.c(|c| c.text)
+                };
+                rows.push(
+                    div()
+                        .id(("menu-row", i))
+                        .h(st.px(|m| m.control_height))
+                        .px(px(10.0))
+                        .flex()
+                        .items_center()
+                        .gap(px(10.0))
+                        .rounded(st.px(|m| m.control_radius))
+                        .text_size(st.px(|m| m.ui_text))
+                        .text_color(fg)
+                        .when(!disabled, |d| {
+                            d.hover(|d| d.bg(st.c(|c| c.hover)))
+                                .on_click(move |_, window, cx| {
+                                    close(window, cx);
+                                    run(window, cx);
+                                })
+                        })
+                        .child(
+                            div().size(px(16.0)).flex_none().children(
+                                ic.map(|name| {
+                                    svg()
+                                        .path(icon(name))
+                                        .size(px(16.0))
+                                        .text_color(st.c(|c| c.muted))
+                                })
+                                .or_else(|| {
+                                    checked.then(|| {
+                                        svg()
+                                            .path(icon("check"))
+                                            .size(px(16.0))
+                                            .text_color(st.c(|c| c.accent))
+                                    })
+                                }),
+                            ),
+                        )
+                        .child(div().flex_1().whitespace_nowrap().child(label.clone()))
+                        .when(*checked && ic.is_some(), |d| {
+                            d.child(
+                                svg()
+                                    .path(icon("check"))
+                                    .size(px(14.0))
+                                    .text_color(st.c(|c| c.accent)),
+                            )
+                        })
+                        .children(shortcut.map(|k| {
+                            div()
+                                .text_size(px(11.0))
+                                .text_color(st.c(|c| c.faint))
+                                .child(k)
+                        }))
+                        .into_any_element(),
+                );
+            }
+        }
+    }
+    div()
+        .id("menu")
+        .w(px(menu.width))
+        .p(px(4.0))
+        .flex()
+        .flex_col()
+        .rounded(px(12.0))
+        .bg(st.c(|c| c.raised))
+        .shadow(st.float())
+        .border_1()
+        .border_color(st.c(|c| c.line))
+        // Clicks inside don't reach the catcher behind the menu.
+        .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation())
+        .on_mouse_down(gpui::MouseButton::Right, |_, _, cx| cx.stop_propagation())
+        .children(rows)
+        .into_any_element()
+}

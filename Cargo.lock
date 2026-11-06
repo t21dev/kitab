@@ -3057,6 +3057,7 @@ name = "kitab-bench"
 version = "0.0.1"
 dependencies = [
  "embed-resource",
+ "kitab-os",
  "serde",
  "serde_json",
  "sysinfo 0.40.1",
@@ -3114,8 +3115,11 @@ dependencies = [
  "gpui",
  "image",
  "kitab-core",
+ "kitab-os",
  "kitab-theme",
  "log",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

@@ -26,13 +26,34 @@ fn main() {
         }
     }
 
-    let theme = match kitab_theme::builtin("dark") {
-        Ok(t) => t,
-        Err(e) => {
-            eprintln!("Kitab: built-in theme failed to load: {e}");
-            std::process::exit(1);
+    // settings.json is read before the first frame because the theme and density
+    // are needed to draw it (AGENTS.md rule 1); it is a few hundred bytes.
+    let settings_path = kitab_os::data_dir().map(|d| d.join("settings.json"));
+    let settings = settings_path
+        .as_ref()
+        .and_then(|p| std::fs::read_to_string(p).ok())
+        .map(|text| {
+            kitab_ui::Settings::from_json(&text).unwrap_or_else(|e| {
+                log::warn!("settings.json is not valid, using defaults: {e}");
+                kitab_ui::Settings::default()
+            })
+        })
+        .unwrap_or_default();
+    let save_settings: Arc<dyn Fn(String) + Send + Sync> = Arc::new(move |json: String| {
+        if let Some(path) = &settings_path {
+            if let Err(e) = write_atomically(path, &json) {
+                log::warn!("could not save settings: {e}");
+            }
         }
-    };
+    });
+    let theme =
+        match kitab_theme::builtin(&settings.theme).or_else(|_| kitab_theme::builtin("dark")) {
+            Ok(t) => t,
+            Err(e) => {
+                eprintln!("Kitab: built-in theme failed to load: {e}");
+                std::process::exit(1);
+            }
+        };
     let engine: Arc<dyn DocEngine> = Arc::new(adapters::MupdfEngine::new());
     // The library database opens on its own io thread, off the start-up path.
     let library: Arc<dyn Library> =
@@ -40,7 +61,7 @@ fn main() {
 
     #[cfg(windows)]
     if let Some(first) = files.first().cloned() {
-        first_frame::show(first, engine.clone(), &theme);
+        first_frame::show(first, engine.clone(), &theme, settings.density);
     }
 
     Application::new()
@@ -57,11 +78,29 @@ fn main() {
                 cx.background_spawn(async move { library.end_session() })
             })
             .detach();
-            if !kitab_ui::open_main_window(cx, engine, library, theme, files) {
+            if !kitab_ui::open_main_window(
+                cx,
+                engine,
+                library,
+                theme,
+                settings,
+                save_settings,
+                files,
+            ) {
                 eprintln!("Kitab: could not open a window");
                 cx.quit();
             }
         });
+}
+
+/// Write through a temporary file and rename, so a crash never leaves half a file.
+fn write_atomically(path: &std::path::Path, text: &str) -> std::io::Result<()> {
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir)?;
+    }
+    let tmp = path.with_extension("json.tmp");
+    std::fs::write(&tmp, text)?;
+    std::fs::rename(&tmp, path)
 }
 
 #[cfg(windows)]
@@ -81,13 +120,13 @@ mod first_frame {
         (q(c.r), q(c.g), q(c.b))
     }
 
-    pub fn show(file: PathBuf, engine: Arc<dyn DocEngine>, theme: &Theme) {
+    pub fn show(file: PathBuf, engine: Arc<dyn DocEngine>, theme: &Theme, density: Density) {
         splash::set_dpi_aware();
         let colors = theme.colors.clone();
         let dark = theme.appearance != kitab_theme::Appearance::Light;
         splash::show(move |scale| {
             let (doc, info) = engine.open(&file, None).ok()?;
-            let m = Density::Compact.metrics();
+            let m = density.metrics();
             let (w, h) = (layout::WINDOW_W, layout::WINDOW_H);
             let top = m.title_bar + m.header_row;
             let area_x = layout::SIDEBAR_W + 1.0;

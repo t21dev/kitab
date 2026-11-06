@@ -12,6 +12,9 @@ publish = false
 gpui = { workspace = true }
 kitab-core = { workspace = true }
 kitab-theme = { workspace = true }
+kitab-os = { path = "../kitab-os" }
+serde = { workspace = true }
+serde_json = { workspace = true }
 # gpui 0.2.2's own image and error types (same versions, no new code in the binary).
 image = { version = "0.25", default-features = false }
 anyhow = "1"

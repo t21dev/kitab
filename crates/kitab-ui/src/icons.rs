@@ -20,6 +20,10 @@ const ICONS: &[(&str, &[u8])] = &[
         include_bytes!("../../../assets/icons/bookmark.svg"),
     ),
     (
+        "icons/check.svg",
+        include_bytes!("../../../assets/icons/check.svg"),
+    ),
+    (
         "icons/chevron-down.svg",
         include_bytes!("../../../assets/icons/chevron-down.svg"),
     ),
@@ -34,6 +38,10 @@ const ICONS: &[(&str, &[u8])] = &[
     (
         "icons/close.svg",
         include_bytes!("../../../assets/icons/close.svg"),
+    ),
+    (
+        "icons/copy.svg",
+        include_bytes!("../../../assets/icons/copy.svg"),
     ),
     (
         "icons/file.svg",
@@ -56,12 +64,20 @@ const ICONS: &[(&str, &[u8])] = &[
         include_bytes!("../../../assets/icons/folder-open.svg"),
     ),
     (
+        "icons/hash.svg",
+        include_bytes!("../../../assets/icons/hash.svg"),
+    ),
+    (
         "icons/highlight.svg",
         include_bytes!("../../../assets/icons/highlight.svg"),
     ),
     (
         "icons/home.svg",
         include_bytes!("../../../assets/icons/home.svg"),
+    ),
+    (
+        "icons/info.svg",
+        include_bytes!("../../../assets/icons/info.svg"),
     ),
     (
         "icons/lock.svg",

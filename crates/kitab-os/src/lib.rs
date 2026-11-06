@@ -6,6 +6,9 @@
 #[cfg(windows)]
 pub mod splash;
 
+#[cfg(all(windows, feature = "input"))]
+pub mod input;
+
 use std::path::PathBuf;
 
 /// Kitab's data folder (PRIVACY.md): `%APPDATA%\t21\Kitab`,
@@ -34,5 +37,35 @@ pub fn data_dir() -> Option<PathBuf> {
             .map(PathBuf::from)
             .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".local/share")))
             .map(|d| d.join("kitab"))
+    }
+}
+
+/// Show `path` selected in the system file manager. Spawns the file manager and
+/// returns; call it off the UI thread.
+pub fn reveal_in_folder(path: &std::path::Path) -> std::io::Result<()> {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        // explorer parses its own command line: `/select,"C:\a b\c.pdf"`.
+        std::process::Command::new("explorer.exe")
+            .raw_arg(format!("/select,\"{}\"", path.display()))
+            .spawn()
+            .map(|_| ())
+    }
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg("-R")
+            .arg(path)
+            .spawn()
+            .map(|_| ())
+    }
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        let dir = path.parent().unwrap_or(path);
+        std::process::Command::new("xdg-open")
+            .arg(dir)
+            .spawn()
+            .map(|_| ())
     }
 }

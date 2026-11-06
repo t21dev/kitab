@@ -9,7 +9,11 @@ pub mod cache;
 pub mod engine;
 pub mod icons;
 pub mod library;
+pub mod menu;
+pub mod motion;
 pub mod reader;
+pub mod settings;
+pub mod settings_view;
 pub mod shell;
 pub mod style;
 pub mod tooltip;
@@ -46,18 +50,23 @@ pub(crate) fn fire_first_paint(window: &mut gpui::Window, cx: &mut gpui::App) {
 }
 pub use icons::Assets;
 pub use library::{Library, NoLibrary, RecentItem, SessionTab};
+pub use settings::Settings;
 pub use style::Style;
 
 /// Register globals and key bindings, then open the main window on `files`.
+/// `theme` is the one `settings.theme` names; `save_settings` writes settings.json.
 /// Returns false if the window could not be created.
 pub fn open_main_window(
     cx: &mut App,
     engine: Arc<dyn DocEngine>,
     library: Arc<dyn Library>,
     theme: kitab_theme::Theme,
+    settings: Settings,
+    save_settings: Arc<dyn Fn(String) + Send + Sync>,
     files: Vec<PathBuf>,
 ) -> bool {
-    cx.set_global(Style::new(theme));
+    cx.set_global(Style::from_settings(theme, &settings));
+    cx.set_global(shell::SettingsSink(save_settings));
     actions::bind_default_keys(cx);
     let bounds = Bounds::centered(None, size(px(layout::WINDOW_W), px(layout::WINDOW_H)), cx);
     let options = WindowOptions {

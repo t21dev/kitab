@@ -7,18 +7,32 @@ use crate::actions::*;
 use crate::engine::DocEngine;
 use crate::icons::icon;
 use crate::library::{Library, RecentItem, SessionTab};
+use crate::menu::{self, MenuItem, OpenMenu};
+use crate::motion;
 use crate::reader::{Reader, ReaderEvent, open_reader};
+use crate::settings_view::{self, Section};
 use crate::style::Style;
 use crate::tooltip::Tip;
 use gpui::{
-    AnyElement, App, AppContext, Context, Entity, ExternalPaths, FocusHandle, Focusable,
-    FontWeight, InteractiveElement, IntoElement, ParentElement, PathPromptOptions, Render,
-    SharedString, StatefulInteractiveElement, Styled, Subscription, Window, WindowControlArea, div,
-    prelude::FluentBuilder, px, svg,
+    AnyElement, App, AppContext, ClipboardItem, Context, ElementId, Entity, ExternalPaths,
+    FocusHandle, Focusable, FontWeight, InteractiveElement, IntoElement, MouseButton,
+    MouseDownEvent, ParentElement, PathPromptOptions, Pixels, Point, Render, SharedString,
+    StatefulInteractiveElement, Styled, Subscription, Window, WindowControlArea, anchored,
+    deferred, div, point, prelude::FluentBuilder, px, svg,
 };
 use kitab_core::{OutlineItem, ZoomMode};
-use std::path::PathBuf;
+use kitab_theme::Theme;
+use std::path::{Path, PathBuf};
+use std::rc::Rc;
 use std::sync::Arc;
+use std::time::Duration;
+
+/// Writes settings.json (the app passes it in; called off the UI thread).
+pub struct SettingsSink(pub Arc<dyn Fn(String) + Send + Sync>);
+impl gpui::Global for SettingsSink {}
+
+/// Closed tabs remembered for Ctrl+Shift+T.
+const CLOSED_MAX: usize = 20;
 
 pub struct Workspace {
     engine: Arc<dyn DocEngine>,
@@ -30,6 +44,27 @@ pub struct Workspace {
     sidebar: bool,
     focus: FocusHandle,
     subs: Vec<Subscription>,
+    /// The open menu (⋯ or a right click), and one fading out.
+    menu: Option<OpenMenu>,
+    menu_closing: Option<OpenMenu>,
+    menu_serial: u64,
+    /// The Settings modal, and one fading out.
+    settings: Option<Section>,
+    settings_closing: Option<Section>,
+    settings_section: Section,
+    settings_serial: u64,
+    overlay_focus: FocusHandle,
+    /// Built-in themes, parsed when Settings first opens.
+    themes: Vec<Theme>,
+    closed: Vec<PathBuf>,
+    /// The sidebar is sliding shut; it leaves the layout when that ends.
+    sidebar_closing: bool,
+    /// Bumped on each open so the slide and the row stagger replay; 0 = no motion
+    /// (the start-up layout must match the first frame exactly).
+    sidebar_serial: u64,
+    home_serial: u64,
+    /// Set after the first frame: tabs opened later fade in.
+    booted: bool,
 }
 
 impl Workspace {
@@ -50,6 +85,20 @@ impl Workspace {
             sidebar: true,
             focus,
             subs: Vec::new(),
+            menu: None,
+            menu_closing: None,
+            menu_serial: 0,
+            settings: None,
+            settings_closing: None,
+            settings_section: Section::default(),
+            settings_serial: 0,
+            overlay_focus: cx.focus_handle(),
+            themes: Vec::new(),
+            closed: Vec::new(),
+            sidebar_closing: false,
+            sidebar_serial: 0,
+            home_serial: 0,
+            booted: false,
         };
         if files.is_empty() {
             // Start-up mode "Restore last session" (PLAN.md §4, the default): the
@@ -134,8 +183,10 @@ impl Workspace {
             return;
         }
         let reader = open_reader(path, self.engine.clone(), self.library.clone(), window, cx);
-        self.subs
-            .push(cx.subscribe(&reader, |this, _, e: &ReaderEvent, cx| {
+        self.subs.push(cx.subscribe_in(
+            &reader,
+            window,
+            |this, reader, e: &ReaderEvent, window, cx| {
                 match e {
                     // The library knows the document only once it has opened; save again.
                     ReaderEvent::Opened => {
@@ -143,8 +194,10 @@ impl Workspace {
                         cx.notify();
                     }
                     ReaderEvent::PageChanged => cx.notify(),
+                    ReaderEvent::ContextMenu(at) => this.page_menu(reader.clone(), *at, window, cx),
                 }
-            }));
+            },
+        ));
         self.tabs.push(reader);
         let ix = self.tabs.len() - 1;
         self.activate(ix, window, cx);
@@ -162,6 +215,9 @@ impl Workspace {
     }
 
     fn show_home(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.active.is_some() {
+            self.home_serial += 1;
+        }
         self.active = None;
         self.refresh_recent(cx);
         self.save_session(cx);
@@ -176,6 +232,7 @@ impl Workspace {
         }
         let closing = self.tabs.remove(ix);
         closing.update(cx, |r, cx| r.save_now(cx));
+        self.remember_closed(closing.read(cx).path.clone());
         if self.tabs.is_empty() {
             self.show_home(window, cx);
         } else {
@@ -214,8 +271,7 @@ impl Workspace {
             .position(|id| *id == current)
             .map_or(0, |i| (i + 1) % ids.len());
         if let Ok(theme) = kitab_theme::builtin(ids[next]) {
-            cx.global_mut::<Style>().theme = theme;
-            cx.refresh_windows();
+            self.change_style(&move |s: &mut Style| s.theme = theme.clone(), cx);
         }
     }
 
@@ -352,64 +408,84 @@ impl Workspace {
             } else {
                 "file"
             };
-            bar = bar.child(
-                div()
-                    .id(("tab", ix))
-                    .group("tab")
-                    .flex()
-                    .items_center()
-                    .gap(px(8.0))
-                    .h(st.px(|m| m.control_height))
-                    .pl(px(10.0))
-                    .pr(px(6.0))
-                    .max_w(px(220.0))
-                    .rounded(st.px(|m| m.control_radius))
-                    .text_size(st.px(|m| m.ui_text))
-                    .text_color(if on {
-                        st.c(|c| c.text)
-                    } else {
-                        st.c(|c| c.muted)
-                    })
-                    .when(on, |d| d.bg(st.c(|c| c.raised)).shadow(st.elev()))
-                    .hover(|d| d.text_color(st.c(|c| c.text)))
-                    .on_click(cx.listener(move |ws, _, window, cx| ws.activate(ix, window, cx)))
-                    .child(svg().path(icon(tab_icon)).size(px(14.0)).text_color(if on {
-                        st.c(|c| c.accent)
-                    } else {
-                        st.c(|c| c.faint)
-                    }))
-                    .child(
-                        div()
-                            .flex_1()
-                            .overflow_hidden()
-                            .whitespace_nowrap()
-                            .text_ellipsis()
-                            .child(title),
-                    )
-                    .child(
-                        div()
-                            .id(("close", ix))
-                            .size(px(18.0))
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .rounded(px(5.0))
-                            .invisible()
-                            .when(on, |d| d.visible())
-                            .group_hover("tab", |d| d.visible())
-                            .hover(|d| d.bg(st.c(|c| c.hover)))
-                            .on_click(cx.listener(move |ws, _, window, cx| {
-                                cx.stop_propagation();
-                                ws.close_tab(ix, window, cx)
-                            }))
-                            .child(
-                                svg()
-                                    .path(icon("close"))
-                                    .size(px(11.0))
-                                    .text_color(st.c(|c| c.faint)),
-                            ),
-                    ),
-            );
+            let animate = self.booted && st.animations;
+            let tab_id = tab.entity_id().as_u64();
+            let tab_el = div()
+                .id(("tab", ix))
+                .group("tab")
+                .relative()
+                .on_mouse_up(
+                    MouseButton::Middle,
+                    cx.listener(move |ws, _, window, cx| ws.close_tab(ix, window, cx)),
+                )
+                .on_mouse_down(
+                    MouseButton::Right,
+                    cx.listener(move |ws, e: &MouseDownEvent, window, cx| {
+                        ws.tab_menu(ix, e.position, window, cx)
+                    }),
+                )
+                .flex()
+                .items_center()
+                .gap(px(8.0))
+                .h(st.px(|m| m.control_height))
+                .pl(px(10.0))
+                .pr(px(6.0))
+                .max_w(px(220.0))
+                .rounded(st.px(|m| m.control_radius))
+                .text_size(st.px(|m| m.ui_text))
+                .text_color(if on {
+                    st.c(|c| c.text)
+                } else {
+                    st.c(|c| c.muted)
+                })
+                .when(on, |d| d.bg(st.c(|c| c.raised)).shadow(st.elev()))
+                .hover(|d| d.text_color(st.c(|c| c.text)))
+                .on_click(cx.listener(move |ws, _, window, cx| ws.activate(ix, window, cx)))
+                .child(svg().path(icon(tab_icon)).size(px(14.0)).text_color(if on {
+                    st.c(|c| c.accent)
+                } else {
+                    st.c(|c| c.faint)
+                }))
+                .child(
+                    div()
+                        .flex_1()
+                        .overflow_hidden()
+                        .whitespace_nowrap()
+                        .text_ellipsis()
+                        .child(title),
+                )
+                .child(
+                    div()
+                        .id(("close", ix))
+                        .size(px(18.0))
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .rounded(px(5.0))
+                        .invisible()
+                        .when(on, |d| d.visible())
+                        .group_hover("tab", |d| d.visible())
+                        .hover(|d| d.bg(st.c(|c| c.hover)))
+                        .tip("Close tab  Ctrl+W")
+                        .on_click(cx.listener(move |ws, _, window, cx| {
+                            cx.stop_propagation();
+                            ws.close_tab(ix, window, cx)
+                        }))
+                        .child(
+                            svg()
+                                .path(icon("close"))
+                                .size(px(11.0))
+                                .text_color(st.c(|c| c.faint)),
+                        ),
+                );
+            bar = bar.child(motion::enter(
+                tab_el,
+                ElementId::NamedInteger("tab-in".into(), tab_id),
+                animate,
+                motion::From::Above(6.0),
+                motion::BASE,
+                Duration::ZERO,
+            ));
         }
 
         bar.child(
@@ -472,10 +548,7 @@ impl Workspace {
             .child(
                 icon_button("sidebar", "sidebar", self.sidebar, st)
                     .tip("Contents  Ctrl+B")
-                    .on_click(cx.listener(|ws, _, _, cx| {
-                        ws.sidebar = !ws.sidebar;
-                        cx.notify()
-                    })),
+                    .on_click(cx.listener(|ws, _, _, cx| ws.toggle_sidebar(cx))),
             )
             .child(
                 div()
@@ -544,17 +617,13 @@ impl Workspace {
             })
             .child(
                 icon_button(
-                    "theme",
-                    if st.theme.appearance == kitab_theme::Appearance::Light {
-                        "sun"
-                    } else {
-                        "moon"
-                    },
-                    false,
+                    "more",
+                    "more",
+                    self.menu.as_ref().is_some_and(|m| m.align_right),
                     st,
                 )
-                .tip("Next theme  Ctrl+Shift+L")
-                .on_click(cx.listener(|ws, _, _, cx| ws.cycle_theme(cx))),
+                .tip("More")
+                .on_click(cx.listener(|ws, _, window, cx| ws.more_menu(window, cx))),
             )
             .into_any_element()
     }
@@ -585,61 +654,85 @@ impl Workspace {
                     .child("This document has no contents list."),
             );
         }
+        let stagger = st.animations && self.sidebar_serial > 0;
+        let serial = self.sidebar_serial;
         for (ix, (depth, item)) in rows.into_iter().enumerate() {
             let on = Some(ix) == active_ix;
             let target = item.page;
+            let menu_reader = reader.clone();
+            let menu_title = item.title.clone();
             let reader = reader.clone();
-            col = col.child(
-                div()
-                    .id(("toc", ix))
-                    .flex()
-                    .items_center()
-                    .gap(px(8.0))
-                    .h(st.px(|m| m.list_row))
-                    .pl(px(8.0 + depth as f32 * 14.0))
-                    .pr(px(8.0))
-                    .rounded(st.px(|m| m.control_radius))
-                    .text_size(st.px(|m| m.ui_text))
-                    .text_color(if on {
-                        st.c(|c| c.text)
-                    } else {
-                        st.c(|c| c.muted)
-                    })
-                    .when(on, |d| d.bg(st.c(|c| c.raised)).shadow(st.elev()))
-                    .hover(|d| d.bg(st.c(|c| c.hover)).text_color(st.c(|c| c.text)))
-                    .on_click(move |_, _, cx| {
-                        if let Some(p) = target {
-                            reader.update(cx, |r, cx| r.jump_to(p, cx));
-                        }
-                    })
-                    .child(
-                        div()
-                            .size(px(10.0))
-                            .flex_none()
-                            .rounded_full()
-                            .border_1()
-                            .border_color(if on {
-                                st.c(|c| c.accent)
-                            } else {
-                                st.c(|c| c.ring)
-                            })
-                            .when(on, |d| d.bg(st.c(|c| c.accent))),
-                    )
-                    .child(
-                        div()
-                            .flex_1()
-                            .overflow_hidden()
-                            .whitespace_nowrap()
-                            .text_ellipsis()
-                            .child(item.title),
-                    )
-                    .children(item.page.map(|p| {
-                        div()
-                            .text_size(px(11.5))
-                            .text_color(st.c(|c| c.faint))
-                            .child(format!("{}", p + 1))
-                    })),
-            );
+            let row = div()
+                .id(("toc", ix))
+                .relative()
+                .on_mouse_down(
+                    MouseButton::Right,
+                    cx.listener(move |ws, e: &MouseDownEvent, window, cx| {
+                        ws.toc_menu(
+                            menu_reader.clone(),
+                            target,
+                            menu_title.clone(),
+                            e.position,
+                            window,
+                            cx,
+                        )
+                    }),
+                )
+                .flex()
+                .items_center()
+                .gap(px(8.0))
+                .h(st.px(|m| m.list_row))
+                .pl(px(8.0 + depth as f32 * 14.0))
+                .pr(px(8.0))
+                .rounded(st.px(|m| m.control_radius))
+                .text_size(st.px(|m| m.ui_text))
+                .text_color(if on {
+                    st.c(|c| c.text)
+                } else {
+                    st.c(|c| c.muted)
+                })
+                .when(on, |d| d.bg(st.c(|c| c.raised)).shadow(st.elev()))
+                .hover(|d| d.bg(st.c(|c| c.hover)).text_color(st.c(|c| c.text)))
+                .on_click(move |_, _, cx| {
+                    if let Some(p) = target {
+                        reader.update(cx, |r, cx| r.jump_to(p, cx));
+                    }
+                })
+                .child(
+                    div()
+                        .size(px(10.0))
+                        .flex_none()
+                        .rounded_full()
+                        .border_1()
+                        .border_color(if on {
+                            st.c(|c| c.accent)
+                        } else {
+                            st.c(|c| c.ring)
+                        })
+                        .when(on, |d| d.bg(st.c(|c| c.accent))),
+                )
+                .child(
+                    div()
+                        .flex_1()
+                        .overflow_hidden()
+                        .whitespace_nowrap()
+                        .text_ellipsis()
+                        .child(item.title),
+                )
+                .children(item.page.map(|p| {
+                    div()
+                        .text_size(px(11.5))
+                        .text_color(st.c(|c| c.faint))
+                        .child(format!("{}", p + 1))
+                }));
+            col = col.child(motion::enter(
+                row,
+                ElementId::NamedInteger(format!("toc-{serial}").into(), ix as u64),
+                stagger,
+                motion::From::Left(8.0),
+                motion::BASE,
+                motion::stagger(ix),
+            ));
         }
         div()
             .id("sidebar")
@@ -694,6 +787,9 @@ impl Workspace {
                     .text_color(st.c(|c| c.muted)),
             )
             .child("Open file…");
+        let settings_button = icon_button("home-settings", "settings", false, st)
+            .tip("Settings  Ctrl+,")
+            .on_click(cx.listener(|ws, _, window, cx| ws.open_settings(window, cx)));
 
         if self.recent.is_empty() {
             return div()
@@ -723,7 +819,15 @@ impl Workspace {
                         .text_color(st.c(|c| c.muted))
                         .child("Drop a PDF here, or press Ctrl+O. Kitab remembers where you stop."),
                 )
-                .child(div().mt(px(8.0)).child(open_button))
+                .child(
+                    div()
+                        .mt(px(8.0))
+                        .flex()
+                        .items_center()
+                        .gap(px(8.0))
+                        .child(open_button)
+                        .child(settings_button),
+                )
                 .into_any_element();
         }
 
@@ -753,12 +857,20 @@ impl Workspace {
                             .text_color(st.c(|c| c.text))
                             .child("Home"),
                     )
-                    .child(open_button),
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap(px(8.0))
+                            .child(settings_button)
+                            .child(open_button),
+                    ),
             );
         if !continuing.is_empty() {
             let mut row = div().flex().gap(px(16.0)).px(px(40.0)).pt(px(12.0));
             for (i, item) in continuing.into_iter().enumerate() {
-                row = row.child(self.continue_card(i, item, st, cx));
+                let card = self.continue_card(i, item, st, cx);
+                row = row.child(self.card_enter(card, "continue-in", i, st));
             }
             page = page.child(section_title("Continue reading", st)).child(row);
         }
@@ -770,7 +882,8 @@ impl Workspace {
             .pt(px(12.0))
             .pb(px(40.0));
         for (i, item) in self.recent.clone().into_iter().enumerate() {
-            grid = grid.child(self.recent_card(i, item, st, cx));
+            let card = self.recent_card(i, item, st, cx);
+            grid = grid.child(self.card_enter(card, "recent-in", i + 3, st));
         }
         page.child(section_title("Recent", st))
             .child(grid)
@@ -785,8 +898,15 @@ impl Workspace {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let path = item.path.clone();
+        let menu_path = item.path.clone();
         div()
             .id(("continue", i))
+            .on_mouse_down(
+                MouseButton::Right,
+                cx.listener(move |ws, e: &MouseDownEvent, window, cx| {
+                    ws.card_menu(menu_path.clone(), e.position, window, cx)
+                }),
+            )
             .flex()
             .gap(px(14.0))
             .w(px(320.0))
@@ -843,9 +963,17 @@ impl Workspace {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let path = item.path.clone();
+        let menu_path = item.path.clone();
         let missing = item.missing;
         div()
             .id(("recent", i))
+            .cursor_pointer()
+            .on_mouse_down(
+                MouseButton::Right,
+                cx.listener(move |ws, e: &MouseDownEvent, window, cx| {
+                    ws.card_menu(menu_path.clone(), e.position, window, cx)
+                }),
+            )
             .flex()
             .flex_col()
             .gap(px(8.0))
@@ -992,7 +1120,8 @@ impl Render for Workspace {
             Some(reader) => {
                 let header = self.header_row(&reader, &st, cx);
                 let side = if self.sidebar {
-                    Some(self.sidebar_view(&reader, &st, cx))
+                    let inner = self.sidebar_view(&reader, &st, cx);
+                    Some(self.sidebar_slide(inner, &st))
                 } else {
                     None
                 };
@@ -1014,11 +1143,13 @@ impl Render for Workspace {
             }
             None => self.home(&st, cx),
         };
-        let _ = window;
+        let overlays = self.overlays(&st, window, cx);
+        self.booted = true;
         div()
             .id("workspace")
             .key_context(WORKSPACE)
             .track_focus(&self.focus)
+            .relative()
             .size_full()
             .flex()
             .flex_col()
@@ -1045,9 +1176,22 @@ impl Render for Workspace {
                 }
             }))
             .on_action(cx.listener(|ws, _: &ShowHome, window, cx| ws.show_home(window, cx)))
-            .on_action(cx.listener(|ws, _: &ToggleSidebar, _, cx| {
-                ws.sidebar = !ws.sidebar;
-                cx.notify()
+            .on_action(cx.listener(|ws, _: &ToggleSidebar, _, cx| ws.toggle_sidebar(cx)))
+            .on_action(cx.listener(|ws, _: &OpenSettings, window, cx| ws.open_settings(window, cx)))
+            .on_action(
+                cx.listener(|ws, _: &ReopenClosedTab, window, cx| ws.reopen_closed(window, cx)),
+            )
+            .on_action(cx.listener(|ws, _: &SelectTab1, window, cx| ws.select_tab(0, window, cx)))
+            .on_action(cx.listener(|ws, _: &SelectTab2, window, cx| ws.select_tab(1, window, cx)))
+            .on_action(cx.listener(|ws, _: &SelectTab3, window, cx| ws.select_tab(2, window, cx)))
+            .on_action(cx.listener(|ws, _: &SelectTab4, window, cx| ws.select_tab(3, window, cx)))
+            .on_action(cx.listener(|ws, _: &SelectTab5, window, cx| ws.select_tab(4, window, cx)))
+            .on_action(cx.listener(|ws, _: &SelectTab6, window, cx| ws.select_tab(5, window, cx)))
+            .on_action(cx.listener(|ws, _: &SelectTab7, window, cx| ws.select_tab(6, window, cx)))
+            .on_action(cx.listener(|ws, _: &SelectTab8, window, cx| ws.select_tab(7, window, cx)))
+            .on_action(cx.listener(|ws, _: &SelectLastTab, window, cx| {
+                let last = ws.tabs.len().saturating_sub(1);
+                ws.select_tab(last, window, cx)
             }))
             .on_action(cx.listener(|ws, _: &CycleTheme, _, cx| ws.cycle_theme(cx)))
             .on_drop(cx.listener(|ws, paths: &ExternalPaths, window, cx| {
@@ -1057,5 +1201,737 @@ impl Render for Workspace {
             }))
             .child(title_bar)
             .child(body)
+            .children(overlays)
     }
+}
+
+// ── settings, menus and motion ───────────────────────────────────────────
+
+impl Workspace {
+    /// Change the look, redraw, and save settings.json off the UI thread.
+    pub(crate) fn change_style(&mut self, f: &dyn Fn(&mut Style), cx: &mut Context<Self>) {
+        f(cx.global_mut::<Style>());
+        let json = Style::get(cx).settings().to_json();
+        if cx.has_global::<SettingsSink>() {
+            let sink = cx.global::<SettingsSink>().0.clone();
+            cx.background_spawn(async move { sink(json) }).detach();
+        }
+        cx.refresh_windows();
+    }
+
+    /// Run `f` after `delay` (exit animations remove their element this way).
+    fn after(
+        &mut self,
+        delay: Duration,
+        cx: &mut Context<Self>,
+        f: impl FnOnce(&mut Self, &mut Context<Self>) + 'static,
+    ) {
+        let timer = cx.background_executor().timer(delay);
+        cx.spawn(async move |this, cx| {
+            timer.await;
+            let _ = this.update(cx, |ws, cx| {
+                f(ws, cx);
+                cx.notify();
+            });
+        })
+        .detach();
+    }
+
+    /// Give keyboard focus back to the page (or Home) after an overlay closes.
+    fn refocus(&self, window: &mut Window, cx: &mut Context<Self>) {
+        match self.active_reader() {
+            Some(r) => window.focus(&r.focus_handle(cx)),
+            None => window.focus(&self.focus),
+        }
+    }
+
+    fn toggle_sidebar(&mut self, cx: &mut Context<Self>) {
+        let animate = Style::get(cx).animations;
+        if self.sidebar && !self.sidebar_closing {
+            if animate {
+                self.sidebar_closing = true;
+                let serial = self.sidebar_serial;
+                self.after(motion::EXIT_BASE, cx, move |ws, _| {
+                    if ws.sidebar_closing && ws.sidebar_serial == serial {
+                        ws.sidebar = false;
+                        ws.sidebar_closing = false;
+                    }
+                });
+            } else {
+                self.sidebar = false;
+            }
+        } else {
+            self.sidebar = true;
+            self.sidebar_closing = false;
+            self.sidebar_serial += 1;
+        }
+        cx.notify();
+    }
+
+    /// The sidebar keeps its full width while it shows (the page reflows once,
+    /// not every frame) and its content fades and slides 12 px (DESIGN.md:
+    /// never animate layout sizes).
+    fn sidebar_slide(&self, inner: AnyElement, st: &Style) -> AnyElement {
+        let frame = div()
+            .relative()
+            .w(px(crate::layout::SIDEBAR_W))
+            .h_full()
+            .flex_none()
+            .child(inner);
+        if self.sidebar_closing {
+            motion::exit(
+                frame,
+                ElementId::NamedInteger("sidebar-out".into(), self.sidebar_serial),
+                motion::From::Left(12.0),
+                motion::EXIT_BASE,
+            )
+        } else {
+            motion::enter(
+                frame,
+                ElementId::NamedInteger("sidebar-in".into(), self.sidebar_serial),
+                st.animations && self.sidebar_serial > 0,
+                motion::From::Left(12.0),
+                motion::BASE,
+                Duration::ZERO,
+            )
+        }
+    }
+
+    /// Home cards rise in, one after another, each time Home is shown.
+    fn card_enter(&self, card: AnyElement, name: &str, ix: usize, st: &Style) -> AnyElement {
+        motion::enter(
+            div().relative().child(card),
+            ElementId::NamedInteger(format!("{name}-{}", self.home_serial).into(), ix as u64),
+            st.animations && self.home_serial > 0,
+            motion::From::Below(10.0),
+            motion::BASE,
+            motion::stagger(ix),
+        )
+    }
+
+    pub(crate) fn open_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.themes.is_empty() {
+            self.themes = kitab_theme::builtin_all().unwrap_or_default();
+        }
+        self.menu = None;
+        self.menu_closing = None;
+        self.settings = Some(self.settings_section);
+        self.settings_closing = None;
+        self.settings_serial += 1;
+        window.focus(&self.overlay_focus);
+        cx.notify();
+    }
+
+    pub(crate) fn close_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(section) = self.settings.take() {
+            if Style::get(cx).animations {
+                self.settings_closing = Some(section);
+                let serial = self.settings_serial;
+                self.after(motion::EXIT_BASE, cx, move |ws, _| {
+                    if ws.settings_serial == serial {
+                        ws.settings_closing = None;
+                    }
+                });
+            }
+            self.refocus(window, cx);
+            cx.notify();
+        }
+    }
+
+    pub(crate) fn set_settings_section(&mut self, section: Section, cx: &mut Context<Self>) {
+        self.settings_section = section;
+        if self.settings.is_some() {
+            self.settings = Some(section);
+        }
+        cx.notify();
+    }
+
+    fn open_menu(
+        &mut self,
+        at: Point<Pixels>,
+        align_right: bool,
+        width: f32,
+        items: Vec<MenuItem>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.menu_serial += 1;
+        self.menu_closing = None;
+        self.menu = Some(OpenMenu {
+            at,
+            align_right,
+            items,
+            serial: self.menu_serial,
+            width,
+        });
+        window.focus(&self.overlay_focus);
+        cx.notify();
+    }
+
+    pub(crate) fn close_menu(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(m) = self.menu.take() {
+            if Style::get(cx).animations {
+                let serial = m.serial;
+                self.menu_closing = Some(m);
+                self.after(motion::EXIT_FAST, cx, move |ws, _| {
+                    if ws.menu_closing.as_ref().is_some_and(|m| m.serial == serial) {
+                        ws.menu_closing = None;
+                    }
+                });
+            }
+            self.refocus(window, cx);
+            cx.notify();
+        }
+    }
+
+    fn close_overlay(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.menu.is_some() {
+            self.close_menu(window, cx);
+        } else {
+            self.close_settings(window, cx);
+        }
+    }
+
+    /// A handler that runs `f` on the workspace from a menu row.
+    fn on_ws(
+        &self,
+        cx: &mut Context<Self>,
+        f: impl Fn(&mut Self, &mut Window, &mut Context<Self>) + 'static,
+    ) -> impl Fn(&mut Window, &mut App) + 'static {
+        let ws = cx.weak_entity();
+        move |window, cx| {
+            let _ = ws.update(cx, |ws, cx| f(ws, window, cx));
+        }
+    }
+
+    /// The ⋯ menu: theme and density rows, the contents panel, Settings.
+    fn more_menu(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.themes.is_empty() {
+            self.themes = kitab_theme::builtin_all().unwrap_or_default();
+        }
+        let vp = window.viewport_size();
+        let st = Style::get(cx).clone();
+        let at = point(
+            vp.width - px(12.0),
+            px(st.m().title_bar + st.m().header_row - 4.0),
+        );
+        let ws = cx.weak_entity();
+        let themes = self.themes.clone();
+        let theme_row = {
+            let ws = ws.clone();
+            MenuItem::Custom(Rc::new(move |st: &Style, _cx: &mut App| {
+                let mut row = div().flex().gap(px(6.0)).px(px(10.0)).py(px(6.0));
+                for t in &themes {
+                    let selected = t.id == st.theme.id;
+                    let theme = t.clone();
+                    let ws = ws.clone();
+                    row = row.child(
+                        div()
+                            .id(SharedString::from(format!("swatch-{}", t.id)))
+                            .size(px(26.0))
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .rounded_full()
+                            .cursor_pointer()
+                            .bg(crate::style::hsla(t.colors.bg))
+                            .border_2()
+                            .border_color(if selected {
+                                st.c(|c| c.accent)
+                            } else {
+                                crate::style::hsla(t.colors.line)
+                            })
+                            .tip(t.name.clone())
+                            .on_click(move |_, _, cx| {
+                                let theme = theme.clone();
+                                let _ = ws.update(cx, |ws, cx| {
+                                    ws.change_style(
+                                        &move |s: &mut Style| s.theme = theme.clone(),
+                                        cx,
+                                    )
+                                });
+                            })
+                            .child(
+                                div()
+                                    .size(px(8.0))
+                                    .rounded_full()
+                                    .bg(crate::style::hsla(t.colors.accent)),
+                            ),
+                    );
+                }
+                row.into_any_element()
+            }))
+        };
+        let density_row = {
+            let ws = ws.clone();
+            MenuItem::Custom(Rc::new(move |st: &Style, _cx: &mut App| {
+                let mut group = div()
+                    .mx(px(10.0))
+                    .my(px(4.0))
+                    .p(px(2.0))
+                    .flex()
+                    .gap(px(2.0))
+                    .rounded(st.px(|m| m.control_radius))
+                    .bg(st.c(|c| c.hover))
+                    .shadow(st.well());
+                for (ix, (d, label)) in [
+                    (kitab_theme::Density::Dense, "Dense"),
+                    (kitab_theme::Density::Compact, "Compact"),
+                    (kitab_theme::Density::Standard, "Standard"),
+                ]
+                .into_iter()
+                .enumerate()
+                {
+                    let on = st.density == d;
+                    let ws = ws.clone();
+                    group = group.child(
+                        div()
+                            .id(("density-opt", ix))
+                            .flex_1()
+                            .h(px(26.0))
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .rounded(px(6.0))
+                            .text_size(px(12.0))
+                            .text_color(if on {
+                                st.c(|c| c.text)
+                            } else {
+                                st.c(|c| c.muted)
+                            })
+                            .when(on, |e| e.bg(st.c(|c| c.raised)).shadow(st.elev()))
+                            .when(!on, |e| e.hover(|e| e.text_color(st.c(|c| c.text))))
+                            .on_click(move |_, _, cx| {
+                                let _ = ws.update(cx, |ws, cx| {
+                                    ws.change_style(&move |s: &mut Style| s.density = d, cx)
+                                });
+                            })
+                            .child(label),
+                    );
+                }
+                group.into_any_element()
+            }))
+        };
+        let items = vec![
+            MenuItem::Heading("Theme".into()),
+            theme_row,
+            MenuItem::Heading("Density".into()),
+            density_row,
+            MenuItem::Separator,
+            MenuItem::new(
+                "Contents",
+                self.on_ws(cx, |ws, _, cx| ws.toggle_sidebar(cx)),
+            )
+            .icon("sidebar")
+            .key("F12")
+            .checked(self.sidebar && !self.sidebar_closing),
+            MenuItem::new(
+                "Go to page…",
+                self.on_ws(cx, |ws, window, cx| {
+                    if let Some(r) = ws.active_reader().cloned() {
+                        r.update(cx, |r, cx| r.edit_page(window, cx));
+                    }
+                }),
+            )
+            .icon("hash")
+            .key("Ctrl+G")
+            .disabled(self.active.is_none()),
+            MenuItem::Separator,
+            MenuItem::new(
+                "Settings…",
+                self.on_ws(cx, |ws, window, cx| ws.open_settings(window, cx)),
+            )
+            .icon("settings")
+            .key("Ctrl+,"),
+        ];
+        self.open_menu(at, true, 260.0, items, window, cx);
+    }
+
+    /// Right click on a page.
+    fn page_menu(
+        &mut self,
+        reader: Entity<Reader>,
+        at: Point<Pixels>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let r = reader.read(cx);
+        let (back, forward, mode, path) = (
+            r.can_go_back(),
+            r.can_go_forward(),
+            r.zoom_mode(),
+            r.path.clone(),
+        );
+        let run = |f: fn(&mut Reader, &mut Window, &mut Context<Reader>)| {
+            let reader = reader.clone();
+            move |window: &mut Window, cx: &mut App| reader.update(cx, |r, cx| f(r, window, cx))
+        };
+        let items = vec![
+            MenuItem::new("Previous page", run(|r, _, cx| r.prev_page(cx)))
+                .icon("chevron-left")
+                .key("Left"),
+            MenuItem::new("Next page", run(|r, _, cx| r.next_page(cx)))
+                .icon("chevron-right")
+                .key("Right"),
+            MenuItem::new("Go to page…", run(|r, window, cx| r.edit_page(window, cx)))
+                .icon("hash")
+                .key("Ctrl+G"),
+            MenuItem::new("Back", run(|r, _, cx| r.history(true, cx)))
+                .key("Alt+Left")
+                .disabled(!back),
+            MenuItem::new("Forward", run(|r, _, cx| r.history(false, cx)))
+                .key("Alt+Right")
+                .disabled(!forward),
+            MenuItem::Separator,
+            MenuItem::new("Zoom in", run(|r, _, cx| r.zoom_step(true, cx)))
+                .icon("plus")
+                .key("Ctrl+="),
+            MenuItem::new("Zoom out", run(|r, _, cx| r.zoom_step(false, cx)))
+                .icon("minus")
+                .key("Ctrl+-"),
+            MenuItem::new(
+                "Fit width",
+                run(|r, _, cx| r.set_zoom_mode(ZoomMode::FitWidth, cx)),
+            )
+            .key("Ctrl+2")
+            .checked(mode == ZoomMode::FitWidth),
+            MenuItem::new(
+                "Fit page",
+                run(|r, _, cx| r.set_zoom_mode(ZoomMode::FitPage, cx)),
+            )
+            .key("Ctrl+0")
+            .checked(mode == ZoomMode::FitPage),
+            MenuItem::new(
+                "Actual size",
+                run(|r, _, cx| r.set_zoom_mode(ZoomMode::ActualSize, cx)),
+            )
+            .key("Ctrl+1")
+            .checked(mode == ZoomMode::ActualSize),
+            MenuItem::new("Rotate clockwise", run(|r, _, cx| r.rotate(true, cx)))
+                .icon("rotate")
+                .key("Ctrl+Shift+="),
+            MenuItem::new(
+                "Rotate counter-clockwise",
+                run(|r, _, cx| r.rotate(false, cx)),
+            )
+            .key("Ctrl+Shift+-"),
+            MenuItem::Separator,
+            file_item_copy(&path),
+            file_item_reveal(&path),
+        ];
+        self.open_menu(at, false, 290.0, items, window, cx);
+    }
+
+    fn tab_menu(
+        &mut self,
+        ix: usize,
+        at: Point<Pixels>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(path) = self.tabs.get(ix).map(|t| t.read(cx).path.clone()) else {
+            return;
+        };
+        let n = self.tabs.len();
+        let items = vec![
+            MenuItem::new(
+                "Close",
+                self.on_ws(cx, move |ws, window, cx| ws.close_tab(ix, window, cx)),
+            )
+            .icon("close")
+            .key("Ctrl+W"),
+            MenuItem::new(
+                "Close other tabs",
+                self.on_ws(cx, move |ws, window, cx| {
+                    ws.close_where(window, cx, |i| i != ix)
+                }),
+            )
+            .disabled(n < 2),
+            MenuItem::new(
+                "Close tabs to the right",
+                self.on_ws(cx, move |ws, window, cx| {
+                    ws.close_where(window, cx, |i| i > ix)
+                }),
+            )
+            .disabled(ix + 1 >= n),
+            MenuItem::Separator,
+            MenuItem::new(
+                "Reopen closed tab",
+                self.on_ws(cx, |ws, window, cx| ws.reopen_closed(window, cx)),
+            )
+            .key("Ctrl+Shift+T")
+            .disabled(self.closed.is_empty()),
+            MenuItem::Separator,
+            file_item_copy(&path),
+            file_item_reveal(&path),
+        ];
+        self.open_menu(at, false, 250.0, items, window, cx);
+    }
+
+    fn card_menu(
+        &mut self,
+        path: PathBuf,
+        at: Point<Pixels>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let exists = path.exists();
+        let open = path.clone();
+        let items = vec![
+            MenuItem::new(
+                "Open",
+                self.on_ws(cx, move |ws, window, cx| {
+                    ws.open_tab(open.clone(), window, cx)
+                }),
+            )
+            .icon("book")
+            .disabled(!exists),
+            MenuItem::Separator,
+            file_item_copy(&path),
+            file_item_reveal(&path).disabled(!exists),
+        ];
+        self.open_menu(at, false, 230.0, items, window, cx);
+    }
+
+    fn toc_menu(
+        &mut self,
+        reader: Entity<Reader>,
+        page: Option<u32>,
+        title: String,
+        at: Point<Pixels>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let label = match page {
+            Some(p) => format!("Go to page {}", p + 1),
+            None => "Go to section".to_string(),
+        };
+        let items = vec![
+            MenuItem::new(label, move |_, cx: &mut App| {
+                if let Some(p) = page {
+                    reader.update(cx, |r, cx| r.jump_to(p, cx));
+                }
+            })
+            .icon("chevron-right")
+            .disabled(page.is_none()),
+            MenuItem::new("Copy title", move |_, cx: &mut App| {
+                cx.write_to_clipboard(ClipboardItem::new_string(title.clone()))
+            })
+            .icon("copy"),
+        ];
+        self.open_menu(at, false, 220.0, items, window, cx);
+    }
+
+    fn remember_closed(&mut self, path: PathBuf) {
+        self.closed.retain(|p| *p != path);
+        self.closed.push(path);
+        if self.closed.len() > CLOSED_MAX {
+            self.closed.remove(0);
+        }
+    }
+
+    fn reopen_closed(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(path) = self.closed.pop() {
+            self.open_tab(path, window, cx);
+        }
+    }
+
+    fn select_tab(&mut self, ix: usize, window: &mut Window, cx: &mut Context<Self>) {
+        if ix < self.tabs.len() {
+            self.activate(ix, window, cx);
+        }
+    }
+
+    /// Close every tab whose index matches `close`.
+    fn close_where(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+        close: impl Fn(usize) -> bool,
+    ) {
+        let active = self.active.and_then(|i| self.tabs.get(i).cloned());
+        let tabs = std::mem::take(&mut self.tabs);
+        for (i, t) in tabs.into_iter().enumerate() {
+            if close(i) {
+                t.update(cx, |r, cx| r.save_now(cx));
+                self.remember_closed(t.read(cx).path.clone());
+            } else {
+                self.tabs.push(t);
+            }
+        }
+        let keep = active.and_then(|a| self.tabs.iter().position(|t| *t == a));
+        match keep.or(if self.tabs.is_empty() { None } else { Some(0) }) {
+            Some(i) => self.activate(i, window, cx),
+            None => self.show_home(window, cx),
+        }
+    }
+
+    /// The open menu and Settings, over everything.
+    fn overlays(
+        &mut self,
+        st: &Style,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Vec<AnyElement> {
+        let mut out = Vec::new();
+        let ws = cx.weak_entity();
+
+        if let Some(section) = self.settings.or(self.settings_closing) {
+            let closing = self.settings.is_none();
+            let serial = self.settings_serial;
+            let scrim = div().absolute().inset_0().bg(st.c(|c| c.scrim));
+            let panel =
+                div()
+                    .relative()
+                    .child(settings_view::panel(ws.clone(), section, st, &self.themes));
+            let (scrim, panel) = if closing {
+                (
+                    motion::exit(
+                        scrim,
+                        ElementId::NamedInteger("scrim-out".into(), serial),
+                        motion::From::Fade,
+                        motion::EXIT_BASE,
+                    ),
+                    motion::exit(
+                        panel,
+                        ElementId::NamedInteger("settings-out".into(), serial),
+                        motion::From::Below(10.0),
+                        motion::EXIT_BASE,
+                    ),
+                )
+            } else {
+                (
+                    motion::enter(
+                        scrim,
+                        ElementId::NamedInteger("scrim-in".into(), serial),
+                        st.animations,
+                        motion::From::Fade,
+                        motion::BASE,
+                        Duration::ZERO,
+                    ),
+                    motion::enter(
+                        panel,
+                        ElementId::NamedInteger("settings-in".into(), serial),
+                        st.animations,
+                        motion::From::Below(10.0),
+                        motion::BASE,
+                        Duration::ZERO,
+                    ),
+                )
+            };
+            let mut layer = div()
+                .id("settings-layer")
+                .absolute()
+                .inset_0()
+                .flex()
+                .items_center()
+                .justify_center()
+                .child(scrim)
+                .child(panel);
+            if !closing {
+                layer =
+                    layer
+                        .key_context(OVERLAY)
+                        .track_focus(&self.overlay_focus)
+                        .on_action(cx.listener(|ws, _: &CloseOverlay, window, cx| {
+                            ws.close_overlay(window, cx)
+                        }))
+                        .on_mouse_down(
+                            MouseButton::Left,
+                            cx.listener(|ws, _, window, cx| ws.close_settings(window, cx)),
+                        );
+            }
+            out.push(layer.into_any_element());
+        }
+
+        if let Some(m) = self.menu.clone().or_else(|| self.menu_closing.clone()) {
+            let closing = self.menu.is_none();
+            let close: menu::Handler = {
+                let ws = ws.clone();
+                Rc::new(move |window, cx| {
+                    let _ = ws.update(cx, |ws, cx| ws.close_menu(window, cx));
+                })
+            };
+            let panel = div().relative().child(menu::panel(&m, st, close, cx));
+            let panel = if closing {
+                motion::exit(
+                    panel,
+                    ElementId::NamedInteger("menu-out".into(), m.serial),
+                    motion::From::Above(4.0),
+                    motion::EXIT_FAST,
+                )
+            } else {
+                motion::enter(
+                    panel,
+                    ElementId::NamedInteger("menu-in".into(), m.serial),
+                    st.animations,
+                    motion::From::Above(4.0),
+                    motion::FAST,
+                    Duration::ZERO,
+                )
+            };
+            let positioned = deferred(
+                anchored()
+                    .position(m.at)
+                    .anchor(if m.align_right {
+                        gpui::Corner::TopRight
+                    } else {
+                        gpui::Corner::TopLeft
+                    })
+                    .snap_to_window_with_margin(px(8.0))
+                    .child(panel),
+            )
+            .with_priority(1);
+            let mut layer = div().id("menu-layer").absolute().inset_0();
+            if !closing {
+                // A click anywhere else closes the menu (and doesn't reach what's under it).
+                layer =
+                    layer
+                        .key_context(OVERLAY)
+                        .track_focus(&self.overlay_focus)
+                        .on_action(cx.listener(|ws, _: &CloseOverlay, window, cx| {
+                            ws.close_overlay(window, cx)
+                        }))
+                        .on_mouse_down(
+                            MouseButton::Left,
+                            cx.listener(|ws, _, window, cx| ws.close_menu(window, cx)),
+                        )
+                        .on_mouse_down(
+                            MouseButton::Right,
+                            cx.listener(|ws, _, window, cx| ws.close_menu(window, cx)),
+                        );
+            }
+            out.push(layer.child(positioned).into_any_element());
+        }
+        out
+    }
+}
+
+fn file_item_copy(path: &Path) -> MenuItem {
+    let text = path.display().to_string();
+    MenuItem::new("Copy file path", move |_, cx: &mut App| {
+        cx.write_to_clipboard(ClipboardItem::new_string(text.clone()))
+    })
+    .icon("copy")
+}
+
+fn file_item_reveal(path: &Path) -> MenuItem {
+    let path = path.to_path_buf();
+    MenuItem::new(
+        if cfg!(target_os = "macos") {
+            "Show in Finder"
+        } else {
+            "Show in folder"
+        },
+        move |_, cx: &mut App| {
+            let path = path.clone();
+            cx.background_spawn(async move {
+                if let Err(e) = kitab_os::reveal_in_folder(&path) {
+                    log::warn!("could not open the file manager: {e}");
+                }
+            })
+            .detach();
+        },
+    )
+    .icon("folder-open")
 }

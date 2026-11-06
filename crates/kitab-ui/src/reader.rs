@@ -9,19 +9,25 @@ use crate::cache::{PageCache, PageKey, scale_key};
 use crate::engine::{DocEngine, DocHandle};
 use crate::icons::icon;
 use crate::library::Library;
+use crate::motion;
+use crate::settings::PageNav;
 use crate::style::Style;
+use crate::tooltip::Tip;
 use gpui::{
-    AnyElement, App, AppContext, Context, Entity, EventEmitter, FocusHandle, Focusable, FontWeight,
-    ImageSource, InteractiveElement, IntoElement, KeyDownEvent, ListAlignment, ListOffset,
-    ListState, ParentElement, Render, RenderImage, SharedString, Styled, Window, div, img, list,
-    px, svg,
+    AnyElement, App, AppContext, Bounds, Context, Entity, EventEmitter, FocusHandle, Focusable,
+    FontWeight, ImageSource, InteractiveElement, IntoElement, KeyDownEvent, ListAlignment,
+    ListOffset, ListState, MouseButton, MouseDownEvent, MouseMoveEvent, ParentElement, Pixels,
+    Point, Render, RenderImage, ScrollWheelEvent, SharedString, StatefulInteractiveElement, Styled,
+    Subscription, Window, canvas, div, img, list, prelude::FluentBuilder, px, svg,
 };
 use image::{Frame, RgbaImage};
 use kitab_core::{
     DocInfo, Locator, OpenError, OutlineItem, ReadingState, RenderRequest, SizePt, ZoomMode,
 };
+use std::cell::Cell;
 use std::collections::HashSet;
 use std::path::PathBuf;
+use std::rc::Rc;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -47,7 +53,12 @@ pub enum Status {
 pub enum ReaderEvent {
     Opened,
     PageChanged,
+    /// Right click on the page area, at this window position.
+    ContextMenu(Point<Pixels>),
 }
+
+/// Jumps remembered for Alt+Left / Alt+Right.
+const HISTORY_MAX: usize = 100;
 
 impl EventEmitter<ReaderEvent> for Reader {}
 
@@ -72,6 +83,16 @@ pub struct Reader {
     save_scheduled: bool,
     /// Where to go once the first layout has a viewport (restored reading state).
     restore: Option<ReadingState>,
+    /// The page field (Ctrl+G or a click on the page number).
+    page_focus: FocusHandle,
+    /// The field's text while it is being edited.
+    page_edit: Option<String>,
+    /// The scrubber track's bounds from the last frame, for clicks and drags.
+    track: Rc<Cell<Option<Bounds<Pixels>>>>,
+    dragging: bool,
+    back: Vec<usize>,
+    forward: Vec<usize>,
+    _subs: Vec<Subscription>,
 }
 
 impl Reader {
@@ -84,6 +105,12 @@ impl Reader {
     ) -> Self {
         let focus = cx.focus_handle();
         window.focus(&focus);
+        let page_focus = cx.focus_handle();
+        // Clicking away from the page field cancels the edit.
+        let blur = cx.on_blur(&page_focus, window, |r, _, cx| {
+            r.page_edit = None;
+            cx.notify();
+        });
         let mut this = Self {
             path,
             engine,
@@ -103,6 +130,13 @@ impl Reader {
             last_page: 0,
             save_scheduled: false,
             restore: None,
+            page_focus,
+            page_edit: None,
+            track: Rc::new(Cell::new(None)),
+            dragging: false,
+            back: Vec::new(),
+            forward: Vec::new(),
+            _subs: vec![blur],
         };
         this.open(None, cx);
         this
@@ -348,8 +382,119 @@ impl Reader {
         cx.notify();
     }
 
+    /// Go to `page` and remember where the reader was, for Alt+Left.
+    pub fn jump(&mut self, page: usize, cx: &mut Context<Self>) {
+        let page = page.min(self.page_count().saturating_sub(1));
+        let here = self.current_page();
+        if here != page {
+            self.back.push(here);
+            if self.back.len() > HISTORY_MAX {
+                self.back.remove(0);
+            }
+            self.forward.clear();
+        }
+        self.go_to_page(page, cx);
+    }
+
     pub fn jump_to(&mut self, page: u32, cx: &mut Context<Self>) {
-        self.go_to_page(page as usize, cx);
+        self.jump(page as usize, cx);
+    }
+
+    pub fn can_go_back(&self) -> bool {
+        !self.back.is_empty()
+    }
+
+    pub fn can_go_forward(&self) -> bool {
+        !self.forward.is_empty()
+    }
+
+    pub fn history(&mut self, back: bool, cx: &mut Context<Self>) {
+        let here = self.current_page();
+        let (from, to) = if back {
+            (&mut self.back, &mut self.forward)
+        } else {
+            (&mut self.forward, &mut self.back)
+        };
+        if let Some(page) = from.pop() {
+            to.push(here);
+            self.go_to_page(page, cx);
+        }
+    }
+
+    pub fn zoom_step(&mut self, zoom_in: bool, cx: &mut Context<Self>) {
+        self.step_zoom(zoom_in, cx);
+    }
+
+    pub fn set_zoom_mode(&mut self, mode: ZoomMode, cx: &mut Context<Self>) {
+        self.set_zoom(mode, cx);
+    }
+
+    pub fn rotate(&mut self, clockwise: bool, cx: &mut Context<Self>) {
+        self.rotation = (self.rotation + if clockwise { 90 } else { 270 }) % 360;
+        self.cache.clear();
+        self.relayout(cx);
+    }
+
+    pub fn next_page(&mut self, cx: &mut Context<Self>) {
+        self.go_to_page(self.current_page() + 1, cx);
+    }
+
+    pub fn prev_page(&mut self, cx: &mut Context<Self>) {
+        self.go_to_page(self.current_page().saturating_sub(1), cx);
+    }
+
+    // ── page field ──
+
+    /// Start typing a page number (Ctrl+G, or a click on the number).
+    pub fn edit_page(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.status != Status::Open {
+            return;
+        }
+        self.page_edit = Some(String::new());
+        window.focus(&self.page_focus);
+        cx.notify();
+    }
+
+    fn confirm_page(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(text) = self.page_edit.take() {
+            if let Some(n) = parse_page(&text, self.page_count()) {
+                self.jump(n, cx);
+            }
+        }
+        window.focus(&self.focus);
+        cx.notify();
+    }
+
+    fn cancel_page(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.page_edit = None;
+        window.focus(&self.focus);
+        cx.notify();
+    }
+
+    fn on_key_page(&mut self, e: &KeyDownEvent, _: &mut Window, cx: &mut Context<Self>) {
+        let Some(text) = self.page_edit.as_mut() else {
+            return;
+        };
+        let k = &e.keystroke;
+        if k.key == "backspace" {
+            text.pop();
+        } else if let Some(ch) = k.key_char.as_ref() {
+            let digits = ch.chars().all(|c| c.is_ascii_digit());
+            if !k.modifiers.control && !k.modifiers.alt && digits && text.len() < 7 {
+                text.push_str(ch);
+            }
+        }
+        cx.stop_propagation();
+        cx.notify();
+    }
+
+    /// Scrubber: go to the page under window x `x`.
+    fn seek_x(&mut self, x: Pixels, cx: &mut Context<Self>) {
+        let Some(b) = self.track.get() else { return };
+        let w = f32::from(b.size.width).max(1.0);
+        let f = (f32::from(x - b.origin.x) / w).clamp(0.0, 1.0);
+        let last = self.page_count().saturating_sub(1);
+        self.go_to_page((f * last as f32).round() as usize, cx);
     }
 
     // ── rendering ─────────────────────────────────────────────────────────
@@ -406,6 +551,9 @@ impl Reader {
             scale_key: scale_key(device_scale),
             rotation: self.rotation,
         };
+        // Corners scale with the page so they look the same at every zoom.
+        let zoom = (ppt / PX_PER_PT_AT_100).clamp(0.5, 2.0);
+        let radius = px(st.page_corners.radius() * zoom);
         let image = match self.cache.get(&key) {
             Some(i) => {
                 crate::fire_first_paint(window, cx);
@@ -429,10 +577,15 @@ impl Reader {
                     .flex_none()
                     // Paper before the bitmap arrives; the page's own colour once it has.
                     .bg(gpui::white())
-                    .rounded(px(2.0))
+                    .rounded(radius)
                     .shadow(st.sheet())
                     .overflow_hidden()
-                    .children(image.map(|i| img(ImageSource::Render(i)).w(px(w)).h(px(h)))),
+                    .children(image.map(|i| {
+                        img(ImageSource::Render(i))
+                            .w(px(w))
+                            .h(px(h))
+                            .rounded(radius)
+                    })),
             )
             .into_any_element()
     }
@@ -644,8 +797,41 @@ impl Render for Reader {
             .on_action(cx.listener(|r, _: &PrevPage, _, cx| {
                 r.go_to_page(r.current_page().saturating_sub(1), cx)
             }))
-            .on_action(cx.listener(|r, _: &FirstPage, _, cx| r.go_to_page(0, cx)))
-            .on_action(cx.listener(|r, _: &LastPage, _, cx| r.go_to_page(usize::MAX, cx)))
+            .on_action(cx.listener(|r, _: &FirstPage, _, cx| r.jump(0, cx)))
+            .on_action(cx.listener(|r, _: &LastPage, _, cx| r.jump(usize::MAX, cx)))
+            .on_action(cx.listener(|r, _: &GoToPage, window, cx| r.edit_page(window, cx)))
+            .on_action(cx.listener(|r, _: &HistoryBack, _, cx| r.history(true, cx)))
+            .on_action(cx.listener(|r, _: &HistoryForward, _, cx| r.history(false, cx)))
+            .on_mouse_down(
+                MouseButton::Right,
+                cx.listener(|r, e: &MouseDownEvent, _, cx| {
+                    if r.status == Status::Open {
+                        cx.emit(ReaderEvent::ContextMenu(e.position));
+                    }
+                }),
+            )
+            // The mouse's back and forward buttons follow history, as in a browser.
+            .on_mouse_down(
+                MouseButton::Navigate(gpui::NavigationDirection::Back),
+                cx.listener(|r, _, _, cx| r.history(true, cx)),
+            )
+            .on_mouse_down(
+                MouseButton::Navigate(gpui::NavigationDirection::Forward),
+                cx.listener(|r, _, _, cx| r.history(false, cx)),
+            )
+            .on_mouse_move(cx.listener(|r, e: &MouseMoveEvent, _, cx| {
+                if r.dragging {
+                    if e.pressed_button == Some(MouseButton::Left) {
+                        r.seek_x(e.position.x, cx);
+                    } else {
+                        r.dragging = false;
+                    }
+                }
+            }))
+            .on_mouse_up(
+                MouseButton::Left,
+                cx.listener(|r, _, _, _| r.dragging = false),
+            )
             .on_action(cx.listener(|r, _: &ScrollDown, _, cx| {
                 r.list.scroll_by(px(64.0));
                 cx.notify()
@@ -667,31 +853,183 @@ impl Render for Reader {
             .on_action(cx.listener(|r, _: &FitPage, _, cx| r.set_zoom(ZoomMode::FitPage, cx)))
             .on_action(cx.listener(|r, _: &FitWidth, _, cx| r.set_zoom(ZoomMode::FitWidth, cx)))
             .on_action(cx.listener(|r, _: &ActualSize, _, cx| r.set_zoom(ZoomMode::ActualSize, cx)))
-            .on_action(cx.listener(|r, _: &RotateRight, _, cx| {
-                r.rotation = (r.rotation + 90) % 360;
-                r.cache.clear();
-                r.relayout(cx)
-            }))
-            .on_action(cx.listener(|r, _: &RotateLeft, _, cx| {
-                r.rotation = (r.rotation + 270) % 360;
-                r.cache.clear();
-                r.relayout(cx)
-            }))
+            .on_action(cx.listener(|r, _: &RotateRight, _, cx| r.rotate(true, cx)))
+            .on_action(cx.listener(|r, _: &RotateLeft, _, cx| r.rotate(false, cx)))
             .child(
                 list(self.list.clone(), move |ix, window, cx| {
                     this.update(cx, |r, cx| r.page_element(ix, window, cx))
                 })
                 .size_full(),
             )
+            // Ctrl+wheel zooms. This layer is painted after the list so it sees the
+            // wheel first; it has no other handlers, so clicks pass through.
+            .child(
+                div()
+                    .id("wheel-zoom")
+                    .absolute()
+                    .inset_0()
+                    .on_scroll_wheel(cx.listener(|r, e: &ScrollWheelEvent, _, cx| {
+                        if e.modifiers.control || e.modifiers.platform {
+                            let dy = f32::from(e.delta.pixel_delta(px(20.0)).y);
+                            if dy.abs() > 0.5 {
+                                r.step_zoom(dy > 0.0, cx);
+                            }
+                            cx.stop_propagation();
+                        }
+                    })),
+            )
             .children(status)
-            .children((self.status == Status::Open).then(|| self.scrubber(&st, cx)))
+            .children(self.page_nav(&st, window, cx))
     }
 }
 
 impl Reader {
-    /// Floating scrubber (DESIGN.md § Scrubber): page number, a track with the
-    /// reading position, and the total. Clicking the track jumps.
-    fn scrubber(&self, st: &Style, _cx: &mut Context<Self>) -> AnyElement {
+    /// The page navigator chosen in Settings (DESIGN.md § Scrubber). With
+    /// "Hidden", only the Ctrl+G field shows, while it is open.
+    fn page_nav(&self, st: &Style, window: &Window, cx: &mut Context<Self>) -> Option<AnyElement> {
+        if self.status != Status::Open {
+            return None;
+        }
+        let count = self.page_count().max(1);
+        let field = self.page_field(st, window, cx);
+        let pill = |h: f32| {
+            div()
+                .flex()
+                .items_center()
+                .gap(px(10.0))
+                .h(px(h))
+                .px(px(6.0))
+                .rounded_full()
+                .bg(st.c(|c| c.raised))
+                .shadow(st.float())
+                .text_size(px(12.0))
+                .text_color(st.c(|c| c.muted))
+        };
+        let (body, corner) = match st.page_nav {
+            PageNav::Scrubber => (
+                pill(36.0)
+                    .child(field)
+                    .child(self.track_element(st, cx))
+                    .child(div().pr(px(10.0)).child(format!("{count}"))),
+                false,
+            ),
+            PageNav::Stepper => (
+                pill(36.0)
+                    .child(
+                        nav_button("prev-page", "chevron-left", st)
+                            .tip("Previous page  Left")
+                            .on_click(cx.listener(|r, _, _, cx| r.prev_page(cx))),
+                    )
+                    .child(field)
+                    .child(format!("of {count}"))
+                    .child(
+                        nav_button("next-page", "chevron-right", st)
+                            .tip("Next page  Right")
+                            .on_click(cx.listener(|r, _, _, cx| r.next_page(cx))),
+                    ),
+                false,
+            ),
+            PageNav::Counter => (
+                pill(30.0)
+                    .gap(px(4.0))
+                    .child(field)
+                    .child(div().pr(px(8.0)).child(format!("/ {count}"))),
+                true,
+            ),
+            PageNav::Hidden => {
+                self.page_edit.as_ref()?;
+                (
+                    pill(36.0)
+                        .child(div().pl(px(10.0)).child("Go to page"))
+                        .child(field)
+                        .child(div().pr(px(10.0)).child(format!("of {count}"))),
+                    false,
+                )
+            }
+        };
+        let body = motion::enter(
+            body.relative(),
+            ("page-nav", st.page_nav as usize),
+            st.animations,
+            motion::From::Below(8.0),
+            motion::BASE,
+            std::time::Duration::ZERO,
+        );
+        let place = div().absolute().bottom(px(18.0));
+        Some(
+            if corner {
+                place.right(px(22.0)).child(body)
+            } else {
+                place.left_0().right_0().flex().justify_center().child(body)
+            }
+            .into_any_element(),
+        )
+    }
+
+    /// The current page as a field: click it (or Ctrl+G) and type a number.
+    /// Enter goes there; Escape or clicking away cancels.
+    fn page_field(&self, st: &Style, window: &Window, cx: &mut Context<Self>) -> AnyElement {
+        let editing = self.page_edit.is_some();
+        let focused = self.page_focus.is_focused(window);
+        let typed = self.page_edit.clone().unwrap_or_default();
+        let current = format!("{}", self.current_page() + 1);
+        div()
+            .id("page-field")
+            .key_context(PAGE_FIELD)
+            .track_focus(&self.page_focus)
+            .on_action(cx.listener(|r, _: &ConfirmPage, window, cx| r.confirm_page(window, cx)))
+            .on_action(cx.listener(|r, _: &CancelPage, window, cx| r.cancel_page(window, cx)))
+            .on_key_down(cx.listener(Self::on_key_page))
+            .on_click(cx.listener(|r, _, window, cx| {
+                if r.page_edit.is_none() {
+                    r.edit_page(window, cx);
+                }
+            }))
+            .min_w(px(40.0))
+            .h(px(24.0))
+            .px(px(8.0))
+            .flex()
+            .items_center()
+            .justify_center()
+            .rounded(px(7.0))
+            .text_size(px(12.0))
+            .text_color(st.c(|c| c.text))
+            .cursor_text()
+            .border_1()
+            .border_color(if editing && focused {
+                st.c(|c| c.accent)
+            } else {
+                st.ca(|c| c.line, 0.0)
+            })
+            .when(editing, |d| d.bg(st.c(|c| c.hover)).shadow(st.well()))
+            .when(!editing, |d| d.hover(|d| d.bg(st.c(|c| c.hover))))
+            .tip("Go to page  Ctrl+G")
+            .child(if editing {
+                div()
+                    .flex()
+                    .items_center()
+                    .child(if typed.is_empty() {
+                        div().text_color(st.c(|c| c.faint)).child(current)
+                    } else {
+                        div().child(typed)
+                    })
+                    // Caret.
+                    .child(
+                        div()
+                            .ml(px(1.0))
+                            .w(px(1.0))
+                            .h(px(14.0))
+                            .bg(st.c(|c| c.accent)),
+                    )
+            } else {
+                div().child(current)
+            })
+            .into_any_element()
+    }
+
+    /// The scrubber track: a well with the reading position. Click to jump,
+    /// drag to scrub.
+    fn track_element(&self, st: &Style, cx: &mut Context<Self>) -> AnyElement {
         let count = self.page_count().max(1);
         let page = self.current_page();
         let fraction = if count > 1 {
@@ -700,60 +1038,82 @@ impl Reader {
             0.0
         };
         let track_w = 220.0;
+        let cell = self.track.clone();
         div()
-            .absolute()
-            .bottom(px(18.0))
-            .left_0()
-            .right_0()
+            .id("track")
+            .relative()
+            .w(px(track_w))
+            .h(px(20.0))
             .flex()
-            .justify_center()
+            .items_center()
+            .cursor_pointer()
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(|r, e: &MouseDownEvent, _, cx| {
+                    r.dragging = true;
+                    r.seek_x(e.position.x, cx);
+                    cx.stop_propagation();
+                }),
+            )
+            .child(
+                canvas(move |bounds, _, _| cell.set(Some(bounds)), |_, _, _, _| {})
+                    .absolute()
+                    .size_full(),
+            )
             .child(
                 div()
-                    .id("scrubber")
-                    .flex()
-                    .items_center()
-                    .gap(px(12.0))
-                    .h(px(36.0))
-                    .px(px(16.0))
+                    .relative()
+                    .w_full()
+                    .h(px(6.0))
                     .rounded_full()
-                    .bg(st.c(|c| c.raised))
-                    .shadow(st.float())
-                    .text_size(px(12.0))
-                    .text_color(st.c(|c| c.muted))
-                    .child(format!("{}", page + 1))
+                    .bg(st.c(|c| c.hover))
+                    .shadow(st.well())
                     .child(
                         div()
-                            .relative()
-                            .w(px(track_w))
-                            .h(px(6.0))
+                            .absolute()
+                            .left_0()
+                            .top_0()
+                            .bottom_0()
+                            .w(px(track_w * fraction))
                             .rounded_full()
-                            .bg(st.c(|c| c.hover))
-                            .shadow(st.well())
-                            .child(
-                                div()
-                                    .absolute()
-                                    .left_0()
-                                    .top_0()
-                                    .bottom_0()
-                                    .w(px(track_w * fraction))
-                                    .rounded_full()
-                                    .bg(st.c(|c| c.accent)),
-                            )
-                            .child(
-                                div()
-                                    .absolute()
-                                    .top(px(-4.0))
-                                    .left(px(track_w * fraction - 7.0))
-                                    .size(px(14.0))
-                                    .rounded_full()
-                                    .bg(st.c(|c| c.text))
-                                    .shadow(st.elev()),
-                            ),
+                            .bg(st.c(|c| c.accent)),
                     )
-                    .child(format!("{count}")),
+                    .child(
+                        div()
+                            .absolute()
+                            .top(px(-4.0))
+                            .left(px(track_w * fraction - 7.0))
+                            .size(px(14.0))
+                            .rounded_full()
+                            .bg(st.c(|c| c.text))
+                            .shadow(st.elev()),
+                    ),
             )
             .into_any_element()
     }
+}
+
+fn nav_button(id: &'static str, name: &str, st: &Style) -> gpui::Stateful<gpui::Div> {
+    div()
+        .id(id)
+        .size(px(26.0))
+        .flex()
+        .items_center()
+        .justify_center()
+        .rounded_full()
+        .hover(|d| d.bg(st.c(|c| c.hover)))
+        .child(
+            svg()
+                .path(icon(name))
+                .size(px(15.0))
+                .text_color(st.c(|c| c.muted)),
+        )
+}
+
+/// A typed page number (1-based) as a page index, clamped to the document.
+fn parse_page(text: &str, count: usize) -> Option<usize> {
+    let n: usize = text.trim().parse().ok()?;
+    (n >= 1 && count > 0).then(|| (n - 1).min(count - 1))
 }
 
 /// Create a reader for `path` in its own entity.
@@ -765,4 +1125,19 @@ pub fn open_reader(
     cx: &mut App,
 ) -> Entity<Reader> {
     cx.new(|cx| Reader::new(path, engine, library, window, cx))
+}
+
+#[cfg(test)]
+mod page_field_tests {
+    use super::parse_page;
+
+    #[test]
+    fn page_numbers_are_one_based_and_clamped() {
+        assert_eq!(parse_page("1", 40), Some(0));
+        assert_eq!(parse_page(" 12 ", 40), Some(11));
+        assert_eq!(parse_page("999", 40), Some(39));
+        assert_eq!(parse_page("0", 40), None);
+        assert_eq!(parse_page("", 40), None);
+        assert_eq!(parse_page("3", 0), None);
+    }
 }

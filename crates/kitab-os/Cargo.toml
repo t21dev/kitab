@@ -8,6 +8,11 @@ license.workspace = true
 repository.workspace = true
 publish = false
 
+[features]
+# Posts mouse messages to one window by handle, for kitab-bench screenshots of
+# menus and dialogs. Never enabled by the app (AGENTS.md rule 14).
+input = []
+
 [target.'cfg(windows)'.dependencies]
 # The same windows crate gpui 0.2.2 uses (no second copy in the binary).
 windows = { version = "0.61", features = [

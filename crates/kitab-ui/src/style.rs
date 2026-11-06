@@ -3,25 +3,49 @@
 //! Theme tokens as GPUI values. Views take every colour, shadow and size from
 //! here (AGENTS.md rule 16, DESIGN.md).
 
+use crate::settings::{PageCorners, PageNav, Settings};
 use gpui::{App, BoxShadow, Global, Hsla, Pixels, point, px};
 use kitab_theme::{Density, DensityMetrics, Shadow, Theme};
 
-/// The active look: theme, density and whether Ultra mode is on.
+/// The active look: theme, density, Ultra mode and the reading-view choices
+/// from Settings.
 #[derive(Clone)]
 pub struct Style {
     pub theme: Theme,
     pub density: Density,
     pub ultra: bool,
+    pub page_nav: PageNav,
+    pub page_corners: PageCorners,
+    pub animations: bool,
 }
 
 impl Global for Style {}
 
 impl Style {
     pub fn new(theme: Theme) -> Self {
+        Self::from_settings(theme, &Settings::default())
+    }
+
+    /// `theme` is the loaded theme `settings.theme` names.
+    pub fn from_settings(theme: Theme, s: &Settings) -> Self {
         Self {
             theme,
-            density: Density::Compact,
+            density: s.density,
             ultra: false,
+            page_nav: s.page_nav,
+            page_corners: s.page_corners,
+            animations: s.animations,
+        }
+    }
+
+    /// The settings this look comes from (what `settings.json` should hold).
+    pub fn settings(&self) -> Settings {
+        Settings {
+            theme: self.theme.id.clone(),
+            density: self.density,
+            page_nav: self.page_nav,
+            page_corners: self.page_corners,
+            animations: self.animations,
         }
     }
 

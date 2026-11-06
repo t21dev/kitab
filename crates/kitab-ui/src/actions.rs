@@ -14,6 +14,16 @@ actions!(
         NextTab,
         PrevTab,
         ShowHome,
+        ReopenClosedTab,
+        SelectTab1,
+        SelectTab2,
+        SelectTab3,
+        SelectTab4,
+        SelectTab5,
+        SelectTab6,
+        SelectTab7,
+        SelectTab8,
+        SelectLastTab,
         // Navigate
         NextPage,
         PrevPage,
@@ -23,6 +33,9 @@ actions!(
         ScrollUp,
         ScreenDown,
         ScreenUp,
+        GoToPage,
+        HistoryBack,
+        HistoryForward,
         // Zoom and view
         ZoomIn,
         ZoomOut,
@@ -34,6 +47,12 @@ actions!(
         // Read
         ToggleSidebar,
         CycleTheme,
+        // App
+        OpenSettings,
+        CloseOverlay,
+        // Page field
+        ConfirmPage,
+        CancelPage,
         // Password prompt
         SubmitPassword,
         DismissPrompt,
@@ -44,6 +63,9 @@ actions!(
 pub const READER: &str = "Reader";
 pub const WORKSPACE: &str = "Workspace";
 pub const PROMPT: &str = "PasswordPrompt";
+pub const PAGE_FIELD: &str = "PageField";
+/// Settings and open menus: Escape closes them.
+pub const OVERLAY: &str = "Overlay";
 
 pub fn bind_default_keys(cx: &mut App) {
     let r = Some(READER);
@@ -56,6 +78,23 @@ pub fn bind_default_keys(cx: &mut App) {
         KeyBinding::new("ctrl-shift-tab", PrevTab, w),
         KeyBinding::new("ctrl-shift-h", ShowHome, w),
         KeyBinding::new("ctrl-b", ToggleSidebar, w),
+        KeyBinding::new("f12", ToggleSidebar, w),
+        KeyBinding::new("ctrl-shift-t", ReopenClosedTab, w),
+        KeyBinding::new("ctrl-f4", CloseTab, w),
+        KeyBinding::new("ctrl-pagedown", NextTab, w),
+        KeyBinding::new("ctrl-pageup", PrevTab, w),
+        // Alt+digit, because Ctrl+0/1/2 are SumatraPDF's zoom keys.
+        KeyBinding::new("alt-1", SelectTab1, w),
+        KeyBinding::new("alt-2", SelectTab2, w),
+        KeyBinding::new("alt-3", SelectTab3, w),
+        KeyBinding::new("alt-4", SelectTab4, w),
+        KeyBinding::new("alt-5", SelectTab5, w),
+        KeyBinding::new("alt-6", SelectTab6, w),
+        KeyBinding::new("alt-7", SelectTab7, w),
+        KeyBinding::new("alt-8", SelectTab8, w),
+        KeyBinding::new("alt-9", SelectLastTab, w),
+        KeyBinding::new("ctrl-,", OpenSettings, w),
+        KeyBinding::new("escape", CloseOverlay, Some(OVERLAY)),
         KeyBinding::new("ctrl-shift-l", CycleTheme, w),
         // Navigate (SumatraPDF-compatible where Sumatra has a binding)
         KeyBinding::new("right", NextPage, r),
@@ -72,6 +111,11 @@ pub fn bind_default_keys(cx: &mut App) {
         KeyBinding::new("pageup", ScreenUp, r),
         KeyBinding::new("space", ScreenDown, r),
         KeyBinding::new("shift-space", ScreenUp, r),
+        KeyBinding::new("ctrl-g", GoToPage, r),
+        KeyBinding::new("alt-left", HistoryBack, r),
+        KeyBinding::new("alt-right", HistoryForward, r),
+        KeyBinding::new("enter", ConfirmPage, Some(PAGE_FIELD)),
+        KeyBinding::new("escape", CancelPage, Some(PAGE_FIELD)),
         // Zoom and view
         KeyBinding::new("ctrl-=", ZoomIn, r),
         KeyBinding::new("ctrl-+", ZoomIn, r),

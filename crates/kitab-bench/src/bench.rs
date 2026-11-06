@@ -480,24 +480,63 @@ fn write_report(dir: &Path, report: &Report) -> std::io::Result<()> {
     Ok(())
 }
 
+fn run_steps(hwnd: isize, steps: &str) -> Result<(), String> {
+    use kitab_os::input::{Button, click, hover};
+    for step in steps.split(';').map(str::trim).filter(|s| !s.is_empty()) {
+        let (verb, arg) = step.split_once(':').ok_or(format!("bad step {step}"))?;
+        let xy = || -> Result<(i32, i32), String> {
+            let (x, y) = arg.split_once(',').ok_or(format!("bad point in {step}"))?;
+            Ok((
+                x.trim().parse().map_err(|_| format!("bad x in {step}"))?,
+                y.trim().parse().map_err(|_| format!("bad y in {step}"))?,
+            ))
+        };
+        let ok = match verb {
+            "wait" => {
+                std::thread::sleep(Duration::from_millis(
+                    arg.parse().map_err(|_| format!("bad wait {step}"))?,
+                ));
+                true
+            }
+            "click" => xy().map(|(x, y)| click(hwnd, x, y, Button::Left))?,
+            "rclick" => xy().map(|(x, y)| click(hwnd, x, y, Button::Right))?,
+            "mclick" => xy().map(|(x, y)| click(hwnd, x, y, Button::Middle))?,
+            "hover" => xy().map(|(x, y)| hover(hwnd, x, y))?,
+            other => return Err(format!("unknown step {other}")),
+        };
+        if !ok {
+            return Err(format!("could not post {step}"));
+        }
+        // Let the app handle the message and draw before the next step.
+        std::thread::sleep(Duration::from_millis(150));
+    }
+    Ok(())
+}
+
 /// `canonicalize` on Windows returns `\\?\C:\…`, which some apps don't accept as an argument.
 fn strip_verbatim(p: &Path) -> String {
     let s = p.display().to_string();
     s.strip_prefix(r"\\?\").map(str::to_string).unwrap_or(s)
 }
 
-/// `kitab-bench shot --out FILE.png [--wait MS] [--size WxH] -- EXE [ARGS…]`: start an
+/// `kitab-bench shot --out FILE.png [--wait MS] [--do STEPS] -- EXE [ARGS…]`: start an
 /// app, wait, and save a capture of **its own window only** (PrintWindow), never
 /// the screen, so other apps' content can't end up in a screenshot.
+///
+/// `--do` runs steps on that window before the capture, separated by `;`:
+/// `click:X,Y`, `rclick:X,Y`, `mclick:X,Y`, `hover:X,Y` (client pixels, as in the
+/// capture) and `wait:MS`. Clicks are posted to the window, not the desktop.
 fn shot(args: &[String]) -> i32 {
     let mut out = None;
     let mut wait = 2500u64;
+    let mut steps = String::new();
     let mut cmd: Vec<String> = Vec::new();
     let mut it = args.iter();
     while let Some(a) = it.next() {
         match a.as_str() {
             "--out" => out = it.next().cloned(),
             "--wait" => wait = it.next().and_then(|w| w.parse().ok()).unwrap_or(wait),
+            "--do" => steps = it.next().cloned().unwrap_or_default(),
             "--" => {
                 cmd = it.by_ref().cloned().collect();
                 break;
@@ -527,7 +566,11 @@ fn shot(args: &[String]) -> i32 {
     std::thread::sleep(Duration::from_millis(wait));
     let result = window_of(child.id())
         .ok_or_else(|| "no window".to_string())
-        .and_then(|w| w.capture_image().map_err(|e| e.to_string()))
+        .and_then(|w| {
+            let hwnd = w.id().map_err(|e| e.to_string())? as isize;
+            run_steps(hwnd, &steps)?;
+            w.capture_image().map_err(|e| e.to_string())
+        })
         .and_then(|img| img.save(&out).map_err(|e| e.to_string()));
     stop(&mut child);
     match result {

@@ -206,13 +206,14 @@ Everything is an **action**, bound in `keymap.json` by context (`Workspace`, `Re
 
 | Area | Keys |
 |---|---|
-| Files and tabs | Ctrl+O open · Ctrl+W close tab · Ctrl+Shift+T reopen closed · Ctrl+Tab / Ctrl+Shift+Tab next/prev · Ctrl+1…8 tab n, Ctrl+9 last · Ctrl+Shift+PgUp/PgDn move tab · Ctrl+Shift+H Home · Ctrl+N new window · Ctrl+P print · Ctrl+S save annotated copy |
+| Files and tabs | Ctrl+O open · Ctrl+W / Ctrl+F4 close tab · Ctrl+Shift+T reopen closed · Ctrl+Tab / Ctrl+Shift+Tab and Ctrl+PgDn / Ctrl+PgUp next/prev · Alt+1…8 tab n, Alt+9 last (Ctrl+0/1/2 stay Sumatra's zoom keys) · Ctrl+Shift+PgUp/PgDn move tab · Ctrl+Shift+H Home · Ctrl+N new window · Ctrl+P print · Ctrl+S save annotated copy |
 | Navigate | ←/→, PgUp/PgDn, Space/Shift+Space, Home/End · n / p next/prev page · j / k scroll · Ctrl+G go to page · Alt+←/→ back/forward (history) · F12 toggle contents |
 | Find | Ctrl+F or / find · F3 / Enter next · Shift+F3 / Shift+Enter previous · Alt+C match case · Alt+W whole word · Esc close |
 | Zoom and view | Ctrl+= / Ctrl+− zoom · Ctrl+scroll and pinch · Ctrl+0 fit page · Ctrl+1 actual size · Ctrl+2 fit width · Ctrl+6 single page · Ctrl+7 two-page · Ctrl+8 book view · c continuous · Ctrl+Shift+− / Ctrl+Shift+= rotate left/right |
 | Read | F11 focus mode · F5 presentation · Ctrl+Shift+L theme cycle · Ctrl+B sidebar · Ctrl+Alt+= / Ctrl+Alt+− text size (reflow) |
 | Annotate | h highlight selection (1–5 colours) · Ctrl+Alt+N note · Ctrl+D bookmark |
-| App | Ctrl+K command palette · Ctrl+, settings · ? shortcuts · Ctrl+Shift+F12 performance overlay |
+| App | Ctrl+K command palette · Ctrl+, settings · Esc closes menus and dialogs · ? shortcuts · Ctrl+Shift+F12 performance overlay |
+| Mouse | Middle-click a tab to close it · right-click a page, tab, Home card or contents entry for its menu · back/forward mouse buttons follow history · Ctrl+wheel zooms · click or drag the scrubber track · click the page number to type a page |
 
 macOS maps Ctrl to Cmd, and Alt+←/→ to Cmd+[ and ].
 
