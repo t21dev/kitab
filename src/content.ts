@@ -8,9 +8,9 @@ export const SITE = {
   name: "Kitab Reader",
   shortName: "Kitab",
   url: "https://kitab.t21.dev",
-  tagline: "Read beautifully. Work efficiently.",
+  tagline: "The most beautiful PDF reader. Fast by design.",
   description:
-    "Kitab Reader is a free, open-source reader for PDF, EPUB, Markdown and comics. It is native and GPU-drawn, opens in a blink, and keeps your files on your computer. For Windows, macOS and Linux.",
+    "Kitab Reader is a beautiful, modern PDF reader built with an eye for performance: native, drawn on the GPU, open in a blink and idle at 0 % CPU. Free and open source, for PDF, EPUB, Markdown and comics, on Windows, macOS and Linux. Your files stay on your computer.",
   repo: "https://github.com/t21dev/kitab",
   releases: "https://github.com/t21dev/kitab/releases",
   plan: "https://github.com/t21dev/kitab/blob/main/docs/PLAN.md",
@@ -20,7 +20,7 @@ export const SITE = {
   author: { name: "TriptoAfsin", github: "https://github.com/TriptoAfsin" },
   license: { name: "AGPL-3.0-or-later", url: "https://www.gnu.org/licenses/agpl-3.0.html" },
   status: "In development. There is no release to download yet.",
-  phase: "Phase 0: foundations and spikes",
+  phase: "Phase 2: shell, Home and Settings",
   locale: "en",
 } as const;
 
@@ -293,9 +293,9 @@ export const ROUTES: Route[] = [
     path: "/",
     file: "index.html",
     md: "index.md",
-    title: "Kitab Reader: a fast, native reader for PDF, EPUB and Markdown",
+    title: "Kitab Reader: the most beautiful, modern PDF reader, built for performance",
     description:
-      "Free, open-source PDF, EPUB, Markdown and comic reader for Windows, macOS and Linux. Native and GPU-drawn, quick to open, with tabs, a library, forms, signatures and no telemetry.",
+      "A beautiful, modern PDF reader with an eye for performance. Native and GPU-drawn, quick to open, idle at 0 % CPU. Free and open source for Windows, macOS and Linux, with tabs, split view, PDF tools, forms, signatures and no telemetry.",
     changefreq: "weekly",
     priority: 1,
   },

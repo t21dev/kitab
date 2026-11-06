@@ -45,10 +45,10 @@ const og = `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.o
     <g transform="translate(12 12) scale(1.2)"><path d="${MARK}" fill="none" stroke="${C.accent}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></g>
     <text x="70" y="36" font-family="Inter" font-weight="600" font-size="28" fill="${C.text}">Kitab Reader</text>
   </g>
-  <text x="72" y="268" font-family="Literata" font-weight="600" font-size="66" letter-spacing="-1.4" fill="${C.text}">Read beautifully.</text>
-  <text x="72" y="348" font-family="Literata" font-weight="600" font-size="66" letter-spacing="-1.4" fill="${C.faint}">Work efficiently.</text>
-  <text x="72" y="430" font-family="Inter" font-size="24" fill="${C.muted}">A fast, native reader for PDF, EPUB,</text>
-  <text x="72" y="464" font-family="Inter" font-size="24" fill="${C.muted}">Markdown and comics. Free and open source.</text>
+  <text x="72" y="268" font-family="Literata" font-weight="600" font-size="66" letter-spacing="-1.4" fill="${C.text}">The most beautiful</text>
+  <text x="72" y="348" font-family="Literata" font-weight="600" font-size="66" letter-spacing="-1.4" fill="${C.faint}">PDF reader.</text>
+  <text x="72" y="430" font-family="Inter" font-size="24" fill="${C.muted}">Modern, native and fast by design.</text>
+  <text x="72" y="464" font-family="Inter" font-size="24" fill="${C.muted}">PDF, EPUB, Markdown, comics. Free and open source.</text>
   <text x="72" y="560" font-family="Inter" font-weight="500" font-size="20" fill="${C.accent}">kitab.t21.dev</text>
   <clipPath id="frame"><rect x="760" y="70" width="380" height="490" rx="18"/></clipPath>
   <rect x="760" y="70" width="380" height="490" rx="18" fill="${C.desk}" stroke="${C.line}"/>
@@ -71,7 +71,7 @@ writeFileSync(
     {
       name: "Kitab Reader",
       short_name: "Kitab",
-      description: "A fast, native reader for PDF, EPUB, Markdown and comics.",
+      description: "The most beautiful, modern PDF reader, built for performance.",
       start_url: "/",
       display: "browser",
       background_color: C.bg,

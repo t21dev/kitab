@@ -1,7 +1,7 @@
 {
   "name": "Kitab Reader",
   "short_name": "Kitab",
-  "description": "A fast, native reader for PDF, EPUB, Markdown and comics.",
+  "description": "The most beautiful, modern PDF reader, built for performance.",
   "start_url": "/",
   "display": "browser",
   "background_color": "#141415",

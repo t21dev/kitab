@@ -246,7 +246,7 @@ function head(route, { noindex = false } = {}) {
     `<meta property="og:image" content="${SITE.url}/og.png" />`,
     `<meta property="og:image:width" content="1200" />`,
     `<meta property="og:image:height" content="630" />`,
-    `<meta property="og:image:alt" content="Kitab Reader. Read beautifully. Work efficiently." />`,
+    `<meta property="og:image:alt" content="Kitab Reader. The most beautiful PDF reader. Fast by design." />`,
     `<meta name="twitter:card" content="summary_large_image" />`,
     `<meta name="twitter:title" content="${t}" />`,
     `<meta name="twitter:description" content="${d}" />`,

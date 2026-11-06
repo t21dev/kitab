@@ -14,13 +14,13 @@ function Hero({ data }: { data: PageData }) {
         {data.release ? `Version ${data.release.tag.replace(/^v/, "")} is out` : `In development · ${SITE.phase}`}
       </p>
       <h1 id="hero-title" className="rise" style={{ "--i": 1 } as React.CSSProperties}>
-        Read beautifully.
+        The most beautiful PDF reader.
         <br />
-        <span>Work efficiently.</span>
+        <span>Fast by design.</span>
       </h1>
       <p className="lede rise" style={{ "--i": 2 } as React.CSSProperties}>
-        Kitab is a reader for PDF, EPUB, Markdown and comics. It is native and drawn on the GPU, it opens in a blink, and it
-        keeps your files on your computer.
+        Kitab is a modern reader for PDF, EPUB, Markdown and comics, designed down to the last pixel and built with an eye
+        for performance: native, drawn on the GPU, open in a blink and idle at 0 % CPU. Your files stay on your computer.
       </p>
       <div className="ctas rise" style={{ "--i": 3 } as React.CSSProperties}>
         <a className="btn btn--primary" href={SITE.repo}>
