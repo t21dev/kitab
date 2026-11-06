@@ -29,6 +29,14 @@ We compared GPUI with plain Win32 + Direct2D, egui, Iced, Slint, Xilem + Vello, 
 
 If the gate fails after step 3, the fallback is a Windows-only Win32 + Direct2D shell with AccessKit used on its own (ADR to follow), with macOS and Linux on GPUI.
 
+## GPUI ecosystem to use or watch
+
+Checked on 7 November 2026; none of these changes start-up on its own.
+
+- **[gpui-component](https://github.com/longbridge/gpui-component)** (Longbridge, Apache-2.0): about 60 widgets on GPUI, including text inputs, tables, menus, docks and dialogs. It depends on Zed's git main, the same source as step 2, so it is the default widget layer for Phase 2 (find field, settings forms, command palette) instead of hand-rolling inputs.
+- **[gpui-ce](https://docs.rs/crate/gpui-ce/0.3.3/source/README.md)**: a community fork published on crates.io (0.3.x) that tracks upstream and adds standalone-app APIs. An alternative to a git dependency for step 2 if its Windows code includes upstream's single device creation. Check before choosing.
+- **[gpui-fast](https://github.com/longbridge/gpui-fast/releases/tag/v0.1.0)** (Longbridge, experimental): retained mode that reuses unchanged views, layout and text measurement, plus opt-in native window composition. Worth evaluating against the scroll budgets (S9) in Phase 1; not a drop-in replacement.
+
 ## Risks
 
 - Keeping a fork of a pre-1.0 framework current: pin, keep patches small, upstream them.
