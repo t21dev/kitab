@@ -81,6 +81,9 @@ struct Report {
 }
 
 pub fn run(args: Vec<String>) -> i32 {
+    if args.first().map(String::as_str) == Some("shot") {
+        return shot(&args[1..]);
+    }
     let opts = match parse(args) {
         Ok(o) => o,
         Err(e) => {
@@ -481,4 +484,60 @@ fn write_report(dir: &Path, report: &Report) -> std::io::Result<()> {
 fn strip_verbatim(p: &Path) -> String {
     let s = p.display().to_string();
     s.strip_prefix(r"\\?\").map(str::to_string).unwrap_or(s)
+}
+
+/// `kitab-bench shot --out FILE.png [--wait MS] [--size WxH] -- EXE [ARGS…]`: start an
+/// app, wait, and save a capture of **its own window only** (PrintWindow), never
+/// the screen, so other apps' content can't end up in a screenshot.
+fn shot(args: &[String]) -> i32 {
+    let mut out = None;
+    let mut wait = 2500u64;
+    let mut cmd: Vec<String> = Vec::new();
+    let mut it = args.iter();
+    while let Some(a) = it.next() {
+        match a.as_str() {
+            "--out" => out = it.next().cloned(),
+            "--wait" => wait = it.next().and_then(|w| w.parse().ok()).unwrap_or(wait),
+            "--" => {
+                cmd = it.by_ref().cloned().collect();
+                break;
+            }
+            other => {
+                eprintln!("kitab-bench shot: unknown flag {other}");
+                return 2;
+            }
+        }
+    }
+    let (Some(out), Some((exe, rest))) = (out, cmd.split_first()) else {
+        eprintln!("usage: kitab-bench shot --out FILE.png [--wait MS] -- EXE [ARGS…]");
+        return 2;
+    };
+    let mut child = match Command::new(exe)
+        .args(rest)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+    {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("kitab-bench shot: could not start {exe}: {e}");
+            return 1;
+        }
+    };
+    std::thread::sleep(Duration::from_millis(wait));
+    let result = window_of(child.id())
+        .ok_or_else(|| "no window".to_string())
+        .and_then(|w| w.capture_image().map_err(|e| e.to_string()))
+        .and_then(|img| img.save(&out).map_err(|e| e.to_string()));
+    stop(&mut child);
+    match result {
+        Ok(()) => {
+            eprintln!("saved {out}");
+            0
+        }
+        Err(e) => {
+            eprintln!("kitab-bench shot: {e}");
+            1
+        }
+    }
 }

@@ -17,7 +17,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 SPDX = "SPDX-License-Identifier: AGPL-3.0-or-later"
 # vendor: third-party code copied in locally (e.g. spikes/spike-a/vendor/gpui, Apache-2.0), never committed.
-SKIP_DIRS = {"target", ".git", ".venv", "node_modules", "__pycache__", "real", "vendor"}
+SKIP_DIRS = {"target", ".git", ".venv", "node_modules", "__pycache__", "real", "vendor", ".claude"}
 THEME_CRATE = ROOT / "crates" / "kitab-theme"
 
 # Hex colours in string literals, and the colour constructors GPUI and our

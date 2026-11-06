@@ -22,5 +22,9 @@ xcap = { version = "0.9.8", default-features = false }
 # Process memory and CPU time (working set, private bytes, user + kernel time). MIT.
 sysinfo = { version = "0.40", default-features = false, features = ["system"] }
 
+[target.'cfg(windows)'.build-dependencies]
+# Already in the tree via gpui; embeds the DPI-aware manifest.
+embed-resource = "3"
+
 [lints]
 workspace = true

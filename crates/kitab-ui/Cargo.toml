@@ -1,0 +1,21 @@
+[package]
+name = "kitab-ui"
+description = "Kitab Reader's GPUI views: shell, tabs, reader, outline, scrubber"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+gpui = { workspace = true }
+kitab-core = { workspace = true }
+kitab-theme = { workspace = true }
+# gpui 0.2.2's own image and error types (same versions, no new code in the binary).
+image = { version = "0.25", default-features = false }
+anyhow = "1"
+log = "0.4"
+
+[lints]
+workspace = true

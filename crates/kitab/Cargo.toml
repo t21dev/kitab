@@ -9,6 +9,12 @@ repository.workspace = true
 authors.workspace = true
 
 [dependencies]
+gpui = { workspace = true }
+mupdf = { workspace = true }
+kitab-core = { workspace = true }
+kitab-theme = { workspace = true }
+kitab-ui = { path = "../kitab-ui" }
+kitab-os = { path = "../kitab-os" }
 
 [lints]
 workspace = true
