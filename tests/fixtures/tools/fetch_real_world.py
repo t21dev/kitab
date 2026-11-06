@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Download a few real-world files into tests/fixtures/real/ (gitignored) and check their hashes.
 
     python tests/fixtures/tools/fetch_real_world.py          # fetch and verify

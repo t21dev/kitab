@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Check every fixture with MuPDF (the engine Kitab uses) and pyHanko, and write expected.json.
 
     python tests/fixtures/tools/verify_fixtures.py

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Generate Kitab's deterministic test corpus.
 
     python tests/fixtures/tools/generate_fixtures.py            # everything except the 20 MB PDF
