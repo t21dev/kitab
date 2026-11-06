@@ -6,10 +6,10 @@
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-mod interim_engine;
+mod adapters;
 
-use gpui::Application;
-use kitab_ui::{DocEngine, FirstPaint};
+use gpui::{AppContext, Application};
+use kitab_ui::{DocEngine, FirstPaint, Library};
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -33,7 +33,10 @@ fn main() {
             std::process::exit(1);
         }
     };
-    let engine: Arc<dyn DocEngine> = Arc::new(interim_engine::InterimEngine::new());
+    let engine: Arc<dyn DocEngine> = Arc::new(adapters::MupdfEngine::new());
+    // The library database opens on its own io thread, off the start-up path.
+    let library: Arc<dyn Library> =
+        adapters::StoreLibrary::start(kitab_os::data_dir().map(|d| d.join("library.sqlite3")));
 
     #[cfg(windows)]
     if let Some(first) = files.first().cloned() {
@@ -47,7 +50,14 @@ fn main() {
             cx.set_global(FirstPaint(Some(Box::new(kitab_os::splash::close))));
             #[cfg(not(windows))]
             cx.set_global(FirstPaint(None));
-            if !kitab_ui::open_main_window(cx, engine, theme, files) {
+            let on_quit = library.clone();
+            cx.on_app_quit(move |cx| {
+                let library = on_quit.clone();
+                // Off the UI thread; the quit waits for it (bounded by GPUI's quit timeout).
+                cx.background_spawn(async move { library.end_session() })
+            })
+            .detach();
+            if !kitab_ui::open_main_window(cx, engine, library, theme, files) {
                 eprintln!("Kitab: could not open a window");
                 cx.quit();
             }
@@ -83,7 +93,7 @@ mod first_frame {
             let area_x = layout::SIDEBAR_W + 1.0;
             let area_w = w - area_x;
             let size = info.page_sizes.first().copied()?;
-            // Fit width, as the reader opens (PLAN.md §3.3).
+            // Fit width, as the reader opens (PLAN.md Â§3.3).
             let ppt = (area_w - 2.0 * layout::PAGE_GAP) / size.w.max(1.0);
             let req = RenderRequest {
                 page: 0,

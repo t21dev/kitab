@@ -8,6 +8,7 @@ use crate::actions::*;
 use crate::cache::{PageCache, PageKey, scale_key};
 use crate::engine::{DocEngine, DocHandle};
 use crate::icons::icon;
+use crate::library::Library;
 use crate::style::Style;
 use gpui::{
     AnyElement, App, AppContext, Context, Entity, EventEmitter, FocusHandle, Focusable, FontWeight,
@@ -16,10 +17,13 @@ use gpui::{
     px, svg,
 };
 use image::{Frame, RgbaImage};
-use kitab_core::{DocInfo, OpenError, OutlineItem, RenderRequest, SizePt, ZoomMode};
+use kitab_core::{
+    DocInfo, Locator, OpenError, OutlineItem, ReadingState, RenderRequest, SizePt, ZoomMode,
+};
 use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::Duration;
 
 /// Points to logical pixels at 100 %: 1 pt = 1/72 in, 1 px = 1/96 in.
 const PX_PER_PT_AT_100: f32 = 96.0 / 72.0;
@@ -50,6 +54,7 @@ impl EventEmitter<ReaderEvent> for Reader {}
 pub struct Reader {
     pub path: PathBuf,
     engine: Arc<dyn DocEngine>,
+    library: Arc<dyn Library>,
     doc: Option<DocHandle>,
     pub info: Option<DocInfo>,
     pub status: Status,
@@ -63,12 +68,17 @@ pub struct Reader {
     password: String,
     viewport: (f32, f32),
     last_page: usize,
+    /// A save is scheduled (debounced: at most one write per 2 s).
+    save_scheduled: bool,
+    /// Where to go once the first layout has a viewport (restored reading state).
+    restore: Option<ReadingState>,
 }
 
 impl Reader {
     pub fn new(
         path: PathBuf,
         engine: Arc<dyn DocEngine>,
+        library: Arc<dyn Library>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
@@ -77,6 +87,7 @@ impl Reader {
         let mut this = Self {
             path,
             engine,
+            library,
             doc: None,
             info: None,
             status: Status::Opening,
@@ -90,6 +101,8 @@ impl Reader {
             password: String::new(),
             viewport: (0.0, 0.0),
             last_page: 0,
+            save_scheduled: false,
+            restore: None,
         };
         this.open(None, cx);
         this
@@ -144,12 +157,24 @@ impl Reader {
     fn open(&mut self, password: Option<String>, cx: &mut Context<Self>) {
         self.status = Status::Opening;
         let engine = self.engine.clone();
+        let library = self.library.clone();
         let path = self.path.clone();
         cx.spawn(async move |this, cx| {
-            let result = cx
-                .background_spawn(async move { engine.open(&path, password.as_deref()) })
+            let (result, saved) = cx
+                .background_spawn(async move {
+                    let result = engine.open(&path, password.as_deref());
+                    // Per-file memory (PLAN.md Phase 1): ask the library while still off the UI thread.
+                    let saved = result
+                        .as_ref()
+                        .ok()
+                        .and_then(|(_, info)| library.opened(&path, info));
+                    (result, saved)
+                })
                 .await;
-            let _ = this.update(cx, |this, cx| this.on_opened(result, cx));
+            let _ = this.update(cx, |this, cx| {
+                this.restore = saved;
+                this.on_opened(result, cx)
+            });
         })
         .detach();
     }
@@ -161,6 +186,10 @@ impl Reader {
     ) {
         match result {
             Ok((doc, info)) => {
+                if let Some(state) = self.restore {
+                    self.zoom = state.zoom;
+                    self.rotation = state.rotation;
+                }
                 self.list.reset(info.page_count as usize);
                 self.doc = Some(doc);
                 self.info = Some(info);
@@ -173,6 +202,57 @@ impl Reader {
             Err(e) => self.status = Status::Failed(e),
         }
         cx.notify();
+    }
+
+    /// The reading state to remember for this document.
+    pub fn reading_state(&self) -> Option<ReadingState> {
+        if self.status != Status::Open {
+            return None;
+        }
+        let top = self.list.logical_scroll_top();
+        let page = top.item_ix.min(self.page_count().saturating_sub(1));
+        let ppt = self.px_per_pt(page).max(0.01);
+        let count = self.page_count().max(1);
+        Some(ReadingState {
+            locator: Locator::Fixed {
+                page: page as u32,
+                x: 0.0,
+                y: f32::from(top.offset_in_item) / ppt,
+            },
+            zoom: self.zoom,
+            rotation: self.rotation,
+            progress: if count > 1 {
+                page as f32 / (count - 1) as f32
+            } else {
+                1.0
+            },
+        })
+    }
+
+    /// Save now (tab closing, app quitting). Runs the store call off the UI thread.
+    pub fn save_now(&mut self, cx: &mut Context<Self>) {
+        if let Some(state) = self.reading_state() {
+            let (library, path) = (self.library.clone(), self.path.clone());
+            cx.background_spawn(async move { library.save_state(&path, state) })
+                .detach();
+        }
+    }
+
+    /// Save in at most 2 s, once, however much the reader scrolls meanwhile.
+    fn schedule_save(&mut self, cx: &mut Context<Self>) {
+        if self.save_scheduled {
+            return;
+        }
+        self.save_scheduled = true;
+        let timer = cx.background_executor().timer(Duration::from_secs(2));
+        cx.spawn(async move |this, cx| {
+            timer.await;
+            let _ = this.update(cx, |this, cx| {
+                this.save_scheduled = false;
+                this.save_now(cx);
+            });
+        })
+        .detach();
     }
 
     // ── geometry ──────────────────────────────────────────────────────────
@@ -523,10 +603,26 @@ impl Render for Reader {
                 self.relayout(cx);
             }
         }
+        if self.status == Status::Open && self.viewport.0 > 0.0 {
+            if let Some(ReadingState {
+                locator: Locator::Fixed { page, y, .. },
+                ..
+            }) = self.restore.take()
+            {
+                let page = (page as usize).min(self.page_count().saturating_sub(1));
+                let offset = y * self.px_per_pt(page);
+                self.list.scroll_to(ListOffset {
+                    item_ix: page,
+                    offset_in_item: px(offset),
+                });
+                self.last_page = page;
+            }
+        }
         let page = self.current_page();
         if page != self.last_page {
             self.last_page = page;
             cx.emit(ReaderEvent::PageChanged);
+            self.schedule_save(cx);
         }
 
         if matches!(
@@ -664,8 +760,9 @@ impl Reader {
 pub fn open_reader(
     path: PathBuf,
     engine: Arc<dyn DocEngine>,
+    library: Arc<dyn Library>,
     window: &mut Window,
     cx: &mut App,
 ) -> Entity<Reader> {
-    cx.new(|cx| Reader::new(path, engine, window, cx))
+    cx.new(|cx| Reader::new(path, engine, library, window, cx))
 }

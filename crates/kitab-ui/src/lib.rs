@@ -8,6 +8,7 @@ pub mod actions;
 pub mod cache;
 pub mod engine;
 pub mod icons;
+pub mod library;
 pub mod reader;
 pub mod shell;
 pub mod style;
@@ -44,6 +45,7 @@ pub(crate) fn fire_first_paint(window: &mut gpui::Window, cx: &mut gpui::App) {
     }
 }
 pub use icons::Assets;
+pub use library::{Library, NoLibrary, RecentItem, SessionTab};
 pub use style::Style;
 
 /// Register globals and key bindings, then open the main window on `files`.
@@ -51,6 +53,7 @@ pub use style::Style;
 pub fn open_main_window(
     cx: &mut App,
     engine: Arc<dyn DocEngine>,
+    library: Arc<dyn Library>,
     theme: kitab_theme::Theme,
     files: Vec<PathBuf>,
 ) -> bool {
@@ -69,7 +72,7 @@ pub fn open_main_window(
         ..Default::default()
     };
     cx.open_window(options, |window, cx| {
-        cx.new(|cx| shell::Workspace::new(engine, files, window, cx))
+        cx.new(|cx| shell::Workspace::new(engine, library, files, window, cx))
     })
     .is_ok()
 }

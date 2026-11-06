@@ -10,7 +10,9 @@ authors.workspace = true
 
 [dependencies]
 gpui = { workspace = true }
-mupdf = { workspace = true }
+kitab-mupdf = { path = "../kitab-mupdf" }
+kitab-store = { path = "../kitab-store" }
+log = "0.4"
 kitab-core = { workspace = true }
 kitab-theme = { workspace = true }
 kitab-ui = { path = "../kitab-ui" }

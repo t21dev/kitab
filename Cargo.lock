@@ -3044,10 +3044,12 @@ version = "0.0.1"
 dependencies = [
  "gpui",
  "kitab-core",
+ "kitab-mupdf",
  "kitab-os",
+ "kitab-store",
  "kitab-theme",
  "kitab-ui",
- "mupdf",
+ "log",
 ]
 
 [[package]]
