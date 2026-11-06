@@ -1,0 +1,424 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Kitab Reader · Mockup A</title>
+<meta name="description" content="Mockup A: a sticky story pane beside a reader that changes as you scroll." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Literata:opsz,wght@7..72,400;7..72,600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+/* Hallmark · macrostructure: Feature Stack · tone: technical-calm · anchor hue: amber (Noctua accent)
+ * genre: modern-minimal · theme: custom from DESIGN.md Noctua tokens · nav: N13 inline ⌘K pill · footer: Ft4 dense typographic
+ * enrichment: the reader panel itself (built from app tokens; a design preview, not a screenshot)
+ * pre-emit critique: P4 H5 E4 S5 R4 V5 */
+:root {
+  /* DESIGN.md · Noctua */
+  --bg: #0E1626; --panel: #0B1220; --desk: #0A101C; --raised: #17223A; --hover: #121C30; --line: #1F2B45;
+  --text: #E6ECF7; --read: #DCE3F0; --muted: #A9B5CE; --faint: #8A97B3; --ring: #33405E; --accent: #F2A65A;
+  --highlight: rgba(242,166,90,.28); --ok: #5FD3A3; --warn: #F2C14E; --bad: #F07A7A; --paper: #F7F4EE; --ink: #1B1B1F;
+  --elev: inset 0 1px 0 rgba(255,255,255,.07), 0 0 0 1px rgba(0,0,0,.5), 0 2px 6px rgba(0,0,0,.35);
+  --well: inset 0 1px 2px rgba(0,0,0,.45), inset 0 0 0 1px rgba(255,255,255,.05);
+  --float: inset 0 1px 0 rgba(255,255,255,.08), 0 0 0 1px rgba(0,0,0,.6), 0 8px 20px rgba(0,0,0,.4), 0 24px 48px rgba(0,0,0,.35);
+  --sheet: 0 0 0 1px rgba(0,0,0,.6), 0 4px 10px rgba(0,0,0,.35), 0 16px 32px rgba(0,0,0,.3);
+  --font-ui: "Inter", "Segoe UI", system-ui, sans-serif;
+  --font-read: "Literata", Georgia, serif;
+  --font-mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --space-sm: 8px; --space-md: 16px; --space-lg: 24px; --space-xl: 40px; --space-2xl: 80px; --space-3xl: 128px;
+  --gutter: clamp(16px, 4vw, 40px);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; overflow-x: clip; background: var(--bg); color: var(--text); }
+body { font: 15px/1.55 var(--font-ui); -webkit-font-smoothing: antialiased; }
+a { color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 8px; }
+.wrap { max-width: 1200px; margin: 0 auto; padding: 0 var(--gutter); }
+
+/* ── N13 nav with the search pill ───────────────────────────────────── */
+.nav { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 40; background: var(--bg); border-bottom: 1px solid var(--line); }
+.nav__in { display: flex; align-items: center; gap: var(--space-md); height: 60px; }
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 600; text-decoration: none; letter-spacing: -0.01em; }
+.brand__mark { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 9px; background: var(--raised); box-shadow: var(--elev); color: var(--accent); }
+.pill { display: flex; align-items: center; gap: 10px; height: 36px; width: min(340px, 100%); margin: 0 auto; padding: 0 6px 0 12px;
+  border: 0; border-radius: 999px; background: var(--hover); box-shadow: var(--well); color: var(--faint); font: 13px var(--font-ui); cursor: pointer;
+  transition: transform 160ms var(--ease-out), color 150ms ease; }
+.pill:active { transform: scale(0.98); }
+@media (hover: hover) and (pointer: fine) { .pill:hover { color: var(--muted); } }
+.pill__text { flex: 1; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+kbd { font: 500 11px/1 var(--font-mono); padding: 4px 6px; border-radius: 6px; background: var(--raised); box-shadow: var(--elev); color: var(--muted); }
+.nav__links { display: flex; align-items: center; gap: 4px; }
+.nav__links a { padding: 8px 10px; border-radius: 8px; font-size: 13.5px; color: var(--muted); text-decoration: none; white-space: nowrap; transition: color 150ms ease, background-color 150ms ease; }
+@media (hover: hover) and (pointer: fine) { .nav__links a:hover { color: var(--text); background: var(--hover); } }
+.btn { display: inline-flex; align-items: center; gap: 8px; height: 38px; padding: 0 16px; border: 0; border-radius: 10px; font: 500 14px/1 var(--font-ui);
+  text-decoration: none; white-space: nowrap; cursor: pointer; transition: transform 160ms var(--ease-out), background-color 150ms ease; }
+.btn:active { transform: scale(0.97); }
+.btn--primary { background: var(--text); color: var(--bg); box-shadow: var(--elev); }
+.btn--raised, .nav__links a.btn--raised { background: var(--raised); color: var(--text); box-shadow: var(--elev); }
+@media (hover: hover) and (pointer: fine) { .btn--raised:hover { background: var(--line); } .btn--primary:hover { background: var(--muted); } }
+
+/* ── Spotlight (⌘K) ─────────────────────────────────────────────────── */
+.cmdk { position: fixed; inset: 0; z-index: 60; display: grid; place-items: start center; padding-top: 14vh; visibility: hidden; }
+.cmdk__scrim { position: absolute; inset: 0; background: rgba(0,0,0,.55); opacity: 0; transition: opacity 150ms ease; }
+.cmdk__panel { position: relative; width: min(560px, calc(100vw - 32px)); border-radius: 16px; background: var(--raised); box-shadow: var(--float);
+  opacity: 0; transform: scale(0.97) translateY(-6px); transform-origin: top center; transition: opacity 150ms var(--ease-out), transform 150ms var(--ease-out); }
+.cmdk.is-open { visibility: visible; }
+.cmdk.is-open .cmdk__scrim { opacity: 1; }
+.cmdk.is-open .cmdk__panel { opacity: 1; transform: none; transition-duration: 200ms; }
+.cmdk__field { display: flex; align-items: center; gap: 10px; padding: 14px 16px; border-bottom: 1px solid var(--line); }
+.cmdk__field input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--text); font: 15px var(--font-ui); }
+.cmdk__list { list-style: none; margin: 0; padding: 6px; max-height: 50vh; overflow: auto; }
+.cmdk__item a { display: flex; justify-content: space-between; gap: 12px; padding: 10px 12px; border-radius: 10px; text-decoration: none; font-size: 14px; color: var(--muted); }
+.cmdk__item[aria-selected="true"] a { background: var(--hover); color: var(--text); }
+.cmdk__item small { color: var(--faint); }
+.cmdk__foot { display: flex; gap: var(--space-md); padding: 10px 16px; border-top: 1px solid var(--line); font-size: 12px; color: var(--faint); }
+
+/* ── Hero ───────────────────────────────────────────────────────────── */
+.hero { padding-block: var(--space-3xl) var(--space-2xl); }
+.status { display: inline-flex; align-items: center; gap: 8px; padding: 5px 12px; border-radius: 999px; background: var(--raised); box-shadow: var(--elev); font-size: 12.5px; color: var(--muted); }
+.status i { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+.hero h1 { margin: var(--space-lg) 0 0; font: 700 clamp(40px, 7.4vw, 88px)/1.0 var(--font-ui); letter-spacing: -0.035em; max-width: 13ch; overflow-wrap: anywhere; }
+.hero h1 span { color: var(--faint); }
+.hero p { max-width: 560px; margin: var(--space-lg) 0 0; font-size: 18px; color: var(--muted); }
+.hero__ctas { display: flex; flex-wrap: wrap; gap: 10px; margin-top: var(--space-xl); }
+.hero__fine { margin-top: var(--space-md); font-size: 13px; color: var(--faint); }
+.hero .rise { opacity: 0; transform: translateY(10px); animation: rise 600ms var(--ease-out) forwards; animation-delay: calc(var(--i) * 70ms); }
+@keyframes rise { to { opacity: 1; transform: none; } }
+
+/* ── Feature stack ──────────────────────────────────────────────────── */
+.stack { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: var(--space-2xl); padding-bottom: var(--space-3xl); }
+.story { padding: 0; margin: 0; list-style: none; }
+.step { min-height: 78vh; display: flex; flex-direction: column; justify-content: center; padding: var(--space-xl) 0;
+  opacity: .35; transition: opacity 300ms var(--ease-out); }
+.step.is-active { opacity: 1; }
+.step__n { font: 500 12px var(--font-mono); color: var(--accent); }
+.step h2 { margin: 10px 0 0; font: 600 clamp(26px, 3.2vw, 36px)/1.15 var(--font-ui); letter-spacing: -0.02em; }
+.step p { margin: var(--space-md) 0 0; color: var(--muted); font-size: 16px; max-width: 46ch; }
+.step ul { margin: var(--space-md) 0 0; padding: 0; list-style: none; display: grid; gap: 8px; font-size: 14px; color: var(--muted); }
+.step li { display: flex; gap: 10px; }
+.step li::before { content: ""; flex: none; width: 6px; height: 6px; margin-top: 8px; border-radius: 50%; background: var(--ring); }
+.step__stage { display: none; }
+
+.stage { position: sticky; top: 92px; height: min(620px, calc(100dvh - 124px)); }
+.reader { position: relative; height: 100%; border-radius: 18px; background: var(--bg); box-shadow: var(--float); overflow: hidden; display: flex; flex-direction: column; }
+.reader__tabs { display: flex; align-items: center; gap: 6px; height: 44px; padding: 0 10px; border-bottom: 1px solid var(--line); flex: none; }
+.rtab { display: flex; align-items: center; gap: 8px; height: 28px; padding: 0 10px; border-radius: 8px; font-size: 12.5px; color: var(--faint); white-space: nowrap; transition: background-color 200ms ease, color 200ms ease, box-shadow 200ms ease; }
+.rtab.is-on { background: var(--raised); color: var(--text); box-shadow: var(--elev); }
+.rtab svg { color: var(--accent); }
+.reader__body { position: relative; flex: 1; background: var(--desk); }
+/* Scenes cross-fade; a 2px blur hides the overlap (Emil: blur to bridge two states). */
+.scene { position: absolute; inset: 0; padding: 22px; opacity: 0; filter: blur(2px); transform: scale(0.985);
+  transition: opacity 260ms var(--ease-out), filter 260ms var(--ease-out), transform 260ms var(--ease-out); pointer-events: none; }
+.scene.is-on { opacity: 1; filter: none; transform: none; }
+.sheet { background: var(--paper); color: var(--ink); border-radius: 2px; box-shadow: var(--sheet); padding: 22px 26px; font: 13px/1.6 var(--font-read); }
+.sheet h3 { margin: 0 0 8px; font: 600 17px/1.2 var(--font-read); }
+.sheet p { margin: 0 0 8px; }
+.sheet mark { background: var(--highlight); color: inherit; border-radius: 2px; }
+.sheet mark.cur { background: rgba(242,166,90,.55); }
+.ghost { height: 7px; border-radius: 4px; background: rgba(27,27,31,.12); margin: 7px 0; }
+
+/* scene: pages of their own size */
+.pages { display: flex; align-items: flex-start; justify-content: center; gap: 18px; height: 100%; }
+.pages .sheet { padding: 16px; }
+.pg-portrait { width: 30%; aspect-ratio: 210/297; }
+.pg-land { width: 38%; aspect-ratio: 297/210; }
+.pg-receipt { width: 12%; aspect-ratio: 80/400; }
+.size { margin-top: 8px; text-align: center; font: 11px var(--font-ui); color: var(--faint); }
+
+/* scene: find bar */
+.findbar { display: flex; align-items: center; gap: 8px; margin: -6px -6px 16px; padding: 8px; border-radius: 12px; background: var(--raised); box-shadow: var(--elev); }
+.findbar .well { flex: 1; display: flex; justify-content: space-between; height: 30px; align-items: center; padding: 0 10px; border-radius: 8px; background: var(--hover); box-shadow: var(--well); font-size: 13px; color: var(--text); }
+.findbar .well small { color: var(--faint); font-variant-numeric: tabular-nums; }
+.ib { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 8px; color: var(--muted); font-size: 12px; }
+.ib.on { background: var(--raised); box-shadow: var(--elev); color: var(--accent); }
+
+/* scene: markdown + mermaid */
+.md { background: var(--bg); color: var(--read); border-radius: 12px; padding: 20px 24px; height: 100%; font: 14px/1.6 var(--font-ui); box-shadow: inset 0 0 0 1px var(--line); }
+.md h3 { margin: 0 0 8px; color: var(--text); font: 600 18px var(--font-ui); }
+.md pre { margin: 12px 0; padding: 12px 14px; border-radius: 10px; background: var(--panel); box-shadow: var(--well); font: 12px/1.6 var(--font-mono); color: var(--muted); overflow: hidden; }
+.md pre b { color: var(--accent); font-weight: 500; }
+.flow { display: flex; align-items: center; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
+.node { padding: 8px 12px; border-radius: 8px; background: var(--raised); box-shadow: var(--elev); font-size: 12.5px; color: var(--text); }
+.arrow { color: var(--faint); }
+
+/* scene: form */
+.field { display: grid; grid-template-columns: 110px minmax(0, 1fr); align-items: center; gap: 10px; margin: 10px 0; font: 12.5px var(--font-ui); }
+.field .in { height: 26px; display: flex; align-items: center; padding: 0 8px; border: 1px solid rgba(27,27,31,.25); border-radius: 3px; background: rgba(242,166,90,.10); font-variant-numeric: tabular-nums; }
+.field .in.focus { outline: 2px solid var(--accent); outline-offset: 1px; background: #fff; }
+.caret { display: inline-block; width: 1px; height: 14px; margin-left: 1px; background: var(--ink); animation: blink 1s steps(1) infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+.note-chip { margin-top: 12px; padding: 8px 10px; border-radius: 8px; background: var(--raised); color: var(--muted); font: 12px var(--font-ui); box-shadow: var(--elev); }
+
+/* scene: signatures */
+.sig { display: flex; align-items: center; gap: 10px; padding: 10px 12px; margin: 8px 0; border-radius: 10px; background: var(--raised); box-shadow: var(--elev); font-size: 13px; color: var(--text); }
+.sig small { display: block; color: var(--faint); font-size: 12px; }
+.sig .glyph { flex: none; width: 22px; height: 22px; }
+.ok { color: var(--ok); } .warn { color: var(--warn); } .bad { color: var(--bad); }
+
+/* ── Closing + Ft4 ──────────────────────────────────────────────────── */
+.closing { padding-block: var(--space-2xl) var(--space-3xl); border-top: 1px solid var(--line); }
+.closing h2 { margin: 0; font: 600 clamp(28px, 4vw, 44px)/1.1 var(--font-ui); letter-spacing: -0.025em; max-width: 18ch; }
+.closing p { color: var(--muted); max-width: 52ch; }
+.colophon { padding: var(--space-xl) 0; border-top: 1px solid var(--line); background: var(--panel); }
+.colophon p { margin: 0; font: 12px/1.9 var(--font-mono); color: var(--faint); max-width: 110ch; }
+.colophon a { color: var(--muted); text-decoration: none; }
+@media (hover: hover) and (pointer: fine) { .colophon a:hover { color: var(--text); } }
+
+.reveal { transition: opacity 500ms var(--ease-out), transform 500ms var(--ease-out); }
+.reveal.pre { opacity: 0; transform: translateY(10px); }
+
+@media (prefers-reduced-motion: reduce) {
+  .hero .rise { animation: none; opacity: 1; transform: none; }
+  .reveal, .scene { transform: none; filter: none; transition: opacity 150ms ease; }
+  .caret { animation: none; }
+}
+
+/* ── Tablet: keep the stack, tighten it ─────────────────────────────── */
+@media (max-width: 1023px) {
+  .stack { gap: var(--space-xl); grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .nav__links a:not(.btn) { display: none; }
+}
+/* ── Phone: no sticky stage; each step carries its own panel ───────── */
+@media (max-width: 767px) {
+  .stack { grid-template-columns: minmax(0, 1fr); }
+  .stage { display: none; }
+  .step { min-height: 0; opacity: 1; padding: var(--space-xl) 0; border-top: 1px solid var(--line); }
+  .step__stage { display: block; margin-top: var(--space-lg); height: 340px; }
+  .step__stage .scene { position: relative; inset: auto; height: 100%; opacity: 1; filter: none; transform: none; }
+  .pill { width: 40px; padding: 0; justify-content: center; margin: 0 0 0 auto; }
+  .pill__text, .pill kbd { display: none; }
+  .nav__links .btn { height: 34px; padding: 0 12px; }
+  .hero { padding-block: var(--space-2xl) var(--space-xl); }
+  .hero p { font-size: 16px; }
+}
+</style>
+</head>
+<body>
+<header class="nav">
+  <div class="wrap nav__in">
+    <a class="brand" href="#">
+      <span class="brand__mark"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 6.6C10.2 5.3 7.7 4.6 4.5 4.6v13c3.2 0 5.7.7 7.5 2 1.8-1.3 4.3-2 7.5-2v-13c-3.2 0-5.7.7-7.5 2zM12 6.6v13"/></svg></span>
+      Kitab
+    </a>
+    <button class="pill" id="pill" aria-label="Search the site (Ctrl K)" aria-haspopup="dialog">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M10.5 17a6.5 6.5 0 1 0 0-13 6.5 6.5 0 0 0 0 13zM15.2 15.2 20 20"/></svg>
+      <span class="pill__text">Formats, shortcuts, privacy…</span>
+      <kbd>Ctrl K</kbd>
+    </button>
+    <nav class="nav__links" aria-label="Main">
+      <a href="#stack">Features</a>
+      <a href="/shortcuts">Shortcuts</a>
+      <a class="btn btn--raised" href="https://github.com/t21dev/kitab">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<div class="cmdk" id="cmdk" role="dialog" aria-modal="true" aria-label="Search the site">
+  <div class="cmdk__scrim" data-close></div>
+  <div class="cmdk__panel">
+    <div class="cmdk__field">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M10.5 17a6.5 6.5 0 1 0 0-13 6.5 6.5 0 0 0 0 13zM15.2 15.2 20 20"/></svg>
+      <input id="q" placeholder="Search the site" autocomplete="off" aria-controls="results" />
+      <kbd>Esc</kbd>
+    </div>
+    <ul class="cmdk__list" id="results" role="listbox"></ul>
+    <div class="cmdk__foot"><span><kbd>↑</kbd> <kbd>↓</kbd> move</span><span><kbd>↵</kbd> open</span><span><kbd>Esc</kbd> close</span></div>
+  </div>
+</div>
+
+<main>
+  <section class="wrap hero">
+    <span class="status rise" style="--i:0"><i></i>In development · Phase 0</span>
+    <h1 class="rise" style="--i:1">Every document. <span>One fast window.</span></h1>
+    <p class="rise" style="--i:2">Kitab Reader opens PDF, EPUB, Markdown and comics in tabs that remember where you were. Native, drawn on the GPU, and built to open as fast as SumatraPDF.</p>
+    <div class="hero__ctas rise" style="--i:3">
+      <a class="btn btn--primary" href="https://github.com/t21dev/kitab">Follow on GitHub</a>
+      <a class="btn btn--raised" href="/download">Release status</a>
+    </div>
+    <p class="hero__fine rise" style="--i:4">Free and open source (AGPL-3.0). Windows first, then macOS and Linux.</p>
+  </section>
+
+  <section class="wrap stack" id="stack" aria-label="Features">
+    <ol class="story">
+      <li class="step" data-scene="tabs">
+        <span class="step__n">01</span>
+        <h2>Tabs that come back</h2>
+        <p>Open as many documents as you like. Restart, and every tab returns on the same page, at the same zoom.</p>
+        <ul><li>Pin, reorder, reopen a closed tab</li><li>Home shows what you were reading</li></ul>
+        <div class="step__stage"></div>
+      </li>
+      <li class="step" data-scene="pages">
+        <span class="step__n">02</span>
+        <h2>Pages keep their shape</h2>
+        <p>Portrait, landscape and receipt-sized pages sit together at one zoom, each at its own size.</p>
+        <div class="step__stage"></div>
+      </li>
+      <li class="step" data-scene="find">
+        <span class="step__n">03</span>
+        <h2>Find, the same everywhere</h2>
+        <p>Ctrl+F in a PDF, a book or a Markdown file. Match case, whole word, accents ignored, and a list of every hit.</p>
+        <div class="step__stage"></div>
+      </li>
+      <li class="step" data-scene="md">
+        <span class="step__n">04</span>
+        <h2>Markdown, rendered properly</h2>
+        <p>Tables, task lists, highlighted code with a copy button, Mermaid diagrams and math. It reloads when you save.</p>
+        <div class="step__stage"></div>
+      </li>
+      <li class="step" data-scene="form">
+        <span class="step__n">05</span>
+        <h2>Forms that add up</h2>
+        <p>Fill every kind of field. Currency, dates and totals work the way the form expects, and no script inside the PDF ever runs.</p>
+        <ul><li>Save a copy, export or import the data</li><li>Password-protected files of every standard kind</li></ul>
+        <div class="step__stage"></div>
+      </li>
+      <li class="step" data-scene="sign">
+        <span class="step__n">06</span>
+        <h2>Signatures you can trust</h2>
+        <p>See whether a signature is valid and whether the file changed after signing. Sign with a certificate that never leaves your computer.</p>
+        <div class="step__stage"></div>
+      </li>
+    </ol>
+
+    <div class="stage" aria-hidden="true">
+      <div class="reader">
+        <div class="reader__tabs">
+          <span class="rtab" data-tab="tabs"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 6.6C10.2 5.3 7.7 4.6 4.5 4.6v13c3.2 0 5.7.7 7.5 2 1.8-1.3 4.3-2 7.5-2v-13c-3.2 0-5.7.7-7.5 2z"/></svg>Pride and Prejudice</span>
+          <span class="rtab" data-tab="pages find form sign">Field guide.pdf</span>
+          <span class="rtab" data-tab="md">notes.md</span>
+        </div>
+        <div class="reader__body" id="scenes">
+          <div class="scene" data-scene="tabs">
+            <div class="sheet" style="max-width:440px;margin:0 auto">
+              <p style="font:11px var(--font-ui);color:#6b6b73;margin:0 0 6px">Chapter 1</p>
+              <h3>It is a truth universally acknowledged</h3>
+              <p>It is a truth universally acknowledged, that a single man in possession of a good fortune, must be in want of a wife.</p>
+              <p>However little known the feelings or views of such a man may be on his first entering a neighbourhood, <mark>this truth is so well fixed in the minds of the surrounding families</mark>, that he is considered as the rightful property of some one or other of their daughters.</p>
+              <div class="ghost" style="width:92%"></div><div class="ghost" style="width:84%"></div><div class="ghost" style="width:60%"></div>
+            </div>
+          </div>
+          <div class="scene" data-scene="pages">
+            <div class="pages">
+              <div><div class="sheet pg-portrait" style="width:150px"></div><div class="size">A4</div></div>
+              <div><div class="sheet pg-land" style="width:200px"></div><div class="size">A4 landscape</div></div>
+              <div><div class="sheet pg-receipt" style="width:44px"></div><div class="size">Receipt</div></div>
+            </div>
+          </div>
+          <div class="scene" data-scene="find">
+            <div class="findbar">
+              <span class="well">lantern <small>3 of 10</small></span>
+              <span class="ib on" title="Match case">Aa</span><span class="ib" title="Whole word">W</span>
+            </div>
+            <div class="sheet" style="max-width:440px;margin:0 auto">
+              <h3>Section 3.2</h3>
+              <p>The <mark>lantern</mark> hung by the gutter of the page. A second <mark class="cur">lantern</mark> lit the ledger, and the reader turned the leaf.</p>
+              <div class="ghost" style="width:90%"></div><div class="ghost" style="width:70%"></div>
+              <p>By morning the <mark>lantern</mark> had burned down to the wick.</p>
+            </div>
+          </div>
+          <div class="scene" data-scene="md">
+            <div class="md">
+              <h3>Release checklist</h3>
+              <pre><b>fn</b> first_page_sharp() -&gt; Duration {
+    measure(<b>"S2"</b>, Sumatra::same_machine())
+}</pre>
+              <div class="flow"><span class="node">Open</span><span class="arrow">→</span><span class="node">Render preview</span><span class="arrow">→</span><span class="node">Sharp tiles</span></div>
+            </div>
+          </div>
+          <div class="scene" data-scene="form">
+            <div class="sheet" style="max-width:440px;margin:0 auto">
+              <h3>Book order form</h3>
+              <div class="field"><span>Price, book 1</span><span class="in">$12.50</span></div>
+              <div class="field"><span>Price, book 2</span><span class="in focus">$7.25<span class="caret"></span></span></div>
+              <div class="field"><span>Total</span><span class="in">$19.75</span></div>
+              <div class="field"><span>Delivery date</span><span class="in">06 Nov 2026</span></div>
+              <div class="note-chip">Totals and dates are worked out by Kitab. Scripts in this form don't run.</div>
+            </div>
+          </div>
+          <div class="scene" data-scene="sign">
+            <div class="sig"><svg class="glyph ok" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5 5 6v5.5c0 4.2 3 7.6 7 9 4-1.4 7-4.8 7-9V6zM9 12l2.2 2.2L15.5 10"/></svg><span>Landlord<small>Valid. Only form fields changed since.</small></span></div>
+            <div class="sig"><svg class="glyph ok" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5 5 6v5.5c0 4.2 3 7.6 7 9 4-1.4 7-4.8 7-9V6zM9 12l2.2 2.2L15.5 10"/></svg><span>Tenant<small>Valid. Signed last.</small></span></div>
+            <div class="sig"><svg class="glyph warn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5 5 6v5.5c0 4.2 3 7.6 7 9 4-1.4 7-4.8 7-9V6zM12 8.5v4M12 15.5h.01"/></svg><span>Witness<small>Signer not in your trusted list.</small></span></div>
+            <div class="sig"><svg class="glyph bad" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5 5 6v5.5c0 4.2 3 7.6 7 9 4-1.4 7-4.8 7-9V6zM9.5 9.5l5 5M14.5 9.5l-5 5"/></svg><span>Draft copy<small>Broken: the file changed after signing.</small></span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="wrap closing reveal">
+    <h2>Open source, private, and measured against SumatraPDF.</h2>
+    <p>No telemetry, no account, no network unless you turn it on. The speed comparison is published with each release, with the machine it ran on.</p>
+    <div class="hero__ctas"><a class="btn btn--primary" href="https://github.com/t21dev/kitab">Follow on GitHub</a><a class="btn btn--raised" href="https://github.com/t21dev/kitab/blob/main/docs/PLAN.md">Read the plan</a></div>
+  </section>
+</main>
+
+<footer class="colophon">
+  <div class="wrap">
+    <p>Kitab Reader. Free software under the AGPL-3.0-or-later. Uses MuPDF by Artifex (AGPL). Nord palette by Arctic Ice Studio (MIT). Set in Inter, Literata and JetBrains Mono. Made by <a href="https://t21.dev">Team 21</a> and <a href="https://github.com/TriptoAfsin">TriptoAfsin</a>. <a href="/download">Download</a> · <a href="/shortcuts">Shortcuts</a> · <a href="/changelog">Changelog</a> · <a href="/privacy">Privacy</a> · <a href="/llms.txt">llms.txt</a> · <a href="https://github.com/t21dev/kitab">Source</a>. No cookies, no analytics.</p>
+  </div>
+</footer>
+
+<script>
+(() => {
+  // Mobile: each step gets a copy of its scene.
+  const scenes = document.querySelectorAll("#scenes .scene");
+  document.querySelectorAll(".step").forEach((step) => {
+    const src = [...scenes].find((s) => s.dataset.scene === step.dataset.scene);
+    const slot = step.querySelector(".step__stage");
+    if (src && slot) { const c = src.cloneNode(true); c.classList.add("is-on"); const r = document.createElement("div"); r.className = "reader"; const b = document.createElement("div"); b.className = "reader__body"; b.appendChild(c); r.appendChild(b); slot.appendChild(r); }
+  });
+
+  // Desktop: the step nearest the middle of the screen drives the stage.
+  const steps = [...document.querySelectorAll(".story .step")];
+  const tabs = document.querySelectorAll(".rtab");
+  const show = (id) => {
+    scenes.forEach((s) => s.classList.toggle("is-on", s.dataset.scene === id));
+    tabs.forEach((t) => t.classList.toggle("is-on", t.dataset.tab.split(" ").includes(id)));
+    steps.forEach((s) => s.classList.toggle("is-active", s.dataset.scene === id));
+  };
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach((e) => { if (e.isIntersecting) show(e.target.dataset.scene); });
+  }, { rootMargin: "-45% 0px -45% 0px" });
+  steps.forEach((s) => io.observe(s));
+  show("tabs");
+
+  const rev = new IntersectionObserver((es) => es.forEach((e) => { if (e.isIntersecting) { e.target.classList.remove("pre"); rev.unobserve(e.target); } }), { rootMargin: "0px 0px -10% 0px" });
+  document.querySelectorAll(".reveal").forEach((el) => { if (el.getBoundingClientRect().top > innerHeight) { el.classList.add("pre"); rev.observe(el); } });
+
+  // ⌘K / Ctrl K spotlight. Keyboard-opened: no entrance animation beyond 150 ms opacity.
+  const items = [
+    ["Formats", "PDF, EPUB, Markdown, comics", "#stack"], ["Forms and passwords", "Feature", "#stack"],
+    ["Signatures", "Feature", "#stack"], ["Keyboard shortcuts", "Page", "/shortcuts"],
+    ["Download", "Page", "/download"], ["Privacy", "Page", "/privacy"], ["Changelog", "Page", "/changelog"],
+    ["The plan", "GitHub", "https://github.com/t21dev/kitab/blob/main/docs/PLAN.md"], ["llms.txt", "For machines", "/llms.txt"],
+  ];
+  const cmdk = document.getElementById("cmdk"), q = document.getElementById("q"), list = document.getElementById("results");
+  let sel = 0, opener = null;
+  const render = () => {
+    const term = q.value.trim().toLowerCase();
+    const hits = items.filter(([t, s]) => (t + " " + s).toLowerCase().includes(term));
+    sel = Math.min(sel, Math.max(0, hits.length - 1));
+    list.innerHTML = hits.length ? hits.map(([t, s, h], i) => `<li class="cmdk__item" role="option" aria-selected="${i === sel}"><a href="${h}">${t}<small>${s}</small></a></li>`).join("")
+      : `<li class="cmdk__item"><a>No match for “${q.value.replace(/[<>&]/g, "")}”<small>Try “forms”</small></a></li>`;
+  };
+  const open = () => { opener = document.activeElement; cmdk.classList.add("is-open"); q.value = ""; sel = 0; render(); q.focus(); document.body.style.overflow = "hidden"; };
+  const close = () => { cmdk.classList.remove("is-open"); document.body.style.overflow = ""; opener && opener.focus(); };
+  document.getElementById("pill").addEventListener("click", open);
+  cmdk.addEventListener("click", (e) => { if (e.target.hasAttribute("data-close")) close(); });
+  q.addEventListener("input", () => { sel = 0; render(); });
+  addEventListener("keydown", (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") { e.preventDefault(); cmdk.classList.contains("is-open") ? close() : open(); return; }
+    if (!cmdk.classList.contains("is-open")) return;
+    const n = list.querySelectorAll('[role="option"]').length;
+    if (e.key === "Escape") close();
+    else if (e.key === "ArrowDown") { e.preventDefault(); sel = (sel + 1) % Math.max(1, n); render(); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); sel = (sel - 1 + n) % Math.max(1, n); render(); }
+    else if (e.key === "Enter") { const a = list.querySelector('[aria-selected="true"] a'); if (a && a.href) { close(); location.href = a.href; } }
+  });
+})();
+</script>
+</body>
+</html>

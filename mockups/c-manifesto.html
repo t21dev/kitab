@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="en" data-theme="vampire">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Kitab Reader · Mockup C</title>
+<meta name="description" content="Mockup C: a manifesto for a fast, private reader, with a live theme switcher." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+/* Hallmark · macrostructure: Manifesto · tone: polemical-calm · anchor hue: crimson (Vampire accent)
+ * genre: editorial (poster) · theme: custom from DESIGN.md Vampire tokens, live-switchable to all six
+ * nav: N12 banner + retract · footer: Ft5 statement
+ * enrichment: none (type only; clip-path sweep reveals)
+ * pre-emit critique: P5 H5 E4 S5 R4 V5 */
+:root {
+  --font-ui: "Inter", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --space-sm: 8px; --space-md: 16px; --space-lg: 24px; --space-xl: 48px; --space-2xl: 96px; --space-3xl: 160px;
+  --gutter: clamp(16px, 5vw, 64px);
+  --banner-h: 40px; --bar-h: 60px;
+}
+/* DESIGN.md themes. Dark-family elev/float, Light/Paper their own. */
+:root[data-theme="vampire"] { --bg:#17121A; --panel:#130F16; --raised:#231B28; --hover:#1D1621; --line:#2F2534; --text:#F2EAF0; --muted:#C2B2BF; --faint:#A2909F; --ring:#4A3B50; --accent:#E0466A; --highlight:rgba(224,70,106,.28); --on-accent:#17121A; }
+:root[data-theme="dark"]    { --bg:#141415; --panel:#111112; --raised:#1E1E21; --hover:#18181A; --line:#27272B; --text:#ECECEE; --muted:#A1A1A7; --faint:#8C8C92; --ring:#5C5C63; --accent:#E6B450; --highlight:rgba(230,180,80,.30); --on-accent:#141415; }
+:root[data-theme="noctua"]  { --bg:#0E1626; --panel:#0B1220; --raised:#17223A; --hover:#121C30; --line:#1F2B45; --text:#E6ECF7; --muted:#A9B5CE; --faint:#8A97B3; --ring:#33405E; --accent:#F2A65A; --highlight:rgba(242,166,90,.28); --on-accent:#0E1626; }
+:root[data-theme="nord"]    { --bg:#2E3440; --panel:#2A303B; --raised:#3B4252; --hover:#343A47; --line:#434C5E; --text:#ECEFF4; --muted:#C3CAD6; --faint:#A3ACBC; --ring:#4C566A; --accent:#88C0D0; --highlight:rgba(235,203,139,.30); --on-accent:#2E3440; }
+:root[data-theme="light"]   { --bg:#FFFFFF; --panel:#FAFAFB; --raised:#FFFFFF; --hover:#F3F3F5; --line:#E8E8EC; --text:#18181B; --muted:#55555D; --faint:#6B6B73; --ring:#B5B5BC; --accent:#B7791F; --highlight:#FBE2A6; --on-accent:#FFFFFF; }
+:root[data-theme="paper"]   { --bg:#F4EEE3; --panel:#EFE8DB; --raised:#FAF6EE; --hover:#EDE5D7; --line:#DCD1BF; --text:#2B241D; --muted:#5F5346; --faint:#6E6253; --ring:#B5A893; --accent:#A65424; --highlight:#EFD08F; --on-accent:#FAF6EE; }
+:root[data-theme="vampire"], :root[data-theme="dark"], :root[data-theme="noctua"], :root[data-theme="nord"] {
+  --elev: inset 0 1px 0 rgba(255,255,255,.07), 0 0 0 1px rgba(0,0,0,.5), 0 2px 6px rgba(0,0,0,.35);
+  --well: inset 0 1px 2px rgba(0,0,0,.45), inset 0 0 0 1px rgba(255,255,255,.05);
+  --float: inset 0 1px 0 rgba(255,255,255,.08), 0 0 0 1px rgba(0,0,0,.6), 0 8px 20px rgba(0,0,0,.4), 0 24px 48px rgba(0,0,0,.35); color-scheme: dark; }
+:root[data-theme="light"] { --elev: 0 0 0 1px rgba(20,20,40,.08), 0 1px 2px rgba(20,20,40,.08), 0 2px 6px rgba(20,20,40,.05);
+  --well: inset 0 1px 2px rgba(20,20,40,.06), inset 0 0 0 1px rgba(20,20,40,.08); --float: 0 0 0 1px rgba(20,20,40,.08), 0 4px 12px rgba(20,20,40,.08), 0 20px 40px rgba(20,20,40,.10); color-scheme: light; }
+:root[data-theme="paper"] { --elev: inset 0 1px 0 rgba(255,255,255,.7), 0 0 0 1px rgba(80,55,25,.12), 0 1px 3px rgba(80,55,25,.12);
+  --well: inset 0 1px 2px rgba(80,55,25,.10), inset 0 0 0 1px rgba(80,55,25,.10); --float: inset 0 1px 0 rgba(255,255,255,.6), 0 0 0 1px rgba(80,55,25,.12), 0 6px 16px rgba(80,55,25,.10), 0 22px 44px rgba(80,55,25,.12); color-scheme: light; }
+
+* { box-sizing: border-box; }
+html, body { margin: 0; overflow-x: clip; background: var(--bg); color: var(--text); }
+body { font: 16px/1.55 var(--font-ui); -webkit-font-smoothing: antialiased; }
+/* Theme change: colours cross-fade (colour, not layout). Skipped with reduced motion. */
+body, .bar, .banner, .claim, .theme-dot, .btn, footer { transition: background-color 250ms ease, color 250ms ease, border-color 250ms ease; }
+a { color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 6px; }
+.wrap { max-width: 1240px; margin: 0 auto; padding: 0 var(--gutter); }
+
+/* ── N12: banner + retracting bar ───────────────────────────────────── */
+.nav { position: fixed; inset: 0 0 auto; z-index: 50; padding-top: env(safe-area-inset-top, 0px); background: var(--accent); transition: transform 300ms var(--ease-out); }
+.nav.is-compact { transform: translateY(calc(var(--banner-h) * -1)); }
+.banner { height: var(--banner-h); display: flex; align-items: center; justify-content: center; gap: 12px; padding: 0 44px;
+  background: var(--accent); color: var(--on-accent); font-size: 13px; font-weight: 500; position: relative; white-space: nowrap; overflow: hidden; }
+.banner a { text-underline-offset: 3px; }
+.banner__x { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); width: 28px; height: 28px; border: 0; border-radius: 8px;
+  background: transparent; color: inherit; cursor: pointer; display: grid; place-items: center; }
+.banner__x:active { transform: translateY(-50%) scale(0.92); }
+.bar { height: var(--bar-h); background: var(--bg); border-bottom: 1px solid var(--line); }
+.bar .wrap { display: flex; align-items: center; height: 100%; gap: var(--space-md); }
+.brand { font-weight: 800; letter-spacing: -0.02em; text-decoration: none; font-size: 18px; }
+.brand b { color: var(--accent); }
+.links { margin-left: auto; display: flex; gap: 2px; }
+.links a { padding: 8px 10px; border-radius: 8px; font-size: 14px; color: var(--muted); text-decoration: none; transition: color 150ms ease, background-color 150ms ease; }
+@media (hover: hover) and (pointer: fine) { .links a:hover { color: var(--text); background: var(--hover); } }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 40px; padding: 0 18px; border: 0; border-radius: 10px;
+  font: 600 14px/1 var(--font-ui); text-decoration: none; white-space: nowrap; cursor: pointer; transition: transform 160ms var(--ease-out), background-color 150ms ease; }
+.btn:active { transform: scale(0.97); }
+.btn--accent, .links a.btn--accent { background: var(--accent); color: var(--on-accent); box-shadow: var(--elev); font-weight: 600; }
+.btn--raised { background: var(--raised); color: var(--text); box-shadow: var(--elev); }
+@media (hover: hover) and (pointer: fine) { .btn--raised:hover { background: var(--hover); } }
+
+/* ── Claims ─────────────────────────────────────────────────────────── */
+main { padding-top: calc(var(--banner-h) + var(--bar-h)); }
+.claim { min-height: 88vh; display: flex; flex-direction: column; justify-content: center; padding: var(--space-2xl) 0; border-bottom: 1px solid var(--line); }
+.claim--first { min-height: calc(100dvh - var(--banner-h) - var(--bar-h)); }
+.eyebrow { font: 500 12.5px var(--font-mono); color: var(--accent); margin: 0 0 var(--space-lg); }
+.display { margin: 0; font: 900 clamp(44px, 9vw, 124px)/0.92 var(--font-ui); letter-spacing: -0.045em; text-transform: uppercase; max-width: 14ch; overflow-wrap: anywhere; }
+.display .hl { color: var(--accent); }
+.display .dim { color: var(--ring); }
+.big { margin: 0; font: 800 clamp(34px, 6.4vw, 92px)/0.98 var(--font-ui); letter-spacing: -0.04em; max-width: 16ch; overflow-wrap: anywhere; }
+.big .hl { box-shadow: inset 0 -0.18em 0 var(--highlight); }
+.claim p.body { margin: var(--space-xl) 0 0; max-width: 54ch; font-size: clamp(16px, 1.6vw, 19px); color: var(--muted); }
+.claim .ctas { display: flex; flex-wrap: wrap; gap: 10px; margin-top: var(--space-xl); }
+
+/* Sweep reveal: lines wipe in left to right with clip-path (transform-free, GPU). */
+.sweep { transition: clip-path 700ms var(--ease-in-out); }
+.sweep.pre { clip-path: inset(0 100% 0 0); }
+.sweep:nth-child(2) { transition-delay: 80ms; } .sweep:nth-child(3) { transition-delay: 160ms; }
+.fade { transition: opacity 500ms var(--ease-out), transform 500ms var(--ease-out); transition-delay: 250ms; }
+.fade.pre { opacity: 0; transform: translateY(10px); }
+.line { display: block; }
+
+/* Numbered list of commitments */
+.vows { list-style: none; margin: var(--space-xl) 0 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 var(--space-xl); }
+.vows li { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--space-md); padding: var(--space-lg) 0; border-top: 1px solid var(--line); }
+.vows .n { font: 500 13px var(--font-mono); color: var(--accent); padding-top: 4px; }
+.vows h3 { margin: 0; font: 700 20px/1.25 var(--font-ui); letter-spacing: -0.01em; }
+.vows p { margin: 6px 0 0; color: var(--muted); font-size: 15px; }
+
+/* Theme switcher as the proof */
+.themes { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; margin-top: var(--space-xl); }
+.theme-dot { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; padding: 12px; border: 0; border-radius: 14px; background: var(--raised);
+  box-shadow: var(--elev); color: var(--text); font: 600 14px var(--font-ui); cursor: pointer; text-align: left;
+  transition: transform 160ms var(--ease-out), background-color 250ms ease, color 250ms ease; }
+.theme-dot:active { transform: scale(0.97); }
+.theme-dot[aria-pressed="true"] { box-shadow: var(--elev), 0 0 0 2px var(--accent); }
+.swatch { width: 100%; height: 44px; border-radius: 8px; position: relative; overflow: hidden; box-shadow: inset 0 0 0 1px rgba(0,0,0,.15); }
+.swatch i { position: absolute; right: 8px; bottom: 8px; width: 12px; height: 12px; border-radius: 50%; }
+
+/* ── Ft5 statement footer ───────────────────────────────────────────── */
+footer { padding: var(--space-2xl) 0 var(--space-xl); }
+.stmt { margin: 0; font: 800 clamp(30px, 5vw, 64px)/1.0 var(--font-ui); letter-spacing: -0.035em; max-width: 20ch; }
+.meta { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: var(--space-md); margin-top: var(--space-xl); padding-top: var(--space-md); border-top: 1px solid var(--line); font-size: 13px; color: var(--faint); }
+.meta nav { display: flex; flex-wrap: wrap; gap: var(--space-md); }
+.meta a { text-decoration: none; }
+@media (hover: hover) and (pointer: fine) { .meta a:hover { color: var(--text); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .sweep, .sweep.pre { clip-path: none; transition: opacity 150ms ease; } .sweep.pre { opacity: 0; }
+  .fade { transform: none; transition: opacity 150ms ease; }
+  body, .bar, .banner, .claim, .theme-dot, .btn, footer, .nav { transition: none; }
+}
+@media (max-width: 1023px) {
+  .themes { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 767px) {
+  :root { --banner-h: 36px; --bar-h: 56px; }
+  .links a:not(.btn) { display: none; }
+  .banner { font-size: 12px; justify-content: flex-start; padding-left: 16px; }
+  .banner .long { display: none; }
+  .vows { grid-template-columns: minmax(0, 1fr); }
+  .claim { min-height: 0; padding: var(--space-2xl) 0; }
+  .themes { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+</style>
+</head>
+<body>
+<header class="nav" id="nav">
+  <div class="banner" id="banner">
+    <span>Kitab is in development.<span class="long"> No release yet.</span></span>
+    <a href="https://github.com/t21dev/kitab">Watch on GitHub →</a>
+    <button class="banner__x" id="bannerX" aria-label="Dismiss the notice"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+  </div>
+  <div class="bar">
+    <div class="wrap">
+      <a class="brand" href="#">kitab<b>.</b></a>
+      <nav class="links" aria-label="Main">
+        <a href="#vows">Promises</a>
+        <a href="#themes">Themes</a>
+        <a href="/shortcuts">Shortcuts</a>
+        <a class="btn btn--accent" href="/download">Download</a>
+      </nav>
+    </div>
+  </div>
+</header>
+
+<main>
+  <section class="claim claim--first">
+    <div class="wrap">
+      <p class="eyebrow fade">Kitab Reader · PDF, EPUB, Markdown, comics</p>
+      <h1 class="display">
+        <span class="line sweep">A reader</span>
+        <span class="line sweep">should open <span class="hl">before</span></span>
+        <span class="line sweep"><span class="dim">you notice.</span></span>
+      </h1>
+      <p class="body fade">Kitab is a native, GPU-drawn reader with one rule above the rest: it has to start as fast as SumatraPDF on the same machine, or the change that slowed it down doesn't ship.</p>
+      <div class="ctas fade">
+        <a class="btn btn--accent" href="https://github.com/t21dev/kitab">Follow on GitHub</a>
+        <a class="btn btn--raised" href="https://github.com/t21dev/kitab/blob/main/docs/PLAN.md">Read the plan</a>
+      </div>
+    </div>
+  </section>
+
+  <section class="claim">
+    <div class="wrap">
+      <p class="eyebrow fade">On speed</p>
+      <p class="big"><span class="line sweep">Measured against</span><span class="line sweep"><span class="hl">SumatraPDF.</span> Not claimed.</span></p>
+      <p class="body fade">The same files, the same machine, a stopwatch that watches the window. Fifteen runs per scenario. Results ship with every release, along with the machine they ran on. Until the first release, there is no number on this page.</p>
+    </div>
+  </section>
+
+  <section class="claim" id="vows">
+    <div class="wrap">
+      <p class="eyebrow fade">What Kitab promises</p>
+      <p class="big"><span class="line sweep">Your files.</span><span class="line sweep">Your computer.</span></p>
+      <ul class="vows">
+        <li class="fade"><span class="n">01</span><div><h3>No telemetry. Ever.</h3><p>No analytics, no crash uploads, no account. Nothing leaves unless you send it.</p></div></li>
+        <li class="fade"><span class="n">02</span><div><h3>No document runs code.</h3><p>PDF scripts never run. Forms still add up: Kitab works out totals and dates itself.</p></div></li>
+        <li class="fade"><span class="n">03</span><div><h3>Keys stay local.</h3><p>Sign PDFs with a certificate that never leaves your machine. Open password-protected files of every standard kind.</p></div></li>
+        <li class="fade"><span class="n">04</span><div><h3>Everything in one window.</h3><p>PDF, EPUB, MOBI, FB2, XPS, CBZ, Markdown with Mermaid and math. Tabs that come back after a restart.</p></div></li>
+        <li class="fade"><span class="n">05</span><div><h3>Free, and the source is open.</h3><p>AGPL-3.0. The plan, the design system and the tests are public.</p></div></li>
+        <li class="fade"><span class="n">06</span><div><h3>Installs the way you install things.</h3><p>Installer, portable zip, DMG, AppImage, Flatpak, and from the first release brew, scoop and winget.</p></div></li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="claim" id="themes">
+    <div class="wrap">
+      <p class="eyebrow fade">Six themes, any accent</p>
+      <p class="big"><span class="line sweep">Pick one.</span><span class="line sweep">This page <span class="hl">changes</span> with it.</span></p>
+      <div class="themes fade" role="group" aria-label="Theme">
+        <button class="theme-dot" data-t="vampire" style="--s-bg:#17121A;--s-ac:#E0466A"><span class="swatch" style="background:var(--s-bg)"><i style="background:var(--s-ac)"></i></span>Vampire</button>
+        <button class="theme-dot" data-t="dark" style="--s-bg:#141415;--s-ac:#E6B450"><span class="swatch" style="background:var(--s-bg)"><i style="background:var(--s-ac)"></i></span>Dark</button>
+        <button class="theme-dot" data-t="noctua" style="--s-bg:#0E1626;--s-ac:#F2A65A"><span class="swatch" style="background:var(--s-bg)"><i style="background:var(--s-ac)"></i></span>Noctua</button>
+        <button class="theme-dot" data-t="nord" style="--s-bg:#2E3440;--s-ac:#88C0D0"><span class="swatch" style="background:var(--s-bg)"><i style="background:var(--s-ac)"></i></span>Nord</button>
+        <button class="theme-dot" data-t="light" style="--s-bg:#FFFFFF;--s-ac:#B7791F"><span class="swatch" style="background:var(--s-bg)"><i style="background:var(--s-ac)"></i></span>Light</button>
+        <button class="theme-dot" data-t="paper" style="--s-bg:#F4EEE3;--s-ac:#A65424"><span class="swatch" style="background:var(--s-bg)"><i style="background:var(--s-ac)"></i></span>Paper</button>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <p class="stmt">Read beautifully. Work efficiently.</p>
+    <div class="meta">
+      <span>kitab<b style="color:var(--accent)">.</b> by Team 21 and TriptoAfsin · AGPL-3.0</span>
+      <nav aria-label="Footer"><a href="/download">Download</a><a href="/shortcuts">Shortcuts</a><a href="/changelog">Changelog</a><a href="/privacy">Privacy</a><a href="/llms.txt">llms.txt</a><a href="https://github.com/t21dev/kitab">Source</a></nav>
+    </div>
+  </div>
+</footer>
+
+<script>
+(() => {
+  const root = document.documentElement;
+  // Sweep and fade reveals, once.
+  const io = new IntersectionObserver((es) => es.forEach((e) => { if (e.isIntersecting) { e.target.classList.remove("pre"); io.unobserve(e.target); } }), { rootMargin: "0px 0px -12% 0px" });
+  // Only what starts below the first screen waits for a scroll; the first screen rests visible.
+  document.querySelectorAll(".sweep, .fade").forEach((el) => { if (el.getBoundingClientRect().top > innerHeight) { el.classList.add("pre"); io.observe(el); } });
+
+  // N12: banner retracts on scroll down, returns on scroll up or near the top.
+  const nav = document.getElementById("nav");
+  let last = scrollY, ticking = false;
+  addEventListener("scroll", () => {
+    if (ticking) return; ticking = true;
+    requestAnimationFrame(() => {
+      const y = scrollY;
+      if (y < 48) nav.classList.remove("is-compact");
+      else if (y > last + 4) nav.classList.add("is-compact");
+      else if (y < last - 4) nav.classList.remove("is-compact");
+      last = y; ticking = false;
+    });
+  }, { passive: true });
+  document.getElementById("bannerX").addEventListener("click", () => {
+    nav.classList.remove("is-compact");
+    root.style.setProperty("--banner-h", "0px");
+    document.getElementById("banner").hidden = true;
+  });
+
+  // Theme switcher: the page re-colours with a 250 ms colour cross-fade.
+  const dots = document.querySelectorAll(".theme-dot");
+  const set = (t) => { root.dataset.theme = t; dots.forEach((d) => d.setAttribute("aria-pressed", String(d.dataset.t === t))); };
+  dots.forEach((d) => d.addEventListener("click", () => set(d.dataset.t)));
+  set(root.dataset.theme);
+})();
+</script>
+</body>
+</html>

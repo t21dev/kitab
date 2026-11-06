@@ -1,0 +1,306 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Kitab Reader · Mockup B</title>
+<meta name="description" content="Mockup B: the landing page reads like a chapter open in Kitab." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Literata:opsz,wght@7..72,400;7..72,600&display=swap" rel="stylesheet" />
+<style>
+/* Hallmark · macrostructure: Long Document · tone: editorial-quiet · anchor hue: rust (Paper accent)
+ * genre: editorial · theme: custom from DESIGN.md Paper tokens · nav: N3 side-rail (as the app outline) · footer: Ft6 letter close
+ * enrichment: none (typography + the app's own scrubber as reading progress)
+ * pre-emit critique: P5 H4 E4 S5 R5 V5 */
+:root {
+  /* DESIGN.md · Paper */
+  --bg: #F4EEE3; --panel: #EFE8DB; --desk: #EBE3D5; --raised: #FAF6EE; --hover: #EDE5D7;
+  --line: #DCD1BF; --text: #2B241D; --read: #2B241D; --muted: #5F5346; --faint: #6E6253;
+  --ring: #B5A893; --accent: #A65424; --highlight: #EFD08F; --ok: #4E8A57;
+  --elev: inset 0 1px 0 rgba(255,255,255,.7), 0 0 0 1px rgba(80,55,25,.12), 0 1px 3px rgba(80,55,25,.12);
+  --well: inset 0 1px 2px rgba(80,55,25,.10), inset 0 0 0 1px rgba(80,55,25,.10);
+  --float: inset 0 1px 0 rgba(255,255,255,.6), 0 0 0 1px rgba(80,55,25,.12), 0 6px 16px rgba(80,55,25,.10), 0 22px 44px rgba(80,55,25,.12);
+  --font-ui: "Inter", "Segoe UI", system-ui, sans-serif;
+  --font-read: "Literata", Georgia, serif;
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --space-xs: 4px; --space-sm: 8px; --space-md: 16px; --space-lg: 24px; --space-xl: 40px; --space-2xl: 72px;
+  --rail: 248px; --measure: 640px;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; overflow-x: clip; background: var(--bg); color: var(--text); }
+body { font-family: var(--font-ui); font-size: 15px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+::selection { background: var(--highlight); }
+a { color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+
+/* ── Top bar: the app's title bar, one tab ─────────────────────────────── */
+.bar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20; display: flex; align-items: center; gap: var(--space-sm);
+  height: 48px; padding: 0 var(--space-md); background: var(--bg); border-bottom: 1px solid var(--line); }
+.home { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 8px; color: var(--accent); }
+.tab { display: flex; align-items: center; gap: var(--space-sm); height: 30px; padding: 0 12px; border-radius: 8px;
+  background: var(--raised); box-shadow: var(--elev); font-size: 13px; white-space: nowrap; min-width: 0; }
+.tab span { overflow: hidden; text-overflow: ellipsis; }
+.bar__right { margin-left: auto; display: flex; gap: var(--space-sm); align-items: center; }
+.btn { display: inline-flex; align-items: center; gap: 8px; height: 32px; padding: 0 14px; border-radius: 9px; border: 0;
+  font: 500 13px/1 var(--font-ui); text-decoration: none; white-space: nowrap; cursor: pointer;
+  transition: transform 160ms var(--ease-out), background-color 150ms ease; }
+.btn:active { transform: scale(0.97); }
+.btn--ink { background: var(--text); color: var(--bg); box-shadow: var(--elev); }
+.btn--raised { background: var(--raised); color: var(--text); box-shadow: var(--elev); }
+@media (hover: hover) and (pointer: fine) { .btn--raised:hover { background: var(--hover); } .btn--ink:hover { background: var(--muted); } }
+
+/* ── Layout: outline rail + reading column ─────────────────────────────── */
+.shell { display: grid; grid-template-columns: var(--rail) minmax(0, 1fr); }
+.rail { position: sticky; top: 48px; align-self: start; height: calc(100dvh - 48px); padding: var(--space-md) 12px;
+  background: var(--panel); border-right: 1px solid var(--line); overflow-y: auto; }
+.rail__title { display: flex; justify-content: space-between; padding: 4px 8px 10px; font-size: 12px; font-weight: 500; color: var(--muted); }
+.rail ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.rail a { display: flex; align-items: center; gap: 10px; height: 31px; padding: 0 10px; border-radius: 8px;
+  font-size: 13px; color: var(--muted); text-decoration: none; transition: background-color 150ms ease, color 150ms ease; }
+@media (hover: hover) and (pointer: fine) { .rail a:hover { background: var(--hover); color: var(--text); } }
+.rail a[aria-current="true"] { background: var(--raised); box-shadow: var(--elev); color: var(--text); }
+/* Status ring: unread → reading (half) → finished (filled with check) — DESIGN.md status glyphs */
+.ring { position: relative; flex: none; width: 12px; height: 12px; border-radius: 50%; box-shadow: inset 0 0 0 1.4px var(--ring); overflow: hidden; }
+.ring::after { content: ""; position: absolute; inset: 0; background: var(--accent); transform: scaleX(0); transform-origin: left;
+  transition: transform 240ms var(--ease-out); }
+.ring[data-state="reading"] { box-shadow: inset 0 0 0 1.4px var(--accent); }
+.ring[data-state="reading"]::after { transform: scaleX(.5); }
+.ring[data-state="done"] { box-shadow: none; }
+.ring[data-state="done"]::after { transform: scaleX(1); background: var(--ok); }
+.rail__count { margin-left: auto; font-size: 11.5px; color: var(--faint); font-variant-numeric: tabular-nums; }
+
+.page { padding: var(--space-2xl) var(--space-xl) 160px; }
+.col { max-width: var(--measure); margin: 0 auto; }
+.kicker { font-size: 12.5px; color: var(--faint); margin: 0 0 var(--space-sm); }
+h1 { font: 600 clamp(34px, 6vw, 56px)/1.08 var(--font-read); letter-spacing: -0.015em; margin: 0; overflow-wrap: anywhere; }
+.lede { font: 400 clamp(18px, 2.2vw, 21px)/1.65 var(--font-read); color: var(--read); margin: var(--space-lg) 0 0; }
+.meta { display: flex; flex-wrap: wrap; gap: var(--space-sm) var(--space-md); margin-top: var(--space-lg); font-size: 13px; color: var(--faint); }
+.meta b { color: var(--muted); font-weight: 500; }
+.ctas { display: flex; flex-wrap: wrap; gap: 10px; margin-top: var(--space-lg); }
+.ctas .btn { height: 38px; padding: 0 16px; font-size: 14px; }
+
+section { padding-top: var(--space-2xl); }
+h2 { font: 600 clamp(24px, 3.4vw, 30px)/1.2 var(--font-read); letter-spacing: -0.01em; margin: 0 0 var(--space-md); }
+.prose p { font: 400 18px/1.75 var(--font-read); color: var(--read); margin: 0 0 1.1em; }
+.prose mark { background: var(--highlight); color: inherit; border-radius: 3px; padding: 0 2px; }
+.prose a { text-decoration: underline; text-decoration-color: var(--accent); text-underline-offset: 3px; }
+.prose kbd, .keys kbd { font: 500 12px/1 ui-monospace, Consolas, monospace; padding: 3px 6px; border-radius: 6px; background: var(--raised); box-shadow: var(--elev); white-space: nowrap; }
+
+/* A list of formats, set like a sentence of chips */
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin: var(--space-md) 0 var(--space-lg); padding: 0; list-style: none; }
+.chips li { padding: 4px 10px; border-radius: 999px; background: var(--hover); box-shadow: var(--well); font-size: 12.5px; color: var(--muted); }
+
+/* Margin note: in the column on small screens, hung in the margin on wide ones */
+.prose .note, .note { font-family: var(--font-ui); font-size: 13px; line-height: 1.5; color: var(--faint); border-left: 2px solid var(--accent); padding-left: 12px; margin: 0 0 var(--space-lg); }
+@media (min-width: 1280px) {
+  .with-note { position: relative; }
+  .with-note .note { position: absolute; left: calc(100% + 40px); top: 6px; width: 200px; margin: 0; }
+}
+
+.compare { width: 100%; border-collapse: collapse; font-size: 14px; margin: var(--space-md) 0 var(--space-lg); }
+.compare th, .compare td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.compare thead th { font-weight: 500; color: var(--faint); font-size: 12.5px; }
+.compare tbody th { font-weight: 500; color: var(--muted); }
+.table-wrap { overflow-x: auto; }
+
+.ornament { text-align: center; color: var(--ring); letter-spacing: .6em; margin: var(--space-2xl) 0 0; }
+.close { font: 400 19px/1.6 var(--font-read); }
+.close b { font-weight: 600; }
+.ps { font-size: 13.5px; color: var(--faint); margin-top: var(--space-md); }
+footer.colophon { margin-top: var(--space-xl); padding-top: var(--space-md); border-top: 1px solid var(--line); font-size: 12.5px; color: var(--faint);
+  display: flex; flex-wrap: wrap; gap: var(--space-sm) var(--space-md); }
+footer.colophon a { text-decoration: none; }
+@media (hover: hover) and (pointer: fine) { footer.colophon a:hover { color: var(--text); } }
+
+/* ── The scrubber, doubling as reading progress ────────────────────────── */
+.scrubber { position: fixed; z-index: 30; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%);
+  display: flex; align-items: center; gap: 12px; width: min(420px, calc(100vw - 32px)); height: 40px; padding: 0 16px;
+  border-radius: 999px; background: var(--raised); box-shadow: var(--float); font-size: 12px; color: var(--muted);
+  font-variant-numeric: tabular-nums; }
+.scrubber__label { min-width: 0; flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 40%; }
+.track { position: relative; flex: 1; height: 6px; border-radius: 999px; background: var(--hover); box-shadow: var(--well); overflow: hidden; }
+.track__fill { position: absolute; inset: 0; background: var(--accent); transform-origin: left; transform: scaleX(0); }
+.track__tick { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--ring); opacity: .7; }
+.scrubber__left { white-space: nowrap; }
+
+/* ── Reveal: paragraphs settle in once, quietly ────────────────────────── */
+.reveal { transition: opacity 500ms var(--ease-out), transform 500ms var(--ease-out); }
+.reveal.pre { opacity: 0; transform: translateY(8px); }
+.hero .reveal { transition-delay: calc(var(--i, 0) * 60ms); }
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal { transform: none; transition: opacity 150ms ease; }
+  .ring::after, .btn { transition: none; }
+}
+
+/* ── Responsive ────────────────────────────────────────────────────────── */
+@media (max-width: 1023px) { :root { --rail: 208px; } .page { padding-inline: var(--space-lg); } }
+@media (max-width: 767px) {
+  .shell { grid-template-columns: minmax(0, 1fr); }
+  .rail { position: sticky; top: 48px; z-index: 10; height: auto; padding: 6px var(--space-sm); border-right: 0; border-bottom: 1px solid var(--line); }
+  .rail__title { display: none; }
+  .rail ol { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; }
+  .rail a { height: 30px; white-space: nowrap; }
+  .rail__count { display: none; }
+  .page { padding: var(--space-xl) var(--space-md) 140px; }
+  .prose p { font-size: 17px; }
+  .bar .btn--raised { display: none; }
+}
+@media (max-width: 380px) { .tab { max-width: 150px; } }
+</style>
+</head>
+<body>
+<header class="bar">
+  <a class="home" href="#top" aria-label="Kitab Reader home">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 6.6C10.2 5.3 7.7 4.6 4.5 4.6v13c3.2 0 5.7.7 7.5 2 1.8-1.3 4.3-2 7.5-2v-13c-3.2 0-5.7.7-7.5 2zM12 6.6v13"/></svg>
+  </a>
+  <div class="tab" title="kitab.t21.dev"><span>Kitab Reader</span></div>
+  <div class="bar__right">
+    <a class="btn btn--raised" href="/shortcuts">Shortcuts</a>
+    <a class="btn btn--ink" href="https://github.com/t21dev/kitab">GitHub</a>
+  </div>
+</header>
+
+<div class="shell" id="top">
+  <nav class="rail" aria-label="Contents">
+    <div class="rail__title">Contents <span aria-hidden="true">≡</span></div>
+    <ol id="outline">
+      <li><a href="#opening" data-target="opening"><span class="ring" data-state="unread"></span>Opening</a></li>
+      <li><a href="#speed" data-target="speed"><span class="ring" data-state="unread"></span>Speed<span class="rail__count">vs Sumatra</span></a></li>
+      <li><a href="#reading" data-target="reading"><span class="ring" data-state="unread"></span>Reading</a></li>
+      <li><a href="#working" data-target="working"><span class="ring" data-state="unread"></span>Working</a></li>
+      <li><a href="#privacy" data-target="privacy"><span class="ring" data-state="unread"></span>Privacy</a></li>
+      <li><a href="#status" data-target="status"><span class="ring" data-state="unread"></span>Status</a></li>
+    </ol>
+  </nav>
+
+  <main class="page">
+    <article class="col">
+      <header class="hero" id="opening" data-chapter="Opening">
+        <p class="kicker reveal" style="--i:0">Kitab Reader · in development</p>
+        <h1 class="reveal" style="--i:1">Read beautifully. Work efficiently.</h1>
+        <p class="lede reveal" style="--i:2">Kitab is a reader for PDF, EPUB, Markdown and comics. It is native and drawn on the GPU, it aims to open as fast as SumatraPDF, and it keeps your files on your computer. This page is laid out the way Kitab lays out a book: the contents on the left, your place at the bottom.</p>
+        <div class="meta reveal" style="--i:3"><span><b>Free</b> · AGPL-3.0</span><span><b>Windows</b> first, then macOS and Linux</span><span><b>No</b> account, no telemetry</span></div>
+        <div class="ctas reveal" style="--i:4">
+          <a class="btn btn--ink" href="https://github.com/t21dev/kitab">Follow on GitHub</a>
+          <a class="btn btn--raised" href="/download">Release status</a>
+        </div>
+      </header>
+
+      <section id="speed" data-chapter="Speed" class="prose">
+        <h2 class="reveal">Speed is a test, not a claim</h2>
+        <div class="with-note">
+          <p class="reveal">SumatraPDF is the bar for a light reader on Windows. Kitab's promise is to start and show the first page as fast as Sumatra on the same machine, or faster, and to stay smooth with many tabs open and while you resize the window.</p>
+          <p class="note reveal">No results yet. The first comparison ships with the first release, with the machine and the Sumatra version it ran on.</p>
+        </div>
+        <p class="reveal">A benchmark starts both apps the same way and watches their windows until the page is drawn and stable. Each scenario runs fifteen times. A change that makes Kitab slower <mark>fails the build until it is fixed</mark>.</p>
+      </section>
+
+      <section id="reading" data-chapter="Reading" class="prose">
+        <h2 class="reveal">One window for everything you read</h2>
+        <ul class="chips reveal" aria-label="Formats">
+          <li>PDF</li><li>EPUB</li><li>MOBI</li><li>AZW3</li><li>FB2</li><li>XPS</li><li>CBZ</li><li>Markdown</li><li>TXT</li><li>Images</li>
+        </ul>
+        <p class="reveal">Open as many documents as you like in tabs. Close Kitab and open it again: every tab comes back on the same page, at the same zoom. Home shows what you were reading and where you stopped.</p>
+        <p class="reveal">PDF pages keep their own size, so a landscape chart sits between portrait pages instead of being squeezed. Books reflow in Literata or Atkinson Hyperlegible. Markdown renders like GitHub, with Mermaid diagrams, highlighted code and math, and reloads when you save the file.</p>
+        <p class="reveal">Press <kbd>Ctrl</kbd> <kbd>F</kbd> in any of them. Find works the same way everywhere.</p>
+      </section>
+
+      <section id="working" data-chapter="Working" class="prose">
+        <h2 class="reveal">Fill it, sign it, print it</h2>
+        <p class="reveal">Fill PDF forms, with totals and dates worked out the way the form expects, and no document scripts ever run. Open password-protected files of every standard kind. Check whether a signature is valid and whether the file changed after signing, or sign it yourself with a certificate that never leaves your computer.</p>
+        <p class="reveal">Merge, split, compress, watermark and redact without uploading anything. Print with each page at its own orientation.</p>
+        <div class="table-wrap reveal">
+          <table class="compare">
+            <thead><tr><th></th><th>SumatraPDF</th><th>Kitab</th></tr></thead>
+            <tbody>
+              <tr><th scope="row">Engine</th><td>MuPDF</td><td>MuPDF</td></tr>
+              <tr><th scope="row">Platforms</th><td>Windows</td><td>Windows, macOS, Linux</td></tr>
+              <tr><th scope="row">Markdown</th><td>No</td><td>Yes, with Mermaid and math</td></tr>
+              <tr><th scope="row">Forms</th><td>Fill</td><td>Fill, save, export data</td></tr>
+              <tr><th scope="row">Signatures</th><td>No</td><td>Verify and sign</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="privacy" data-chapter="Privacy" class="prose">
+        <h2 class="reveal">Your files stay where they are</h2>
+        <p class="reveal">There is no telemetry and no account. Kitab makes no network request until you turn something on, like the update check, and each setting says so where you turn it on. Your library, highlights and settings live in one folder. Delete it and they are gone.</p>
+      </section>
+
+      <section id="status" data-chapter="Status" class="prose">
+        <h2 class="reveal">Where it stands</h2>
+        <p class="reveal">Kitab is in its first phase: the foundations, and a test of whether the interface framework can start as fast as Sumatra. Every phase after that ends with its tests passing and a release. The <a href="https://github.com/t21dev/kitab/blob/main/docs/PLAN.md">plan is public</a>, and so is every line of code.</p>
+        <p class="ornament" aria-hidden="true">· · ·</p>
+        <p class="close reveal">Thanks for reading this far.<br /><b>Team 21 and TriptoAfsin</b></p>
+        <p class="ps reveal">P.S. If a PDF opens badly in other readers, keep it. When Kitab has a release, it is exactly the file we want in an issue.</p>
+        <footer class="colophon">
+          <a href="/download">Download</a><a href="/shortcuts">Shortcuts</a><a href="/changelog">Changelog</a><a href="/privacy">Privacy</a><a href="/llms.txt">llms.txt</a><span>AGPL-3.0 · kitab.t21.dev</span>
+        </footer>
+      </section>
+    </article>
+  </main>
+</div>
+
+<div class="scrubber" role="progressbar" aria-label="Reading progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+  <span class="scrubber__label" id="chapter">Opening</span>
+  <span class="track"><span class="track__fill" id="fill"></span></span>
+  <span class="scrubber__left" id="left">6 sections</span>
+</div>
+
+<script>
+(() => {
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  // Reveal once, as paragraphs reach the reader.
+  const io = new IntersectionObserver((entries) => {
+    for (const e of entries) if (e.isIntersecting) { e.target.classList.remove("pre"); io.unobserve(e.target); }
+  }, { rootMargin: "0px 0px -8% 0px" });
+  document.querySelectorAll(".reveal").forEach((el) => { if (el.getBoundingClientRect().top > innerHeight) { el.classList.add("pre"); io.observe(el); } });
+
+  // Outline rings + scrubber follow the reading position.
+  const chapters = [...document.querySelectorAll("[data-chapter]")];
+  const links = new Map([...document.querySelectorAll("#outline a")].map((a) => [a.dataset.target, a]));
+  const fill = document.getElementById("fill");
+  const label = document.getElementById("chapter");
+  const left = document.getElementById("left");
+  const bar = document.querySelector(".scrubber");
+  const track = document.querySelector(".track");
+  // Chapter ticks on the track.
+  const total = () => document.documentElement.scrollHeight - innerHeight;
+  const placeTicks = () => {
+    track.querySelectorAll(".track__tick").forEach((t) => t.remove());
+    chapters.slice(1).forEach((c) => {
+      const t = document.createElement("span"); t.className = "track__tick";
+      t.style.left = Math.min(99, (c.offsetTop / Math.max(1, total())) * 100) + "%"; track.appendChild(t);
+    });
+  };
+  let ticking = false;
+  const update = () => {
+    ticking = false;
+    const y = scrollY, p = Math.min(1, Math.max(0, y / Math.max(1, total())));
+    fill.style.transform = `scaleX(${p})`;
+    bar.setAttribute("aria-valuenow", String(Math.round(p * 100)));
+    let current = 0;
+    chapters.forEach((c, i) => { if (c.getBoundingClientRect().top < innerHeight * 0.4) current = i; });
+    chapters.forEach((c, i) => {
+      const a = links.get(c.id); if (!a) return;
+      const ring = a.querySelector(".ring");
+      ring.dataset.state = i < current || p > 0.995 ? "done" : i === current ? "reading" : "unread";
+      if (i === current) { a.setAttribute("aria-current", "true"); if (innerWidth < 768) { const ol = a.closest("ol"); ol.scrollLeft = a.offsetLeft - ol.clientWidth / 2 + a.offsetWidth / 2; } }
+      else a.removeAttribute("aria-current");
+    });
+    label.textContent = chapters[current].dataset.chapter;
+    const remaining = chapters.length - current - 1;
+    left.textContent = remaining === 0 ? "Last section" : `${remaining} more`;
+  };
+  addEventListener("scroll", () => { if (!ticking) { ticking = true; requestAnimationFrame(update); } }, { passive: true });
+  addEventListener("resize", () => { placeTicks(); update(); });
+  placeTicks(); update();
+  if (reduce) document.querySelectorAll(".reveal").forEach((el) => el.classList.remove("pre"));
+})();
+</script>
+</body>
+</html>
