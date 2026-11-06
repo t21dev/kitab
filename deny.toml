@@ -44,6 +44,12 @@ allow = [
     "OFL-1.1",
     "Unlicense",
 ]
+# The mupdf bindings declare the deprecated SPDX id "AGPL-3.0" (MuPDF itself is
+# AGPL-3.0-or-later). Allowed for those two crates only.
+exceptions = [
+    { crate = "mupdf", allow = ["AGPL-3.0"] },
+    { crate = "mupdf-sys", allow = ["AGPL-3.0"] },
+]
 
 [bans]
 multiple-versions = "warn"

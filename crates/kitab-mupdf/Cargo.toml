@@ -1,0 +1,27 @@
+[package]
+name = "kitab-mupdf"
+description = "MuPDF document engine for Kitab Reader: a worker pool that opens, renders and searches documents"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish = false
+
+[dependencies]
+kitab-core = { workspace = true }
+mupdf = { workspace = true }
+# The raw MuPDF calls the safe crate does not expose (store shrinking, permissions,
+# repair flag). Same version the `mupdf` crate pins, so it adds no code.
+mupdf-sys = "0.8.0"
+# Find: diacritic-insensitive matching (NFD, then drop combining marks). MIT/Apache-2.0, ~300 KB of tables.
+unicode-normalization = "0.1"
+
+[dev-dependencies]
+serde_json = { workspace = true }
+# Local corpus test: check each file's SHA-256 before trusting a result. MIT/Apache-2.0.
+sha2 = "0.10"
+
+[lints]
+workspace = true
