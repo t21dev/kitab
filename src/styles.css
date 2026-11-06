@@ -166,14 +166,11 @@
 .band__lede a { text-decoration: underline; text-decoration-color: var(--accent); text-underline-offset: 3px; }
 .band__grid { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: var(--space-2xl); align-items: start; }
 .table-wrap { margin-top: var(--space-xl); overflow-x: auto; border-radius: 14px; box-shadow: inset 0 0 0 1px var(--line); }
-.compare { width: 100%; min-width: 560px; border-collapse: collapse; font-size: 14px; }
-.compare th, .compare td { padding: 12px 18px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--line); }
-.compare thead th { background: var(--panel); font-size: 12.5px; font-weight: 500; color: var(--faint); }
-.compare thead th:last-child { color: var(--text); }
-.compare tbody th { width: 11rem; font-weight: 500; color: var(--muted); }
-.compare td { color: var(--muted); }
-.compare td:last-child { color: var(--text); }
-.compare tbody tr:last-child > * { border-bottom: 0; }
+.specs { width: 100%; border-collapse: collapse; font-size: 14.5px; }
+.specs th, .specs td { padding: 13px 18px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--line); }
+.specs th { width: 12rem; font-weight: 500; color: var(--muted); }
+.specs td { color: var(--text); }
+.specs tr:last-child > * { border-bottom: 0; }
 
 .phases { list-style: none; margin: 0; padding: 0 0 0 22px; border-left: 1px solid var(--line); display: grid; gap: 18px; }
 .phases li { position: relative; display: flex; gap: 12px; }
@@ -260,16 +257,12 @@
   .step__shot .shot { height: auto; }
   .step__shot .shot__frame img { height: auto; aspect-ratio: 1000 / 998; max-height: 420px; }
   .step__shot .pending { height: auto; padding: var(--space-lg); }
-  .compare tbody th { width: 7rem; }
 }
-/* Small phones: each comparison row becomes a labelled block instead of a sideways-scrolling table. */
+/* Small phones: each spec row stacks, label above value. */
 @media (max-width: 639px) {
-  .table-wrap { overflow: visible; }
-  .compare { min-width: 0; }
-  .compare thead { display: none; }
-  .compare tbody tr { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 4px 16px; padding: 14px 16px; border-bottom: 1px solid var(--line); }
-  .compare tbody tr:last-child { border-bottom: 0; }
-  .compare tbody th { grid-column: 1 / -1; width: auto; padding: 0; border: 0; color: var(--text); }
-  .compare td { padding: 0; border: 0; font-size: 13.5px; }
-  .compare td::before { content: attr(data-label); display: block; font-size: 11.5px; color: var(--faint); }
+  .specs tr { display: grid; gap: 2px; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+  .specs tr:last-child { border-bottom: 0; }
+  .specs th, .specs td { width: auto; padding: 0; border: 0; }
+  .specs th { font-size: 12.5px; }
 }
+

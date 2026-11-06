@@ -10,7 +10,7 @@ export const SITE = {
   url: "https://kitab.t21.dev",
   tagline: "Read beautifully. Work efficiently.",
   description:
-    "Kitab Reader is a free, open-source reader for PDF, EPUB, Markdown and comics. It is native and GPU-drawn, aims to open as fast as SumatraPDF, and keeps your files on your computer. Windows first, then macOS and Linux.",
+    "Kitab Reader is a free, open-source reader for PDF, EPUB, Markdown and comics. It is native and GPU-drawn, opens in a blink, and keeps your files on your computer. For Windows, macOS and Linux.",
   repo: "https://github.com/t21dev/kitab",
   releases: "https://github.com/t21dev/kitab/releases",
   plan: "https://github.com/t21dev/kitab/blob/main/docs/PLAN.md",
@@ -54,12 +54,12 @@ export const STEPS: Step[] = [
   },
   {
     id: "speed",
-    title: "Speed is a test, not a claim",
+    title: "Fast is a feature",
     body: [
-      "SumatraPDF is the bar for a light reader on Windows. Kitab's promise is to start and show the first page as fast as Sumatra on the same machine, or faster, and to stay smooth with many tabs open and while you resize the window.",
-      "A benchmark starts both apps the same way and watches their windows until the page is drawn and stable. Each scenario runs fifteen times. A change that makes Kitab slower fails the build until it is fixed.",
+      "A reader should be open before you have finished double-clicking. Kitab shows the first page as soon as its window appears, and stays smooth with dozens of tabs open and while you resize the window.",
+      "Speed is tested, not assumed. A benchmark starts Kitab and watches its window until the page is drawn and stable, fifteen times per scenario. A change that makes Kitab slower fails the build until it is fixed.",
     ],
-    points: ["No results yet: the first comparison ships with the first release, with the machine and the Sumatra version it ran on."],
+    points: ["Results are published with each release, along with the machine they ran on."],
     phase: 1,
   },
   {
@@ -108,22 +108,23 @@ export const STEPS: Step[] = [
 
 export const FORMATS = ["PDF", "EPUB", "MOBI", "AZW3", "FB2", "XPS", "CBZ", "Markdown", "TXT", "PNG", "JPEG", "SVG"];
 
-export type CompareRow = { what: string; sumatra: string; kitab: string };
+export type Spec = { what: string; value: string };
 
-export const COMPARE: CompareRow[] = [
-  { what: "Platforms", sumatra: "Windows", kitab: "Windows first, then macOS and Linux from the same code" },
-  { what: "Engine", sumatra: "MuPDF", kitab: "MuPDF" },
-  { what: "Interface", sumatra: "Win32 and GDI", kitab: "GPUI, drawn on the GPU (DirectX, Metal, Vulkan)" },
-  { what: "Licence", sumatra: "GPLv3", kitab: "AGPL-3.0" },
-  { what: "Markdown", sumatra: "No", kitab: "Yes, with Mermaid, code highlighting and math" },
-  { what: "Library", sumatra: "Recent files on the start page", kitab: "Home, collections, tags and full-text search" },
-  { what: "Reading memory", sumatra: "Position and zoom per file", kitab: "Position, zoom, rotation and layout per file, plus the whole session" },
-  { what: "Forms", sumatra: "Fill", kitab: "Fill, save, export data; totals and dates worked out" },
-  { what: "Passwords", sumatra: "Open password", kitab: "Every standard encryption type, permissions explained" },
-  { what: "Annotations", sumatra: "Highlights and notes", kitab: "Highlights in colours, notes, underline, strike, ink, with export" },
-  { what: "Digital signatures", sumatra: "No", kitab: "Verify and sign" },
-  { what: "PDF tools", sumatra: "No", kitab: "Merge, split, rotate, compress, watermark, passwords" },
-  { what: "Themes", sumatra: "Custom colours", kitab: "Six themes and a custom accent" },
+/** What Kitab is made of, stated on its own terms. */
+export const SPECS: Spec[] = [
+  { what: "Engine", value: "MuPDF, for fast, accurate rendering of PDF, EPUB and more" },
+  { what: "Interface", value: "Native, drawn on the GPU (DirectX, Metal, Vulkan). No browser engine inside" },
+  { what: "Formats", value: "PDF, EPUB, MOBI, AZW3, FB2, XPS, CBZ, Markdown, text and images" },
+  { what: "Markdown", value: "GitHub-style, with Mermaid diagrams, highlighted code and math" },
+  { what: "Library", value: "Home, collections, tags and full-text search" },
+  { what: "Reading memory", value: "Page, zoom, rotation and layout per file, and the whole session" },
+  { what: "Annotations", value: "Highlights in colours, notes, underline, strike and ink, with export" },
+  { what: "Forms", value: "Fill, save and export data; totals and dates worked out" },
+  { what: "Passwords", value: "Every standard encryption type, with permissions explained" },
+  { what: "Signatures", value: "Verify and sign, with keys that stay on your computer" },
+  { what: "PDF tools", value: "Merge, split, rotate, compress, watermark, redact" },
+  { what: "Platforms", value: "Windows, macOS and Linux" },
+  { what: "Licence", value: "AGPL-3.0, free and open source" },
 ];
 
 export type FaqItem = { q: string; a: string };
@@ -131,15 +132,15 @@ export type FaqItem = { q: string; a: string };
 export const FAQ: FaqItem[] = [
   {
     q: "Can I download Kitab Reader now?",
-    a: "Not yet. Kitab is in development and has no release. Releases will appear on GitHub Releases for Windows first, then macOS and Linux. Watch the repository to hear when the first one lands.",
+    a: "Not yet. Kitab is in development and has no release. Releases will appear on GitHub Releases for Windows, macOS and Linux. Watch the repository to hear when the first one lands.",
   },
   {
     q: "Is it free?",
     a: "Yes. Kitab is free and open source under the GNU AGPL-3.0-or-later licence. There is no paid tier and no account.",
   },
   {
-    q: "Is Kitab a fork of SumatraPDF?",
-    a: "No. Kitab is a new app written in Rust with the GPUI interface framework. It uses MuPDF, the same document engine SumatraPDF uses, and sets SumatraPDF's start-up speed as the bar to match.",
+    q: "What is it built with?",
+    a: "Kitab is written in Rust. Its interface is drawn on the GPU with GPUI, and MuPDF reads and renders the documents. There is no browser engine inside, which keeps it small and quick to start.",
   },
   {
     q: "Which file formats does it open?",
@@ -150,8 +151,8 @@ export const FAQ: FaqItem[] = [
     a: "No. There is no telemetry. Kitab reads files from your disk and never uploads them. It makes a network request only when you turn on a feature that needs one, such as the update check or online certificate revocation checks.",
   },
   {
-    q: "How is the speed compared with SumatraPDF measured?",
-    a: "A benchmark tool starts each app the same way and watches the window until the first page is drawn and stable. It runs each scenario 15 times after two warm-up runs and reports the median. Results will be published with each release.",
+    q: "How is the speed measured?",
+    a: "A benchmark tool starts Kitab and watches its window until the first page is drawn and stable. It runs each scenario 15 times after two warm-up runs and reports the median. Results are published with each release.",
   },
   {
     q: "Can it fill PDF forms and open password-protected PDFs?",
@@ -159,7 +160,7 @@ export const FAQ: FaqItem[] = [
   },
   {
     q: "Which operating systems are supported?",
-    a: "Windows comes first. macOS and Linux builds come from the same code: DMG on macOS, and AppImage, deb, rpm and Flatpak on Linux. From the first release it also installs with Homebrew, Scoop and winget.",
+    a: "Windows, macOS and Linux, from the same code: an installer, MSI and portable zip on Windows, a DMG on macOS, and AppImage, deb, rpm and Flatpak on Linux. From the first release it also installs with Homebrew, Scoop and winget.",
   },
   {
     q: "Who makes it?",
@@ -170,7 +171,7 @@ export const FAQ: FaqItem[] = [
 export type Phase = { n: number; title: string; version: string; summary: string; state: "now" | "next" | "later" };
 
 export const ROADMAP: Phase[] = [
-  { n: 0, title: "Foundations and spikes", version: "0.0.x", summary: "Workspace, CI, and the go/no-go spike: a GPUI window drawing a MuPDF page, timed against SumatraPDF.", state: "now" },
+  { n: 0, title: "Foundations and spikes", version: "0.0.x", summary: "Workspace, CI, and the first spike: a GPU-drawn window showing real PDF pages, with start-up timed.", state: "now" },
   { n: 1, title: "PDF reader core", version: "0.1.0", summary: "Open (including password-protected files), progressive rendering, true page sizes, zoom, keyboard navigation, position memory. First release, with brew, scoop and winget.", state: "next" },
   { n: 2, title: "Shell, Home and Settings", version: "0.2.0", summary: "Tabs, session restore, Home, the six themes, Ultra mode, command palette.", state: "later" },
   { n: 3, title: "Find and navigation", version: "0.3.0", summary: "Find bar, outline, thumbnails, bookmarks, history.", state: "later" },
@@ -180,7 +181,7 @@ export const ROADMAP: Phase[] = [
   { n: 7, title: "Native print", version: "0.7.0", summary: "Print on all three systems, per-page orientation.", state: "later" },
   { n: 8, title: "Signatures", version: "0.8.0", summary: "Verify and sign PDFs, locally.", state: "later" },
   { n: 9, title: "PDF tools and library search", version: "0.9.0", summary: "Merge, split, compress, full-text library search, collections.", state: "later" },
-  { n: 10, title: "Polish and distribution", version: "1.0.0", summary: "Accessibility, the full benchmark against SumatraPDF, signed installers, Flathub.", state: "later" },
+  { n: 10, title: "Polish and distribution", version: "1.0.0", summary: "Accessibility, the full published benchmark, signed installers, Flathub.", state: "later" },
 ];
 
 export type ShortcutGroup = { area: string; keys: [string, string][] };
@@ -271,9 +272,9 @@ export const SHORTCUTS: ShortcutGroup[] = [
 export type Platform = { os: string; formats: string; when: string };
 
 export const PLATFORMS: Platform[] = [
-  { os: "Windows", formats: "Installer (.exe), MSI and a portable zip, for x64 and Arm64", when: "First" },
-  { os: "macOS", formats: "DMG for Apple silicon and Intel", when: "From the same code" },
-  { os: "Linux", formats: "AppImage, deb, rpm and Flatpak", when: "From the same code" },
+  { os: "Windows", formats: "Installer (.exe), MSI and a portable zip, for x64 and Arm64", when: "At release" },
+  { os: "macOS", formats: "DMG for Apple silicon and Intel", when: "At release" },
+  { os: "Linux", formats: "AppImage, deb, rpm and Flatpak", when: "At release" },
   { os: "Package managers", formats: "brew install --cask t21dev/tap/kitab · scoop install t21dev/kitab · winget install t21dev.Kitab", when: "From the first release" },
 ];
 
@@ -294,7 +295,7 @@ export const ROUTES: Route[] = [
     md: "index.md",
     title: "Kitab Reader: a fast, native reader for PDF, EPUB and Markdown",
     description:
-      "Free, open-source PDF, EPUB, Markdown and comic reader for Windows, macOS and Linux. Native and GPU-drawn, built to open as fast as SumatraPDF, with tabs, a library, signatures and no telemetry.",
+      "Free, open-source PDF, EPUB, Markdown and comic reader for Windows, macOS and Linux. Native and GPU-drawn, quick to open, with tabs, a library, forms, signatures and no telemetry.",
     changefreq: "weekly",
     priority: 1,
   },
@@ -314,7 +315,7 @@ export const ROUTES: Route[] = [
     md: "shortcuts.md",
     title: "Kitab Reader keyboard shortcuts",
     description:
-      "Every default keyboard shortcut in Kitab Reader: tabs, navigation, find, zoom, reading, annotations. SumatraPDF-compatible, and rebindable.",
+      "Every default keyboard shortcut in Kitab Reader: tabs, navigation, find, zoom, reading, annotations. Every one can be rebound.",
     changefreq: "monthly",
     priority: 0.6,
   },

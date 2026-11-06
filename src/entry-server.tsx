@@ -3,7 +3,7 @@ import { renderToString } from "react-dom/server";
 import { App } from "./App";
 import type { PageData } from "./data";
 
-export { ROUTES, SITE, STEPS, FAQ, ROADMAP, SHORTCUTS, COMPARE, PLATFORMS, FORMATS } from "./content";
+export { ROUTES, SITE, STEPS, FAQ, ROADMAP, SHORTCUTS, SPECS, PLATFORMS, FORMATS } from "./content";
 export { themeCss } from "./themes";
 
 export function render(path: string, data: PageData): string {

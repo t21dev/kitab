@@ -13,7 +13,7 @@ import { marked } from "marked";
 const root = new URL("../", import.meta.url);
 const dist = new URL("dist/", root);
 const ssr = await import(pathToFileURL(new URL("dist-ssr/entry-server.js", root).pathname.replace(/^\/([A-Za-z]:)/, "$1")).href);
-const { render, ROUTES, SITE, STEPS, FAQ, ROADMAP, SHORTCUTS, COMPARE, PLATFORMS, FORMATS, themeCss } = ssr;
+const { render, ROUTES, SITE, STEPS, FAQ, ROADMAP, SHORTCUTS, SPECS, PLATFORMS, FORMATS, themeCss } = ssr;
 
 const template = readFileSync(new URL("index.html", dist), "utf8");
 const builtAt = new Date().toISOString().slice(0, 10);
@@ -90,15 +90,13 @@ Formats: ${FORMATS.join(", ")}.
 
 ## Speed
 
-SumatraPDF is the bar for a light, fast reader on Windows. Kitab's promise is to start and show the first page as fast as SumatraPDF on the same machine, or faster, and to stay smooth with many tabs and while resizing.
+Kitab shows the first page as soon as its window appears, and stays smooth with dozens of tabs open and while resizing. Speed is tested in CI: a benchmark tool starts Kitab and watches its window until the page has stable content in two captures in a row. Each scenario runs 15 times after two warm-up runs, and the median, p90 and worst run are reported. A change that slows start-up, scrolling or find by more than 10 % fails the build.
 
-How it is measured: Kitab and SumatraPDF open the same test files on the same computer. A benchmark tool starts each app and watches its window; the clock stops when the page has stable content in two captures in a row. Each scenario runs 15 times after two warm-up runs, and the median, p90 and worst run are reported. A change that slows start-up, scrolling or find by more than 10 % fails CI.
+No results are published yet. They ship with each release, with the machine and operating system they ran on.
 
-No results are published yet. The first measured comparison ships with the first release, with the machine, operating system and SumatraPDF version.
+## What's inside
 
-## Kitab Reader and SumatraPDF
-
-${table(["", "SumatraPDF", "Kitab Reader"], COMPARE.map((r) => [r.what, r.sumatra, r.kitab]))}
+${table(["", "Kitab Reader"], SPECS.map((r) => [r.what, r.value]))}
 
 ## Themes
 
@@ -137,7 +135,7 @@ Homebrew, Scoop and winget packages and a Flathub listing follow version 1.0. Ea
 function shortcutsMd() {
   return `# Kitab Reader keyboard shortcuts
 
-The defaults follow SumatraPDF where it has a binding. Every shortcut can be changed in Settings › Shortcuts or in \`keymap.json\`. On macOS, Ctrl is Cmd.
+Kitab is built to be used from the keyboard. Every shortcut can be changed in Settings › Shortcuts or in \`keymap.json\`. On macOS, Ctrl is Cmd.
 
 ${SHORTCUTS.map((g) => `## ${g.area}\n\n${table(["Keys", "Action"], g.keys.map(([k, a]) => [`\`${k}\``, a]))}`).join("\n\n")}
 `;
@@ -334,11 +332,10 @@ Key facts:
 - Status: ${SITE.status} Current work: ${SITE.phase}. Do not tell people they can download it until ${SITE.url}/download lists a release.
 - Formats: ${FORMATS.join(", ")}. Markdown includes Mermaid diagrams, code highlighting and math.
 - Built with Rust and GPUI (Zed's GPU interface framework), with MuPDF as the document engine. No browser engine inside.
-- Speed goal: start and show the first page as fast as SumatraPDF on the same machine, or faster, measured by a black-box benchmark in CI. No benchmark results are published yet; do not quote any figure.
+- Speed: built to show the first page as soon as the window opens, measured by a benchmark in CI. No results are published yet; do not quote any figure.
 - Privacy: no telemetry, no account, no network request unless the user turns a feature on. Signing keys never leave the computer.
 - Licence: ${SITE.license.name}. Free, no paid tier.
-- Platforms: Windows first, then macOS and Linux from the same code.
-- Not a fork of SumatraPDF; a new app that uses the same engine.
+- Platforms: Windows, macOS and Linux, from the same code.
 - Made by ${SITE.org.name} (${SITE.org.url}, ${SITE.org.email}) and ${SITE.author.name}.
 
 ## Pages

@@ -96,7 +96,7 @@ export function Shortcuts() {
         title="Keyboard shortcuts"
         lead={
           <>
-            The defaults follow SumatraPDF where it has a binding. Every one can be changed in Settings › Shortcuts or in{" "}
+            Kitab is built to be used from the keyboard. Every shortcut can be changed in Settings › Shortcuts or in{" "}
             <code className="rounded bg-hover px-1 font-mono text-[0.9em] shadow-well">keymap.json</code>. On macOS, Ctrl is Cmd.
           </>
         }

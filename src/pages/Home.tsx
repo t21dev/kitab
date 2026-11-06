@@ -2,7 +2,7 @@
 // Layout: mockup A (Feature Stack: a sticky stage beside the story). Copy: mockup B.
 // The stage shows only real captures of the app; a feature with none yet says which phase brings it.
 import { useEffect, useState } from "react";
-import { COMPARE, FAQ, ROADMAP, SITE, STEPS, type Step } from "../content";
+import { FAQ, ROADMAP, SITE, SPECS, STEPS, type Step } from "../content";
 import type { PageData } from "../data";
 import { FEATURE_ICONS, Icon } from "../components/Icon";
 
@@ -19,8 +19,8 @@ function Hero({ data }: { data: PageData }) {
         <span>Work efficiently.</span>
       </h1>
       <p className="lede rise" style={{ "--i": 2 } as React.CSSProperties}>
-        Kitab is a reader for PDF, EPUB, Markdown and comics. It is native and drawn on the GPU, it aims to open as fast as
-        SumatraPDF, and it keeps your files on your computer.
+        Kitab is a reader for PDF, EPUB, Markdown and comics. It is native and drawn on the GPU, it opens in a blink, and it
+        keeps your files on your computer.
       </p>
       <div className="ctas rise" style={{ "--i": 3 } as React.CSSProperties}>
         <a className="btn btn--primary" href={SITE.repo}>
@@ -35,7 +35,7 @@ function Hero({ data }: { data: PageData }) {
           <b>Free</b> · AGPL-3.0
         </li>
         <li>
-          <b>Windows</b> first, then macOS and Linux
+          <b>Windows, macOS</b> and <b>Linux</b>
         </li>
         <li>
           <b>No</b> account, no telemetry
@@ -122,25 +122,17 @@ function Compare() {
     <section id="compare" className="band" aria-labelledby="compare-title">
       <div className="wrap">
         <h2 id="compare-title" className="band__title">
-          Same engine as SumatraPDF, a different kind of app
+          What's inside
         </h2>
-        <p className="band__lede">Both use MuPDF to read documents. Kitab adds a library, Markdown, forms, signatures and a modern interface, and runs on three systems.</p>
+        <p className="band__lede">One app for reading and working with documents, built natively for each system.</p>
         <div className="table-wrap">
-          <table className="compare">
-            <caption className="sr-only">Kitab Reader compared with SumatraPDF</caption>
-            <thead>
-              <tr>
-                <th scope="col"></th>
-                <th scope="col">SumatraPDF</th>
-                <th scope="col">Kitab Reader</th>
-              </tr>
-            </thead>
+          <table className="specs">
+            <caption className="sr-only">What Kitab Reader includes</caption>
             <tbody>
-              {COMPARE.map((r) => (
+              {SPECS.map((r) => (
                 <tr key={r.what}>
                   <th scope="row">{r.what}</th>
-                  <td data-label="SumatraPDF">{r.sumatra}</td>
-                  <td data-label="Kitab">{r.kitab}</td>
+                  <td>{r.value}</td>
                 </tr>
               ))}
             </tbody>
@@ -160,8 +152,8 @@ function Roadmap() {
             Where it stands
           </h2>
           <p className="band__lede">
-            Kitab is in its first phase: the foundations, and a test of whether the interface framework can start as fast as
-            Sumatra. Every phase after that ends with its tests passing and a release. The <a href={SITE.plan}>plan is public</a>,
+            Kitab is in its first phase: the foundations, and a test of how fast the interface can start and draw the first
+            page. Every phase after that ends with its tests passing and a release. The <a href={SITE.plan}>plan is public</a>,
             and so is every line of code.
           </p>
         </div>
