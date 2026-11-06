@@ -7,6 +7,14 @@ all-features = true
 [advisories]
 version = 2
 yanked = "deny"
+# zbus is xcap's Linux (Wayland portal) backend. kitab-bench uses xcap on Windows only
+# (a Windows-only dependency), and kitab-bench is a dev tool that never ships. Remove
+# these when xcap moves off zbus 5 or kitab-bench gains Linux support.
+ignore = [
+    { id = "RUSTSEC-2026-0370", reason = "zvariant: Linux-only path of a Windows-only dev tool (kitab-bench via xcap)" },
+    { id = "RUSTSEC-2026-0371", reason = "zbus_names: Linux-only path of a Windows-only dev tool (kitab-bench via xcap)" },
+    { id = "RUSTSEC-2026-0372", reason = "zvariant_derive: Linux-only path of a Windows-only dev tool (kitab-bench via xcap)" },
+]
 
 [licenses]
 version = 2
