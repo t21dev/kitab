@@ -10,13 +10,13 @@ Rust and GPUI on the GPU, with MuPDF underneath. No browser engine inside.
 By **[t21 dev](https://github.com/t21dev)** and **[TriptoAfsin](https://github.com/TriptoAfsin)**
 
 [![Licence: AGPL-3.0](https://img.shields.io/badge/licence-AGPL--3.0-blue?style=flat-square)](LICENSE)
-![Status: planning](https://img.shields.io/badge/status-planning-lightgrey?style=flat-square)
+![Status: Phase 0](https://img.shields.io/badge/status-phase%200-lightgrey?style=flat-square)
 
 </div>
 
 ---
 
-> **Status: planning.** There is no app to download yet. This repository holds the plan, the design system and the test corpus. Work lands phase by phase. See the [roadmap](docs/PLAN.md#12-roadmap).
+> **Status: Phase 0 (foundations).** There is no app to download yet. This repository holds the plan, the design system, the test corpus and the first workspace crates. Work lands phase by phase. See the [roadmap](docs/PLAN.md#12-roadmap).
 
 ## What it will do
 
@@ -52,7 +52,19 @@ Windows first, then macOS and Linux from the same code. Releases will be on [Git
 
 ## Building
 
-Not yet: the Rust workspace arrives with Phase 0. The test corpus can be built today:
+Phase 0: the Rust workspace has the theme tokens and a stub binary. You need Rust stable (see `rust-toolchain.toml`).
+
+```powershell
+cargo run -p kitab
+cargo test --workspace
+cargo clippy --workspace --all-targets -- -D warnings
+python tools/check_source.py     # SPDX headers, no colour literals outside kitab-theme
+cargo deny check                 # cargo install cargo-deny
+```
+
+The GPUI + MuPDF spike lives in `spikes/spike-a` and needs libclang; see [ADR 0001](docs/adr/0001-spike-a-gpui-mupdf.md).
+
+The test corpus:
 
 ```powershell
 python -m venv tests\fixtures\tools\.venv

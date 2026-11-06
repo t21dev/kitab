@@ -5,7 +5,7 @@
 
 This is the working plan. It records decisions, the architecture, the performance budgets, the test strategy and the phased roadmap. [AGENTS.md](../AGENTS.md) holds the rules for working on the code, and [DESIGN.md](../DESIGN.md) holds the visual system. If the code and this file disagree, change one of them on purpose, in the same commit.
 
-Status: **planning**. Mockups: Kitab Reader mockups canvas (private Claude artifact; Round 2 is current).
+Status: **Phase 0** (workspace, themes and CI in place; Spike A results in [ADR 0001](adr/0001-spike-a-gpui-mupdf.md): MuPDF renders in milliseconds, GPUI's Windows start-up is ~250 ms and needs work before the gate). Mockups: Kitab Reader mockups canvas (private Claude artifact; Round 2 is current).
 
 ---
 

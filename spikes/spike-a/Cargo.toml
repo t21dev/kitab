@@ -1,0 +1,20 @@
+[package]
+name = "spike-a"
+description = "Phase 0 Spike A: GPUI window showing MuPDF-rendered pages"
+version = "0.0.0"
+edition = "2024"
+license = "AGPL-3.0-or-later"
+publish = false
+
+# Not a member of the main workspace, so CI does not build GPUI and MuPDF
+# until Phase 1 adopts them.
+[workspace]
+
+[dependencies]
+gpui = "0.2.2"
+mupdf = { version = "0.8.0", default-features = false }
+image = { version = "0.25", default-features = false }
+kitab-theme = { path = "../../crates/kitab-theme" }
+
+[profile.release]
+debug = false
