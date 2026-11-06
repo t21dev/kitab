@@ -1,0 +1,14 @@
+[package]
+name = "kitab"
+description = "Kitab Reader: a fast, native reader for PDF, EPUB, Markdown and comics"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+
+[lints]
+workspace = true
