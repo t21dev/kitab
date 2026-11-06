@@ -9,7 +9,7 @@
 //! measured from process start. These are not the black-box S1/S2 numbers
 //! (PLAN.md §6.1); they say whether the stack is in the right ballpark.
 //!
-//! Usage: spike-a <file.pdf> [pages=40] [--exit-after-first-paint]
+//! Usage: spike-a <file.pdf> [pages=40] [--theme <id>] [--zoom <f>] [--exit-after-first-paint]
 
 use gpui::{
     App, Application, Bounds, Context, ImageSource, RenderImage, SharedString, Window,
@@ -20,6 +20,10 @@ use std::sync::{Arc, OnceLock};
 use std::time::Instant;
 
 static START: OnceLock<Instant> = OnceLock::new();
+/// Theme id from `--theme <id>` (default "dark"), for captures in each theme.
+static THEME: OnceLock<String> = OnceLock::new();
+/// Display zoom from `--zoom <f>` (default 1.0: one point = one logical pixel).
+static ZOOM: OnceLock<f32> = OnceLock::new();
 
 fn mark(what: &str) {
     if let Some(start) = START.get() {
@@ -83,7 +87,7 @@ struct Reader {
 
 impl Render for Reader {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let theme = kitab_theme::builtin("dark").ok();
+        let theme = kitab_theme::builtin(THEME.get().map_or("dark", String::as_str)).ok();
         let tok = |f: fn(&kitab_theme::Colors) -> kitab_theme::Rgba| {
             let c = theme.as_ref().map(|t| f(&t.colors));
             c.map(|c| gpui::Rgba {
@@ -103,7 +107,7 @@ impl Render for Reader {
             }
         }
         let _ = cx;
-        let zoom = 1.0; // pages at 100 %: one point = one logical pixel
+        let zoom = *ZOOM.get().unwrap_or(&1.0);
         div()
             .id("pages")
             .size_full()
@@ -130,7 +134,20 @@ impl Render for Reader {
 
 fn main() {
     START.get_or_init(Instant::now);
-    let args: Vec<String> = std::env::args().skip(1).collect();
+    let mut args: Vec<String> = std::env::args().skip(1).collect();
+    if let Some(i) = args.iter().position(|a| a == "--zoom") {
+        args.remove(i);
+        if i < args.len() {
+            let z = args.remove(i).parse::<f32>().unwrap_or(1.0).clamp(0.1, 8.0);
+            ZOOM.get_or_init(|| z);
+        }
+    }
+    if let Some(i) = args.iter().position(|a| a == "--theme") {
+        args.remove(i);
+        if i < args.len() {
+            THEME.get_or_init(|| args.remove(i));
+        }
+    }
     let Some(path) = args.iter().find(|a| !a.starts_with("--")).cloned() else {
         eprintln!("usage: spike-a <file.pdf> [pages] [--exit-after-first-paint]");
         std::process::exit(2);
@@ -185,7 +202,7 @@ fn main() {
             };
             let count = doc.page_count().unwrap_or(0).min(max_pages);
             for i in 0..count {
-                let page = render_page(&doc, i, scale);
+                let page = render_page(&doc, i, scale * ZOOM.get().copied().unwrap_or(1.0));
                 if i == 0 {
                     mark("page1_rendered");
                 }
