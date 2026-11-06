@@ -27,6 +27,9 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::time::Duration;
 
+mod tools_ui;
+use tools_ui::ToolsState;
+
 /// Writes settings.json (the app passes it in; called off the UI thread).
 pub struct SettingsSink(pub Arc<dyn Fn(String) + Send + Sync>);
 impl gpui::Global for SettingsSink {}
@@ -66,6 +69,7 @@ pub struct Workspace {
     /// Set after the first frame: tabs opened later fade in.
     booted: bool,
     hex: HexState,
+    tools: ToolsState,
 }
 
 impl Workspace {
@@ -104,6 +108,7 @@ impl Workspace {
                 edit: None,
                 focus: cx.focus_handle(),
             },
+            tools: ToolsState::new(cx),
         };
         // Leaving the hex field ends the edit.
         let hex_blur = cx.on_blur(&this.hex.focus, window, |ws, _, cx| {
@@ -216,6 +221,9 @@ impl Workspace {
 
     fn activate(&mut self, ix: usize, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(t) = self.tabs.get(ix).cloned() {
+            if self.tools.split.as_ref() == Some(&t) {
+                self.tools.split = self.active_reader().cloned();
+            }
             self.active = Some(ix);
             self.save_session(cx);
             let title = t.read(cx).title();
@@ -242,6 +250,9 @@ impl Workspace {
             return;
         }
         let closing = self.tabs.remove(ix);
+        if self.tools.split.as_ref() == Some(&closing) {
+            self.tools.split = None;
+        }
         closing.update(cx, |r, cx| r.save_now(cx));
         self.remember_closed(closing.read(cx).path.clone());
         if self.tabs.is_empty() {
@@ -408,6 +419,8 @@ impl Workspace {
 
         for (ix, tab) in self.tabs.iter().enumerate() {
             let on = self.active == Some(ix);
+            // The tab shown in the side pane of a split view.
+            let side = !on && self.tools.split.as_ref() == Some(tab);
             let r = tab.read(cx);
             let title = r.title();
             let tab_icon = if r
@@ -451,6 +464,9 @@ impl Workspace {
                 })
                 .when(on, |d| d.bg(st.c(|c| c.raised)).shadow(st.elev()))
                 .hover(|d| d.text_color(st.c(|c| c.text)))
+                .when(side, |d| {
+                    d.bg(st.c(|c| c.hover)).text_color(st.c(|c| c.text))
+                })
                 .on_click(cx.listener(move |ws, _, window, cx| ws.activate(ix, window, cx)))
                 .child(svg().path(icon(tab_icon)).size(px(14.0)).text_color(if on {
                     st.c(|c| c.accent)
@@ -1130,6 +1146,22 @@ impl Render for Workspace {
         let body = match self.active_reader().cloned() {
             Some(reader) => {
                 let header = self.header_row(&reader, &st, cx);
+                // Split view: the other document beside this one; a click there
+                // makes it the active pane.
+                let side_pane = self.tools.split.clone().map(|side| {
+                    div()
+                        .flex()
+                        .flex_1()
+                        .min_w_0()
+                        .h_full()
+                        .border_l_1()
+                        .border_color(st.c(|c| c.line))
+                        .on_mouse_down(
+                            MouseButton::Left,
+                            cx.listener(|ws, _, window, cx| ws.focus_split(window, cx)),
+                        )
+                        .child(side)
+                });
                 let side = if self.sidebar {
                     let inner = self.sidebar_view(&reader, &st, cx);
                     Some(self.sidebar_slide(inner, &st))
@@ -1148,12 +1180,16 @@ impl Render for Workspace {
                             .flex_1()
                             .min_h_0()
                             .children(side)
-                            .child(div().flex_1().min_w_0().h_full().child(reader)),
+                            .child(div().flex_1().min_w_0().h_full().child(reader))
+                            .children(side_pane),
                     )
                     .into_any_element()
             }
             None => self.home(&st, cx),
         };
+        if self.tools.split.is_some() && self.tools.split.as_ref() == self.active_reader() {
+            self.tools.split = None;
+        }
         let overlays = self.overlays(&st, window, cx);
         self.booted = true;
         div()
@@ -1192,6 +1228,14 @@ impl Render for Workspace {
             .on_action(
                 cx.listener(|ws, _: &ShowShortcuts, window, cx| ws.show_shortcuts(window, cx)),
             )
+            .on_action(cx.listener(|ws, _: &ToggleSplit, _, cx| ws.toggle_split(cx)))
+            .on_action(cx.listener(|ws, _: &ExtractPages, window, cx| {
+                if let Some(r) = ws.active_reader().cloned() {
+                    if r.read(cx).is_pdf() {
+                        ws.open_extract(r, window, cx);
+                    }
+                }
+            }))
             .on_action(
                 cx.listener(|ws, _: &ReopenClosedTab, window, cx| ws.reopen_closed(window, cx)),
             )
@@ -1450,7 +1494,9 @@ impl Workspace {
     }
 
     fn close_overlay(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.menu.is_some() {
+        if self.tools.extract.is_some() {
+            self.close_extract(window, cx);
+        } else if self.menu.is_some() {
             self.close_menu(window, cx);
         } else {
             self.close_settings(window, cx);
@@ -1759,9 +1805,14 @@ impl Workspace {
             .icon("hash"),
             file_item_copy(&path),
             MenuItem::Separator,
-            file_item_reveal(&path),
         ];
-        self.open_menu(at, false, 290.0, items, window, cx);
+        let mut items = items;
+        items.extend(self.save_page_items(&reader, page, cx));
+        items.push(MenuItem::Separator);
+        items.extend(self.pdf_tool_items(&reader, cx));
+        items.push(MenuItem::Separator);
+        items.push(file_item_reveal(&path));
+        self.open_menu(at, false, 300.0, items, window, cx);
     }
 
     fn tab_menu(
@@ -1804,10 +1855,15 @@ impl Workspace {
             .key("Ctrl+Shift+T")
             .disabled(self.closed.is_empty()),
             MenuItem::Separator,
-            file_item_copy(&path),
-            file_item_reveal(&path),
         ];
-        self.open_menu(at, false, 250.0, items, window, cx);
+        let mut items = items;
+        if let Some(reader) = self.tabs.get(ix).cloned() {
+            items.extend(self.pdf_tool_items(&reader, cx));
+            items.push(MenuItem::Separator);
+        }
+        items.push(file_item_copy(&path));
+        items.push(file_item_reveal(&path));
+        self.open_menu(at, false, 300.0, items, window, cx);
     }
 
     fn card_menu(
@@ -1828,6 +1884,14 @@ impl Workspace {
             )
             .icon("book")
             .disabled(!exists),
+            MenuItem::new("Open to the side", {
+                let side = path.clone();
+                self.on_ws(cx, move |ws, window, cx| {
+                    ws.open_to_side(side.clone(), window, cx)
+                })
+            })
+            .icon("sidebar")
+            .disabled(!exists || self.tabs.is_empty()),
             MenuItem::Separator,
             file_item_copy(&path),
             file_item_reveal(&path).disabled(!exists),
@@ -1895,6 +1959,9 @@ impl Workspace {
         let tabs = std::mem::take(&mut self.tabs);
         for (i, t) in tabs.into_iter().enumerate() {
             if close(i) {
+                if self.tools.split.as_ref() == Some(&t) {
+                    self.tools.split = None;
+                }
                 t.update(cx, |r, cx| r.save_now(cx));
                 self.remember_closed(t.read(cx).path.clone());
             } else {
@@ -1917,6 +1984,8 @@ impl Workspace {
     ) -> Vec<AnyElement> {
         let mut out = Vec::new();
         let ws = cx.weak_entity();
+        out.extend(self.toast_view(st, cx));
+        out.extend(self.extract_view(st, window, cx));
 
         if let Some(section) = self.settings.or(self.settings_closing) {
             let closing = self.settings.is_none();

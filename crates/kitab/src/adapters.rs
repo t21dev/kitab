@@ -82,6 +82,20 @@ impl DocEngine for MupdfEngine {
             .and_then(|id| self.engine.page_plain_text(id, page).ok())
     }
 
+    fn extract_pages(
+        &self,
+        src: &Path,
+        password: Option<&str>,
+        pages: &[u32],
+        out: &Path,
+    ) -> Result<(), String> {
+        kitab_mupdf::tools::extract_pages(src, password, pages, out)
+    }
+
+    fn merge(&self, inputs: &[(PathBuf, Option<String>)], out: &Path) -> Result<u32, String> {
+        kitab_mupdf::tools::merge(inputs, out)
+    }
+
     fn close(&self, doc: DocHandle) {
         let id = self.ids.lock().ok().and_then(|mut ids| ids.remove(&doc));
         if let Some(id) = id {

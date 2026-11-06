@@ -5,7 +5,7 @@
 //! task, never from the UI thread (AGENTS.md rule 2).
 
 use kitab_core::{Bitmap, DocInfo, FindHit, FindOptions, Link, OpenError, RenderRequest};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 /// An open document inside the engine.
 pub type DocHandle = u64;
@@ -26,5 +26,15 @@ pub trait DocEngine: Send + Sync + 'static {
     );
     /// A page's text in reading order, lines separated by newlines.
     fn page_text(&self, doc: DocHandle, page: u32) -> Option<String>;
+    /// Write `pages` (0-based) of the PDF at `src` to a new PDF at `out`.
+    fn extract_pages(
+        &self,
+        src: &Path,
+        password: Option<&str>,
+        pages: &[u32],
+        out: &Path,
+    ) -> Result<(), String>;
+    /// Write all pages of `inputs` (path, password), in order, to `out`. Returns the page count.
+    fn merge(&self, inputs: &[(PathBuf, Option<String>)], out: &Path) -> Result<u32, String>;
     fn close(&self, doc: DocHandle);
 }

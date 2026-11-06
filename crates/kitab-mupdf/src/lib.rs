@@ -38,6 +38,7 @@
 mod doc;
 mod ffi;
 mod find;
+pub mod tools;
 
 use std::collections::HashMap;
 use std::panic::{AssertUnwindSafe, catch_unwind};

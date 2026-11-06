@@ -54,6 +54,13 @@ pub const GROUPS: &[Group] = &[
         ],
     },
     Group {
+        title: "PDF tools",
+        rows: &[
+            ("Save pages as a new PDF", "Ctrl+Shift+E"),
+            ("Split view with the next tab", "Ctrl+\\"),
+        ],
+    },
+    Group {
         title: "App",
         rows: &[
             ("Settings", "Ctrl+,"),
@@ -129,6 +136,9 @@ mod tests {
             let Some(binding) = chunk.split('"').next() else {
                 continue;
             };
+            // The source escapes a backslash (`ctrl-\\`).
+            let binding = binding.replace(r"\\", r"\");
+            let binding = binding.as_str();
             // Field keys, an alias of Ctrl+=, and Alt+2..8 (listed as the range Alt+1–8).
             let skip = matches!(binding, "enter" | "escape" | "ctrl-+")
                 || binding

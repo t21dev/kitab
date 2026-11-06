@@ -453,6 +453,9 @@ Each phase ends with its exit criteria green in CI and a minor release. A phase 
 
 ### Phase 9: PDF tools, library search, stats → `0.9.0`
 
+> Pulled forward at the owner's request (2026-11-07): save a page as PDF/image/text, extract pages, merge, and split view shipped with the shell work. The rest of this phase is still to do.
+
+
 - Merge, split, extract, delete, reorder, rotate, compress, extract text and images, watermark, page numbers, encrypt/decrypt, print range. FTS5 library search, collections, smart collections, tags, watched folders, reading stats and streaks.
 - Exit: K, E4–E6.
 

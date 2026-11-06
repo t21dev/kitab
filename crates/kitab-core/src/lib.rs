@@ -7,7 +7,9 @@
 //! requests, locators and reading state.
 
 mod model;
+mod ranges;
 pub use model::*;
+pub use ranges::parse_page_ranges;
 
 /// A file format Kitab can open.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

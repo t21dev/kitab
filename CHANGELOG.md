@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Save one page as a PDF, a PNG image (150 dpi) or plain text, from the page's right-click menu.
+- Save pages as a new PDF (Ctrl+Shift+E): type pages and ranges such as 1-3, 7, 10-; works on password-protected PDFs while they are open.
+- Merge PDFs: pick more files and save them, in order, after the open one as a new PDF.
+- Split view: open a second document beside the first (Ctrl+\, "Open to the side" on a tab or Home card); click a pane to make it the active one.
+- A toast reports saved files, with Open or Show in folder.
 - Ink, a true-black theme for OLED screens.
 - Accent presets (Theme, Amber, Rose, Blue, Emerald, Grape, Wine, Mono) and a custom accent with a hex field and a hue strip; every accent is adjusted per theme to stay visible.
 - Settings › Shortcuts lists every keyboard and mouse shortcut (Ctrl+/).

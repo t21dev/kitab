@@ -57,6 +57,24 @@ pub enum ReaderEvent {
     ContextMenu(Point<Pixels>),
 }
 
+/// What "Save page as…" writes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PageExport {
+    Image,
+    Text,
+    Pdf,
+}
+
+impl PageExport {
+    pub fn extension(self) -> &'static str {
+        match self {
+            Self::Image => "png",
+            Self::Text => "txt",
+            Self::Pdf => "pdf",
+        }
+    }
+}
+
 /// Resolution of pages copied or saved as images.
 pub const EXPORT_DPI: f32 = 150.0;
 
@@ -96,6 +114,8 @@ pub struct Reader {
     back: Vec<usize>,
     forward: Vec<usize>,
     _subs: Vec<Subscription>,
+    /// The password that opened this document, if it needed one (memory only).
+    unlock: Option<String>,
 }
 
 impl Reader {
@@ -140,6 +160,7 @@ impl Reader {
             back: Vec::new(),
             forward: Vec::new(),
             _subs: vec![blur],
+            unlock: None,
         };
         this.open(None, cx);
         this
@@ -196,6 +217,7 @@ impl Reader {
         let engine = self.engine.clone();
         let library = self.library.clone();
         let path = self.path.clone();
+        let tried = password.clone();
         cx.spawn(async move |this, cx| {
             let (result, saved) = cx
                 .background_spawn(async move {
@@ -210,6 +232,11 @@ impl Reader {
                 .await;
             let _ = this.update(cx, |this, cx| {
                 this.restore = saved;
+                if result.is_ok() {
+                    // Kept in memory only, for tools that reopen the file
+                    // (extract, merge); never saved or logged (AGENTS.md rule 13).
+                    this.unlock = tried;
+                }
                 this.on_opened(result, cx)
             });
         })
@@ -498,6 +525,77 @@ impl Reader {
         let f = (f32::from(x - b.origin.x) / w).clamp(0.0, 1.0);
         let last = self.page_count().saturating_sub(1);
         self.go_to_page((f * last as f32).round() as usize, cx);
+    }
+
+    /// The password that opened the document, for tools that reopen the file.
+    pub fn unlock(&self) -> Option<String> {
+        self.unlock.clone()
+    }
+
+    pub fn is_pdf(&self) -> bool {
+        self.info
+            .as_ref()
+            .is_some_and(|i| i.format == kitab_core::Format::Pdf)
+    }
+
+    /// Save one page as PNG (150 dpi), plain text or a one-page PDF, at `out`.
+    /// `done` gets an error message or `None`.
+    pub fn save_page(
+        &self,
+        page: usize,
+        kind: PageExport,
+        out: PathBuf,
+        cx: &mut Context<Self>,
+        done: impl FnOnce(Result<PathBuf, String>, &mut App) + 'static,
+    ) {
+        let Some(doc) = self.doc else { return };
+        let engine = self.engine.clone();
+        let (src, unlock, rotation, generation) = (
+            self.path.clone(),
+            self.unlock.clone(),
+            self.rotation,
+            self.generation,
+        );
+        cx.spawn(async move |_, cx| {
+            let result = cx
+                .background_spawn(async move {
+                    match kind {
+                        PageExport::Image => {
+                            let req = RenderRequest {
+                                page: page as u32,
+                                scale: EXPORT_DPI / 72.0,
+                                rotation,
+                                tile: None,
+                                generation,
+                            };
+                            let bmp = engine
+                                .render(doc, req)?
+                                .ok_or("the page changed while saving; try again")?;
+                            let png = png_from_bgra(bmp.width, bmp.height, bmp.bgra)
+                                .ok_or("could not encode the image")?;
+                            std::fs::write(&out, png)
+                                .map_err(|e| format!("could not save: {e}"))?;
+                        }
+                        PageExport::Text => {
+                            let text = engine.page_text(doc, page as u32).unwrap_or_default();
+                            if text.trim().is_empty() {
+                                return Err(
+                                    "this page has no text (it may be a scanned image)".to_string()
+                                );
+                            }
+                            std::fs::write(&out, text)
+                                .map_err(|e| format!("could not save: {e}"))?;
+                        }
+                        PageExport::Pdf => {
+                            engine.extract_pages(&src, unlock.as_deref(), &[page as u32], &out)?
+                        }
+                    }
+                    Ok(out)
+                })
+                .await;
+            let _ = cx.update(|cx| done(result, cx));
+        })
+        .detach();
     }
 
     // ── copy ──
