@@ -5,10 +5,12 @@
 //! values. Views take every colour, shadow and size from here (AGENTS.md
 //! rule 16).
 
+mod accent;
 mod color;
 mod density;
 mod theme;
 
+pub use accent::{Accent, AccentPreset, hue_swatch};
 pub use color::{Rgba, accent_for_contrast, contrast_ratio};
 pub use density::{Density, DensityMetrics};
 pub use theme::{

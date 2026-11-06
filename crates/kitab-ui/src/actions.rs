@@ -49,6 +49,7 @@ actions!(
         CycleTheme,
         // App
         OpenSettings,
+        ShowShortcuts,
         CloseOverlay,
         // Page field
         ConfirmPage,
@@ -94,6 +95,7 @@ pub fn bind_default_keys(cx: &mut App) {
         KeyBinding::new("alt-8", SelectTab8, w),
         KeyBinding::new("alt-9", SelectLastTab, w),
         KeyBinding::new("ctrl-,", OpenSettings, w),
+        KeyBinding::new("ctrl-/", ShowShortcuts, w),
         KeyBinding::new("escape", CloseOverlay, Some(OVERLAY)),
         KeyBinding::new("ctrl-shift-l", CycleTheme, w),
         // Navigate (SumatraPDF-compatible where Sumatra has a binding)

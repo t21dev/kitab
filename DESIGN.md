@@ -19,37 +19,37 @@ All colours are tokens. Components never contain a literal colour. Tokens are de
 
 ### Surface and text tokens
 
-| Token | Dark | Light | Paper | Nord | Noctua | Vampire | Use |
-|---|---|---|---|---|---|---|---|
-| `bg` | `#141415` | `#FFFFFF` | `#F4EEE3` | `#2E3440` | `#0E1626` | `#17121A` | Window, chrome **and** reflowed reading surface |
-| `panel` | `#111112` | `#FAFAFB` | `#EFE8DB` | `#2A303B` | `#0B1220` | `#130F16` | Sidebar, settings rail, wells |
-| `desk` | `#0F0F10` | `#F2F2F4` | `#EBE3D5` | `#292E39` | `#0A101C` | `#120E14` | Behind fixed-layout page sheets |
-| `raised` | `#1E1E21` | `#FFFFFF` | `#FAF6EE` | `#3B4252` | `#17223A` | `#231B28` | Raised controls, active tab, menus, cards |
-| `hover` | `#18181A` | `#F3F3F5` | `#EDE5D7` | `#343A47` | `#121C30` | `#1D1621` | Hover fill, well fill |
-| `line` | `#27272B` | `#E8E8EC` | `#DCD1BF` | `#434C5E` | `#1F2B45` | `#2F2534` | Every hairline |
-| `text` | `#ECECEE` | `#18181B` | `#2B241D` | `#ECEFF4` | `#E6ECF7` | `#F2EAF0` | Primary text |
-| `read` | `#D9D9DD` | `#232326` | `#2B241D` | `#E5E9F0` | `#DCE3F0` | `#EADFE6` | Reading body text (slightly softer) |
-| `muted` | `#A1A1A7` | `#55555D` | `#5F5346` | `#C3CAD6` | `#A9B5CE` | `#C2B2BF` | Secondary text, idle icons |
-| `faint` | `#8C8C92` | `#6B6B73` | `#6E6253` | `#A3ACBC` | `#8A97B3` | `#A2909F` | Meta, counts, helper text. Never the only copy of something important |
-| `ring` | `#5C5C63` | `#B5B5BC` | `#B5A893` | `#4C566A` | `#33405E` | `#4A3B50` | Unread ring, disabled glyphs, ticks |
-| `accent` | `#E6B450` | `#B7791F` | `#A65424` | `#88C0D0` | `#F2A65A` | `#E0466A` | The accent (overridable, see below) |
-| `highlight` | `rgba(230,180,80,.30)` | `#FBE2A6` | `#EFD08F` | `rgba(235,203,139,.30)` | `rgba(242,166,90,.28)` | `rgba(224,70,106,.28)` | Default highlight colour behind text |
-| `ok` | `#4CC38A` | `#1F9D63` | `#4E8A57` | `#A3BE8C` | `#5FD3A3` | `#6CCB97` | Finished, signature valid |
-| `warn` | `#E6B450` | `#B7791F` | `#B87A1E` | `#EBCB8B` | `#F2C14E` | `#E8B04A` | Signer unknown, changed after signing |
-| `bad` | `#F06A6A` | `#D33B3B` | `#B5402F` | `#BF616A` | `#F07A7A` | `#FF5C7A` | Errors, broken signature, destructive |
-| `scrim` | `rgba(0,0,0,.55)` | `rgba(20,20,30,.28)` | `rgba(60,40,20,.25)` | `rgba(0,0,0,.45)` | `rgba(0,0,0,.55)` | `rgba(0,0,0,.55)` | Behind dialogs |
+| Token | Dark | Light | Paper | Nord | Noctua | Vampire | Ink | Use |
+|---|---|---|---|---|---|---|---|---|
+| `bg` | `#141415` | `#FFFFFF` | `#F4EEE3` | `#2E3440` | `#0E1626` | `#17121A` | `#000000` | Window, chrome **and** reflowed reading surface |
+| `panel` | `#111112` | `#FAFAFB` | `#EFE8DB` | `#2A303B` | `#0B1220` | `#130F16` | `#050506` | Sidebar, settings rail, wells |
+| `desk` | `#0F0F10` | `#F2F2F4` | `#EBE3D5` | `#292E39` | `#0A101C` | `#120E14` | `#000000` | Behind fixed-layout page sheets |
+| `raised` | `#1E1E21` | `#FFFFFF` | `#FAF6EE` | `#3B4252` | `#17223A` | `#231B28` | `#131316` | Raised controls, active tab, menus, cards |
+| `hover` | `#18181A` | `#F3F3F5` | `#EDE5D7` | `#343A47` | `#121C30` | `#1D1621` | `#0C0C0E` | Hover fill, well fill |
+| `line` | `#27272B` | `#E8E8EC` | `#DCD1BF` | `#434C5E` | `#1F2B45` | `#2F2534` | `#1E1E23` | Every hairline |
+| `text` | `#ECECEE` | `#18181B` | `#2B241D` | `#ECEFF4` | `#E6ECF7` | `#F2EAF0` | `#F4F4F6` | Primary text |
+| `read` | `#D9D9DD` | `#232326` | `#2B241D` | `#E5E9F0` | `#DCE3F0` | `#EADFE6` | `#E2E2E7` | Reading body text (slightly softer) |
+| `muted` | `#A1A1A7` | `#55555D` | `#5F5346` | `#C3CAD6` | `#A9B5CE` | `#C2B2BF` | `#A7A7B0` | Secondary text, idle icons |
+| `faint` | `#8C8C92` | `#6B6B73` | `#6E6253` | `#A3ACBC` | `#8A97B3` | `#A2909F` | `#8E8E98` | Meta, counts, helper text. Never the only copy of something important |
+| `ring` | `#5C5C63` | `#B5B5BC` | `#B5A893` | `#4C566A` | `#33405E` | `#4A3B50` | `#4A4A53` | Unread ring, disabled glyphs, ticks |
+| `accent` | `#E6B450` | `#B7791F` | `#A65424` | `#88C0D0` | `#F2A65A` | `#E0466A` | `#8EA8FF` | The accent (overridable, see below) |
+| `highlight` | `rgba(230,180,80,.30)` | `#FBE2A6` | `#EFD08F` | `rgba(235,203,139,.30)` | `rgba(242,166,90,.28)` | `rgba(224,70,106,.28)` | `rgba(142,168,255,.28)` | Default highlight colour behind text |
+| `ok` | `#4CC38A` | `#1F9D63` | `#4E8A57` | `#A3BE8C` | `#5FD3A3` | `#6CCB97` | `#4CC38A` | Finished, signature valid |
+| `warn` | `#E6B450` | `#B7791F` | `#B87A1E` | `#EBCB8B` | `#F2C14E` | `#E8B04A` | `#E6B450` | Signer unknown, changed after signing |
+| `bad` | `#F06A6A` | `#D33B3B` | `#B5402F` | `#BF616A` | `#F07A7A` | `#FF5C7A` | `#F06A6A` | Errors, broken signature, destructive |
+| `scrim` | `rgba(0,0,0,.55)` | `rgba(20,20,30,.28)` | `rgba(60,40,20,.25)` | `rgba(0,0,0,.45)` | `rgba(0,0,0,.55)` | `rgba(0,0,0,.55)` | `rgba(0,0,0,.7)` | Behind dialogs |
 
-Nord uses the published Nord palette (MIT; credit in About and NOTICE). Noctua and Vampire are Kitab's own. A new theme must define every token above and pass the contrast check: `text`/`read` ≥ 7:1 on `bg`, `muted` ≥ 4.5:1, `faint` ≥ 4.5:1 on `bg` and `panel`, `accent` ≥ 3:1 as a mark and ≥ 4.5:1 when used as text.
+Nord uses the published Nord palette (MIT; credit in About and NOTICE). Noctua, Vampire and Ink are Kitab's own. Ink is true black for OLED screens, with a blue-black ink accent. A new theme must define every token above and pass the contrast check: `text`/`read` ≥ 7:1 on `bg`, `muted` ≥ 4.5:1, `faint` ≥ 4.5:1 on `bg` and `panel`, `accent` ≥ 3:1 as a mark and ≥ 4.5:1 when used as text.
 
 ### Accent
 
-- Presets: theme default, Amber, Rose, Blue, Green, Mono. **Custom: any hex.**
+- Presets: theme default, Amber, Rose, Blue, Emerald, Grape, Wine, Mono. **Custom: any hex**, typed or picked from a hue strip.
 - Kitab keeps the hue and chroma of a custom colour and adjusts OKLCH lightness per theme until it reaches 3:1 against `bg` for marks and 4.5:1 where it is text. The hex field shows the measured ratio, and says when it lightens the colour.
 - The accent marks: active and selected states, progress bars, the focus ring, the scrubber thumb, reading-state rings, toggled icon buttons and switches. Never large fills, and never body text.
 
 ### Depth tokens
 
-| Token | Dark-family themes (Dark, Nord, Noctua, Vampire) | Light | Paper |
+| Token | Dark-family themes (Dark, Nord, Noctua, Vampire, Ink) | Light | Paper |
 |---|---|---|---|
 | `elev` (raised control) | `inset 0 1px 0 rgba(255,255,255,.07), 0 0 0 1px rgba(0,0,0,.5), 0 2px 6px rgba(0,0,0,.35)` | `0 0 0 1px rgba(20,20,40,.08), 0 1px 2px rgba(20,20,40,.08), 0 2px 6px rgba(20,20,40,.05)` | `inset 0 1px 0 rgba(255,255,255,.7), 0 0 0 1px rgba(80,55,25,.12), 0 1px 3px rgba(80,55,25,.12)` |
 | `well` (recessed) | `inset 0 1px 2px rgba(0,0,0,.45), inset 0 0 0 1px rgba(255,255,255,.05)` | `inset 0 1px 2px rgba(20,20,40,.06), inset 0 0 0 1px rgba(20,20,40,.08)` | `inset 0 1px 2px rgba(80,55,25,.10), inset 0 0 0 1px rgba(80,55,25,.10)` |

@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Ink, a true-black theme for OLED screens.
+- Accent presets (Theme, Amber, Rose, Blue, Emerald, Grape, Wine, Mono) and a custom accent with a hex field and a hue strip; every accent is adjusted per theme to stay visible.
+- Settings › Shortcuts lists every keyboard and mouse shortcut (Ctrl+/).
+- Right-click a page to copy its text, copy it as an image (150 dpi PNG) or copy its page number.
 - Settings (Ctrl+,) with Appearance and Reading sections and live previews for themes, density, page navigator and page corners, saved to `settings.json`.
 - Page navigator styles (Scrubber, Stepper, Counter, Hidden); the page number is a field you can type into (or press Ctrl+G); the scrubber track can be clicked and dragged.
 - Optional rounded page corners (Square, Soft, Round).

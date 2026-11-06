@@ -4,10 +4,11 @@
 //! only). Messages go to that window's queue: nothing else on the desktop sees
 //! them, and the real cursor doesn't move.
 
-use windows::Win32::Foundation::{HWND, LPARAM, WPARAM};
+use windows::Win32::Foundation::{HWND, LPARAM, POINT, WPARAM};
+use windows::Win32::Graphics::Gdi::ClientToScreen;
 use windows::Win32::UI::WindowsAndMessaging::{
     PostMessageW, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MBUTTONDOWN, WM_MBUTTONUP, WM_MOUSEMOVE,
-    WM_RBUTTONDOWN, WM_RBUTTONUP,
+    WM_MOUSEWHEEL, WM_RBUTTONDOWN, WM_RBUTTONUP,
 };
 
 #[derive(Clone, Copy, Debug)]
@@ -41,4 +42,18 @@ pub fn click(hwnd: isize, x: i32, y: i32, button: Button) -> bool {
 /// Move the pointer to (`x`, `y`) in client pixels (hover states).
 pub fn hover(hwnd: isize, x: i32, y: i32) -> bool {
     post(HWND(hwnd as *mut core::ffi::c_void), WM_MOUSEMOVE, 0, x, y)
+}
+
+/// Turn the wheel over (`x`, `y`) in client pixels; `notches` > 0 scrolls up.
+pub fn wheel(hwnd: isize, x: i32, y: i32, notches: i32) -> bool {
+    let hwnd = HWND(hwnd as *mut core::ffi::c_void);
+    let mut pt = POINT { x, y };
+    // SAFETY: `pt` is a valid POINT for the call; an invalid window handle
+    // makes it return false, which is reported.
+    if !unsafe { ClientToScreen(hwnd, &mut pt) }.as_bool() {
+        return false;
+    }
+    // WM_MOUSEWHEEL: the delta is the high word of wparam; the point is in screen pixels.
+    let delta = ((notches * 120) as i16 as u16 as usize) << 16;
+    post(hwnd, WM_MOUSEMOVE, 0, x, y) && post(hwnd, WM_MOUSEWHEEL, delta, pt.x, pt.y)
 }

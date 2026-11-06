@@ -10,18 +10,18 @@ use crate::library::{Library, RecentItem, SessionTab};
 use crate::menu::{self, MenuItem, OpenMenu};
 use crate::motion;
 use crate::reader::{Reader, ReaderEvent, open_reader};
-use crate::settings_view::{self, Section};
+use crate::settings_view::{self, HexState, Section};
 use crate::style::Style;
 use crate::tooltip::Tip;
 use gpui::{
     AnyElement, App, AppContext, ClipboardItem, Context, ElementId, Entity, ExternalPaths,
-    FocusHandle, Focusable, FontWeight, InteractiveElement, IntoElement, MouseButton,
+    FocusHandle, Focusable, FontWeight, InteractiveElement, IntoElement, KeyDownEvent, MouseButton,
     MouseDownEvent, ParentElement, PathPromptOptions, Pixels, Point, Render, SharedString,
     StatefulInteractiveElement, Styled, Subscription, Window, WindowControlArea, anchored,
     deferred, div, point, prelude::FluentBuilder, px, svg,
 };
 use kitab_core::{OutlineItem, ZoomMode};
-use kitab_theme::Theme;
+use kitab_theme::{Accent, AccentPreset, Theme};
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::Arc;
@@ -65,6 +65,7 @@ pub struct Workspace {
     home_serial: u64,
     /// Set after the first frame: tabs opened later fade in.
     booted: bool,
+    hex: HexState,
 }
 
 impl Workspace {
@@ -99,7 +100,17 @@ impl Workspace {
             sidebar_serial: 0,
             home_serial: 0,
             booted: false,
+            hex: HexState {
+                edit: None,
+                focus: cx.focus_handle(),
+            },
         };
+        // Leaving the hex field ends the edit.
+        let hex_blur = cx.on_blur(&this.hex.focus, window, |ws, _, cx| {
+            ws.hex.edit = None;
+            cx.notify();
+        });
+        this.subs.push(hex_blur);
         if files.is_empty() {
             // Start-up mode "Restore last session" (PLAN.md §4, the default): the
             // previous tabs, read off the UI thread.
@@ -271,7 +282,7 @@ impl Workspace {
             .position(|id| *id == current)
             .map_or(0, |i| (i + 1) % ids.len());
         if let Ok(theme) = kitab_theme::builtin(ids[next]) {
-            self.change_style(&move |s: &mut Style| s.theme = theme.clone(), cx);
+            self.change_style(&move |s: &mut Style| s.set_theme(theme.clone()), cx);
         }
     }
 
@@ -618,7 +629,7 @@ impl Workspace {
             .child(
                 icon_button(
                     "more",
-                    "more",
+                    "more-vertical",
                     self.menu.as_ref().is_some_and(|m| m.align_right),
                     st,
                 )
@@ -1179,6 +1190,9 @@ impl Render for Workspace {
             .on_action(cx.listener(|ws, _: &ToggleSidebar, _, cx| ws.toggle_sidebar(cx)))
             .on_action(cx.listener(|ws, _: &OpenSettings, window, cx| ws.open_settings(window, cx)))
             .on_action(
+                cx.listener(|ws, _: &ShowShortcuts, window, cx| ws.show_shortcuts(window, cx)),
+            )
+            .on_action(
                 cx.listener(|ws, _: &ReopenClosedTab, window, cx| ws.reopen_closed(window, cx)),
             )
             .on_action(cx.listener(|ws, _: &SelectTab1, window, cx| ws.select_tab(0, window, cx)))
@@ -1338,6 +1352,57 @@ impl Workspace {
         }
     }
 
+    fn show_shortcuts(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.settings_section = Section::Shortcuts;
+        self.open_settings(window, cx);
+    }
+
+    pub(crate) fn edit_hex(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let current = match Style::get(cx).accent {
+            Accent::Custom(c) => c.to_string().trim_start_matches('#').to_string(),
+            Accent::Preset(_) => String::new(),
+        };
+        self.hex.edit = Some(current);
+        window.focus(&self.hex.focus);
+        cx.notify();
+    }
+
+    /// Typing in the hex field: hex digits, Backspace, Enter to finish. Six
+    /// digits apply at once.
+    pub(crate) fn hex_key(
+        &mut self,
+        e: &KeyDownEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(text) = self.hex.edit.as_mut() else {
+            return;
+        };
+        let k = &e.keystroke;
+        if k.key == "enter" {
+            self.hex.edit = None;
+            window.focus(&self.overlay_focus);
+        } else if k.key == "backspace" {
+            text.pop();
+        } else if let Some(ch) = k.key_char.as_ref() {
+            let ch = ch.trim_start_matches('#');
+            if !k.modifiers.control
+                && ch.chars().all(|c| c.is_ascii_hexdigit())
+                && text.len() + ch.len() <= 6
+            {
+                text.push_str(&ch.to_uppercase());
+            }
+        }
+        let typed = self.hex.edit.clone().unwrap_or_default();
+        if typed.len() == 6 {
+            if let Some(Accent::Custom(c)) = Accent::parse(&format!("#{typed}")) {
+                self.change_style(&move |s: &mut Style| s.set_accent(Accent::Custom(c)), cx);
+            }
+        }
+        cx.stop_propagation();
+        cx.notify();
+    }
+
     pub(crate) fn set_settings_section(&mut self, section: Section, cx: &mut Context<Self>) {
         self.settings_section = section;
         if self.settings.is_some() {
@@ -1446,7 +1511,7 @@ impl Workspace {
                                 let theme = theme.clone();
                                 let _ = ws.update(cx, |ws, cx| {
                                     ws.change_style(
-                                        &move |s: &mut Style| s.theme = theme.clone(),
+                                        &move |s: &mut Style| s.set_theme(theme.clone()),
                                         cx,
                                     )
                                 });
@@ -1474,10 +1539,14 @@ impl Workspace {
                     .rounded(st.px(|m| m.control_radius))
                     .bg(st.c(|c| c.hover))
                     .shadow(st.well());
-                for (ix, (d, label)) in [
-                    (kitab_theme::Density::Dense, "Dense"),
-                    (kitab_theme::Density::Compact, "Compact"),
-                    (kitab_theme::Density::Standard, "Standard"),
+                for (ix, (d, label, glyph)) in [
+                    (kitab_theme::Density::Dense, "Dense", "density-dense"),
+                    (kitab_theme::Density::Compact, "Compact", "density-compact"),
+                    (
+                        kitab_theme::Density::Standard,
+                        "Standard",
+                        "density-standard",
+                    ),
                 ]
                 .into_iter()
                 .enumerate()
@@ -1492,6 +1561,7 @@ impl Workspace {
                             .flex()
                             .items_center()
                             .justify_center()
+                            .gap(px(5.0))
                             .rounded(px(6.0))
                             .text_size(px(12.0))
                             .text_color(if on {
@@ -1506,15 +1576,63 @@ impl Workspace {
                                     ws.change_style(&move |s: &mut Style| s.density = d, cx)
                                 });
                             })
+                            .child(svg().path(icon(glyph)).size(px(13.0)).text_color(if on {
+                                st.c(|c| c.accent)
+                            } else {
+                                st.c(|c| c.muted)
+                            }))
                             .child(label),
                     );
                 }
                 group.into_any_element()
             }))
         };
+        let accent_row = {
+            let ws = ws.clone();
+            MenuItem::Custom(Rc::new(move |st: &Style, _cx: &mut App| {
+                let mut row = div().flex().gap(px(6.0)).px(px(10.0)).py(px(6.0));
+                for (ix, p) in AccentPreset::ALL.into_iter().enumerate() {
+                    let selected = st.accent == Accent::Preset(p);
+                    let color = Accent::Preset(p).resolve(st.base_theme());
+                    let ws = ws.clone();
+                    row = row.child(
+                        div()
+                            .id(("accent-dot", ix))
+                            .size(px(22.0))
+                            .p(px(2.0))
+                            .rounded_full()
+                            .cursor_pointer()
+                            .border_2()
+                            .border_color(if selected {
+                                st.c(|c| c.text)
+                            } else {
+                                st.ca(|c| c.line, 0.0)
+                            })
+                            .tip(p.name())
+                            .on_click(move |_, _, cx| {
+                                let _ = ws.update(cx, |ws, cx| {
+                                    ws.change_style(
+                                        &move |s: &mut Style| s.set_accent(Accent::Preset(p)),
+                                        cx,
+                                    )
+                                });
+                            })
+                            .child(
+                                div()
+                                    .size_full()
+                                    .rounded_full()
+                                    .bg(crate::style::hsla(color)),
+                            ),
+                    );
+                }
+                row.into_any_element()
+            }))
+        };
         let items = vec![
             MenuItem::Heading("Theme".into()),
             theme_row,
+            MenuItem::Heading("Accent".into()),
+            accent_row,
             MenuItem::Heading("Density".into()),
             density_row,
             MenuItem::Separator,
@@ -1538,13 +1656,19 @@ impl Workspace {
             .disabled(self.active.is_none()),
             MenuItem::Separator,
             MenuItem::new(
+                "Keyboard shortcuts",
+                self.on_ws(cx, |ws, window, cx| ws.show_shortcuts(window, cx)),
+            )
+            .icon("keyboard")
+            .key("Ctrl+/"),
+            MenuItem::new(
                 "Settings…",
                 self.on_ws(cx, |ws, window, cx| ws.open_settings(window, cx)),
             )
             .icon("settings")
             .key("Ctrl+,"),
         ];
-        self.open_menu(at, true, 260.0, items, window, cx);
+        self.open_menu(at, true, 280.0, items, window, cx);
     }
 
     /// Right click on a page.
@@ -1562,6 +1686,7 @@ impl Workspace {
             r.zoom_mode(),
             r.path.clone(),
         );
+        let (page, has_doc) = (r.current_page(), r.status == crate::reader::Status::Open);
         let run = |f: fn(&mut Reader, &mut Window, &mut Context<Reader>)| {
             let reader = reader.clone();
             move |window: &mut Window, cx: &mut App| reader.update(cx, |r, cx| f(r, window, cx))
@@ -1616,7 +1741,24 @@ impl Workspace {
             )
             .key("Ctrl+Shift+-"),
             MenuItem::Separator,
+            MenuItem::new(format!("Copy text of page {}", page + 1), {
+                let reader = reader.clone();
+                move |_, cx: &mut App| reader.update(cx, |r, cx| r.copy_page_text(page, cx))
+            })
+            .icon("text")
+            .disabled(!has_doc),
+            MenuItem::new(format!("Copy page {} as image", page + 1), {
+                let reader = reader.clone();
+                move |_, cx: &mut App| reader.update(cx, |r, cx| r.copy_page_image(page, cx))
+            })
+            .icon("image")
+            .disabled(!has_doc),
+            MenuItem::new("Copy page number", move |_, cx: &mut App| {
+                cx.write_to_clipboard(ClipboardItem::new_string(format!("{}", page + 1)))
+            })
+            .icon("hash"),
             file_item_copy(&path),
+            MenuItem::Separator,
             file_item_reveal(&path),
         ];
         self.open_menu(at, false, 290.0, items, window, cx);
@@ -1770,7 +1912,7 @@ impl Workspace {
     fn overlays(
         &mut self,
         st: &Style,
-        _window: &mut Window,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Vec<AnyElement> {
         let mut out = Vec::new();
@@ -1780,10 +1922,14 @@ impl Workspace {
             let closing = self.settings.is_none();
             let serial = self.settings_serial;
             let scrim = div().absolute().inset_0().bg(st.c(|c| c.scrim));
-            let panel =
-                div()
-                    .relative()
-                    .child(settings_view::panel(ws.clone(), section, st, &self.themes));
+            let panel = div().relative().child(settings_view::panel(
+                ws.clone(),
+                section,
+                st,
+                &self.themes,
+                &self.hex,
+                window,
+            ));
             let (scrim, panel) = if closing {
                 (
                     motion::exit(
@@ -1821,6 +1967,8 @@ impl Workspace {
             };
             let mut layer = div()
                 .id("settings-layer")
+                // Nothing under the dialog gets the mouse or the wheel.
+                .occlude()
                 .absolute()
                 .inset_0()
                 .flex()
@@ -1882,7 +2030,7 @@ impl Workspace {
                     .child(panel),
             )
             .with_priority(1);
-            let mut layer = div().id("menu-layer").absolute().inset_0();
+            let mut layer = div().id("menu-layer").absolute().inset_0().occlude();
             if !closing {
                 // A click anywhere else closes the menu (and doesn't reach what's under it).
                 layer =

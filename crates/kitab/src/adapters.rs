@@ -77,6 +77,11 @@ impl DocEngine for MupdfEngine {
         }
     }
 
+    fn page_text(&self, doc: DocHandle, page: u32) -> Option<String> {
+        self.id(doc)
+            .and_then(|id| self.engine.page_plain_text(id, page).ok())
+    }
+
     fn close(&self, doc: DocHandle) {
         let id = self.ids.lock().ok().and_then(|mut ids| ids.remove(&doc));
         if let Some(id) = id {

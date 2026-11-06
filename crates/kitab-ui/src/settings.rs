@@ -5,7 +5,7 @@
 //! old and hand-edited files keep working. The app reads the file before the
 //! first frame (the theme is needed to draw it) and writes it off the UI thread.
 
-use kitab_theme::Density;
+use kitab_theme::{Accent, Density};
 use serde::{Deserialize, Serialize};
 
 /// The settings format version, independent of the app version (PLAN.md §11).
@@ -114,6 +114,8 @@ pub struct Settings {
     /// A built-in theme id (`kitab_theme::BUILTIN_IDS`).
     pub theme: String,
     pub density: Density,
+    /// A preset or a custom colour; adjusted per theme for contrast.
+    pub accent: Accent,
     pub page_nav: PageNav,
     pub page_corners: PageCorners,
     /// Opening and closing motion for menus, dialogs, panels and lists.
@@ -125,6 +127,7 @@ impl Default for Settings {
         Self {
             theme: "dark".into(),
             density: Density::Compact,
+            accent: Accent::default(),
             page_nav: PageNav::default(),
             page_corners: PageCorners::default(),
             animations: true,
@@ -139,6 +142,8 @@ struct File {
     version: u32,
     theme: String,
     density: DensityName,
+    /// `"theme"`, a preset id (`"emerald"`) or a hex colour (`"#10B981"`).
+    accent: String,
     page_navigator: PageNav,
     page_corners: PageCorners,
     animations: bool,
@@ -156,6 +161,7 @@ impl From<Settings> for File {
             version: SETTINGS_VERSION,
             theme: s.theme,
             density: s.density.into(),
+            accent: s.accent.id(),
             page_navigator: s.page_nav,
             page_corners: s.page_corners,
             animations: s.animations,
@@ -177,6 +183,8 @@ impl Settings {
         Ok(Self {
             theme,
             density: f.density.into(),
+            // An accent Kitab doesn't know falls back to the theme's.
+            accent: Accent::parse(&f.accent).unwrap_or_default(),
             page_nav: f.page_navigator,
             page_corners: f.page_corners,
             animations: f.animations,
@@ -197,6 +205,7 @@ mod tests {
         let s = Settings {
             theme: "nord".into(),
             density: Density::Standard,
+            accent: Accent::Preset(kitab_theme::AccentPreset::Emerald),
             page_nav: PageNav::Stepper,
             page_corners: PageCorners::Round,
             animations: false,
@@ -211,6 +220,15 @@ mod tests {
         assert_eq!(s.page_nav, PageNav::Counter);
         assert_eq!(s.page_corners, PageCorners::Square);
         assert_eq!(s.theme, "dark");
+        assert_eq!(s.accent, Accent::default());
+    }
+
+    #[test]
+    fn accent_presets_and_hex_round_trip() {
+        let s = Settings::from_json(r#"{ "accent": "wine" }"#).expect("parses");
+        assert_eq!(s.accent.id(), "wine");
+        let s = Settings::from_json(r#"{ "accent": "not-a-colour" }"#).expect("parses");
+        assert_eq!(s.accent, Accent::default());
     }
 
     #[test]

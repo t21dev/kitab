@@ -202,7 +202,7 @@ The CLI is `kitab [files…] [--page N] [--find TEXT] [--new-window] [--print] [
 
 ### 3.10 Keyboard
 
-Everything is an **action**, bound in `keymap.json` by context (`Workspace`, `Reader`, `FindBar`, `Home`, `Palette`, `Settings`). Defaults are Sumatra-compatible where Sumatra has a binding (to be checked against Sumatra's published shortcut list in Phase 0; that check is an exit item). Settings › Shortcuts lists, searches and rebinds by key capture, with conflict warnings. `?` or Ctrl+/ opens the cheat sheet. Every action is also in the command palette (Ctrl+K / Ctrl+Shift+P) with its binding shown.
+Everything is an **action**, bound in `keymap.json` by context (`Workspace`, `Reader`, `FindBar`, `Home`, `Palette`, `Settings`). Defaults are Sumatra-compatible where Sumatra has a binding (to be checked against Sumatra's published shortcut list in Phase 0; that check is an exit item). Settings › Shortcuts lists, searches and rebinds by key capture, with conflict warnings. Ctrl+/ opens Settings › Shortcuts, the cheat sheet (`?` is left free for typing). Every action is also in the command palette (Ctrl+K / Ctrl+Shift+P) with its binding shown.
 
 | Area | Keys |
 |---|---|

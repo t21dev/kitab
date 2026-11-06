@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-//! Theme files (`assets/themes/<id>.json`) and the six built-in themes.
+//! Theme files (`assets/themes/<id>.json`) and the built-in themes.
 
 use crate::color::Rgba;
 use serde::Deserialize;
 use std::fmt;
 
 /// Ids of the built-in themes, in the order Settings shows them.
-pub const BUILTIN_IDS: [&str; 6] = ["dark", "light", "paper", "nord", "noctua", "vampire"];
+pub const BUILTIN_IDS: [&str; 7] = ["dark", "light", "paper", "nord", "noctua", "vampire", "ink"];
 
-const BUILTIN_JSON: [(&str, &str); 6] = [
+const BUILTIN_JSON: [(&str, &str); 7] = [
     ("dark", include_str!("../../../assets/themes/dark.json")),
     ("light", include_str!("../../../assets/themes/light.json")),
     ("paper", include_str!("../../../assets/themes/paper.json")),
@@ -19,6 +19,7 @@ const BUILTIN_JSON: [(&str, &str); 6] = [
         "vampire",
         include_str!("../../../assets/themes/vampire.json"),
     ),
+    ("ink", include_str!("../../../assets/themes/ink.json")),
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
@@ -277,7 +278,7 @@ pub fn builtin(id: &str) -> Result<Theme, ThemeError> {
     Theme::from_json(json)
 }
 
-/// Load all six built-in themes, in Settings order.
+/// Load all built-in themes, in Settings order.
 pub fn builtin_all() -> Result<Vec<Theme>, ThemeError> {
     BUILTIN_IDS.iter().map(|id| builtin(id)).collect()
 }

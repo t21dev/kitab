@@ -77,7 +77,8 @@ impl Rgba {
             + 0.0722 * srgb_to_linear(self.b)
     }
 
-    fn to_oklch(self) -> (f32, f32, f32) {
+    /// OKLCH lightness, chroma and hue (radians).
+    pub fn to_oklch(self) -> (f32, f32, f32) {
         let (l, a, b) = linear_to_oklab(
             srgb_to_linear(self.r),
             srgb_to_linear(self.g),
@@ -87,7 +88,7 @@ impl Rgba {
     }
 
     /// Build an opaque colour from OKLCH, reducing chroma until it fits sRGB.
-    fn from_oklch(l: f32, c: f32, h: f32) -> Rgba {
+    pub fn from_oklch(l: f32, c: f32, h: f32) -> Rgba {
         let mut chroma = c;
         loop {
             let (r, g, b) = oklab_to_linear(l, chroma * h.cos(), chroma * h.sin());

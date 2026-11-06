@@ -5,13 +5,18 @@
 
 use crate::settings::{PageCorners, PageNav, Settings};
 use gpui::{App, BoxShadow, Global, Hsla, Pixels, point, px};
-use kitab_theme::{Density, DensityMetrics, Shadow, Theme};
+use kitab_theme::{Accent, Density, DensityMetrics, Shadow, Theme};
 
 /// The active look: theme, density, Ultra mode and the reading-view choices
 /// from Settings.
 #[derive(Clone)]
 pub struct Style {
+    /// The theme in use, with the chosen accent applied. Change it with
+    /// [`Style::set_theme`] and [`Style::set_accent`].
     pub theme: Theme,
+    /// The theme as its file defines it (the accent's "Theme" preset).
+    base_theme: Theme,
+    pub accent: Accent,
     pub density: Density,
     pub ultra: bool,
     pub page_nav: PageNav,
@@ -28,14 +33,39 @@ impl Style {
 
     /// `theme` is the loaded theme `settings.theme` names.
     pub fn from_settings(theme: Theme, s: &Settings) -> Self {
-        Self {
-            theme,
+        let mut style = Self {
+            theme: theme.clone(),
+            base_theme: theme,
+            accent: s.accent,
             density: s.density,
             ultra: false,
             page_nav: s.page_nav,
             page_corners: s.page_corners,
             animations: s.animations,
-        }
+        };
+        style.resolve_accent();
+        style
+    }
+
+    pub fn set_theme(&mut self, theme: Theme) {
+        self.base_theme = theme;
+        self.resolve_accent();
+    }
+
+    pub fn set_accent(&mut self, accent: Accent) {
+        self.accent = accent;
+        self.resolve_accent();
+    }
+
+    /// The theme as its file defines it, before the accent.
+    pub fn base_theme(&self) -> &Theme {
+        &self.base_theme
+    }
+
+    fn resolve_accent(&mut self) {
+        let mut theme = self.base_theme.clone();
+        theme.colors.accent = self.accent.resolve(&self.base_theme);
+        self.theme = theme;
     }
 
     /// The settings this look comes from (what `settings.json` should hold).
@@ -43,6 +73,7 @@ impl Style {
         Settings {
             theme: self.theme.id.clone(),
             density: self.density,
+            accent: self.accent,
             page_nav: self.page_nav,
             page_corners: self.page_corners,
             animations: self.animations,

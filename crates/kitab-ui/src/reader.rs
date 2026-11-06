@@ -57,6 +57,9 @@ pub enum ReaderEvent {
     ContextMenu(Point<Pixels>),
 }
 
+/// Resolution of pages copied or saved as images.
+pub const EXPORT_DPI: f32 = 150.0;
+
 /// Jumps remembered for Alt+Left / Alt+Right.
 const HISTORY_MAX: usize = 100;
 
@@ -495,6 +498,51 @@ impl Reader {
         let f = (f32::from(x - b.origin.x) / w).clamp(0.0, 1.0);
         let last = self.page_count().saturating_sub(1);
         self.go_to_page((f * last as f32).round() as usize, cx);
+    }
+
+    // ── copy ──
+
+    /// Copy one page's text to the clipboard (worked out off the UI thread).
+    pub fn copy_page_text(&self, page: usize, cx: &mut Context<Self>) {
+        let Some(doc) = self.doc else { return };
+        let engine = self.engine.clone();
+        cx.spawn(async move |_, cx| {
+            let text = cx
+                .background_spawn(async move { engine.page_text(doc, page as u32) })
+                .await;
+            if let Some(text) = text.filter(|t| !t.trim().is_empty()) {
+                let _ =
+                    cx.update(|cx| cx.write_to_clipboard(gpui::ClipboardItem::new_string(text)));
+            }
+        })
+        .detach();
+    }
+
+    /// Copy one page as a PNG at 150 dpi.
+    pub fn copy_page_image(&self, page: usize, cx: &mut Context<Self>) {
+        let Some(doc) = self.doc else { return };
+        let engine = self.engine.clone();
+        let req = RenderRequest {
+            page: page as u32,
+            scale: EXPORT_DPI / 72.0,
+            rotation: self.rotation,
+            tile: None,
+            generation: self.generation,
+        };
+        cx.spawn(async move |_, cx| {
+            let png = cx
+                .background_spawn(async move {
+                    let bmp = engine.render(doc, req).ok().flatten()?;
+                    png_from_bgra(bmp.width, bmp.height, bmp.bgra)
+                })
+                .await;
+            if let Some(png) = png {
+                let image = gpui::Image::from_bytes(gpui::ImageFormat::Png, png);
+                let _ =
+                    cx.update(|cx| cx.write_to_clipboard(gpui::ClipboardItem::new_image(&image)));
+            }
+        })
+        .detach();
     }
 
     // ── rendering ─────────────────────────────────────────────────────────
@@ -1108,6 +1156,23 @@ fn nav_button(id: &'static str, name: &str, st: &Style) -> gpui::Stateful<gpui::
                 .size(px(15.0))
                 .text_color(st.c(|c| c.muted)),
         )
+}
+
+/// Encode a rendered page (BGRA) as PNG.
+pub fn png_from_bgra(width: u32, height: u32, mut bgra: Vec<u8>) -> Option<Vec<u8>> {
+    for px in bgra.chunks_exact_mut(4) {
+        px.swap(0, 2);
+    }
+    let mut out = Vec::new();
+    image::ImageEncoder::write_image(
+        image::codecs::png::PngEncoder::new(&mut out),
+        &bgra,
+        width,
+        height,
+        image::ExtendedColorType::Rgba8,
+    )
+    .ok()?;
+    Some(out)
 }
 
 /// A typed page number (1-based) as a page index, clamped to the document.

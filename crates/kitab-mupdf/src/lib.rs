@@ -307,6 +307,16 @@ impl Engine {
         self.with_doc(doc, move |d| Ok(doc::page_text(d, page)?.has_text()))
     }
 
+    /// A page's text in reading order, one line per line of text (Copy page text).
+    pub fn page_plain_text(&self, doc: DocId, page: u32) -> Result<String, String> {
+        self.with_doc(doc, move |d| {
+            Ok(doc::page_text(d, page)?.lines.join(
+                "
+",
+            ))
+        })
+    }
+
     /// Every hit of `query` on one page, in reading order.
     pub fn find_page(
         &self,

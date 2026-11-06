@@ -24,5 +24,7 @@ pub trait DocEngine: Send + Sync + 'static {
         options: FindOptions,
         on_hit: &mut dyn FnMut(FindHit) -> bool,
     );
+    /// A page's text in reading order, lines separated by newlines.
+    fn page_text(&self, doc: DocHandle, page: u32) -> Option<String>;
     fn close(&self, doc: DocHandle);
 }

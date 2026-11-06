@@ -44,6 +44,18 @@ const ICONS: &[(&str, &[u8])] = &[
         include_bytes!("../../../assets/icons/copy.svg"),
     ),
     (
+        "icons/density-compact.svg",
+        include_bytes!("../../../assets/icons/density-compact.svg"),
+    ),
+    (
+        "icons/density-dense.svg",
+        include_bytes!("../../../assets/icons/density-dense.svg"),
+    ),
+    (
+        "icons/density-standard.svg",
+        include_bytes!("../../../assets/icons/density-standard.svg"),
+    ),
+    (
         "icons/file.svg",
         include_bytes!("../../../assets/icons/file.svg"),
     ),
@@ -76,8 +88,16 @@ const ICONS: &[(&str, &[u8])] = &[
         include_bytes!("../../../assets/icons/home.svg"),
     ),
     (
+        "icons/image.svg",
+        include_bytes!("../../../assets/icons/image.svg"),
+    ),
+    (
         "icons/info.svg",
         include_bytes!("../../../assets/icons/info.svg"),
+    ),
+    (
+        "icons/keyboard.svg",
+        include_bytes!("../../../assets/icons/keyboard.svg"),
     ),
     (
         "icons/lock.svg",
@@ -98,6 +118,10 @@ const ICONS: &[(&str, &[u8])] = &[
     (
         "icons/more.svg",
         include_bytes!("../../../assets/icons/more.svg"),
+    ),
+    (
+        "icons/more-vertical.svg",
+        include_bytes!("../../../assets/icons/more-vertical.svg"),
     ),
     (
         "icons/outline.svg",
@@ -130,6 +154,10 @@ const ICONS: &[(&str, &[u8])] = &[
     (
         "icons/sun.svg",
         include_bytes!("../../../assets/icons/sun.svg"),
+    ),
+    (
+        "icons/text.svg",
+        include_bytes!("../../../assets/icons/text.svg"),
     ),
     (
         "icons/win-max.svg",
