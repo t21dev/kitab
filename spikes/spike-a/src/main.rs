@@ -213,6 +213,15 @@ fn main() {
         );
     }
 
+    // Memory isolation (diagnostics): --splash-only keeps just the GDI splash
+    // (Win32 + GDI + MuPDF, no GPUI); --no-mupdf runs GPUI without opening the file.
+    if args.iter().any(|a| a == "--splash-only") {
+        loop {
+            std::thread::park();
+        }
+    }
+    let no_mupdf = args.iter().any(|a| a == "--no-mupdf");
+
     let app = Application::new();
     mark("application_new");
     app.run(move |cx: &mut App| {
@@ -246,6 +255,9 @@ fn main() {
         // Render on a plain thread: MuPDF never runs on the UI thread.
         let (tx, rx) = std::sync::mpsc::channel::<Result<PageImage, String>>();
         std::thread::spawn(move || {
+            if no_mupdf {
+                return;
+            }
             let doc = match mupdf::Document::open(path.as_str()) {
                 Ok(d) => d,
                 Err(e) => {

@@ -290,7 +290,7 @@ fn measure(pid: u32, start: Instant, save: Option<&Path>) -> Result<Run, String>
                 std::thread::sleep(Duration::from_millis(1));
                 continue;
             }
-            window_ms = Some(ms(start.elapsed()));
+            window_ms.get_or_insert(ms(start.elapsed()));
         }
         let (Some(w), Some(window_ms)) = (win.as_ref(), window_ms) else {
             continue;
@@ -303,6 +303,11 @@ fn measure(pid: u32, start: Instant, save: Option<&Path>) -> Result<Run, String>
                 if std::env::var_os("KITAB_BENCH_DEBUG").is_some() {
                     eprintln!("    capture failed at {:.0} ms: {e}", ms(start.elapsed()));
                 }
+                // The window may have closed (a splash handing over to the main
+                // window): find the app's current window again. "Window shown"
+                // keeps its first time.
+                win = None;
+                last = None;
                 std::thread::sleep(Duration::from_millis(2));
                 continue;
             }

@@ -72,6 +72,14 @@ def main() -> None:
     // throwaway D3D11 device on it. Creating the first device initialises the driver,
     // which is the slow part; doing it twice doubles the cost.
     if let Ok(pref) = std::env::var("KITAB_GPU") {
+        // Software rendering (WARP): no vendor driver in the process. Its memory and
+        // CPU cost are measured against the hardware adapters (ADR 0002).
+        if pref == "warp" {
+            if let Ok(adapter) = unsafe { dxgi_factory.EnumWarpAdapter::<IDXGIAdapter1>() } {
+                log::info!("Using GPU: Microsoft Basic Render Driver (WARP)");
+                return Ok(adapter);
+            }
+        }
         use windows::Win32::Graphics::Dxgi::{
             DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE, DXGI_GPU_PREFERENCE_MINIMUM_POWER,
         };
@@ -93,6 +101,61 @@ def main() -> None:
         }
     }
     for adapter_index in 0.. {""",
+    )])
+    # 3. Lean GPU memory (KITAB_LEAN=1): a single-sampled path texture instead of a
+    #    full-window 4x MSAA one (resolved with a plain copy), and 2 swap-chain
+    #    buffers instead of 3. A reader draws few vector paths in its chrome.
+    lean_fn = """
+
+/// Kitab patch (ADR 0002): KITAB_LEAN=1 trades path anti-aliasing quality and one
+/// back buffer for less GPU memory.
+fn kitab_lean() -> bool {
+    std::env::var_os("KITAB_LEAN").is_some()
+}
+
+fn kitab_buffer_count() -> u32 {
+    if kitab_lean() { 2 } else { BUFFER_COUNT as u32 }
+}
+"""
+    p = DEST / "src/platform/windows/directx_renderer.rs"
+    s = p.read_text(encoding="utf8")
+    if s.count("BUFFER_COUNT as u32") != 3:
+        sys.exit("directx_renderer.rs: expected 3 uses of BUFFER_COUNT as u32")
+    s = s.replace("BUFFER_COUNT as u32", "kitab_buffer_count()")
+    p.write_text(s + lean_fn, encoding="utf8")
+    edit("src/platform/windows/directx_renderer.rs", [
+        ("""            self.devices.device_context.ResolveSubresource(
+                &self.resources.path_intermediate_texture,
+                0,
+                &self.resources.path_intermediate_msaa_texture,
+                0,
+                RENDER_TARGET_FORMAT,
+            );""",
+         """            if kitab_lean() {
+                self.devices.device_context.CopyResource(
+                    &self.resources.path_intermediate_texture,
+                    &self.resources.path_intermediate_msaa_texture,
+                );
+            } else {
+                self.devices.device_context.ResolveSubresource(
+                    &self.resources.path_intermediate_texture,
+                    0,
+                    &self.resources.path_intermediate_msaa_texture,
+                    0,
+                    RENDER_TARGET_FORMAT,
+                );
+            }"""),
+        ("""                Count: PATH_MULTISAMPLE_COUNT,
+                Quality: D3D11_STANDARD_MULTISAMPLE_PATTERN.0 as u32,""",
+         """                Count: if kitab_lean() { 1 } else { PATH_MULTISAMPLE_COUNT },
+                Quality: if kitab_lean() { 0 } else { D3D11_STANDARD_MULTISAMPLE_PATTERN.0 as u32 },"""),
+    ])
+    # 4. Segment heap (Windows 10 2004+): the process heap (Rust's System allocator)
+    #    commits less and fragments less. zed#54538 measured 124 -> 91 MB.
+    edit("resources/windows/gpui.manifest.xml", [(
+        """            <dpiAwareness xmlns="http://schemas.microsoft.com/SMI/2016/WindowsSettings">PerMonitorV2</dpiAwareness>""",
+        """            <dpiAwareness xmlns="http://schemas.microsoft.com/SMI/2016/WindowsSettings">PerMonitorV2</dpiAwareness>
+            <heapType xmlns="http://schemas.microsoft.com/SMI/2020/WindowsSettings">SegmentHeap</heapType>""",
     )])
     print(f"patched gpui copy: {DEST}")
 

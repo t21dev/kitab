@@ -53,6 +53,49 @@ Same machine and method, now with CPU and memory. `kitab-bench s2 --runs 15 --wa
 
 Patches: `spikes/spike-a/patch_gpui.py` (applied to a local copy of gpui 0.2.2). Splash: `spikes/spike-a/src/splash.rs`.
 
+## Memory and idle CPU deep dive (7 November 2026)
+
+Owner's targets: idle CPU 0 % (1–2 % at most), memory under 50 MB (100–120 MB at worst).
+
+### Which number is "memory"
+
+- **Task Manager memory** = private working set: memory only this app holds in RAM right now. What users see.
+- **Working set** = all RAM the process touches, including shared DLL pages.
+- **Private bytes** = commit charge: memory the process has committed, in RAM or the page file. The strictest.
+
+SumatraPDF keeps rendered pages in page-file-backed mapped sections (`CreateFileMapping` + `CreateDIBSection`, `EngineMupdf.cpp` at tag 3.6.1rel), which count in its working set but not its private bytes, so compare all three.
+
+### Where Kitab's memory goes (spike, 6 s after start, this machine)
+
+| Configuration | Task Manager | Working set | Private bytes | Threads | Idle CPU |
+|---|---|---|---|---|---|
+| SumatraPDF 3.6.1 | 5.6 MB | 40.2 MB | 14.6 MB | | 0 % |
+| GDI + MuPDF only (`--splash-only`), page shown, no GPUI | | 21.5 MB | **9.0 MB** | 5 | 0 % |
+| GPUI only, no MuPDF, NVIDIA | | 60.6 MB | 113.8 MB | 91 | 0.9 % |
+| GPUI only, no MuPDF, AMD iGPU | | 130.4 MB | 202.1 MB | 68 | 0.6 % |
+| Kitab no fixes, 2 pages | 36.1 MB | 66.8 MB | 129.7 MB | 91 | |
+| **Kitab NVIDIA lean, 2 pages** | **28.8 MB** | 68.9 MB | **107.1 MB** | 91 | 0.3 % |
+| Kitab AMD lean, 2 pages | 50.8 MB | 130.9 MB | 186.0 MB | 68 | 0.6 % |
+| Kitab WARP lean, 2 pages | 33.1 MB | 77.4 MB | 59.0 MB | 33 | 0.6 % |
+
+Findings:
+
+1. **MuPDF and GDI are lean**: page 1 on screen for 9 MB private, less than SumatraPDF. The cost is GPUI's Direct3D 11 device, the vendor driver and window-sized GPU surfaces.
+2. **The GPU choice decides most of it.** On the AMD iGPU textures live in system memory and count as Kitab's; on the NVIDIA dGPU they are in VRAM. WARP (software Direct3D) loads no vendor driver: 39 MB private with no pages, but it burns about 14 cores for the first second (shader compilation) and costs CPU on every frame, so it is the "hardware acceleration off" fallback, not the default.
+3. **`KITAB_LEAN=1`** (single-sampled path texture instead of a window-sized 4× MSAA one, 2 swap-chain buffers instead of 3): GPUI-only floor 113 → 87 MB on NVIDIA, 198 → 149 MB on AMD, 65 → 39 MB on WARP.
+4. **Segment heap** in the manifest: about 1 MB here, because the remaining memory is driver and GPU memory, not the process heap. Kept, as the app's own allocations will grow.
+5. **Each full-resolution page costs about 9–10 MB** (a CPU copy kept by GPUI's `RenderImage` plus the GPU texture). Phase 1 renders visible pages only, into a byte-bounded cache, and drops the CPU copy after upload.
+6. **Idle CPU reaches 0 % within about 5 s** on NVIDIA and AMD. Before that, frames after start-up cost 2–5 %. GPUI's vsync thread invalidates every window on every refresh; making it demand-driven (zed PR #63182 measured 4.7 % → 0.02 %) removes the remaining wake-ups.
+
+### Next fixes, in order
+
+1. Render only visible pages or tiles, keep no CPU copy after upload, and free atlas textures on eviction (`drop_image`).
+2. Demand-driven frames: patch `begin_vsync_thread` (`platform/windows/platform.rs`) to wait until a window asks for a frame, and skip minimised windows.
+3. Create path textures only on frames that draw paths.
+4. On minimise or long idle: `ClearState` + `IDXGIDevice3::Trim`, drop atlas pages.
+5. Cap MuPDF's store (256 MB by default; one-line `mupdf-sys` patch) and call `fz_shrink_store` when idle.
+6. Choose the default adapter by measurement on more machines: dGPU (less private memory, may wake a sleeping GPU) against iGPU (more private memory, lower power).
+
 ## Internal trace marks (Kitab only)
 
 From ADR 0001 (milliseconds from `main`, 5 runs): window opened 262–275 ms, page 1 rendered by MuPDF 3–4 ms later, first page painted 281–290 ms. About 250 ms of that is GPUI's Windows platform set-up (D3D11 device created twice, DirectWrite) before the window exists.
