@@ -15,6 +15,7 @@ smol = "2"
 gpui = { workspace = true }
 kitab-mupdf = { path = "../kitab-mupdf" }
 kitab-print = { path = "../kitab-print" }
+kitab-sign = { path = "../kitab-sign" }
 kitab-store = { path = "../kitab-store" }
 log = "0.4"
 kitab-core = { workspace = true }

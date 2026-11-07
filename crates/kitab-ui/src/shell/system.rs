@@ -47,8 +47,90 @@ impl Workspace {
                 .detach();
             }
             Section::Advanced => self.load_db_size(cx),
+            Section::Signing => self.load_trusted(cx),
             _ => {}
         }
+    }
+
+    fn load_trusted(&mut self, cx: &mut Context<Self>) {
+        let engine = self.engine.clone();
+        cx.spawn(async move |this, cx| {
+            let list = cx
+                .background_spawn(async move { engine.trusted_certs() })
+                .await;
+            let _ = this.update(cx, |ws, cx| {
+                ws.system.trusted = Some(list);
+                cx.notify();
+            });
+        })
+        .detach();
+    }
+
+    /// The trust list changed: list it again, and verify every open tab's
+    /// signatures again.
+    fn trust_changed(&mut self, cx: &mut Context<Self>) {
+        self.load_trusted(cx);
+        for tab in self.tabs.clone() {
+            tab.update(cx, |r, cx| r.check_signatures(cx));
+        }
+    }
+
+    /// Signing › Add certificate…: pick PEM or DER files and trust them.
+    pub(crate) fn add_trusted_cert(&mut self, cx: &mut Context<Self>) {
+        let rx = cx.prompt_for_paths(gpui::PathPromptOptions {
+            files: true,
+            directories: false,
+            multiple: true,
+            prompt: Some("Trust".into()),
+        });
+        let engine = self.engine.clone();
+        cx.spawn(async move |this, cx| {
+            let Ok(Ok(Some(paths))) = rx.await else {
+                return;
+            };
+            let result = cx
+                .background_spawn(async move {
+                    let mut added = Vec::new();
+                    for p in paths {
+                        added.extend(engine.trust_cert(&p)?);
+                    }
+                    Ok::<_, String>(added)
+                })
+                .await;
+            let _ = this.update(cx, |ws, cx| {
+                match result {
+                    Ok(added) if added.len() == 1 => {
+                        ws.toast(format!("Trusted {}.", added[0]), false, None, cx)
+                    }
+                    Ok(added) => ws.toast(
+                        format!("Trusted {} certificates.", added.len()),
+                        false,
+                        None,
+                        cx,
+                    ),
+                    Err(e) => ws.toast(format!("Couldn't trust it: {e}"), true, None, cx),
+                }
+                ws.trust_changed(cx);
+            });
+        })
+        .detach();
+    }
+
+    /// Signing › Remove: stop trusting one certificate.
+    pub(crate) fn untrust_cert(&mut self, path: std::path::PathBuf, cx: &mut Context<Self>) {
+        let engine = self.engine.clone();
+        cx.spawn(async move |this, cx| {
+            let r = cx
+                .background_spawn(async move { engine.untrust_cert(&path) })
+                .await;
+            let _ = this.update(cx, |ws, cx| {
+                if let Err(e) = r {
+                    ws.toast(format!("Couldn't remove it: {e}"), true, None, cx);
+                }
+                ws.trust_changed(cx);
+            });
+        })
+        .detach();
     }
 
     fn load_db_size(&mut self, cx: &mut Context<Self>) {

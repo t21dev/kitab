@@ -34,16 +34,18 @@ pub enum Section {
     Reading,
     FileTypes,
     Shortcuts,
+    Signing,
     Advanced,
     About,
 }
 
 impl Section {
-    const ALL: [Section; 6] = [
+    const ALL: [Section; 7] = [
         Section::Appearance,
         Section::Reading,
         Section::FileTypes,
         Section::Shortcuts,
+        Section::Signing,
         Section::Advanced,
         Section::About,
     ];
@@ -54,6 +56,7 @@ impl Section {
             Section::Reading => "Reading",
             Section::FileTypes => "File types",
             Section::Shortcuts => "Shortcuts",
+            Section::Signing => "Signing",
             Section::Advanced => "Advanced",
             Section::About => "About",
         }
@@ -65,6 +68,7 @@ impl Section {
             Section::Reading => "book",
             Section::FileTypes => "file",
             Section::Shortcuts => "keyboard",
+            Section::Signing => "shield",
             Section::Advanced => "settings",
             Section::About => "info",
         }
@@ -148,6 +152,7 @@ pub fn panel(
         Section::Reading => reading(&ws, st),
         Section::FileTypes => system::file_types(&ws, sys, st),
         Section::Shortcuts => shortcuts_section(&ws, st),
+        Section::Signing => system::signing(&ws, sys, st),
         Section::Advanced => system::advanced(&ws, sys, st),
         Section::About => system::about(&ws, sys, st),
     };

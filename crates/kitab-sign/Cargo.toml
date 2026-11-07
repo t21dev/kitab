@@ -1,0 +1,33 @@
+[package]
+name = "kitab-sign"
+description = "Kitab Reader's PDF signature crypto: CMS verification, certificate chains, trust"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish = false
+
+[dependencies]
+kitab-core = { workspace = true }
+# RustCrypto, pure Rust (MIT/Apache-2.0): CMS and X.509 parsing, the hashes
+# PDFs use, ECDSA P-256/P-384 and RSA (PKCS #1 v1.5 and PSS) verification.
+cms = "0.2"
+x509-cert = { version = "0.2", features = ["pem"] }
+der = { version = "0.7", features = ["alloc", "oid", "pem"] }
+spki = "0.7"
+const-oid = { version = "0.9", features = ["db"] }
+sha1 = { version = "0.10", features = ["oid"] }
+sha2 = { version = "0.10", features = ["oid"] }
+p256 = { version = "0.13", default-features = false, features = ["ecdsa", "std"] }
+p384 = { version = "0.13", default-features = false, features = ["ecdsa", "std"] }
+rsa = { version = "0.9", default-features = false, features = ["std", "sha2"] }
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+# The fixtures' signature fields come from the engine.
+kitab-mupdf = { path = "../kitab-mupdf" }
+serde_json = { workspace = true }

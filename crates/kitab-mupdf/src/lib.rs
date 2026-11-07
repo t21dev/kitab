@@ -43,6 +43,7 @@ mod ffi;
 mod find;
 pub mod fonts;
 pub mod marks;
+pub mod sigs;
 pub mod tools;
 
 use std::collections::HashMap;

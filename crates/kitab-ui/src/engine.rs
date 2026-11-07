@@ -5,8 +5,17 @@
 //! task, never from the UI thread (AGENTS.md rule 2).
 
 use kitab_core::{
-    Bitmap, BookLayout, DocInfo, FindHit, FindOptions, Link, OpenError, RenderRequest, TextChar,
+    Bitmap, BookLayout, DocInfo, FindHit, FindOptions, Link, OpenError, RenderRequest,
+    SignatureCheck, TextChar,
 };
+
+/// A certificate the user trusts for signatures (Settings › Signing).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TrustedCert {
+    pub subject: String,
+    pub fingerprint: String,
+    pub path: PathBuf,
+}
 use std::path::{Path, PathBuf};
 
 /// An open document inside the engine.
@@ -64,6 +73,30 @@ pub trait DocEngine: Send + Sync + 'static {
         pages: &[u32],
         out: &Path,
     ) -> Result<(), String>;
+    /// Verify every signature in the PDF at `src` against the trusted
+    /// certificates. Empty when it has none.
+    fn signatures(
+        &self,
+        src: &Path,
+        password: Option<&str>,
+    ) -> Result<Vec<SignatureCheck>, String> {
+        let _ = (src, password);
+        Ok(Vec::new())
+    }
+    /// The certificates trusted for signatures.
+    fn trusted_certs(&self) -> Vec<TrustedCert> {
+        Vec::new()
+    }
+    /// Trust the certificates in a PEM or DER file; their subjects.
+    fn trust_cert(&self, file: &Path) -> Result<Vec<String>, String> {
+        let _ = file;
+        Err("this engine has no trust list".into())
+    }
+    /// Stop trusting one certificate.
+    fn untrust_cert(&self, path: &Path) -> Result<(), String> {
+        let _ = path;
+        Err("this engine has no trust list".into())
+    }
     /// Write a copy of the PDF at `src` to `out` locked with `new_password`,
     /// or with no password when `None`.
     fn set_password(

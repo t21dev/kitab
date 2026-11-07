@@ -9,6 +9,7 @@ Third-party components and assets (updated as they are added):
 - syntect and its bundled Sublime Text grammars, Copyright (c) Tristan Hume and contributors. MIT. https://github.com/trishume/syntect
 - mermaid-svg (Mermaid diagram layout to SVG), Copyright (c) 2026 Martin Mikšaník. MIT. https://github.com/xmiksay/mermaid
 - resvg, usvg and tiny-skia (SVG drawing; already part of GPUI), Copyright (c) the resvg project authors. Apache-2.0 OR MIT. https://github.com/linebender/resvg
+- RustCrypto cms, x509-cert, der, spki, const-oid, sha1, sha2, p256, p384 and rsa (signature verification), Copyright (c) the RustCrypto developers. Apache-2.0 OR MIT. https://github.com/RustCrypto
 - Nord colour palette, Copyright (c) Arctic Ice Studio and Sven Greb. MIT. https://www.nordtheme.com/
   (Used for the "Nord" theme. "Noctua" and "Vampire" are Kitab's own palettes.)
 

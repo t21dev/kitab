@@ -32,6 +32,7 @@ mod palette_ui;
 mod password_ui;
 mod print_ui;
 mod save_page;
+mod signatures_ui;
 mod system;
 mod title_actions;
 mod tools_ui;
@@ -123,6 +124,7 @@ pub enum SidePane {
     Pages,
     Marks,
     Bookmarks,
+    Signatures,
 }
 
 impl SidePane {
@@ -132,6 +134,7 @@ impl SidePane {
             SidePane::Pages => "Pages",
             SidePane::Marks => "Marks",
             SidePane::Bookmarks => "Bookmarks",
+            SidePane::Signatures => "Signatures",
         }
     }
 }
@@ -307,6 +310,14 @@ impl Workspace {
                     ReaderEvent::Presenting(on) => this.set_presenting(*on, window, cx),
                     ReaderEvent::Print => this.open_print(window, cx),
                     ReaderEvent::Password => this.open_password(window, cx),
+                    ReaderEvent::Signatures => cx.notify(),
+                    ReaderEvent::ShowSignatures => {
+                        this.side_pane = SidePane::Signatures;
+                        if !this.sidebar {
+                            this.toggle_sidebar(cx);
+                        }
+                        cx.notify();
+                    }
                     ReaderEvent::BookText(pt) => {
                         // Remembered across launches (settings.json `book_text_size`).
                         let pt = *pt;
@@ -793,6 +804,10 @@ impl Workspace {
             let pane = self.bookmarks_pane(&reader, st, cx);
             return self.sidebar_frame(tabs_panel, Some(pane), st, cx);
         }
+        if self.side_pane == SidePane::Signatures {
+            let pane = self.signatures_pane(&reader, st, cx);
+            return self.sidebar_frame(tabs_panel, Some(pane), st, cx);
+        }
         let mut col = div().flex().flex_col().gap(px(1.0)).p(px(8.0));
         if rows.is_empty() {
             col = col.child(
@@ -1248,6 +1263,11 @@ impl Workspace {
                 .child(text)
         };
         let has_tabs = tabs_panel.is_some();
+        // The Signatures pane shows for a signed PDF only.
+        let signed = self
+            .active_reader()
+            .and_then(|r| r.read(cx).signatures().map(|s| !s.is_empty()))
+            .unwrap_or(false);
         div()
             .id("sidebar")
             .w(px(self.sidebar_w))
@@ -1342,7 +1362,10 @@ impl Workspace {
                                 SidePane::Bookmarks,
                                 "bookmark",
                                 "Bookmarks  Ctrl+D",
-                            )),
+                            ))
+                            .when(signed, |d| {
+                                d.child(pane_tab(SidePane::Signatures, "shield", "Signatures"))
+                            }),
                     )
                     .when(!has_tabs, |h| {
                         h.child(
@@ -2336,6 +2359,17 @@ impl Workspace {
             motion::BASE,
             motion::stagger(ix),
         )
+    }
+
+    /// Settings, open at `section`.
+    pub(crate) fn open_settings_at(
+        &mut self,
+        section: crate::settings_view::Section,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.settings_section = section;
+        self.open_settings(window, cx);
     }
 
     pub(crate) fn open_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {

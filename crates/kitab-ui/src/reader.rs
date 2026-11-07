@@ -26,6 +26,8 @@ mod mermaid;
 mod pages;
 mod present;
 mod select;
+mod signatures;
+pub(crate) use signatures::status_words;
 
 use crate::actions::*;
 use crate::cache::{PageCache, PageKey, scale_key};
@@ -96,6 +98,10 @@ pub enum ReaderEvent {
     Print,
     /// The dock's Password button.
     Password,
+    /// The signatures were verified (or verified again).
+    Signatures,
+    /// The status bar's signature badge: show the Signatures pane.
+    ShowSignatures,
 }
 
 /// What "Save page as…" writes.
@@ -186,6 +192,8 @@ pub struct Reader {
     markup: markup::MarkupState,
     /// The file's size in bytes, for the info chip (read off the UI thread).
     file_size: Option<u64>,
+    /// The PDF's signatures, verified off the UI thread after opening.
+    signatures: Option<Vec<kitab_core::SignatureCheck>>,
     /// The annotations already in the file, once the Marks panel asked.
     file_annots: Option<Vec<kitab_core::FileAnnot>>,
     /// Bookmarked pages (Ctrl+D), in page order.
@@ -270,6 +278,7 @@ impl Reader {
             book: None,
             markup: markup::MarkupState::default(),
             file_size: None,
+            signatures: None,
             file_annots: None,
             bookmark_rows: Vec::new(),
             pages: pages::PagesState::default(),
@@ -454,6 +463,7 @@ impl Reader {
                 self.password.clear();
                 self.load_marks(cx);
                 self.load_bookmarks(cx);
+                self.check_signatures(cx);
                 cx.emit(ReaderEvent::Opened);
             }
             Err(OpenError::NeedsPassword) => self.status = Status::NeedsPassword { wrong: false },
@@ -1589,7 +1599,7 @@ impl Render for Reader {
                     .child(body)
                     .children(status.map(|s| div().absolute().inset_0().child(s)))
             })
-            .children(self.status_bar(&st))
+            .children(self.status_bar(&st, cx))
             // Ctrl+wheel zooms. This layer is painted after the list so it sees the
             // wheel first; it has no other handlers, so clicks pass through.
             .child(

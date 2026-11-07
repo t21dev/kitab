@@ -22,6 +22,8 @@ pub struct SystemInfo {
     pub types: Option<Vec<TypeStatus>>,
     /// The library database's size; loaded when Advanced opens.
     pub db_size: Option<u64>,
+    /// Certificates trusted for signatures; loaded when Signing opens.
+    pub trusted: Option<Vec<crate::engine::TrustedCert>>,
     pub update: UpdateState,
     /// The update dialog is open.
     pub update_open: bool,
@@ -286,6 +288,69 @@ pub(super) fn file_types(ws: &WeakEntity<Workspace>, info: &SystemInfo, st: &Sty
 }
 
 // ── Advanced ─────────────────────────────────────────────────────────────
+
+// ── Signing ──────────────────────────────────────────────────────────────
+
+const TRUST_IDS: [&str; 12] = [
+    "trust-0", "trust-1", "trust-2", "trust-3", "trust-4", "trust-5", "trust-6", "trust-7",
+    "trust-8", "trust-9", "trust-10", "trust-11",
+];
+
+pub(super) fn signing(ws: &WeakEntity<Workspace>, info: &SystemInfo, st: &Style) -> AnyElement {
+    let mut list = Vec::new();
+    match info.trusted.as_deref() {
+        None => list.push(icon_row(Some("shield"), "Loading…", "", status("…", false, st), st)),
+        Some([]) => list.push(icon_row(
+            Some("shield"),
+            "No trusted certificates",
+            "A signature from a certificate you don't trust shows as \"signer not trusted\". Add your organisation's root certificate, or the signer's own, to trust it.",
+            div().into_any_element(),
+            st,
+        )),
+        Some(certs) => {
+            for (i, c) in certs.iter().enumerate() {
+                let path = c.path.clone();
+                let ws = ws.clone();
+                let remove: Click = Box::new(move |_, cx| {
+                    let path = path.clone();
+                    let _ = ws.update(cx, move |ws, cx| ws.untrust_cert(path, cx));
+                });
+                let short: String = c.fingerprint.chars().take(23).collect();
+                list.push(icon_row(
+                    Some("shield"),
+                    &c.subject,
+                    &format!("SHA-256 {short}…"),
+                    button(TRUST_IDS[i % TRUST_IDS.len()], "Remove", true, st, remove),
+                    st,
+                ));
+            }
+        }
+    }
+    list.push(
+        div()
+            .flex()
+            .gap(px(8.0))
+            .child(button(
+                "trust-add",
+                "Add certificate…",
+                false,
+                st,
+                act(ws, |ws, cx| ws.add_trusted_cert(cx)),
+            ))
+            .into_any_element(),
+    );
+    div()
+        .flex()
+        .flex_col()
+        .gap(px(28.0))
+        .child(group(
+            "Trusted certificates",
+            Some("Kitab checks every signature on your computer: the signed bytes, the signature, and whether the signer's certificate leads to one you trust here. It never asks the internet."),
+            rows(list),
+            st,
+        ))
+        .into_any_element()
+}
 
 pub(super) fn advanced(ws: &WeakEntity<Workspace>, info: &SystemInfo, st: &Style) -> AnyElement {
     let size = info

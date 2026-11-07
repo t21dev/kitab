@@ -472,6 +472,7 @@ Each phase ends with its exit criteria green in CI and a minor release. A phase 
 
 - Verify (full status model), Signature panel and status bar, trusted certificates, optional online revocation; sign with `.pfx/.p12`, the Windows store and the macOS keychain; drawn, typed and image appearances; incremental save.
 - Exit: I1–I5.
+- Done: verifying. `kitab_mupdf::sigs` reads each signature field (name, page, byte range, CMS blob, /M, reason, location), its coverage, and the modification level found by opening the signed revision beside the whole file and classifying every changed object. `kitab-sign` (new, pure Rust on RustCrypto, no unsafe) checks the digest, the signature and the chain to the trust list (`trusted-certs/` in the data folder, Settings › Signing). Status bar badge, Signatures pane. I1 and I2 pass (`kitab-sign/tests/fixtures.rs`: all four fixtures as expected.json says, with and without the test root). Still to do: online revocation (opt-in), embedded timestamps, signing.
 
 ### Phase 9: PDF tools, library search, stats → `0.9.0`
 

@@ -165,10 +165,11 @@ impl Reader {
     }
 
     /// The bar, pinned to the bottom of the reader.
-    pub(super) fn status_bar(&self, st: &Style) -> Option<AnyElement> {
+    pub(super) fn status_bar(&self, st: &Style, cx: &mut Context<Self>) -> Option<AnyElement> {
         if !self.status_bar_shown(st) {
             return None;
         }
+        let badge = self.signature_badge(st, cx);
         let left = self.status_left(st.status_items).join("  ·  ");
         let right = self.status_right(st.status_items).join("  ·  ");
         let path: SharedString = self.path.to_string_lossy().to_string().into();
@@ -188,6 +189,7 @@ impl Reader {
                 .text_size(px(11.5))
                 .text_color(st.c(|c| c.muted))
                 .whitespace_nowrap()
+                .children(badge)
                 .child(
                     div()
                         .id("status-left")

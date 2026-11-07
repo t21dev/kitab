@@ -18,6 +18,11 @@ use std::sync::{Arc, Mutex};
 
 // ── engine ──────────────────────────────────────────────────────────────
 
+/// Where trusted signing certificates live (PRIVACY.md: in Kitab's data).
+fn trust_dir() -> Option<PathBuf> {
+    kitab_os::data_dir().map(|d| d.join("trusted-certs"))
+}
+
 pub struct MupdfEngine {
     engine: Engine,
     ids: Mutex<HashMap<DocHandle, DocId>>,
@@ -153,6 +158,52 @@ impl DocEngine for MupdfEngine {
         out: &Path,
     ) -> Result<(), String> {
         kitab_mupdf::tools::extract_pages(src, password, pages, out)
+    }
+
+    fn signatures(
+        &self,
+        src: &Path,
+        password: Option<&str>,
+    ) -> Result<Vec<kitab_core::SignatureCheck>, String> {
+        let fields = kitab_mupdf::sigs::signed_fields(src, password)?;
+        if fields.is_empty() {
+            return Ok(Vec::new());
+        }
+        let bytes = std::fs::read(src).map_err(|e| e.to_string())?;
+        let trust = trust_dir()
+            .map(|d| kitab_sign::store::load(&d))
+            .unwrap_or_default();
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |d| d.as_secs());
+        Ok(fields
+            .iter()
+            .map(|f| kitab_sign::verify(&bytes, f, &trust, now))
+            .collect())
+    }
+
+    fn trusted_certs(&self) -> Vec<kitab_ui::engine::TrustedCert> {
+        trust_dir()
+            .map(|d| kitab_sign::store::list(&d))
+            .unwrap_or_default()
+            .into_iter()
+            .map(|t| kitab_ui::engine::TrustedCert {
+                subject: t.subject,
+                fingerprint: t.fingerprint,
+                path: t.path,
+            })
+            .collect()
+    }
+
+    fn trust_cert(&self, file: &Path) -> Result<Vec<String>, String> {
+        let dir = trust_dir().ok_or("Kitab has no data folder")?;
+        let bytes = std::fs::read(file).map_err(|e| e.to_string())?;
+        kitab_sign::store::add(&dir, &bytes)
+    }
+
+    fn untrust_cert(&self, path: &Path) -> Result<(), String> {
+        let dir = trust_dir().ok_or("Kitab has no data folder")?;
+        kitab_sign::store::remove(&dir, path)
     }
 
     fn set_password(

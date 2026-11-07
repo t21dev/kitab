@@ -10,9 +10,11 @@ mod markup;
 mod model;
 pub mod notes;
 mod ranges;
+mod signature;
 pub use markup::*;
 pub use model::*;
 pub use ranges::parse_page_ranges;
+pub use signature::*;
 
 /// A file format Kitab can open.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
