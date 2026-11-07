@@ -7,11 +7,58 @@
 //!
 //! Windows: the standard print dialog (`PrintDlgEx`) picks the printer and
 //! copies, then each page, drawn by MuPDF at the printer's resolution, goes
-//! to the printer's GDI device. macOS and Linux follow (NSPrintOperation,
-//! GtkPrintOperation).
+//! to the printer's GDI device.
+//!
+//! macOS and Linux: CUPS. Kitab's own sheet lists the printers (`lpstat`) and
+//! takes the copies; the chosen pages are written to a PDF (vector pages, by
+//! MuPDF) and sent with `lp`, which scales and turns them for the paper.
 
+pub mod cups;
 mod place;
 pub use place::{Placement, Scale, place};
+
+/// A printer the system knows (macOS and Linux; Windows uses its dialog).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PrinterInfo {
+    pub name: String,
+    pub is_default: bool,
+}
+
+/// Whether printing goes through the system's own dialog (Windows), or
+/// through Kitab's sheet with a printer list (macOS and Linux).
+pub const SYSTEM_DIALOG: bool = cfg!(windows);
+
+/// The printers to choose from in Kitab's sheet (macOS and Linux).
+pub fn printers() -> Result<Vec<PrinterInfo>, String> {
+    #[cfg(not(windows))]
+    {
+        cups::run::printers()
+    }
+    #[cfg(windows)]
+    {
+        Ok(Vec::new())
+    }
+}
+
+/// Send a PDF to a printer through CUPS (macOS and Linux).
+pub fn print_pdf(
+    printer: &str,
+    pdf: &std::path::Path,
+    title: &str,
+    copies: u32,
+    scale: Scale,
+    auto_rotate: bool,
+) -> Result<(), String> {
+    #[cfg(not(windows))]
+    {
+        cups::run::print_pdf(printer, pdf, title, copies, scale, auto_rotate)
+    }
+    #[cfg(windows)]
+    {
+        let _ = (printer, pdf, title, copies, scale, auto_rotate);
+        Err("Windows prints through its own dialog".into())
+    }
+}
 
 #[cfg(windows)]
 mod windows;

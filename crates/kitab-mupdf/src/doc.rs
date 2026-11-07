@@ -677,3 +677,30 @@ pub fn ink_ratio(bitmap: &Bitmap) -> f64 {
         .count();
     inked as f64 / total as f64
 }
+
+/// Write `pages` of an open document (any format, as laid out now) to a new
+/// PDF at `out`, as vector pages with their annotations: what CUPS prints on
+/// macOS and Linux. Returns how many pages were written.
+pub(crate) fn write_pdf(doc: &OpenDoc, pages: &[u32], out: &Path) -> Result<u32, String> {
+    if pages.is_empty() {
+        return Err("no pages to print".into());
+    }
+    if pages.iter().any(|&p| p >= doc.page_count) {
+        return Err("a page the document doesn't have".into());
+    }
+    let name = out.to_str().ok_or("the file name is not valid Unicode")?;
+    let mut writer = mupdf::DocumentWriter::new(name, "pdf", "")
+        .map_err(|e| format!("could not start the PDF: {e}"))?;
+    for &p in pages {
+        let i = i32::try_from(p).map_err(|e| e.to_string())?;
+        let page = doc.pdf.load_page(i).map_err(|e| e.to_string())?;
+        let bounds = page.bounds().map_err(|e| e.to_string())?;
+        let device = writer.begin_page(bounds).map_err(|e| e.to_string())?;
+        page.run(&device, &mupdf::Matrix::IDENTITY)
+            .map_err(|e| format!("page {}: {e}", p + 1))?;
+        writer.end_page(device).map_err(|e| e.to_string())?;
+    }
+    // Dropping the writer closes the file.
+    drop(writer);
+    u32::try_from(pages.len()).map_err(|e| e.to_string())
+}

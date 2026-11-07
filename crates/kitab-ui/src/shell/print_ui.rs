@@ -37,6 +37,11 @@ pub(super) struct PrintSheet {
     rotate: bool,
     serial: u64,
     _sub: Subscription,
+    /// macOS and Linux: the printers CUPS knows (loading: `None`), the one
+    /// chosen, and how many copies. Windows asks in its own dialog.
+    printers: Option<Result<Vec<kitab_print::PrinterInfo>, String>>,
+    printer: Option<String>,
+    copies: u32,
 }
 
 impl Workspace {
@@ -71,7 +76,29 @@ impl Workspace {
             rotate: true,
             serial: self.print_serial,
             _sub: sub,
+            printers: None,
+            printer: None,
+            copies: 1,
         });
+        if !kitab_print::SYSTEM_DIALOG {
+            // The printer list comes from CUPS, off the UI thread.
+            cx.spawn(async move |this, cx| {
+                let list = cx.background_spawn(async { kitab_print::printers() }).await;
+                let _ = this.update(cx, |ws, cx| {
+                    if let Some(s) = ws.print.as_mut() {
+                        s.printer = list.as_ref().ok().and_then(|l| {
+                            l.iter()
+                                .find(|p| p.is_default)
+                                .or(l.first())
+                                .map(|p| p.name.clone())
+                        });
+                        s.printers = Some(list);
+                    }
+                    cx.notify();
+                });
+            })
+            .detach();
+        }
         cx.notify();
     }
 
@@ -105,6 +132,57 @@ impl Workspace {
             return;
         };
         let (scale, rotate) = (sheet.scale, sheet.rotate);
+        if !kitab_print::SYSTEM_DIALOG {
+            let Some(printer) = sheet.printer.clone() else {
+                self.print = Some(sheet);
+                return;
+            };
+            let copies = sheet.copies;
+            let r = sheet.reader.read(cx);
+            let title = r.title().to_string();
+            let Ok((doc, _)) = r.print_source() else {
+                return;
+            };
+            self.refocus(window, cx);
+            self.toast("Sending to the printer…", false, None, cx);
+            let engine: Arc<dyn DocEngine> = self.engine.clone();
+            let total = pages.len();
+            cx.spawn(async move |this, cx| {
+                let result = cx
+                    .background_spawn(async move {
+                        // The pages as a PDF, handed to CUPS, then removed.
+                        let tmp = std::env::temp_dir().join(format!(
+                            "kitab-print-{}-{}.pdf",
+                            std::process::id(),
+                            std::time::SystemTime::now()
+                                .duration_since(std::time::UNIX_EPOCH)
+                                .map(|d| d.as_millis())
+                                .unwrap_or(0)
+                        ));
+                        let sent = engine.write_pdf(doc, &pages, &tmp).and_then(|_| {
+                            kitab_print::print_pdf(&printer, &tmp, &title, copies, scale, rotate)
+                        });
+                        let _ = std::fs::remove_file(&tmp);
+                        sent
+                    })
+                    .await;
+                let _ = this.update(cx, |ws, cx| match result {
+                    Ok(()) => {
+                        let what = if total == 1 { "page" } else { "pages" };
+                        ws.toast(
+                            format!("Sent {total} {what} to the printer."),
+                            false,
+                            None,
+                            cx,
+                        )
+                    }
+                    Err(e) => ws.toast(format!("Couldn't print: {e}"), true, None, cx),
+                });
+            })
+            .detach();
+            cx.notify();
+            return;
+        }
         let r = sheet.reader.read(cx);
         let title = r.title().to_string();
         let Ok((doc, sizes)) = r.print_source() else {
@@ -309,7 +387,12 @@ impl Workspace {
                     .text_size(px(12.5))
                     .text_color(st.c(|c| c.muted))
                     .child(format!(
-                        "{title} ({count} pages). The printer and copies are chosen next."
+                        "{title} ({count} pages).{}",
+                        if kitab_print::SYSTEM_DIALOG {
+                            " The printer and copies are chosen next."
+                        } else {
+                            ""
+                        }
                     )),
             )
             .child(row("Pages", which))
@@ -329,6 +412,9 @@ impl Workspace {
                         })
                         .child(s.range.clone()),
                 )
+            })
+            .when(!kitab_print::SYSTEM_DIALOG, |d| {
+                d.child(self.printer_rows(st, cx))
             })
             .child(row("Size", size))
             .child(row("Pages turn", turn))
@@ -366,6 +452,130 @@ impl Workspace {
             Self::close_print,
             cx,
         ))
+    }
+}
+
+impl Workspace {
+    /// macOS and Linux: the printer list and copies, in the sheet.
+    fn printer_rows(&self, st: &Style, cx: &mut Context<Self>) -> AnyElement {
+        let Some(s) = self.print.as_ref() else {
+            return div().into_any_element();
+        };
+        let label = |t: &'static str| {
+            div()
+                .w(px(70.0))
+                .flex_none()
+                .text_size(px(12.5))
+                .text_color(st.c(|c| c.muted))
+                .child(t)
+        };
+        let list: AnyElement = match &s.printers {
+            None => div()
+                .text_size(px(12.5))
+                .text_color(st.c(|c| c.faint))
+                .child("Looking for printers…")
+                .into_any_element(),
+            Some(Err(e)) => div()
+                .text_size(px(12.5))
+                .text_color(st.c(|c| c.bad))
+                .child(e.clone())
+                .into_any_element(),
+            Some(Ok(list)) => {
+                let mut col = div().flex().flex_col().gap(px(2.0)).flex_1().min_w_0();
+                for (i, p) in list.iter().enumerate() {
+                    let on = s.printer.as_deref() == Some(p.name.as_str());
+                    let name = p.name.clone();
+                    col = col.child(
+                        div()
+                            .id(("printer", i))
+                            .flex()
+                            .items_center()
+                            .gap(px(8.0))
+                            .h(px(28.0))
+                            .px(px(10.0))
+                            .rounded(px(7.0))
+                            .text_size(px(12.5))
+                            .cursor_pointer()
+                            .when(on, |d| d.bg(st.c(|c| c.hover)).text_color(st.c(|c| c.text)))
+                            .when(!on, |d| d.text_color(st.c(|c| c.muted)))
+                            .hover(|d| d.bg(st.c(|c| c.hover)))
+                            .on_click(cx.listener(move |ws, _, _, cx| {
+                                if let Some(s) = ws.print.as_mut() {
+                                    s.printer = Some(name.clone());
+                                }
+                                cx.notify();
+                            }))
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .min_w_0()
+                                    .truncate()
+                                    .child(p.name.replace('_', " ")),
+                            )
+                            .when(p.is_default, |d| {
+                                d.child(
+                                    div()
+                                        .text_size(px(11.0))
+                                        .text_color(st.c(|c| c.faint))
+                                        .child("Default"),
+                                )
+                            }),
+                    );
+                }
+                col.into_any_element()
+            }
+        };
+        let step = |id: &'static str, glyph: &'static str, delta: i32| {
+            div()
+                .id(id)
+                .size(px(26.0))
+                .flex()
+                .items_center()
+                .justify_center()
+                .rounded(px(6.0))
+                .bg(st.c(|c| c.raised))
+                .shadow(st.elev())
+                .cursor_pointer()
+                .hover(|d| d.bg(st.c(|c| c.hover)))
+                .on_click(cx.listener(move |ws, _, _, cx| {
+                    if let Some(s) = ws.print.as_mut() {
+                        s.copies = (s.copies as i32 + delta).clamp(1, 99) as u32;
+                    }
+                    cx.notify();
+                }))
+                .child(glyph)
+        };
+        div()
+            .flex()
+            .flex_col()
+            .gap(px(12.0))
+            .child(
+                div()
+                    .flex()
+                    .items_start()
+                    .gap(px(12.0))
+                    .child(label("Printer"))
+                    .child(div().max_h(px(150.0)).flex_1().min_w_0().child(list)),
+            )
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(px(12.0))
+                    .child(label("Copies"))
+                    .child(step("copies-less", "−", -1))
+                    .child(
+                        div()
+                            .w(px(28.0))
+                            .flex()
+                            .justify_center()
+                            .text_size(px(13.0))
+                            .text_color(st.c(|c| c.text))
+                            .child(s.copies.to_string()),
+                    )
+                    .child(step("copies-more", "+", 1)),
+            )
+            .into_any_element()
     }
 }
 

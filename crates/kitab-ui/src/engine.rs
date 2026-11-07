@@ -80,6 +80,12 @@ pub trait DocEngine: Send + Sync + 'static {
         let _ = (src, password, marks, edits, out);
         Err("this engine can't save marks".into())
     }
+    /// Write `pages` of an open document to a new PDF at `out` (vector pages
+    /// as laid out now): what macOS and Linux print through CUPS.
+    fn write_pdf(&self, doc: DocHandle, pages: &[u32], out: &Path) -> Result<u32, String> {
+        let _ = (doc, pages, out);
+        Err("this engine can't write PDFs".into())
+    }
     /// The annotations already in the file (PDF only).
     fn annotations(&self, doc: DocHandle) -> Vec<kitab_core::FileAnnot> {
         let _ = doc;

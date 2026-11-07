@@ -236,6 +236,29 @@ fn page_sizes_and_rotation_of_02() {
     engine().close(id);
 }
 
+/// The pages chosen for printing come out as a PDF of just those pages, at
+/// their own sizes (what macOS and Linux hand to CUPS).
+#[test]
+fn write_pdf_keeps_the_chosen_pages_and_sizes() {
+    let (id, info) = open("02-mixed-page-sizes.pdf");
+    let dir = std::env::temp_dir().join(format!("kitab-write-pdf-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let out = dir.join("chosen.pdf");
+    let pages = vec![2, 0];
+    assert_eq!(engine().write_pdf(id, pages.clone(), out.clone()), Ok(2));
+    let (copy, copied) = engine().open(&out, None).unwrap();
+    assert_eq!(copied.page_sizes.len(), 2);
+    for (n, &p) in pages.iter().enumerate() {
+        let (a, b) = (info.page_sizes[p as usize], copied.page_sizes[n]);
+        assert!((a.w - b.w).abs() < 1.0 && (a.h - b.h).abs() < 1.0, "{a:?} {b:?}");
+    }
+    // A page the document doesn't have is an error, not a panic.
+    assert!(engine().write_pdf(id, vec![9_999], dir.join("bad.pdf")).is_err());
+    engine().close(copy);
+    engine().close(id);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 #[test]
 fn find_counts_in_01() {
     let exp = &expected_pdf("01-text-outline.pdf")["search"];

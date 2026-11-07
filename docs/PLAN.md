@@ -183,8 +183,8 @@ GPUI has no printing, so `kitab-print` has one backend per OS. On each, MuPDF dr
 | OS | Dialog | Drawing |
 |---|---|---|
 | Windows | `PrintDlgEx` (the standard dialog) and a Kitab print sheet in front of it | GDI printer DC via `StartDoc/StartPage`; MuPDF renders bands at printer DPI. Fallback "print as image" for broken fonts. |
-| macOS | `NSPrintOperation` + print panel | Custom `NSView` drawing each page with MuPDF into a CGContext |
-| Linux | `GtkPrintOperation` (portal-aware under Flatpak) | Cairo context; PDF pass-through to CUPS where possible |
+| macOS | Kitab's print sheet with the printers from `lpstat` | The chosen pages written by MuPDF as a PDF (vector, each page its own size) and sent with `lp`, which scales and turns them for the paper |
+| Linux | The same, through CUPS | The same; GTK isn't linked, so no `GtkPrintOperation` |
 
 The Kitab print sheet covers range (all, current, "11–13"), copies, scaling (fit, actual, shrink oversized), **orientation per page** (auto-rotate paper), annotations on/off and print as image. "System dialog…" goes straight to the OS dialog. Owner-restricted PDFs (`04b`) disable print with an explanation. Shell "print" verb: `kitab --print <file>`.
 
@@ -466,7 +466,7 @@ Each phase ends with its exit criteria green in CI and a minor release. A phase 
 
 - Print sheet + native dialogs on Windows, macOS and Linux, per-page orientation, ranges, restrictions, shell print verb.
 - Exit: J1–J4 on all three OSes.
-- Done on Windows: `kitab-print` (placement: fit, actual, shrink, auto-rotate per page, tested; `PrintDlgEx` + GDI `StartDoc`/`StretchDIBits` per page at the printer's resolution capped at 300 dpi; `print_pages` shared by the sheet and `kitab --print`), the print sheet (`shell/print_ui.rs`), Explorer's Print verb, and J4 (`print_to_pdf_writes_every_page`, by hand: the Microsoft Print to PDF driver writes every page). Still to do: macOS (`NSPrintOperation`) and Linux (`GtkPrintOperation`), banded rendering for very large pages, annotations on/off.
+- Done on Windows: `kitab-print` (placement: fit, actual, shrink, auto-rotate per page, tested; `PrintDlgEx` + GDI `StartDoc`/`StretchDIBits` per page at the printer's resolution capped at 300 dpi; `print_pages` shared by the sheet and `kitab --print`), the print sheet (`shell/print_ui.rs`), Explorer's Print verb, and J4 (`print_to_pdf_writes_every_page`, by hand: the Microsoft Print to PDF driver writes every page). Done on macOS and Linux: CUPS (`kitab_print::cups`: printers from `lpstat -e`/`-d`, `lp` with one argument per value and no shell, tested on every OS), the sheet's printer list and copies, `Engine::write_pdf` (tested: the chosen pages at their own sizes), and `kitab --print` there. Still to do: banded rendering for very large pages, annotations on/off, a run on real macOS and Linux printers.
 
 ### Phase 8: Signatures → `0.8.0`
 

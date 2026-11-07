@@ -458,6 +458,12 @@ impl Engine {
         Ok(info)
     }
 
+    /// Write `pages` of an open document to a new PDF (vector pages, as laid
+    /// out now): what Kitab sends to CUPS on macOS and Linux.
+    pub fn write_pdf(&self, doc: DocId, pages: Vec<u32>, out: PathBuf) -> Result<u32, String> {
+        self.with_doc(doc, move |d| doc::write_pdf(d, &pages, &out))
+    }
+
     /// The annotations already in a PDF (for the Marks panel); empty for other formats.
     pub fn annotations(&self, doc: DocId) -> Result<Vec<kitab_core::FileAnnot>, String> {
         self.with_doc(doc, doc::annotations)

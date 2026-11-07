@@ -84,6 +84,11 @@ impl DocEngine for MupdfEngine {
         kitab_mupdf::marks::write_marks(src, password, marks, edits, out)
     }
 
+    fn write_pdf(&self, doc: DocHandle, pages: &[u32], out: &Path) -> Result<u32, String> {
+        let id = self.id(doc).ok_or("the document is not open")?;
+        self.engine.write_pdf(id, pages.to_vec(), out.to_path_buf())
+    }
+
     fn relayout(
         &self,
         doc: DocHandle,
