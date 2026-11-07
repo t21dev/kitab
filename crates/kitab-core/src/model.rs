@@ -162,6 +162,15 @@ pub struct FindHit {
     pub context: String,
 }
 
+/// One character of a page's text with its box in page points, for selection.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct TextChar {
+    pub ch: char,
+    pub rect: RectPt,
+    /// The line it is on, counted from 0 in reading order.
+    pub line: u32,
+}
+
 /// A reading position that survives re-layout (PLAN.md §3.3). Fixed-layout only in Phase 1.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Locator {

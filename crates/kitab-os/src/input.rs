@@ -7,8 +7,8 @@
 use windows::Win32::Foundation::{HWND, LPARAM, POINT, WPARAM};
 use windows::Win32::Graphics::Gdi::ClientToScreen;
 use windows::Win32::UI::WindowsAndMessaging::{
-    PostMessageW, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MBUTTONDOWN, WM_MBUTTONUP, WM_MOUSEMOVE,
-    WM_MOUSEWHEEL, WM_RBUTTONDOWN, WM_RBUTTONUP,
+    PostMessageW, SWP_NOMOVE, SWP_NOZORDER, SetWindowPos, WM_LBUTTONDOWN, WM_LBUTTONUP,
+    WM_MBUTTONDOWN, WM_MBUTTONUP, WM_MOUSEMOVE, WM_MOUSEWHEEL, WM_RBUTTONDOWN, WM_RBUTTONUP,
 };
 
 #[derive(Clone, Copy, Debug)]
@@ -56,4 +56,12 @@ pub fn wheel(hwnd: isize, x: i32, y: i32, notches: i32) -> bool {
     // WM_MOUSEWHEEL: the delta is the high word of wparam; the point is in screen pixels.
     let delta = ((notches * 120) as i16 as u16 as usize) << 16;
     post(hwnd, WM_MOUSEMOVE, 0, x, y) && post(hwnd, WM_MOUSEWHEEL, delta, pt.x, pt.y)
+}
+
+/// Resize the window to `w` × `h` physical pixels, keeping its position.
+pub fn resize(hwnd: isize, w: i32, h: i32) -> bool {
+    let hwnd = HWND(hwnd as *mut core::ffi::c_void);
+    // SAFETY: SetWindowPos only changes this window's size; an invalid handle
+    // makes it return an error, which is reported.
+    unsafe { SetWindowPos(hwnd, None, 0, 0, w, h, SWP_NOMOVE | SWP_NOZORDER).is_ok() }
 }

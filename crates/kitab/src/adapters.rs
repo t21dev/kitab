@@ -77,6 +77,24 @@ impl DocEngine for MupdfEngine {
         }
     }
 
+    fn find_page(
+        &self,
+        doc: DocHandle,
+        page: u32,
+        query: &str,
+        options: FindOptions,
+    ) -> Vec<FindHit> {
+        self.id(doc)
+            .and_then(|id| self.engine.find_page(id, page, query, options).ok())
+            .unwrap_or_default()
+    }
+
+    fn page_chars(&self, doc: DocHandle, page: u32) -> Vec<kitab_core::TextChar> {
+        self.id(doc)
+            .and_then(|id| self.engine.page_chars(id, page).ok())
+            .unwrap_or_default()
+    }
+
     fn page_text(&self, doc: DocHandle, page: u32) -> Option<String> {
         self.id(doc)
             .and_then(|id| self.engine.page_plain_text(id, page).ok())

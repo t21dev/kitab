@@ -318,6 +318,21 @@ impl Engine {
         })
     }
 
+    /// A page's characters in reading order with their boxes (text selection).
+    pub fn page_chars(&self, doc: DocId, page: u32) -> Result<Vec<kitab_core::TextChar>, String> {
+        self.with_doc(doc, move |d| {
+            Ok(doc::page_text(d, page)?
+                .chars
+                .into_iter()
+                .map(|c| kitab_core::TextChar {
+                    ch: c.ch,
+                    rect: c.rect,
+                    line: c.line as u32,
+                })
+                .collect())
+        })
+    }
+
     /// Every hit of `query` on one page, in reading order.
     pub fn find_page(
         &self,

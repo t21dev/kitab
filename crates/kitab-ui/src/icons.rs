@@ -167,6 +167,38 @@ const ICONS: &[(&str, &[u8])] = &[
         "icons/win-min.svg",
         include_bytes!("../../../assets/icons/win-min.svg"),
     ),
+    (
+        "icons/arrow-down.svg",
+        include_bytes!("../../../assets/icons/arrow-down.svg"),
+    ),
+    (
+        "icons/arrow-left.svg",
+        include_bytes!("../../../assets/icons/arrow-left.svg"),
+    ),
+    (
+        "icons/arrow-right.svg",
+        include_bytes!("../../../assets/icons/arrow-right.svg"),
+    ),
+    (
+        "icons/arrow-up.svg",
+        include_bytes!("../../../assets/icons/arrow-up.svg"),
+    ),
+    (
+        "icons/link.svg",
+        include_bytes!("../../../assets/icons/link.svg"),
+    ),
+    (
+        "icons/match-case.svg",
+        include_bytes!("../../../assets/icons/match-case.svg"),
+    ),
+    (
+        "icons/rotate-left.svg",
+        include_bytes!("../../../assets/icons/rotate-left.svg"),
+    ),
+    (
+        "icons/whole-word.svg",
+        include_bytes!("../../../assets/icons/whole-word.svg"),
+    ),
 ];
 
 pub struct Assets;

@@ -334,6 +334,11 @@ impl Reader {
         }
     }
 
+    /// Page `ix`'s size in points as shown (rotation applied).
+    pub fn page_size_pt(&self, ix: usize) -> SizePt {
+        self.page_size(ix)
+    }
+
     /// Logical pixels per point for page `ix` in the current zoom mode. Fit modes
     /// fit each page on its own, so mixed sizes keep their shape (PLAN.md §3.3).
     fn px_per_pt(&self, ix: usize) -> f32 {
@@ -538,12 +543,13 @@ impl Reader {
             .is_some_and(|i| i.format == kitab_core::Format::Pdf)
     }
 
-    /// Save one page as PNG (150 dpi), plain text or a one-page PDF, at `out`.
+    /// Save one page as PNG (at `dpi`), plain text or a one-page PDF, at `out`.
     /// `done` gets an error message or `None`.
     pub fn save_page(
         &self,
         page: usize,
         kind: PageExport,
+        dpi: f32,
         out: PathBuf,
         cx: &mut Context<Self>,
         done: impl FnOnce(Result<PathBuf, String>, &mut App) + 'static,
@@ -563,7 +569,7 @@ impl Reader {
                         PageExport::Image => {
                             let req = RenderRequest {
                                 page: page as u32,
-                                scale: EXPORT_DPI / 72.0,
+                                scale: dpi.clamp(36.0, 600.0) / 72.0,
                                 rotation,
                                 tile: None,
                                 generation,

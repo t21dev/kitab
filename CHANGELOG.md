@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- The page menu is shorter: navigation, zoom and rotation are two rows of icon buttons, and one "Save page as…" entry opens a dialog with the page, the format (PDF, image or text) and the image resolution.
+- Long menus scroll instead of running off short windows.
 - Save one page as a PDF, a PNG image (150 dpi) or plain text, from the page's right-click menu.
 - Save pages as a new PDF (Ctrl+Shift+E): type pages and ranges such as 1-3, 7, 10-; works on password-protected PDFs while they are open.
 - Merge PDFs: pick more files and save them, in order, after the open one as a new PDF.

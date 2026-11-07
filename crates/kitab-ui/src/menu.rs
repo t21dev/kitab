@@ -7,6 +7,7 @@
 
 use crate::icons::icon;
 use crate::style::Style;
+use crate::tooltip::Tip;
 use gpui::{
     AnyElement, App, InteractiveElement, IntoElement, ParentElement, Pixels, Point, SharedString,
     StatefulInteractiveElement, Styled, Window, div, prelude::FluentBuilder, px, svg,
@@ -79,6 +80,111 @@ impl MenuItem {
     }
 }
 
+/// One icon button in a menu toolbar row.
+pub struct Tool {
+    pub icon: &'static str,
+    pub tip: SharedString,
+    /// Shown selected (the current zoom mode).
+    pub on: bool,
+    pub disabled: bool,
+    pub run: Handler,
+}
+
+impl Tool {
+    pub fn new(
+        icon: &'static str,
+        tip: impl Into<SharedString>,
+        run: impl Fn(&mut Window, &mut App) + 'static,
+    ) -> Self {
+        Self {
+            icon,
+            tip: tip.into(),
+            on: false,
+            disabled: false,
+            run: Rc::new(run),
+        }
+    }
+
+    pub fn on(mut self, on: bool) -> Self {
+        self.on = on;
+        self
+    }
+
+    pub fn disabled(mut self, off: bool) -> Self {
+        self.disabled = off;
+        self
+    }
+}
+
+/// A row of icon buttons in groups, each group in a `well` (the page menu's
+/// navigation, zoom and rotation). The menu stays open, so zoom can be
+/// pressed again; `label` (like "125 %") sits after the first group.
+pub fn tool_row(
+    key: &'static str,
+    groups: Vec<Vec<Tool>>,
+    label: Option<SharedString>,
+    st: &Style,
+) -> AnyElement {
+    let mut row = div()
+        .px(px(6.0))
+        .py(px(4.0))
+        .flex()
+        .items_center()
+        .gap(px(6.0));
+    for (g, group) in groups.into_iter().enumerate() {
+        let mut well = div()
+            .p(px(2.0))
+            .flex()
+            .gap(px(2.0))
+            .rounded(st.px(|m| m.control_radius))
+            .bg(st.c(|c| c.hover))
+            .shadow(st.well());
+        for (i, t) in group.into_iter().enumerate() {
+            let run = t.run.clone();
+            let fg = if t.disabled {
+                st.c(|c| c.ring)
+            } else if t.on {
+                st.c(|c| c.accent)
+            } else {
+                st.c(|c| c.muted)
+            };
+            well = well.child(
+                div()
+                    .id(SharedString::from(format!("{key}-{g}-{i}")))
+                    .size(px(28.0))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .rounded(px(6.0))
+                    .when(t.on, |d| d.bg(st.c(|c| c.raised)).shadow(st.elev()))
+                    .when(!t.disabled && !t.on, |d| {
+                        d.hover(|d| d.bg(st.c(|c| c.raised)))
+                    })
+                    .when(!t.disabled, |d| {
+                        d.on_click(move |_, window, cx| run(window, cx))
+                    })
+                    .tip(t.tip)
+                    .child(svg().path(icon(t.icon)).size(px(16.0)).text_color(fg)),
+            );
+        }
+        row = row.child(well);
+        if g == 0 {
+            if let Some(l) = label.clone() {
+                row = row.child(
+                    div()
+                        .min_w(px(44.0))
+                        .text_size(px(12.0))
+                        .text_color(st.c(|c| c.muted))
+                        .flex()
+                        .justify_center()
+                        .child(l),
+                );
+            }
+        }
+    }
+    row.into_any_element()
+}
+
 /// An open menu: where, what, and a serial so each opening animates afresh.
 #[derive(Clone)]
 pub struct OpenMenu {
@@ -90,8 +196,15 @@ pub struct OpenMenu {
     pub width: f32,
 }
 
-/// The menu panel. `close` runs after a row's action.
-pub fn panel(menu: &OpenMenu, st: &Style, close: Handler, cx: &mut App) -> AnyElement {
+/// The menu panel. `close` runs after a row's action. A menu taller than
+/// `max_h` (a short window) scrolls instead of running off the screen.
+pub fn panel(
+    menu: &OpenMenu,
+    st: &Style,
+    close: Handler,
+    max_h: Pixels,
+    cx: &mut App,
+) -> AnyElement {
     let mut rows: Vec<AnyElement> = Vec::new();
     for (i, item) in menu.items.iter().enumerate() {
         match item {
@@ -189,6 +302,8 @@ pub fn panel(menu: &OpenMenu, st: &Style, close: Handler, cx: &mut App) -> AnyEl
     div()
         .id("menu")
         .w(px(menu.width))
+        .max_h(max_h)
+        .overflow_y_scroll()
         .p(px(4.0))
         .flex()
         .flex_col()

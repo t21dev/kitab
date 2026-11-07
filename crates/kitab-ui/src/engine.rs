@@ -4,7 +4,7 @@
 //! app; tests implement it with fakes. Every method is called from a background
 //! task, never from the UI thread (AGENTS.md rule 2).
 
-use kitab_core::{Bitmap, DocInfo, FindHit, FindOptions, Link, OpenError, RenderRequest};
+use kitab_core::{Bitmap, DocInfo, FindHit, FindOptions, Link, OpenError, RenderRequest, TextChar};
 use std::path::{Path, PathBuf};
 
 /// An open document inside the engine.
@@ -24,6 +24,17 @@ pub trait DocEngine: Send + Sync + 'static {
         options: FindOptions,
         on_hit: &mut dyn FnMut(FindHit) -> bool,
     );
+    /// Every hit on one page, in reading order. The find bar searches page by
+    /// page so it can stop early and show hits as they arrive.
+    fn find_page(
+        &self,
+        doc: DocHandle,
+        page: u32,
+        query: &str,
+        options: FindOptions,
+    ) -> Vec<FindHit>;
+    /// A page's characters with their boxes, for text selection.
+    fn page_chars(&self, doc: DocHandle, page: u32) -> Vec<TextChar>;
     /// A page's text in reading order, lines separated by newlines.
     fn page_text(&self, doc: DocHandle, page: u32) -> Option<String>;
     /// Write `pages` (0-based) of the PDF at `src` to a new PDF at `out`.

@@ -10,7 +10,7 @@ use crate::actions::*;
 use crate::icons::icon;
 use crate::menu::MenuItem;
 use crate::motion;
-use crate::reader::{PageExport, Reader};
+use crate::reader::Reader;
 use crate::style::Style;
 use gpui::{
     AnyElement, App, AppContext, Context, ElementId, Entity, FocusHandle, FontWeight,
@@ -45,6 +45,7 @@ pub(super) struct ToolsState {
     pub toast_closing: Option<Toast>,
     pub toast_serial: u64,
     pub extract: Option<ExtractDialog>,
+    pub save: Option<super::save_page::SavePageDialog>,
     pub dialog_focus: FocusHandle,
     /// The tab shown beside the active one.
     pub split: Option<Entity<Reader>>,
@@ -57,13 +58,14 @@ impl ToolsState {
             toast_closing: None,
             toast_serial: 0,
             extract: None,
+            save: None,
             dialog_focus: cx.focus_handle(),
             split: None,
         }
     }
 }
 
-fn stem(p: &Path) -> String {
+pub(super) fn stem(p: &Path) -> String {
     p.file_stem()
         .map(|s| s.to_string_lossy().to_string())
         .unwrap_or_else(|| "document".into())
@@ -71,6 +73,36 @@ fn stem(p: &Path) -> String {
 
 fn dir_of(p: &Path) -> PathBuf {
     p.parent().map(Path::to_path_buf).unwrap_or_default()
+}
+
+/// Cancel (secondary) or the dialog's action (primary), DESIGN.md § Buttons.
+pub(super) fn dialog_button(
+    st: &Style,
+    id: &'static str,
+    label: &'static str,
+    primary: bool,
+) -> gpui::Stateful<gpui::Div> {
+    div()
+        .id(id)
+        .h(st.px(|m| m.control_height))
+        .px(px(16.0))
+        .flex()
+        .items_center()
+        .rounded(st.px(|m| m.control_radius))
+        .text_size(st.px(|m| m.ui_text))
+        .cursor_pointer()
+        .when(primary, |b| {
+            b.bg(st.c(|c| c.text))
+                .text_color(st.c(|c| c.bg))
+                .shadow(st.elev())
+        })
+        .when(!primary, |b| {
+            b.bg(st.c(|c| c.raised))
+                .text_color(st.c(|c| c.text))
+                .shadow(st.elev())
+                .hover(|b| b.bg(st.c(|c| c.hover)))
+        })
+        .child(label)
 }
 
 impl Workspace {
@@ -122,7 +154,12 @@ impl Workspace {
     }
 
     /// Report a finished save: "Open" for PDFs, "Show in folder" for the rest.
-    fn report(&mut self, result: Result<PathBuf, String>, what: &str, cx: &mut Context<Self>) {
+    pub(super) fn report(
+        &mut self,
+        result: Result<PathBuf, String>,
+        what: &str,
+        cx: &mut Context<Self>,
+    ) {
         match result {
             Ok(path) => {
                 let name = path
@@ -231,35 +268,6 @@ impl Workspace {
                 .child(pill)
                 .into_any_element(),
         )
-    }
-
-    // ── save one page ──
-
-    pub(super) fn save_page_as(
-        &mut self,
-        reader: Entity<Reader>,
-        page: usize,
-        kind: PageExport,
-        cx: &mut Context<Self>,
-    ) {
-        let r = reader.read(cx);
-        let name = format!("{} - page {}.{}", stem(&r.path), page + 1, kind.extension());
-        let rx = cx.prompt_for_new_path(&dir_of(&r.path), Some(&name));
-        cx.spawn(async move |this, cx| {
-            let Ok(Ok(Some(mut out))) = rx.await else {
-                return;
-            };
-            if out.extension().is_none() {
-                out.set_extension(kind.extension());
-            }
-            let ws = this.clone();
-            let _ = reader.update(cx, |r, cx| {
-                r.save_page(page, kind, out, cx, move |result, cx| {
-                    let _ = ws.update(cx, |ws, cx| ws.report(result, "Saved", cx));
-                })
-            });
-        })
-        .detach();
     }
 
     // ── extract pages ──
@@ -415,89 +423,88 @@ impl Workspace {
                     .h(px(15.0))
                     .bg(st.c(|c| c.accent)),
             );
-        let button = |id: &'static str, label: &'static str, primary: bool| {
-            div()
-                .id(id)
-                .h(st.px(|m| m.control_height))
-                .px(px(16.0))
-                .flex()
-                .items_center()
-                .rounded(st.px(|m| m.control_radius))
-                .text_size(st.px(|m| m.ui_text))
-                .cursor_pointer()
-                .when(primary, |b| {
-                    b.bg(st.c(|c| c.text))
-                        .text_color(st.c(|c| c.bg))
-                        .shadow(st.elev())
-                })
-                .when(!primary, |b| {
-                    b.bg(st.c(|c| c.raised))
-                        .text_color(st.c(|c| c.text))
-                        .shadow(st.elev())
-                        .hover(|b| b.bg(st.c(|c| c.hover)))
-                })
-                .child(label)
-        };
-        let panel =
-            div()
-                .id("extract-dialog")
-                .relative()
-                .w(px(440.0))
-                .flex()
-                .flex_col()
-                .gap(px(14.0))
-                .p(px(22.0))
-                .rounded(px(16.0))
-                .bg(st.c(|c| c.raised))
-                .shadow(st.modal())
-                .border_1()
-                .border_color(st.c(|c| c.line))
-                .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-                .child(
-                    div()
-                        .text_size(px(15.0))
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .text_color(st.c(|c| c.text))
-                        .child("Save pages as a new PDF"),
-                )
-                .child(
-                    div()
-                        .text_size(px(12.5))
-                        .text_color(st.c(|c| c.muted))
-                        .child(format!(
-                            "From {title} ({count} pages). Type pages and ranges, like 1-3, 7, 10-."
-                        )),
-                )
-                .child(field)
-                .child(
-                    div()
-                        .text_size(px(12.0))
-                        .text_color(if bad {
-                            st.c(|c| c.bad)
-                        } else {
-                            st.c(|c| c.faint)
-                        })
-                        .child(note),
-                )
-                .child(
-                    div()
-                        .flex()
-                        .justify_end()
-                        .gap(px(8.0))
-                        .child(button("extract-cancel", "Cancel", false).on_click(
+        let panel = div()
+            .id("extract-dialog")
+            .relative()
+            .w(px(440.0))
+            .flex()
+            .flex_col()
+            .gap(px(14.0))
+            .p(px(22.0))
+            .rounded(px(16.0))
+            .bg(st.c(|c| c.raised))
+            .shadow(st.modal())
+            .border_1()
+            .border_color(st.c(|c| c.line))
+            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+            .child(
+                div()
+                    .text_size(px(15.0))
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .text_color(st.c(|c| c.text))
+                    .child("Save pages as a new PDF"),
+            )
+            .child(
+                div()
+                    .text_size(px(12.5))
+                    .text_color(st.c(|c| c.muted))
+                    .child(format!(
+                        "From {title} ({count} pages). Type pages and ranges, like 1-3, 7, 10-."
+                    )),
+            )
+            .child(field)
+            .child(
+                div()
+                    .text_size(px(12.0))
+                    .text_color(if bad {
+                        st.c(|c| c.bad)
+                    } else {
+                        st.c(|c| c.faint)
+                    })
+                    .child(note),
+            )
+            .child(
+                div()
+                    .flex()
+                    .justify_end()
+                    .gap(px(8.0))
+                    .child(
+                        dialog_button(st, "extract-cancel", "Cancel", false).on_click(
                             cx.listener(|ws, _, window, cx| ws.close_extract(window, cx)),
-                        ))
-                        .child(
-                            button("extract-save", "Save…", true)
-                                .when(!can_save, |b| b.opacity(0.45))
-                                .on_click(
-                                    cx.listener(|ws, _, window, cx| ws.confirm_extract(window, cx)),
-                                ),
                         ),
-                );
+                    )
+                    .child(
+                        dialog_button(st, "extract-save", "Save…", true)
+                            .when(!can_save, |b| b.opacity(0.45))
+                            .on_click(
+                                cx.listener(|ws, _, window, cx| ws.confirm_extract(window, cx)),
+                            ),
+                    ),
+            );
+        Some(self.modal_layer(
+            "extract",
+            serial,
+            panel.into_any_element(),
+            st,
+            Self::close_extract,
+            cx,
+        ))
+    }
+
+    /// A centred modal over a scrim: both fade, the panel rises 10 px. Esc or a
+    /// click on the scrim runs `close`.
+    pub(super) fn modal_layer(
+        &mut self,
+        id: &'static str,
+        serial: u64,
+        panel: AnyElement,
+        st: &Style,
+        close: fn(&mut Self, &mut Window, &mut Context<Self>),
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
         let panel = motion::enter(
-            panel,
-            ElementId::NamedInteger("extract-in".into(), serial),
+            div().child(panel),
+            ElementId::NamedInteger(format!("{id}-in").into(), serial),
             st.animations,
             motion::From::Below(10.0),
             motion::BASE,
@@ -505,33 +512,29 @@ impl Workspace {
         );
         let scrim = motion::enter(
             div().absolute().inset_0().bg(st.c(|c| c.scrim)),
-            ElementId::NamedInteger("extract-scrim".into(), serial),
+            ElementId::NamedInteger(format!("{id}-scrim").into(), serial),
             st.animations,
             motion::From::Fade,
             motion::BASE,
             Duration::ZERO,
         );
-        Some(
-            div()
-                .id("extract-layer")
-                .absolute()
-                .inset_0()
-                .occlude()
-                .flex()
-                .items_center()
-                .justify_center()
-                .key_context(OVERLAY)
-                .on_action(
-                    cx.listener(|ws, _: &CloseOverlay, window, cx| ws.close_extract(window, cx)),
-                )
-                .on_mouse_down(
-                    MouseButton::Left,
-                    cx.listener(|ws, _, window, cx| ws.close_extract(window, cx)),
-                )
-                .child(scrim)
-                .child(panel)
-                .into_any_element(),
-        )
+        div()
+            .id(SharedString::from(format!("{id}-layer")))
+            .absolute()
+            .inset_0()
+            .occlude()
+            .flex()
+            .items_center()
+            .justify_center()
+            .key_context(OVERLAY)
+            .on_action(cx.listener(move |ws, _: &CloseOverlay, window, cx| close(ws, window, cx)))
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(move |ws, _, window, cx| close(ws, window, cx)),
+            )
+            .child(scrim)
+            .child(panel)
+            .into_any_element()
     }
 
     // ── merge ──
@@ -672,6 +675,7 @@ impl Workspace {
             .icon("copy")
             .disabled(!is_pdf),
         ];
+        items.push(MenuItem::Separator);
         if side {
             items.push(
                 MenuItem::new(
@@ -692,33 +696,5 @@ impl Workspace {
             );
         }
         items
-    }
-
-    pub(super) fn save_page_items(
-        &self,
-        reader: &Entity<Reader>,
-        page: usize,
-        cx: &mut Context<Self>,
-    ) -> Vec<MenuItem> {
-        let is_pdf = reader.read(cx).is_pdf();
-        let mut out = Vec::new();
-        for (kind, label, glyph) in [
-            (PageExport::Pdf, "PDF", "file"),
-            (PageExport::Image, "image", "image"),
-            (PageExport::Text, "text", "text"),
-        ] {
-            let r = reader.clone();
-            out.push(
-                MenuItem::new(
-                    format!("Save page {} as {label}…", page + 1),
-                    self.on_ws(cx, move |ws, _, cx| {
-                        ws.save_page_as(r.clone(), page, kind, cx)
-                    }),
-                )
-                .icon(glyph)
-                .disabled(kind == PageExport::Pdf && !is_pdf),
-            );
-        }
-        out
     }
 }

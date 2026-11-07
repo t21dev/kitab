@@ -7,7 +7,7 @@ use crate::actions::*;
 use crate::engine::DocEngine;
 use crate::icons::icon;
 use crate::library::{Library, RecentItem, SessionTab};
-use crate::menu::{self, MenuItem, OpenMenu};
+use crate::menu::{self, MenuItem, OpenMenu, Tool};
 use crate::motion;
 use crate::reader::{Reader, ReaderEvent, open_reader};
 use crate::settings_view::{self, HexState, Section};
@@ -27,6 +27,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::time::Duration;
 
+mod save_page;
 mod tools_ui;
 use tools_ui::ToolsState;
 
@@ -1496,6 +1497,8 @@ impl Workspace {
     fn close_overlay(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.tools.extract.is_some() {
             self.close_extract(window, cx);
+        } else if self.tools.save.is_some() {
+            self.close_save_page(window, cx);
         } else if self.menu.is_some() {
             self.close_menu(window, cx);
         } else {
@@ -1726,66 +1729,132 @@ impl Workspace {
         cx: &mut Context<Self>,
     ) {
         let r = reader.read(cx);
-        let (back, forward, mode, path) = (
-            r.can_go_back(),
-            r.can_go_forward(),
-            r.zoom_mode(),
-            r.path.clone(),
-        );
+        let path = r.path.clone();
         let (page, has_doc) = (r.current_page(), r.status == crate::reader::Status::Open);
-        let run = |f: fn(&mut Reader, &mut Window, &mut Context<Reader>)| {
+        // Navigation, zoom and rotation as two toolbar rows (DESIGN.md § Menus);
+        // they read the reader's state each frame, so they stay right while the
+        // menu is open and are pressed again without reopening it.
+        let nav_row = {
             let reader = reader.clone();
-            move |window: &mut Window, cx: &mut App| reader.update(cx, |r, cx| f(r, window, cx))
+            MenuItem::Custom(Rc::new(move |st: &Style, cx: &mut App| {
+                let r = reader.read(cx);
+                let (back, forward) = (r.can_go_back(), r.can_go_forward());
+                let (page, last) = (r.current_page(), r.page_count().saturating_sub(1));
+                let go = |f: fn(&mut Reader, &mut Context<Reader>)| {
+                    let reader = reader.clone();
+                    move |_: &mut Window, cx: &mut App| reader.update(cx, f)
+                };
+                menu::tool_row(
+                    "menu-nav",
+                    vec![
+                        vec![
+                            Tool::new(
+                                "arrow-left",
+                                "Back (Alt+Left)",
+                                go(|r, cx| r.history(true, cx)),
+                            )
+                            .disabled(!back),
+                            Tool::new(
+                                "arrow-right",
+                                "Forward (Alt+Right)",
+                                go(|r, cx| r.history(false, cx)),
+                            )
+                            .disabled(!forward),
+                        ],
+                        vec![
+                            Tool::new(
+                                "chevron-left",
+                                "Previous page (Left)",
+                                go(|r, cx| r.prev_page(cx)),
+                            )
+                            .disabled(page == 0),
+                            Tool::new(
+                                "chevron-right",
+                                "Next page (Right)",
+                                go(|r, cx| r.next_page(cx)),
+                            )
+                            .disabled(page >= last),
+                        ],
+                        vec![
+                            Tool::new(
+                                "rotate-left",
+                                "Rotate counter-clockwise (Ctrl+Shift+-)",
+                                go(|r, cx| r.rotate(false, cx)),
+                            ),
+                            Tool::new(
+                                "rotate",
+                                "Rotate clockwise (Ctrl+Shift+=)",
+                                go(|r, cx| r.rotate(true, cx)),
+                            ),
+                        ],
+                    ],
+                    None,
+                    st,
+                )
+            }))
         };
-        let items = vec![
-            MenuItem::new("Previous page", run(|r, _, cx| r.prev_page(cx)))
-                .icon("chevron-left")
-                .key("Left"),
-            MenuItem::new("Next page", run(|r, _, cx| r.next_page(cx)))
-                .icon("chevron-right")
-                .key("Right"),
-            MenuItem::new("Go to page…", run(|r, window, cx| r.edit_page(window, cx)))
-                .icon("hash")
-                .key("Ctrl+G"),
-            MenuItem::new("Back", run(|r, _, cx| r.history(true, cx)))
-                .key("Alt+Left")
-                .disabled(!back),
-            MenuItem::new("Forward", run(|r, _, cx| r.history(false, cx)))
-                .key("Alt+Right")
-                .disabled(!forward),
+        let zoom_row = {
+            let reader = reader.clone();
+            MenuItem::Custom(Rc::new(move |st: &Style, cx: &mut App| {
+                let r = reader.read(cx);
+                let (mode, percent) = (r.zoom_mode(), r.zoom_percent());
+                let go = |f: fn(&mut Reader, &mut Context<Reader>)| {
+                    let reader = reader.clone();
+                    move |_: &mut Window, cx: &mut App| reader.update(cx, f)
+                };
+                menu::tool_row(
+                    "menu-zoom",
+                    vec![
+                        vec![
+                            Tool::new(
+                                "minus",
+                                "Zoom out (Ctrl+-)",
+                                go(|r, cx| r.zoom_step(false, cx)),
+                            ),
+                            Tool::new(
+                                "plus",
+                                "Zoom in (Ctrl+=)",
+                                go(|r, cx| r.zoom_step(true, cx)),
+                            ),
+                        ],
+                        vec![
+                            Tool::new(
+                                "fit-width",
+                                "Fit width (Ctrl+2)",
+                                go(|r, cx| r.set_zoom_mode(ZoomMode::FitWidth, cx)),
+                            )
+                            .on(mode == ZoomMode::FitWidth),
+                            Tool::new(
+                                "fit-page",
+                                "Fit page (Ctrl+0)",
+                                go(|r, cx| r.set_zoom_mode(ZoomMode::FitPage, cx)),
+                            )
+                            .on(mode == ZoomMode::FitPage),
+                            Tool::new(
+                                "file",
+                                "Actual size (Ctrl+1)",
+                                go(|r, cx| r.set_zoom_mode(ZoomMode::ActualSize, cx)),
+                            )
+                            .on(mode == ZoomMode::ActualSize),
+                        ],
+                    ],
+                    Some(format!("{percent} %").into()),
+                    st,
+                )
+            }))
+        };
+        let mut items = vec![
+            nav_row,
+            zoom_row,
             MenuItem::Separator,
-            MenuItem::new("Zoom in", run(|r, _, cx| r.zoom_step(true, cx)))
-                .icon("plus")
-                .key("Ctrl+="),
-            MenuItem::new("Zoom out", run(|r, _, cx| r.zoom_step(false, cx)))
-                .icon("minus")
-                .key("Ctrl+-"),
-            MenuItem::new(
-                "Fit width",
-                run(|r, _, cx| r.set_zoom_mode(ZoomMode::FitWidth, cx)),
-            )
-            .key("Ctrl+2")
-            .checked(mode == ZoomMode::FitWidth),
-            MenuItem::new(
-                "Fit page",
-                run(|r, _, cx| r.set_zoom_mode(ZoomMode::FitPage, cx)),
-            )
-            .key("Ctrl+0")
-            .checked(mode == ZoomMode::FitPage),
-            MenuItem::new(
-                "Actual size",
-                run(|r, _, cx| r.set_zoom_mode(ZoomMode::ActualSize, cx)),
-            )
-            .key("Ctrl+1")
-            .checked(mode == ZoomMode::ActualSize),
-            MenuItem::new("Rotate clockwise", run(|r, _, cx| r.rotate(true, cx)))
-                .icon("rotate")
-                .key("Ctrl+Shift+="),
-            MenuItem::new(
-                "Rotate counter-clockwise",
-                run(|r, _, cx| r.rotate(false, cx)),
-            )
-            .key("Ctrl+Shift+-"),
+            MenuItem::new("Go to page…", {
+                let reader = reader.clone();
+                move |window: &mut Window, cx: &mut App| {
+                    reader.update(cx, |r, cx| r.edit_page(window, cx))
+                }
+            })
+            .icon("hash")
+            .key("Ctrl+G"),
             MenuItem::Separator,
             MenuItem::new(format!("Copy text of page {}", page + 1), {
                 let reader = reader.clone();
@@ -1799,18 +1868,19 @@ impl Workspace {
             })
             .icon("image")
             .disabled(!has_doc),
-            MenuItem::new("Copy page number", move |_, cx: &mut App| {
-                cx.write_to_clipboard(ClipboardItem::new_string(format!("{}", page + 1)))
-            })
-            .icon("hash"),
-            file_item_copy(&path),
             MenuItem::Separator,
+            MenuItem::new("Save page as…", {
+                let reader = reader.clone();
+                self.on_ws(cx, move |ws, window, cx| {
+                    ws.open_save_page(reader.clone(), page, window, cx)
+                })
+            })
+            .icon("file")
+            .disabled(!has_doc),
         ];
-        let mut items = items;
-        items.extend(self.save_page_items(&reader, page, cx));
-        items.push(MenuItem::Separator);
         items.extend(self.pdf_tool_items(&reader, cx));
         items.push(MenuItem::Separator);
+        items.push(file_item_copy(&path));
         items.push(file_item_reveal(&path));
         self.open_menu(at, false, 300.0, items, window, cx);
     }
@@ -1986,6 +2056,7 @@ impl Workspace {
         let ws = cx.weak_entity();
         out.extend(self.toast_view(st, cx));
         out.extend(self.extract_view(st, window, cx));
+        out.extend(self.save_page_view(st, window, cx));
 
         if let Some(section) = self.settings.or(self.settings_closing) {
             let closing = self.settings.is_none();
@@ -2069,7 +2140,11 @@ impl Workspace {
                     let _ = ws.update(cx, |ws, cx| ws.close_menu(window, cx));
                 })
             };
-            let panel = div().relative().child(menu::panel(&m, st, close, cx));
+            // Leave the menu's margin free above and below in a short window.
+            let max_h = window.viewport_size().height - px(16.0);
+            let panel = div()
+                .relative()
+                .child(menu::panel(&m, st, close, max_h, cx));
             let panel = if closing {
                 motion::exit(
                     panel,
