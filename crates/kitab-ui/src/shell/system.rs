@@ -666,7 +666,7 @@ impl Workspace {
                     .justify_end()
                     .gap(px(8.0))
                     .child(
-                        dialog_button(st, "update-later", "Later", false)
+                        dialog_button(st, "update-later", "Skip this version", false)
                             .tip("Hide the Update button until a newer version")
                             .on_click(cx.listener(|ws, _, _, cx| ws.skip_update(cx))),
                     )

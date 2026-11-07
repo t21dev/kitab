@@ -125,8 +125,12 @@ impl Workspace {
         if a.is_empty() || b.is_empty() {
             return Err(String::new());
         }
-        if a != b {
+        // Only once the second is as long as the first: not while typing.
+        if a != b && b.chars().count() >= a.chars().count() {
             return Err("The two don't match.".into());
+        }
+        if a != b {
+            return Err(String::new());
         }
         Ok(Some(a))
     }
@@ -202,10 +206,12 @@ impl Workspace {
         };
         let about = match s.mode {
             Mode::Set => format!(
-                "Kitab saves a copy that asks for this password to open; {title} stays as it is. Keep the password somewhere safe: nobody can recover it."
+                "Kitab saves a copy of {title} that asks for this password to open. The original file stays as it is. Keep the password somewhere safe: nobody can recover it."
             ),
             Mode::Remove => {
-                format!("Kitab saves a copy anyone can open; {title} keeps its password.")
+                format!(
+                    "Kitab saves a copy of {title} that anyone can open. The original keeps its password."
+                )
             }
         };
         let field = |f: &Entity<TextField>, bad: bool| {

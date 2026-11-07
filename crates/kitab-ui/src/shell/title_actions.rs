@@ -226,7 +226,7 @@ impl Workspace {
                         "t-minimal",
                         "focus",
                         st.minimal,
-                        "Minimal mode  F11",
+                        "Focus mode  F11",
                         Box::new(ToggleMinimal),
                     ))
                 });

@@ -44,6 +44,11 @@ pub struct BookStyle {
     pub line_spacing: Option<f32>,
     /// Page margins in em.
     pub margin: Option<f32>,
+    /// The theme's reading surface and text colour (RGB), so a book reads
+    /// like the rest of the window (DESIGN.md: reflowed text sits on `bg`).
+    /// `None` keeps the book's own black on white.
+    pub paper: Option<[u8; 3]>,
+    pub ink: Option<[u8; 3]>,
 }
 
 impl BookStyle {
@@ -51,6 +56,8 @@ impl BookStyle {
         face: BookFace::Book,
         line_spacing: None,
         margin: None,
+        paper: None,
+        ink: None,
     };
     pub const LINE_MIN: f32 = 1.0;
     pub const LINE_MAX: f32 = 2.5;
@@ -79,6 +86,13 @@ impl BookStyle {
         }
         if let Some(m) = self.margin {
             css.push_str(&format!("@page {{ margin: {m:.2}em }}\n"));
+        }
+        if let Some([r, g, b]) = self.ink {
+            // The page is cleared to `paper`; text takes the theme's colour
+            // and boxes let the paper show through. Pictures keep theirs.
+            css.push_str(&format!(
+                "html, body, body * {{ color: #{r:02x}{g:02x}{b:02x} !important; background-color: transparent !important }}\n"
+            ));
         }
         css
     }
@@ -332,11 +346,14 @@ mod book_style_tests {
             face: BookFace::Sans,
             line_spacing: Some(1.6),
             margin: Some(2.0),
+            ink: Some([0xd9, 0xd9, 0xdd]),
+            ..BookStyle::DEFAULT
         };
         let css = s.css();
         assert!(css.contains("font-family: Helvetica !important"));
         assert!(css.contains("line-height: 1.60 !important"));
         assert!(css.contains("@page { margin: 2.00em }"));
+        assert!(css.contains("color: #d9d9dd !important"));
     }
 
     #[test]

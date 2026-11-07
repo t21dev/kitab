@@ -57,6 +57,24 @@ impl DocEngine for MupdfEngine {
         Ok((h, info))
     }
 
+    fn open_styled(
+        &self,
+        path: &Path,
+        password: Option<&str>,
+        style: kitab_core::BookStyle,
+    ) -> Result<(DocHandle, DocInfo), OpenError> {
+        let layout = kitab_core::BookLayout {
+            style,
+            ..kitab_core::BookLayout::DEFAULT
+        };
+        let (id, info) = self.engine.open_with(path, password, layout)?;
+        let h = self.next.fetch_add(1, Ordering::Relaxed);
+        if let Ok(mut ids) = self.ids.lock() {
+            ids.insert(h, id);
+        }
+        Ok((h, info))
+    }
+
     fn render(&self, doc: DocHandle, req: RenderRequest) -> Result<Option<Bitmap>, String> {
         let id = self.id(doc).ok_or("document is closed")?;
         self.engine.render(id, req)

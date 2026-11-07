@@ -28,7 +28,7 @@ mod place_sig;
 mod present;
 mod select;
 mod signatures;
-pub(crate) use signatures::status_words;
+pub(crate) use signatures::check_words;
 
 use crate::actions::*;
 use crate::cache::{PageCache, PageKey, scale_key};
@@ -209,6 +209,8 @@ pub struct Reader {
     placing: bool,
     /// A page to show once the document is laid out (a library search hit).
     pending_page: Option<u32>,
+    /// The book style the document was opened in.
+    opened_style: kitab_core::BookStyle,
     /// The anchor page's scale (×1000) and rotation at the last relayout:
     /// when they haven't changed, renders in flight are still right.
     layout_sig: Option<(i64, u16)>,
@@ -302,6 +304,7 @@ impl Reader {
             signatures: None,
             placing: false,
             pending_page: None,
+            opened_style: kitab_core::BookStyle::DEFAULT,
             layout_sig: None,
             file_annots: None,
             bookmark_rows: Vec::new(),
@@ -370,13 +373,15 @@ impl Reader {
         }
         let engine = self.engine.clone();
         let library = self.library.clone();
+        let style = Self::book_style(cx);
+        self.opened_style = style;
         let path = self.path.clone();
         let tried = password.clone();
         cx.spawn(async move |this, cx| {
             let (result, saved) = cx
                 .background_spawn(async move {
                     kitab_os::trace::mark("reader: open");
-                    let result = engine.open(&path, password.as_deref());
+                    let result = engine.open_styled(&path, password.as_deref(), style);
                     kitab_os::trace::mark("reader: opened");
                     // Per-file memory (PLAN.md Phase 1): ask the library while still off the UI thread.
                     let saved = result
@@ -1273,7 +1278,13 @@ impl Reader {
                     .h(px(h))
                     .flex_none()
                     // Paper before the bitmap arrives; the page's own colour once it has.
-                    .bg(gpui::white())
+                    // A book is printed on the theme's surface (its pages are
+                    // rendered on it too); everything else on white paper.
+                    .bg(if self.is_book() {
+                        st.c(|c| c.bg)
+                    } else {
+                        gpui::white()
+                    })
                     .rounded(radius)
                     .shadow(st.sheet())
                     .overflow_hidden()

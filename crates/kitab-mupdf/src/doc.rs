@@ -69,6 +69,8 @@ pub(crate) struct OpenDoc {
     pub format: Format,
     /// Laid out by Kitab (a book), not paged by the file.
     pub reflowable: bool,
+    /// A book's page colour (the theme's), instead of white.
+    pub paper: Option<[u8; 3]>,
     pub right_to_left: bool,
 }
 
@@ -198,6 +200,7 @@ pub(crate) fn open(
             format,
             reflowable,
             right_to_left,
+            paper: if flows { layout.style.paper } else { None },
         },
         info,
     ))
@@ -483,7 +486,14 @@ pub(crate) fn render(doc: &OpenDoc, req: &RenderRequest) -> Result<Bitmap, Strin
     // and blend modes and soft masks behave as they would on a printed page.
     let mut pixmap = Pixmap::new(&Colorspace::device_rgb(), area.x0, area.y0, w, h, false)
         .map_err(|e| e.to_string())?;
-    pixmap.clear_with(255).map_err(|e| e.to_string())?;
+    match doc.paper.filter(|_| doc.reflowable) {
+        Some(rgb) => {
+            for px in pixmap.samples_mut().chunks_exact_mut(3) {
+                px.copy_from_slice(&rgb);
+            }
+        }
+        None => pixmap.clear_with(255).map_err(|e| e.to_string())?,
+    }
     {
         let device = Device::from_pixmap(&pixmap).map_err(|e| e.to_string())?;
         page.run(&device, &ctm).map_err(|e| e.to_string())?;

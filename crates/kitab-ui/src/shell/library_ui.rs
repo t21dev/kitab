@@ -198,6 +198,9 @@ impl Workspace {
             .rounded(st.px(|m| m.control_radius))
             .bg(st.c(|c| c.raised))
             .shadow(st.well())
+            // Visible on light themes, where raised is the page's own white.
+            .border_1()
+            .border_color(st.c(|c| c.line))
             .child(
                 svg()
                     .path(icon("search"))

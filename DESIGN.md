@@ -36,7 +36,7 @@ All colours are tokens. Components never contain a literal colour. Tokens are de
 | `highlight` | `rgba(230,180,80,.30)` | `rgba(230,180,80,.30)` | `#FBE2A6` | `#EFD08F` | `rgba(235,203,139,.30)` | `rgba(242,166,90,.28)` | `rgba(224,70,106,.28)` | `rgba(142,168,255,.28)` | Default highlight colour behind text |
 | `ok` | `#4CC38A` | `#4CC38A` | `#1F9D63` | `#4E8A57` | `#A3BE8C` | `#5FD3A3` | `#6CCB97` | `#4CC38A` | Finished, signature valid |
 | `warn` | `#E6B450` | `#E6B450` | `#B7791F` | `#B87A1E` | `#EBCB8B` | `#F2C14E` | `#E8B04A` | `#E6B450` | Signer unknown, changed after signing |
-| `bad` | `#F06A6A` | `#F06A6A` | `#D33B3B` | `#B5402F` | `#BF616A` | `#F07A7A` | `#FF5C7A` | `#F06A6A` | Errors, broken signature, destructive |
+| `bad` | `#F06A6A` | `#F06A6A` | `#D33B3B` | `#B5402F` | `#BF616A` | `#F07A7A` | `#FF8F5A` | `#F06A6A` | Errors, broken signature, destructive |
 | `scrim` | `rgba(0,0,0,.55)` | `rgba(0,0,0,.55)` | `rgba(20,20,30,.28)` | `rgba(60,40,20,.25)` | `rgba(0,0,0,.45)` | `rgba(0,0,0,.55)` | `rgba(0,0,0,.55)` | `rgba(0,0,0,.7)` | Behind dialogs |
 
 Nord uses the published Nord palette (MIT; credit in About and NOTICE). Gray, Noctua, Vampire and Ink are Kitab's own. Gray is Dark without its slight warmth: plain neutral greys on `#191919`. Ink is true black for OLED screens, with a blue-black ink accent. A new theme must define every token above and pass the contrast check: `text`/`read` ≥ 7:1 on `bg`, `muted` ≥ 4.5:1, `faint` ≥ 4.5:1 on `bg` and `panel`, `accent` ≥ 3:1 as a mark and ≥ 4.5:1 when used as text.

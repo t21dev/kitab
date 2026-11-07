@@ -130,7 +130,7 @@ pub const COMMANDS: &[Command] = &[
     ),
     cmd!(
         "View",
-        "Minimal mode",
+        "Focus mode",
         "focus distraction full screen",
         false,
         ToggleMinimal

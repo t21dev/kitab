@@ -14,6 +14,16 @@ use gpui::{
 };
 use kitab_core::{SigStatus, SignatureCheck, overall_status};
 
+/// A signature's status in a few words, naming what changed after signing.
+pub fn check_words(c: &SignatureCheck, st: &Style) -> (&'static str, Hsla) {
+    match (c.status(), c.modification) {
+        (SigStatus::Changed, kitab_core::SigModification::Annotations) => {
+            ("Comments added after signing", st.c(|c| c.warn))
+        }
+        (s, _) => status_words(s, st),
+    }
+}
+
 /// A status in a few words, and its colour.
 pub fn status_words(s: SigStatus, st: &Style) -> (&'static str, Hsla) {
     match s {

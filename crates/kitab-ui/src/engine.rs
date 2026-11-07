@@ -68,6 +68,17 @@ pub type Wanted = std::sync::Arc<dyn Fn() -> bool + Send + Sync>;
 
 pub trait DocEngine: Send + Sync + 'static {
     fn open(&self, path: &Path, password: Option<&str>) -> Result<(DocHandle, DocInfo), OpenError>;
+    /// [`DocEngine::open`], with a book laid out in `style` from the start
+    /// (so opening in the theme's colours doesn't mean opening twice).
+    fn open_styled(
+        &self,
+        path: &Path,
+        password: Option<&str>,
+        style: kitab_core::BookStyle,
+    ) -> Result<(DocHandle, DocInfo), OpenError> {
+        let _ = style;
+        self.open(path, password)
+    }
     /// `Ok(None)` when the request's generation is stale.
     fn render(&self, doc: DocHandle, req: RenderRequest) -> Result<Option<Bitmap>, String>;
     /// [`DocEngine::render`], skipped (`Ok(None)`) if `wanted` returns false

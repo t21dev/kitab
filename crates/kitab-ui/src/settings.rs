@@ -546,6 +546,7 @@ fn book_style_from(face: &str, line: Option<f32>, margin: Option<f32>) -> kitab_
         face,
         line_spacing: line,
         margin,
+        ..BookStyle::DEFAULT
     }
 }
 
@@ -681,6 +682,7 @@ mod tests {
                 face: kitab_core::BookFace::Sans,
                 line_spacing: Some(1.6),
                 margin: Some(2.5),
+                ..kitab_core::BookStyle::DEFAULT
             },
             markup: false,
             file_info: false,

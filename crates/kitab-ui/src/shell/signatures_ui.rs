@@ -6,13 +6,13 @@
 
 use super::Workspace;
 use crate::icons::icon;
-use crate::reader::{Reader, status_words};
+use crate::reader::{Reader, check_words};
 use crate::style::Style;
 use gpui::{
     AnyElement, Context, Entity, FontWeight, InteractiveElement, IntoElement, ParentElement,
     StatefulInteractiveElement, Styled, div, prelude::FluentBuilder, px, svg,
 };
-use kitab_core::{SigCoverage, SigModification, SigStatus, SignatureCheck};
+use kitab_core::{SigCoverage, SigModification, SignatureCheck};
 
 /// What the check found, line by line, in plain words.
 pub fn findings(c: &SignatureCheck) -> Vec<String> {
@@ -22,9 +22,9 @@ pub fn findings(c: &SignatureCheck) -> Vec<String> {
         return out;
     }
     out.push(if c.intact {
-        "The signed content hasn't been altered.".into()
+        "The version that was signed is intact.".into()
     } else {
-        "The signed content was altered after signing.".into()
+        "The signed bytes were altered after signing.".into()
     });
     if !c.valid {
         out.push("The signature doesn't match the signer's certificate.".into());
@@ -81,8 +81,7 @@ impl Workspace {
                 .into_any_element();
         }
         for (ix, c) in sigs.iter().enumerate() {
-            let status = c.status();
-            let (words, colour) = status_words(status, st);
+            let (words, colour) = check_words(c, st);
             let jump = reader.clone();
             let page = c.page;
             let mut card = div()
@@ -127,13 +126,15 @@ impl Workspace {
                             (None, None) => c.field.clone(),
                         }),
                 );
-            for extra in [&c.reason, &c.location].into_iter().flatten() {
-                card = card.child(
-                    div()
-                        .text_size(px(11.5))
-                        .text_color(st.c(|c| c.muted))
-                        .child(extra.clone()),
-                );
+            for (label, extra) in [("Reason", &c.reason), ("Place", &c.location)] {
+                if let Some(extra) = extra {
+                    card = card.child(
+                        div()
+                            .text_size(px(11.5))
+                            .text_color(st.c(|c| c.muted))
+                            .child(format!("{label}: {extra}")),
+                    );
+                }
             }
             for line in findings(c) {
                 card = card.child(
@@ -171,7 +172,7 @@ impl Workspace {
                                 jump.update(cx, |r, cx| r.jump_to(p, cx))
                             }))
                         })
-                        .when(status == SigStatus::Unknown, |d| {
+                        .when(!c.trusted && c.intact && c.valid, |d| {
                             d.child(link("sig-trust", "Trusted certificates…").on_click(
                                 cx.listener(|ws, _, window, cx| {
                                     ws.open_settings_at(

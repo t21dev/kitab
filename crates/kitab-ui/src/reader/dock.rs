@@ -223,18 +223,20 @@ impl Reader {
             .when(show_history, |d| {
                 d.child(
                     group()
-                        .child(
+                        .child(if self.can_go_back() {
                             dock_button("dock-back", "arrow-left", false, st)
-                                .when(!self.can_go_back(), |b| b.opacity(0.4))
                                 .tip("Back  Alt+Left")
-                                .on_click(cx.listener(|r, _, _, cx| r.history(true, cx))),
-                        )
-                        .child(
+                                .on_click(cx.listener(|r, _, _, cx| r.history(true, cx)))
+                        } else {
+                            dock_button_off("dock-back", "arrow-left", st)
+                        })
+                        .child(if self.can_go_forward() {
                             dock_button("dock-forward", "arrow-right", false, st)
-                                .when(!self.can_go_forward(), |b| b.opacity(0.4))
                                 .tip("Forward  Alt+Right")
-                                .on_click(cx.listener(|r, _, _, cx| r.history(false, cx))),
-                        ),
+                                .on_click(cx.listener(|r, _, _, cx| r.history(false, cx)))
+                        } else {
+                            dock_button_off("dock-forward", "arrow-right", st)
+                        }),
                 )
             });
         // At the bottom the dock is also the page navigator.
@@ -403,7 +405,7 @@ impl Reader {
                     .when(items.minimal, |g| {
                         g.child(
                             dock_button("dock-minimal", "focus", st.minimal, st)
-                                .tip("Minimal mode  F11")
+                                .tip("Focus mode  F11")
                                 .on_click(|_, window, cx| {
                                     window.dispatch_action(
                                         Box::new(crate::actions::ToggleMinimal),
@@ -503,6 +505,27 @@ pub(super) fn dock_button(
         .when(on, |d| d.bg(st.c(|c| c.raised)).shadow(st.elev()))
         .hover(|d| d.bg(st.c(|c| c.raised)))
         .child(svg().path(icon(name)).size(px(16.0)).text_color(fg))
+}
+
+/// A dock button that can't be used right now: `ring` glyph, no hover.
+pub(super) fn dock_button_off(
+    id: &'static str,
+    name: &'static str,
+    st: &Style,
+) -> gpui::Stateful<gpui::Div> {
+    div()
+        .id(id)
+        .size(px(28.0))
+        .flex_none()
+        .flex()
+        .items_center()
+        .justify_center()
+        .child(
+            svg()
+                .path(icon(name))
+                .size(px(16.0))
+                .text_color(st.c(|c| c.ring)),
+        )
 }
 
 /// The chevron that points at the dock's edge (hide) or away from it (show).

@@ -2775,7 +2775,7 @@ impl Workspace {
             .disabled(self.active.is_none()),
             MenuItem::Separator,
             MenuItem::new(
-                "Minimal mode",
+                "Focus mode",
                 self.on_ws(cx, |ws, _, cx| ws.toggle_minimal(cx)),
             )
             .icon("focus")

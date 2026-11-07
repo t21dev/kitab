@@ -422,6 +422,7 @@ fn books_lay_out_again() {
             face: kitab_core::BookFace::Sans,
             line_spacing: Some(2.4),
             margin: Some(4.0),
+            ..kitab_core::BookStyle::DEFAULT
         },
         ..BookLayout::DEFAULT
     };

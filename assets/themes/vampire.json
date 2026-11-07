@@ -18,7 +18,7 @@
     "highlight": "rgba(224,70,106,.28)",
     "ok": "#6CCB97",
     "warn": "#E8B04A",
-    "bad": "#FF5C7A",
+    "bad": "#FF8F5A",
     "scrim": "rgba(0,0,0,.55)"
   },
   "depth": {

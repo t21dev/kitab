@@ -91,6 +91,21 @@ impl Reader {
     }
 
     /// A newly opened document: books start tracking their layout.
+    /// The reader's typography with the theme's page and text colours: a
+    /// book reads on the window's own surface.
+    pub(super) fn book_style(cx: &gpui::App) -> kitab_core::BookStyle {
+        let st = Style::get(cx);
+        let rgb = |c: kitab_theme::Rgba| {
+            let q = |v: f32| (v.clamp(0.0, 1.0) * 255.0).round() as u8;
+            [q(c.r), q(c.g), q(c.b)]
+        };
+        kitab_core::BookStyle {
+            paper: Some(rgb(st.theme.colors.bg)),
+            ink: Some(rgb(st.theme.colors.read)),
+            ..st.book_style
+        }
+    }
+
     pub(super) fn start_book(&mut self, info: &DocInfo) {
         if !info.reflowable {
             self.book = None;
@@ -100,7 +115,11 @@ impl Reader {
         let restore = self.restore.take().map(|s| s.progress);
         self.zoom = ZoomMode::FitWidth;
         self.book = Some(BookState {
-            layout: BookLayout::DEFAULT,
+            // Opened in the style asked for then (see `open`).
+            layout: BookLayout {
+                style: self.opened_style,
+                ..BookLayout::DEFAULT
+            },
             wanted: None,
             serial: 0,
             busy: false,
@@ -131,10 +150,8 @@ impl Reader {
         if self.status != Status::Open {
             return;
         }
-        let (em, style) = {
-            let st = Style::get(cx);
-            (st.book_text, st.book_style)
-        };
+        let em = Style::get(cx).book_text;
+        let style = Self::book_style(cx);
         let Some(want) = self.layout_for_window(em, style) else {
             return;
         };

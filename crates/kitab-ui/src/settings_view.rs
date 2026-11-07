@@ -505,7 +505,7 @@ fn reading(ws: &WeakEntity<Workspace>, st: &Style) -> AnyElement {
             st,
         ))
         .child(group(
-            "Minimal mode",
+            "Focus mode",
             Some("F11 hides these for distraction-free reading. Point at the top edge for the window buttons and a way back."),
             minimal_rows(ws, st),
             st,
@@ -539,7 +539,7 @@ fn toolbar_rows(ws: &WeakEntity<Workspace>, st: &Style) -> AnyElement {
         ("Bookmark", (|d| &mut d.bookmark, |t| &mut t.bookmark)),
         ("Draw and mark up", (|d| &mut d.markup, |t| &mut t.markup)),
         ("Rotate", (|d| &mut d.rotate, |t| &mut t.rotate)),
-        ("Minimal mode", (|d| &mut d.minimal, |t| &mut t.minimal)),
+        ("Focus mode", (|d| &mut d.minimal, |t| &mut t.minimal)),
         ("Print", (|d| &mut d.print, |t| &mut t.print)),
         ("Password", (|d| &mut d.password, |t| &mut t.password)),
     ];
