@@ -39,6 +39,10 @@ impl MupdfEngine {
 }
 
 impl DocEngine for MupdfEngine {
+    fn shrink_caches(&self) {
+        let _ = self.engine.shrink_caches(0);
+    }
+
     fn open(&self, path: &Path, password: Option<&str>) -> Result<(DocHandle, DocInfo), OpenError> {
         let (id, info) = self.engine.open(path, password)?;
         let h = self.next.fetch_add(1, Ordering::Relaxed);
@@ -298,6 +302,20 @@ impl Library for StoreLibrary {
             let store = s.store.as_mut()?;
             store.delete_mark(kitab_store::MarkId(id)).ok()
         });
+    }
+
+    fn clear_history(&self) -> bool {
+        self.call(|s| s.store.as_mut()?.clear_history().ok())
+            .flatten()
+            .is_some()
+    }
+
+    fn optimize(&self) -> Option<(u64, u64)> {
+        self.call(|s| s.store.as_mut()?.optimize().ok()).flatten()
+    }
+
+    fn size_bytes(&self) -> Option<u64> {
+        self.call(|s| s.store.as_ref()?.size_bytes().ok()).flatten()
     }
 
     fn clear_marks(&self, path: &Path) {

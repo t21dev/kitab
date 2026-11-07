@@ -3,10 +3,10 @@
 //! Platform code for Kitab Reader (PLAN.md §3.9). The only crate besides
 //! kitab-mupdf, kitab-print and kitab-sign allowed `unsafe` (AGENTS.md rule 10).
 
-#[cfg(windows)]
 pub mod assoc;
 pub mod instance;
 pub mod splash;
+pub mod update;
 
 #[cfg(all(windows, feature = "input"))]
 pub mod input;

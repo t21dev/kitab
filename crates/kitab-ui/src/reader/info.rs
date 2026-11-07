@@ -10,7 +10,7 @@ use crate::settings::DockAt;
 use kitab_core::Format;
 
 /// "58.9 KB", "1.2 MB", "312 B".
-pub(super) fn human_size(bytes: u64) -> String {
+pub fn human_size(bytes: u64) -> String {
     const UNITS: [&str; 4] = ["KB", "MB", "GB", "TB"];
     if bytes < 1024 {
         return format!("{bytes} B");

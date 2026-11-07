@@ -565,3 +565,81 @@ fn marks_are_kept_listed_deleted_and_cleared() {
     assert_eq!(store.clear_marks(doc).unwrap(), 1);
     assert!(store.marks(doc).unwrap().is_empty());
 }
+
+#[test]
+fn clearing_history_keeps_marks_and_bookmarks() {
+    use kitab_core::{Mark, MarkShape, PointPt, Rgb8};
+    let mut store = Store::open_in_memory().unwrap();
+    let doc = store
+        .upsert_document(&fake_ident(5), Path::new("/h.pdf"), &pdf_meta("H"))
+        .unwrap();
+    store.mark_opened(doc).unwrap();
+    store
+        .save_reading_state(
+            doc,
+            &kitab_core::ReadingState {
+                locator: kitab_core::Locator::Fixed {
+                    page: 2,
+                    x: 0.0,
+                    y: 10.0,
+                },
+                zoom: kitab_core::ZoomMode::FitWidth,
+                rotation: 0,
+                progress: 0.5,
+            },
+        )
+        .unwrap();
+    let at = kitab_core::Locator::Fixed {
+        page: 1,
+        x: 0.0,
+        y: 0.0,
+    };
+    store.add_bookmark(doc, &at, "Kept").unwrap();
+    let mark = Mark {
+        page: 0,
+        shape: MarkShape::Note {
+            at: PointPt { x: 5.0, y: 5.0 },
+            text: "kept".into(),
+        },
+        color: Rgb8 { r: 1, g: 2, b: 3 },
+        width: 1.0,
+        opacity: 1.0,
+    };
+    store.add_mark(doc, &mark).unwrap();
+    assert_eq!(store.recent(10).unwrap().len(), 1);
+
+    store.clear_history().unwrap();
+    assert!(store.recent(10).unwrap().is_empty());
+    assert!(store.reading_state(doc).unwrap().is_none());
+    assert_eq!(store.bookmarks(doc).unwrap().len(), 1);
+    assert_eq!(store.marks(doc).unwrap().len(), 1);
+}
+
+#[test]
+fn optimize_reports_sizes_and_keeps_data() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut store = Store::open(&dir.path().join("k.db")).unwrap();
+    for i in 0..200u64 {
+        let p = format!("/f{i}.pdf");
+        let id = store
+            .upsert_document(&fake_ident(100 + i), Path::new(&p), &pdf_meta("T"))
+            .unwrap();
+        if i % 2 == 0 {
+            store.forget_document(id).unwrap();
+        }
+    }
+    let (before, after) = store.optimize().unwrap();
+    // The planner's statistics table can take a page or two of its own.
+    assert!(
+        before > 0 && after > 0 && after <= before + 8192,
+        "{before} -> {after}"
+    );
+    let (_, again) = store.optimize().unwrap();
+    assert!(again <= after + 4096, "{after} -> {again}");
+    assert!(
+        store
+            .document_by_path(Path::new("/f1.pdf"))
+            .unwrap()
+            .is_some()
+    );
+}

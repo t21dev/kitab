@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Settings › About: version, Check for updates (asks GitHub for the latest release; on start-up and every six hours, which Check on start-up turns off), and links to the source, changelog, issues, privacy policy, licence and notices. A newer release shows an Update button in the title bar with its notes, Later and Download (opens the release page).
+- Settings › File types: whether Kitab is the default for PDF, EPUB, Markdown, MOBI, FB2, CBZ, XPS and text, with Set up on each type that isn't set up (Make default where another app has it), Set up all, Open Default apps, Explorer thumbnails status, and Remove to take Kitab's file types off your account.
+- Settings › Advanced: clear cached pages, clear reading history (keeps marks, bookmarks and open tabs; asks first), optimize the library database (shows the size before and after), and show the data folder.
 - Choose the quick dock's buttons (Settings › Appearance › Dock items): sidebar, back and forward, zoom, fit, find, bookmark, draw, rotate and minimal mode. More and the hide chevron always stay.
 - A Pages pane in the sidebar: thumbnails at each page's true shape, the current page ringed, bookmarked pages marked; only the visible ones render, and a click goes to the page.
 - The file info chip folds to a small i (its chevron, or Ctrl+I) and a click on the i unfolds it, remembered across launches.

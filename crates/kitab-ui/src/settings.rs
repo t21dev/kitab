@@ -297,6 +297,12 @@ pub struct Settings {
     pub file_info_folded: bool,
     /// The quick dock's buttons.
     pub dock_items: DockItems,
+    /// Ask GitHub for a newer release shortly after start-up and every six
+    /// hours (Settings › About › Check on start-up). On by default, the
+    /// owner's call (AGENTS.md rule 12); the switch turns it off.
+    pub update_check: bool,
+    /// A release the user put off with Later; its pill stays hidden.
+    pub skipped_update: String,
 }
 
 impl Settings {
@@ -368,6 +374,8 @@ impl Default for Settings {
             dock_hidden: false,
             file_info_folded: false,
             dock_items: DockItems::default(),
+            update_check: true,
+            skipped_update: String::new(),
         }
     }
 }
@@ -400,6 +408,8 @@ struct File {
     dock_hidden: bool,
     file_info_folded: bool,
     dock_items: DockItems,
+    check_for_updates: bool,
+    skipped_update: String,
 }
 
 /// Books open at this text size (12 pt reads as 16 px at 100 %).
@@ -445,6 +455,8 @@ impl From<Settings> for File {
             dock_hidden: s.dock_hidden,
             file_info_folded: s.file_info_folded,
             dock_items: s.dock_items,
+            check_for_updates: s.update_check,
+            skipped_update: s.skipped_update,
         }
     }
 }
@@ -483,6 +495,8 @@ impl Settings {
             dock_hidden: f.dock_hidden,
             file_info_folded: f.file_info_folded,
             dock_items: f.dock_items,
+            update_check: f.check_for_updates,
+            skipped_update: f.skipped_update.chars().take(32).collect(),
         })
     }
 
@@ -527,6 +541,8 @@ mod tests {
                 bookmark: true,
                 ..DockItems::default()
             },
+            update_check: false,
+            skipped_update: "0.2.0".into(),
         };
         assert_eq!(Settings::from_json(&s.to_json()), Ok(s));
     }

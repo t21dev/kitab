@@ -17,6 +17,9 @@ use gpui::{
 };
 use kitab_theme::{Accent, AccentPreset, Appearance, Density, Theme, hue_swatch};
 
+mod system;
+pub use system::{SystemInfo, UpdateState};
+
 /// The custom accent's hex field.
 pub struct HexState {
     /// The digits being typed (without '#'), while editing.
@@ -29,17 +32,30 @@ pub enum Section {
     #[default]
     Appearance,
     Reading,
+    FileTypes,
     Shortcuts,
+    Advanced,
+    About,
 }
 
 impl Section {
-    const ALL: [Section; 3] = [Section::Appearance, Section::Reading, Section::Shortcuts];
+    const ALL: [Section; 6] = [
+        Section::Appearance,
+        Section::Reading,
+        Section::FileTypes,
+        Section::Shortcuts,
+        Section::Advanced,
+        Section::About,
+    ];
 
     fn label(self) -> &'static str {
         match self {
             Section::Appearance => "Appearance",
             Section::Reading => "Reading",
+            Section::FileTypes => "File types",
             Section::Shortcuts => "Shortcuts",
+            Section::Advanced => "Advanced",
+            Section::About => "About",
         }
     }
 
@@ -47,7 +63,10 @@ impl Section {
         match self {
             Section::Appearance => "sun",
             Section::Reading => "book",
+            Section::FileTypes => "file",
             Section::Shortcuts => "keyboard",
+            Section::Advanced => "settings",
+            Section::About => "info",
         }
     }
 }
@@ -59,6 +78,7 @@ pub fn panel(
     st: &Style,
     themes: &[Theme],
     hex: &HexState,
+    sys: &SystemInfo,
     window: &Window,
 ) -> AnyElement {
     let rail = {
@@ -126,7 +146,10 @@ pub fn panel(
     let body = match section {
         Section::Appearance => appearance(&ws, st, themes, hex, window),
         Section::Reading => reading(&ws, st),
+        Section::FileTypes => system::file_types(&ws, sys, st),
         Section::Shortcuts => shortcuts_section(st),
+        Section::Advanced => system::advanced(&ws, sys, st),
+        Section::About => system::about(&ws, sys, st),
     };
     let close_ws = ws.clone();
     let main = div()
@@ -449,37 +472,6 @@ fn reading(ws: &WeakEntity<Workspace>, st: &Style) -> AnyElement {
             st,
         ))
         .child(group(
-            "Default app",
-            Some("Kitab opens PDF and Markdown files you double-click. Windows asks you to confirm in Default apps."),
-            well_row(
-                "Open PDF and Markdown files with Kitab",
-                "Registers Kitab for .pdf and .md for your account, then opens Default apps.",
-                div()
-                    .id("make-default")
-                    .h(px(28.0))
-                    .px(px(12.0))
-                    .flex()
-                    .items_center()
-                    .rounded(px(7.0))
-                    .bg(st.c(|c| c.raised))
-                    .shadow(st.elev())
-                    .text_size(px(12.5))
-                    .text_color(st.c(|c| c.text))
-                    .cursor_pointer()
-                    .hover(|b| b.bg(st.c(|c| c.hover)))
-                    .on_click({
-                        let ws = ws.clone();
-                        move |_, _, cx| {
-                            let _ = ws.update(cx, |ws, cx| ws.make_default(cx));
-                        }
-                    })
-                    .child("Make default…")
-                    .into_any_element(),
-                st,
-            ),
-            st,
-        ))
-        .child(group(
             "File info",
             Some("A line at the bottom left with the format, file size, pages and paper size. Point at it for the file's location."),
             well_row(
@@ -742,6 +734,17 @@ fn choice_card(
 }
 
 fn well_row(title: &str, body: &str, control: AnyElement, st: &Style) -> AnyElement {
+    icon_row(None, title, body, control, st)
+}
+
+/// A well row with a muted 18 px icon before its title.
+fn icon_row(
+    name: Option<&str>,
+    title: &str,
+    body: &str,
+    control: AnyElement,
+    st: &Style,
+) -> AnyElement {
     div()
         .flex()
         .items_center()
@@ -751,9 +754,19 @@ fn well_row(title: &str, body: &str, control: AnyElement, st: &Style) -> AnyElem
         .rounded(px(12.0))
         .bg(st.c(|c| c.panel))
         .shadow(st.well())
+        .children(name.map(|n| {
+            svg()
+                .path(icon(n))
+                .flex_none()
+                .size(px(18.0))
+                .mr(px(-4.0))
+                .text_color(st.c(|c| c.muted))
+        }))
         .child(
             div()
                 .flex_1()
+                // Long notes wrap instead of pushing the control out.
+                .min_w_0()
                 .flex()
                 .flex_col()
                 .gap(px(2.0))
@@ -770,7 +783,7 @@ fn well_row(title: &str, body: &str, control: AnyElement, st: &Style) -> AnyElem
                         .child(body.to_string()),
                 ),
         )
-        .child(control)
+        .child(div().flex_none().child(control))
         .into_any_element()
 }
 

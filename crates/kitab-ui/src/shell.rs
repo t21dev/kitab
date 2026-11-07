@@ -11,7 +11,7 @@ use crate::menu::{self, MenuItem, OpenMenu, Tool};
 use crate::motion;
 use crate::reader::{Reader, ReaderEvent, open_reader};
 use crate::settings::TabsAt;
-use crate::settings_view::{self, HexState, Section};
+use crate::settings_view::{self, HexState, Section, SystemInfo};
 use crate::style::Style;
 use crate::tooltip::Tip;
 use gpui::{
@@ -29,7 +29,9 @@ use std::sync::Arc;
 use std::time::Duration;
 
 mod save_page;
+mod system;
 mod tools_ui;
+pub use system::VERSION;
 use tools_ui::ToolsState;
 
 /// Writes settings.json (the app passes it in; called off the UI thread).
@@ -80,6 +82,8 @@ pub struct Workspace {
     peek: bool,
     /// What the sidebar shows for the document: contents or marks.
     side_pane: SidePane,
+    /// Settings › File types, Advanced and About, and the update check.
+    system: SystemInfo,
 }
 
 /// The sidebar's panes for a document.
@@ -144,6 +148,7 @@ impl Workspace {
             tab_scroll: gpui::ScrollHandle::new(),
             reveal_tab: false,
             peek: false,
+            system: SystemInfo::default(),
         };
         // Leaving the hex field ends the edit.
         let hex_blur = cx.on_blur(&this.hex.focus, window, |ws, _, cx| {
@@ -164,6 +169,7 @@ impl Workspace {
             window.focus(&this.focus);
         }
         this.refresh_recent(cx);
+        this.first_update_check(cx);
         this
     }
 
@@ -642,6 +648,7 @@ impl Workspace {
                         })),
                 )
             });
+        let pill = self.update_pill(st, cx);
         bar.child(
             div()
                 .id("drag")
@@ -651,6 +658,7 @@ impl Workspace {
                 .h_full()
                 .window_control_area(WindowControlArea::Drag),
         )
+        .children(pill)
         .child(window_button(
             "win-min",
             "win-min",
@@ -2052,11 +2060,12 @@ impl Workspace {
                         cx.open_url(page);
                     }
                     ws.toast(
-                        "Kitab is registered for PDF and Markdown. Pick it in Default apps.",
+                        "Kitab is set up for its file types. Pick it in Default apps.",
                         false,
                         None,
                         cx,
                     );
+                    ws.load_system_info(Section::FileTypes, cx);
                 }
                 Err(e) => ws.toast(format!("Couldn't register Kitab: {e}"), true, None, cx),
             });
@@ -2148,6 +2157,8 @@ impl Workspace {
         self.settings = Some(self.settings_section);
         self.settings_closing = None;
         self.settings_serial += 1;
+        self.system.confirm_clear = false;
+        self.load_system_info(self.settings_section, cx);
         window.focus(&self.overlay_focus);
         cx.notify();
     }
@@ -2224,6 +2235,8 @@ impl Workspace {
         if self.settings.is_some() {
             self.settings = Some(section);
         }
+        self.system.confirm_clear = false;
+        self.load_system_info(section, cx);
         cx.notify();
     }
 
@@ -2881,6 +2894,7 @@ impl Workspace {
         out.extend(self.toast_view(st, cx));
         out.extend(self.extract_view(st, window, cx));
         out.extend(self.save_page_view(st, window, cx));
+        out.extend(self.update_dialog(st, cx));
 
         if let Some(section) = self.settings.or(self.settings_closing) {
             let closing = self.settings.is_none();
@@ -2892,6 +2906,7 @@ impl Workspace {
                 st,
                 &self.themes,
                 &self.hex,
+                &self.system,
                 window,
             ));
             let (scrim, panel) = if closing {
@@ -3053,6 +3068,11 @@ fn file_item_reveal(path: &Path) -> MenuItem {
 }
 
 /// The tab's icon for a file's format (PDF, Markdown, books, comics, text, XPS).
+/// A document's icon by its format (tabs, Settings › File types).
+pub(crate) fn format_icon(path: &std::path::Path) -> &'static str {
+    tab_icon_for(path)
+}
+
 fn tab_icon_for(path: &std::path::Path) -> &'static str {
     use kitab_core::Format;
     let format = path

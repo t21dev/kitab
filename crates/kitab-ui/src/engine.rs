@@ -90,5 +90,8 @@ pub trait DocEngine: Send + Sync + 'static {
         let _ = (doc, layout);
         Err("this engine can't lay books out".into())
     }
+    /// Drop cached engine data (decoded fonts and images, parsed pages) that
+    /// no open page is using (Settings › Advanced › Clear cached pages).
+    fn shrink_caches(&self) {}
     fn close(&self, doc: DocHandle);
 }

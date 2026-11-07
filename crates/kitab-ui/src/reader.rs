@@ -11,6 +11,7 @@ mod editor;
 mod find;
 pub use bookmarks::BookmarkRow;
 pub use dock::TOP_INSET;
+pub use info::human_size;
 pub use marks_list::{MarkRow, MarkSource};
 mod geom;
 mod info;
@@ -1530,6 +1531,15 @@ impl Render for Reader {
             .children(self.markup_bar(&st, window, cx))
             .children(self.info_chip(&st))
             .children(self.writer(&st, cx))
+    }
+}
+
+impl Reader {
+    /// Settings › Advanced › Clear cached pages: drop every rendered page;
+    /// the visible ones render again on the next frame.
+    pub fn drop_cached_pages(&mut self, cx: &mut Context<Self>) {
+        self.cache.clear();
+        cx.notify();
     }
 }
 

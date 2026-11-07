@@ -71,6 +71,19 @@ pub trait Library: Send + Sync + 'static {
     fn remove_bookmark(&self, id: i64) {
         let _ = id;
     }
+    /// Forget the Recent list and saved reading positions (Settings ›
+    /// Advanced). Marks and bookmarks stay. Returns whether it worked.
+    fn clear_history(&self) -> bool {
+        false
+    }
+    /// Compact the database. Returns its size before and after, in bytes.
+    fn optimize(&self) -> Option<(u64, u64)> {
+        None
+    }
+    /// The database's size in bytes, if there is one.
+    fn size_bytes(&self) -> Option<u64> {
+        None
+    }
 }
 
 /// A library that remembers nothing (tests, or when the data folder can't be opened).

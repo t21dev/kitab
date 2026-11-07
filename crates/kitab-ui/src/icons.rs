@@ -247,6 +247,50 @@ const ICONS: &[(&str, &[u8])] = &[
         "icons/chevron-up.svg",
         include_bytes!("../../../assets/icons/chevron-up.svg"),
     ),
+    (
+        "icons/refresh.svg",
+        include_bytes!("../../../assets/icons/refresh.svg"),
+    ),
+    (
+        "icons/trash.svg",
+        include_bytes!("../../../assets/icons/trash.svg"),
+    ),
+    (
+        "icons/database.svg",
+        include_bytes!("../../../assets/icons/database.svg"),
+    ),
+    (
+        "icons/history.svg",
+        include_bytes!("../../../assets/icons/history.svg"),
+    ),
+    (
+        "icons/shield.svg",
+        include_bytes!("../../../assets/icons/shield.svg"),
+    ),
+    (
+        "icons/scale.svg",
+        include_bytes!("../../../assets/icons/scale.svg"),
+    ),
+    (
+        "icons/download.svg",
+        include_bytes!("../../../assets/icons/download.svg"),
+    ),
+    (
+        "icons/code.svg",
+        include_bytes!("../../../assets/icons/code.svg"),
+    ),
+    (
+        "icons/memory.svg",
+        include_bytes!("../../../assets/icons/memory.svg"),
+    ),
+    (
+        "icons/issue.svg",
+        include_bytes!("../../../assets/icons/issue.svg"),
+    ),
+    (
+        "icons/external.svg",
+        include_bytes!("../../../assets/icons/external.svg"),
+    ),
 ];
 
 pub struct Assets;

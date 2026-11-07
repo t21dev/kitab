@@ -33,6 +33,7 @@ mod marks;
 mod migrate;
 mod session;
 mod store;
+mod upkeep;
 
 pub use bookmarks::{Bookmark, BookmarkId};
 pub use documents::{DocMeta, DocumentId, DocumentRecord, RecentEntry};

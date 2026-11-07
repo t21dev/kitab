@@ -423,6 +423,7 @@ Each phase ends with its exit criteria green in CI and a minor release. A phase 
 
 - Tabs (pin, reorder, reopen closed, previews), session restore and the four startup modes, Home (continue reading, recent cards/list, library rail), Settings modal (General, Appearance with six themes, custom hex accent, density, icon style; Performance with Ultra mode and hardware acceleration), ⋯ menu, command palette, keymap.json and the Shortcuts page, cheat sheet.
 - Exit: D1–D4, E1–E3, F1–F7; S6, S7, S8, S14, S15 within budget; goldens for all themes.
+- Done alongside: Settings › File types (association status per format from the registry or `xdg-mime`, Make default, Default apps, Remove), Advanced (clear cached pages, clear reading history, optimize the database, data folder) and About (version, links, update check through the system's `curl` against GitHub's latest release, on by default per the owner, title-bar Update pill and notes dialog; `kitab-os/src/update.rs`).
 
 ### Phase 3: Find and navigation → `0.3.0`
 

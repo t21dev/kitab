@@ -90,12 +90,25 @@ pub const FILE_TYPES: &[FileType] = &[
     },
 ];
 
+/// Where one format stands with the system (Settings › File types).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct TypeStatus {
+    /// Kitab is listed as an app that opens it.
+    pub registered: bool,
+    /// Kitab is the default for its first extension; `None` when the system
+    /// doesn't say.
+    pub default: Option<bool>,
+    /// Explorer asks Kitab for its thumbnails (Windows).
+    pub thumbnails: bool,
+}
+
 #[cfg(windows)]
 mod imp {
-    use super::FILE_TYPES;
+    use super::{FILE_TYPES, TypeStatus};
     use windows::Win32::System::Registry::{
-        HKEY, HKEY_CURRENT_USER, KEY_WRITE, REG_OPTION_NON_VOLATILE, REG_SZ, RegCloseKey,
-        RegCreateKeyExW, RegDeleteTreeW, RegDeleteValueW, RegSetValueExW,
+        HKEY, HKEY_CURRENT_USER, KEY_WRITE, REG_OPTION_NON_VOLATILE, REG_SZ, RRF_RT_REG_SZ,
+        RegCloseKey, RegCreateKeyExW, RegDeleteTreeW, RegDeleteValueW, RegGetValueW,
+        RegSetValueExW,
     };
     use windows::Win32::UI::Shell::{SHCNE_ASSOCCHANGED, SHCNF_IDLIST, SHChangeNotify};
     use windows::core::HSTRING;
@@ -141,12 +154,73 @@ mod imp {
         }
     }
 
+    /// A string value under HKEY_CURRENT_USER, if it is there.
+    fn get(path: &str, name: Option<&str>) -> Option<String> {
+        let mut buf = [0u16; 512];
+        let mut len = (buf.len() * 2) as u32;
+        let name = name.map(HSTRING::from);
+        // SAFETY: reads one REG_SZ value into a stack buffer whose byte size
+        // is passed in `len`; the registry writes at most that many bytes.
+        let result = unsafe {
+            RegGetValueW(
+                HKEY_CURRENT_USER,
+                &HSTRING::from(path),
+                name.as_ref().map_or(windows::core::PCWSTR::null(), |n| {
+                    windows::core::PCWSTR(n.as_ptr())
+                }),
+                RRF_RT_REG_SZ,
+                None,
+                Some(buf.as_mut_ptr().cast()),
+                Some(&mut len),
+            )
+        };
+        if result.is_err() {
+            return None;
+        }
+        let chars = (len as usize / 2).min(buf.len());
+        let text = String::from_utf16_lossy(&buf[..chars]);
+        Some(text.trim_end_matches('\0').to_string())
+    }
+
+    /// Where each of FILE_TYPES stands, in the same order.
+    pub fn status() -> Vec<TypeStatus> {
+        FILE_TYPES
+            .iter()
+            .map(|t| {
+                let command = format!(r"Software\Classes\{}\shell\open\command", t.prog_id);
+                let choice = t.extensions.first().and_then(|ext| {
+                    let key = format!(
+                        r"Software\Microsoft\Windows\CurrentVersion\Explorer\FileExts\.{ext}\UserChoice"
+                    );
+                    get(&key, Some("ProgId"))
+                });
+                let slot = format!(r"Software\Classes\{}\ShellEx\{THUMB_SLOT}", t.prog_id);
+                TypeStatus {
+                    registered: get(&command, None).is_some(),
+                    default: Some(choice.as_deref() == Some(t.prog_id)),
+                    thumbnails: get(&slot, None).is_some_and(|c| c.eq_ignore_ascii_case(THUMB_CLSID)),
+                }
+            })
+            .collect()
+    }
+
     /// Register Kitab for its file types for the current user.
     pub fn register() -> Result<(), String> {
+        register_types(&FILE_TYPES.iter().collect::<Vec<_>>())
+    }
+
+    /// Register Kitab for one format only (Settings › File types › Set up),
+    /// with the app entry it needs.
+    pub fn register_one(index: usize) -> Result<(), String> {
+        let t = FILE_TYPES.get(index).ok_or("no such file type")?;
+        register_types(&[t])
+    }
+
+    fn register_types(types: &[&super::FileType]) -> Result<(), String> {
         let exe = std::env::current_exe().map_err(|e| e.to_string())?;
         let exe = exe.to_string_lossy().to_string();
         let open = format!("\"{exe}\" \"%1\"");
-        for t in FILE_TYPES {
+        for t in types {
             let classes = format!(r"Software\Classes\{}", t.prog_id);
             set(&classes, None, t.description)?;
             set(
@@ -172,7 +246,7 @@ mod imp {
         set(
             CAPABILITIES,
             Some("ApplicationDescription"),
-            "A fast, native reader for PDF and Markdown",
+            "A fast, native reader for PDF, books and Markdown",
         )?;
         set(
             r"Software\RegisteredApplications",
@@ -192,7 +266,7 @@ mod imp {
         // Thumbnails, when kitab_shell.dll ships next to kitab.exe.
         let dll = std::path::Path::new(&exe).with_file_name("kitab_shell.dll");
         if dll.exists() {
-            let ids: Vec<&str> = FILE_TYPES.iter().map(|t| t.prog_id).collect();
+            let ids: Vec<&str> = types.iter().map(|t| t.prog_id).collect();
             register_thumbnails(&dll, &ids)?;
         }
         // SAFETY: tells Explorer the associations changed; no pointers passed.
@@ -306,22 +380,52 @@ mod imp {
 
 #[cfg(target_os = "linux")]
 mod imp {
-    use super::FILE_TYPES;
+    use super::{FILE_TYPES, TypeStatus};
+
+    /// Where each of FILE_TYPES stands: `xdg-mime query default` per type.
+    pub fn status() -> Vec<TypeStatus> {
+        FILE_TYPES
+            .iter()
+            .map(|t| {
+                let app = std::process::Command::new("xdg-mime")
+                    .args(["query", "default", t.mime])
+                    .output()
+                    .ok()
+                    .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string());
+                TypeStatus {
+                    registered: true,
+                    default: app.map(|a| a == "dev.t21.kitab.desktop"),
+                    thumbnails: true,
+                }
+            })
+            .collect()
+    }
 
     /// Linux: the package installs the .desktop file and icons; this sets
     /// Kitab as the default with `xdg-mime` for each type.
-    pub fn register() -> Result<(), String> {
-        for t in FILE_TYPES.iter().filter(|t| t.claim_default) {
-            let ok = std::process::Command::new("xdg-mime")
-                .args(["default", "dev.t21.kitab.desktop", t.mime])
-                .status()
-                .map_err(|e| format!("xdg-mime: {e}"))?
-                .success();
-            if !ok {
-                return Err(format!("xdg-mime could not set {}", t.mime));
-            }
+    pub fn register_one(index: usize) -> Result<(), String> {
+        let t = FILE_TYPES.get(index).ok_or("no such file type")?;
+        set_default(t.mime)
+    }
+
+    fn set_default(mime: &str) -> Result<(), String> {
+        let ok = std::process::Command::new("xdg-mime")
+            .args(["default", "dev.t21.kitab.desktop", mime])
+            .status()
+            .map_err(|e| format!("xdg-mime: {e}"))?
+            .success();
+        if ok {
+            Ok(())
+        } else {
+            Err(format!("xdg-mime could not set {mime}"))
         }
-        Ok(())
+    }
+
+    pub fn register() -> Result<(), String> {
+        FILE_TYPES
+            .iter()
+            .filter(|t| t.claim_default)
+            .try_for_each(|t| set_default(t.mime))
     }
 
     pub fn unregister() {}
@@ -331,6 +435,24 @@ mod imp {
 
 #[cfg(target_os = "macos")]
 mod imp {
+    use super::{FILE_TYPES, TypeStatus};
+
+    /// macOS: Info.plist declares the types; the default isn't queried yet.
+    pub fn status() -> Vec<TypeStatus> {
+        FILE_TYPES
+            .iter()
+            .map(|_| TypeStatus {
+                registered: true,
+                default: None,
+                thumbnails: false,
+            })
+            .collect()
+    }
+
+    pub fn register_one(_index: usize) -> Result<(), String> {
+        Ok(())
+    }
+
     /// macOS: Info.plist declares the types; the user picks Kitab in Finder's
     /// Get Info › Open with. (NSWorkspace.setDefaultApplication comes with the
     /// macOS build.)
@@ -343,12 +465,18 @@ mod imp {
     pub const DEFAULTS_PAGE: &str = "";
 }
 
-pub use imp::{DEFAULTS_PAGE, register, unregister};
+pub use imp::{DEFAULTS_PAGE, register, register_one, status, unregister};
 #[cfg(windows)]
 pub use imp::{register_thumbnails, unregister_thumbnails};
 
 #[cfg(all(test, windows))]
 mod tests {
+    /// Read-only: one answer per format, and reading never writes.
+    #[test]
+    fn status_covers_every_type() {
+        assert_eq!(super::status().len(), super::FILE_TYPES.len());
+    }
+
     /// Writes to the current user's registry, then removes it again. Run by
     /// hand: `cargo test -p kitab-os -- --ignored register_round_trip`.
     #[test]
@@ -364,7 +492,10 @@ mod tests {
             .output()
             .expect("reg runs");
         let text = String::from_utf8_lossy(&out.stdout).to_string();
+        let pdf = super::status()[0];
         super::unregister();
+        assert!(pdf.registered, "status sees the registration");
+        assert!(!super::status()[0].registered, "and sees it go");
         assert!(text.contains(",-101"), "{text}");
         let gone = std::process::Command::new("reg")
             .args(["query", r"HKCU\Software\Classes\Kitab.PDF"])

@@ -43,6 +43,10 @@ pub struct Style {
     pub file_info_folded: bool,
     /// The quick dock's buttons.
     pub dock_items: crate::settings::DockItems,
+    /// Check for updates automatically (opt-in).
+    pub update_check: bool,
+    /// The release put off with Later.
+    pub skipped_update: String,
 }
 
 impl Global for Style {}
@@ -77,6 +81,8 @@ impl Style {
             dock_hidden: s.dock_hidden,
             file_info_folded: s.file_info_folded,
             dock_items: s.dock_items,
+            update_check: s.update_check,
+            skipped_update: s.skipped_update.clone(),
         };
         style.resolve_accent();
         style
@@ -126,6 +132,8 @@ impl Style {
             dock_hidden: self.dock_hidden,
             file_info_folded: self.file_info_folded,
             dock_items: self.dock_items,
+            update_check: self.update_check,
+            skipped_update: self.skipped_update.clone(),
         }
     }
 
