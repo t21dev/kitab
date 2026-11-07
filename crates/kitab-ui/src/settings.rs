@@ -152,6 +152,7 @@ pub struct DockItems {
     pub rotate: bool,
     pub bookmark: bool,
     pub minimal: bool,
+    pub print: bool,
 }
 
 impl Default for DockItems {
@@ -166,6 +167,7 @@ impl Default for DockItems {
             rotate: true,
             bookmark: false,
             minimal: false,
+            print: false,
         }
     }
 }
@@ -185,6 +187,7 @@ pub struct TitleItems {
     pub rotate: bool,
     pub bookmark: bool,
     pub minimal: bool,
+    pub print: bool,
     pub more: bool,
 }
 
@@ -199,6 +202,7 @@ impl TitleItems {
         rotate: false,
         bookmark: false,
         minimal: false,
+        print: false,
         more: false,
     };
 }

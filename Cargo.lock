@@ -3067,6 +3067,7 @@ dependencies = [
  "kitab-core",
  "kitab-mupdf",
  "kitab-os",
+ "kitab-print",
  "kitab-store",
  "kitab-theme",
  "kitab-thumb",
@@ -3123,6 +3124,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "kitab-print"
+version = "0.0.1"
+dependencies = [
+ "windows 0.61.3",
+]
+
+[[package]]
 name = "kitab-shell"
 version = "0.0.1"
 dependencies = [
@@ -3174,13 +3182,16 @@ dependencies = [
  "kitab-core",
  "kitab-md",
  "kitab-os",
+ "kitab-print",
  "kitab-theme",
  "log",
  "lyon_tessellation",
  "mermaid-svg",
+ "raw-window-handle",
  "resvg",
  "serde",
  "serde_json",
+ "smol",
 ]
 
 [[package]]

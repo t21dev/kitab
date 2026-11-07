@@ -520,7 +520,7 @@ type Slot = (
 /// One row per toolbar button: title bar, dock or off. More can't be off;
 /// the dock's hide chevron always stays.
 fn toolbar_rows(ws: &WeakEntity<Workspace>, st: &Style) -> AnyElement {
-    let rows: [(&'static str, Slot); 9] = [
+    let rows: [(&'static str, Slot); 10] = [
         ("Sidebar", (|d| &mut d.sidebar, |t| &mut t.sidebar)),
         ("Back and forward", (|d| &mut d.history, |t| &mut t.history)),
         ("Zoom", (|d| &mut d.zoom, |t| &mut t.zoom)),
@@ -530,6 +530,7 @@ fn toolbar_rows(ws: &WeakEntity<Workspace>, st: &Style) -> AnyElement {
         ("Draw and mark up", (|d| &mut d.markup, |t| &mut t.markup)),
         ("Rotate", (|d| &mut d.rotate, |t| &mut t.rotate)),
         ("Minimal mode", (|d| &mut d.minimal, |t| &mut t.minimal)),
+        ("Print", (|d| &mut d.print, |t| &mut t.print)),
     ];
     let mut col = div().flex().flex_col().gap(px(8.0));
     for (label, (dock, title)) in rows {
@@ -655,7 +656,7 @@ fn code_preview(t: kitab_theme::CodeTheme, st: &Style) -> AnyElement {
 
 // ── pieces ───────────────────────────────────────────────────────────────
 
-type Click = Box<dyn Fn(&mut Window, &mut App)>;
+pub(crate) type Click = Box<dyn Fn(&mut Window, &mut App)>;
 
 /// A click handler that changes the look and saves settings.json.
 fn change(ws: &WeakEntity<Workspace>, f: impl Fn(&mut Style) + 'static) -> Click {
@@ -820,7 +821,7 @@ fn icon_row(
 }
 
 /// A row of choices, one of them on (Settings › Reading › Books).
-fn segmented(choices: Vec<(SharedString, bool, Click)>, st: &Style) -> AnyElement {
+pub(crate) fn segmented(choices: Vec<(SharedString, bool, Click)>, st: &Style) -> AnyElement {
     let mut row = div()
         .flex()
         .flex_none()

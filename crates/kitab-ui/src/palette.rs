@@ -65,6 +65,7 @@ pub const COMMANDS: &[Command] = &[
         true,
         ToggleSplit
     ),
+    cmd!("File", "Print…", "printer paper", true, Print),
     // Navigate
     cmd!("Go", "Go to page…", "jump number", true, GoToPage),
     cmd!("Go", "Next page", "forward down", true, NextPage),

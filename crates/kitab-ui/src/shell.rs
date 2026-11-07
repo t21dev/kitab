@@ -29,6 +29,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 mod palette_ui;
+mod print_ui;
 mod save_page;
 mod system;
 mod title_actions;
@@ -105,6 +106,9 @@ pub struct Workspace {
     born: std::time::Instant,
     /// The window is too narrow for the title-bar buttons: only More shows.
     title_squeezed: bool,
+    /// The print sheet (Ctrl+P), when open.
+    print: Option<print_ui::PrintSheet>,
+    print_serial: u64,
 }
 
 /// The sidebar's panes for a document.
@@ -176,6 +180,8 @@ impl Workspace {
             sidebar_w: crate::layout::SIDEBAR_W,
             born: std::time::Instant::now(),
             title_squeezed: false,
+            print: None,
+            print_serial: 0,
         };
         // Leaving the hex field ends the edit.
         let hex_blur = cx.on_blur(&this.hex.focus, window, |ws, _, cx| {
@@ -1929,6 +1935,7 @@ impl Render for Workspace {
                 .key_context(WORKSPACE)
                 .size_full()
                 .on_action(cx.listener(|ws, _: &Present, window, cx| ws.toggle_present(window, cx)))
+                .on_action(cx.listener(|ws, _: &Print, window, cx| ws.open_print(window, cx)))
                 .child(reader)
                 .into_any_element();
         }
@@ -2673,6 +2680,13 @@ impl Workspace {
             .key("F11")
             .checked(Style::get(cx).minimal),
             MenuItem::new(
+                "Print…",
+                self.on_ws(cx, |ws, window, cx| ws.open_print(window, cx)),
+            )
+            .icon("print")
+            .key("Ctrl+P")
+            .disabled(self.active.is_none()),
+            MenuItem::new(
                 "Command palette",
                 self.on_ws(cx, |ws, window, cx| ws.open_palette(window, cx)),
             )
@@ -3074,6 +3088,7 @@ impl Workspace {
         out.extend(self.save_page_view(st, window, cx));
         out.extend(self.update_dialog(st, cx));
         out.extend(self.palette_view(st, cx));
+        out.extend(self.print_view(st, cx));
 
         if let Some(section) = self.settings.or(self.settings_closing) {
             let closing = self.settings.is_none();

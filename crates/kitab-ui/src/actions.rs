@@ -81,6 +81,8 @@ actions!(
         OpenKeymap,
         // Presentation mode
         Present,
+        // Printing
+        Print,
         // PDF tools
         ExtractPages,
         ToggleSplit,
@@ -145,6 +147,7 @@ pub fn bind_default_keys(cx: &mut App) {
         KeyBinding::new("ctrl-shift-l", CycleTheme, w),
         KeyBinding::new("f11", ToggleMinimal, w),
         KeyBinding::new("f5", Present, w),
+        KeyBinding::new("ctrl-p", Print, w),
         // Navigate (SumatraPDF-compatible where Sumatra has a binding)
         KeyBinding::new("ctrl-shift-d", ToggleMarkup, r),
         KeyBinding::new("h", HighlightSelection, r),

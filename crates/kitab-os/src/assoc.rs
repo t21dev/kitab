@@ -229,6 +229,15 @@ mod imp {
                 &format!("\"{exe}\",-{}", t.icon_id),
             )?;
             set(&format!(r"{classes}\shell\open\command"), None, &open)?;
+            // Explorer's Print: printed without opening a window (not Markdown,
+            // which prints from a later version, nor plain text).
+            if !matches!(t.prog_id, "Kitab.Text" | "Kitab.Markdown") {
+                set(
+                    &format!(r"{classes}\shell\print\command"),
+                    None,
+                    &format!("\"{exe}\" --print \"%1\""),
+                )?;
+            }
             for ext in t.extensions {
                 set(
                     &format!(r"Software\Classes\.{ext}\OpenWithProgids"),

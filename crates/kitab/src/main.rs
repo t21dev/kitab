@@ -7,6 +7,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod adapters;
+mod print_cli;
 
 use gpui::{AppContext, Application};
 use kitab_ui::{DocEngine, FirstPaint, Library};
@@ -14,6 +15,14 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 fn main() {
+    // Print without a window (Explorer's Print verb, PLAN.md §3.8).
+    if std::env::args_os().nth(1).is_some_and(|a| a == "--print") {
+        let args: Option<Vec<String>> = std::env::args_os()
+            .skip(2)
+            .map(|a| a.into_string().ok())
+            .collect();
+        std::process::exit(args.map_or(1, |a| print_cli::run(&a)));
+    }
     // File-manager thumbnails (PLAN.md §3.9): a separate short-lived process
     // the shell starts; no settings, no instance check, no window.
     if std::env::args_os()

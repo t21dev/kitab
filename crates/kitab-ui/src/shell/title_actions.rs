@@ -22,7 +22,7 @@ pub(super) fn count(t: TitleItems, has_doc: bool) -> usize {
         return usize::from(t.more);
     }
     [
-        t.sidebar, t.find, t.bookmark, t.markup, t.rotate, t.minimal, t.more,
+        t.sidebar, t.find, t.bookmark, t.markup, t.rotate, t.minimal, t.print, t.more,
     ]
     .iter()
     .filter(|b| **b)
@@ -196,6 +196,15 @@ impl Workspace {
                         false,
                         "Rotate  Ctrl+Shift+=",
                         Box::new(RotateRight),
+                    ))
+                })
+                .when(t.print, |d| {
+                    d.child(button(
+                        "t-print",
+                        "print",
+                        false,
+                        "Print  Ctrl+P",
+                        Box::new(Print),
                     ))
                 })
                 .when(t.minimal, |d| {

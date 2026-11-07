@@ -110,6 +110,7 @@ pub const GROUPS: &[Group] = &[
         title: "App",
         rows: &[
             ("Command palette", "Ctrl+K / Ctrl+Shift+P"),
+            ("Print", "Ctrl+P"),
             ("Settings", "Ctrl+,"),
             ("Keyboard shortcuts", "Ctrl+/"),
             ("Close a menu or dialog", "Esc"),

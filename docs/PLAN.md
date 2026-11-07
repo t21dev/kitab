@@ -466,6 +466,7 @@ Each phase ends with its exit criteria green in CI and a minor release. A phase 
 
 - Print sheet + native dialogs on Windows, macOS and Linux, per-page orientation, ranges, restrictions, shell print verb.
 - Exit: J1–J4 on all three OSes.
+- Done on Windows: `kitab-print` (placement: fit, actual, shrink, auto-rotate per page, tested; `PrintDlgEx` + GDI `StartDoc`/`StretchDIBits` per page at the printer's resolution capped at 300 dpi; `print_pages` shared by the sheet and `kitab --print`), the print sheet (`shell/print_ui.rs`), Explorer's Print verb, and J4 (`print_to_pdf_writes_every_page`, by hand: the Microsoft Print to PDF driver writes every page). Still to do: macOS (`NSPrintOperation`) and Linux (`GtkPrintOperation`), banded rendering for very large pages, annotations on/off.
 
 ### Phase 8: Signatures → `0.8.0`
 

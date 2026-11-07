@@ -794,6 +794,27 @@ impl Reader {
         self.pages.reveal = true;
     }
 
+    /// What printing needs: the open document and its page sizes, or why
+    /// this tab can't print.
+    pub fn print_source(&self) -> Result<(DocHandle, Vec<SizePt>), &'static str> {
+        if self.md.is_some() {
+            return Err("Printing Markdown comes in a later version.");
+        }
+        let (Some(doc), Some(info)) = (self.doc, self.info.as_ref()) else {
+            return Err("The document isn't open yet.");
+        };
+        if self.status != Status::Open {
+            return Err("The document isn't open yet.");
+        }
+        if !info.permissions.print {
+            return Err("This PDF's owner doesn't allow printing it.");
+        }
+        let sizes = (0..self.page_count())
+            .map(|i| self.page_size_pt(i))
+            .collect();
+        Ok((doc, sizes))
+    }
+
     pub fn is_markdown(&self) -> bool {
         self.md.is_some()
     }
