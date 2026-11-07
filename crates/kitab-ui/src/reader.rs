@@ -1657,6 +1657,11 @@ pub fn open_reader(
     cx.new(|cx| Reader::new(path, engine, library, window, cx))
 }
 
+/// A code token's colour with the current code palette (Settings previews).
+pub fn code_color(st: &Style, kind: kitab_md::TokenKind) -> gpui::Hsla {
+    markdown::token_color(st, kind)
+}
+
 /// Files Kitab reads as Markdown.
 pub fn is_markdown_path(path: &std::path::Path) -> bool {
     path.extension()

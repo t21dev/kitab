@@ -30,6 +30,7 @@ pub struct Style {
     pub minimal: bool,
     pub sidebar_open: bool,
     pub dock_compact: bool,
+    pub code_theme: kitab_theme::CodeTheme,
 }
 
 impl Global for Style {}
@@ -57,6 +58,7 @@ impl Style {
             minimal: false,
             sidebar_open: s.sidebar,
             dock_compact: s.dock_compact,
+            code_theme: s.code_theme,
         };
         style.resolve_accent();
         style
@@ -99,6 +101,7 @@ impl Style {
             sidebar: self.sidebar_open,
             flat: self.ultra,
             dock_compact: self.dock_compact,
+            code_theme: self.code_theme,
         }
     }
 
@@ -122,6 +125,12 @@ impl Style {
         } else {
             0.0
         }
+    }
+
+    /// The code palette for this theme, or `None` to use the theme's tokens.
+    pub fn code_palette(&self) -> Option<kitab_theme::CodePalette> {
+        let dark = self.theme.appearance != kitab_theme::Appearance::Light;
+        self.code_theme.palette(dark)
     }
 
     /// Apply a layout preset to everything it covers.

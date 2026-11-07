@@ -474,7 +474,21 @@ fn list_el(
 }
 
 /// Theme colour for a kind of code token.
-fn token_color(st: &Style, kind: TokenKind) -> Hsla {
+pub(crate) fn token_color(st: &Style, kind: TokenKind) -> Hsla {
+    if let Some(p) = st.code_palette() {
+        let c = match kind {
+            TokenKind::Plain => p.plain,
+            TokenKind::Keyword => p.keyword,
+            TokenKind::String => p.string,
+            TokenKind::Comment => p.comment,
+            TokenKind::Number => p.number,
+            TokenKind::Function => p.function,
+            TokenKind::Type => p.type_,
+            TokenKind::Tag => p.tag,
+            TokenKind::Punctuation => p.punctuation,
+        };
+        return crate::style::hsla(c);
+    }
     match kind {
         TokenKind::Plain => st.c(|c| c.text),
         TokenKind::Keyword => st.c(|c| c.accent),
@@ -551,7 +565,9 @@ fn code_el(
         .rounded(px(10.0))
         .border_1()
         .border_color(st.c(|c| c.line))
-        .bg(st.c(|c| c.panel))
+        .bg(st
+            .code_palette()
+            .map_or(st.c(|c| c.panel), |p| crate::style::hsla(p.background)))
         .child(
             div()
                 .flex()
@@ -596,7 +612,7 @@ fn code_el(
                         .font_family(MONO_FONT)
                         .text_size(d.px(BODY * 0.85))
                         .line_height(relative(1.5))
-                        .text_color(st.c(|c| c.text))
+                        .text_color(token_color(st, TokenKind::Plain))
                         .children({
                             let mut at = 0;
                             text.split('\n')

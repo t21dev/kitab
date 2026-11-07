@@ -6,11 +6,13 @@
 //! rule 16).
 
 mod accent;
+mod code;
 mod color;
 mod density;
 mod theme;
 
 pub use accent::{Accent, AccentPreset, hue_swatch};
+pub use code::{CodePalette, CodeTheme};
 pub use color::{Rgba, accent_for_contrast, contrast_ratio};
 pub use density::{Density, DensityMetrics};
 pub use theme::{

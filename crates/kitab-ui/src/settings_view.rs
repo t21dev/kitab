@@ -189,12 +189,13 @@ pub fn panel(
                 ),
         );
 
+    // Sized from the window: the panel sits in auto-sized wrappers (motion),
+    // so a relative max width would resolve against its own content.
+    let vp = window.viewport_size();
     div()
         .id("settings")
-        .w(px(900.0))
-        .max_w(relative(0.94))
-        .h(px(600.0))
-        .max_h(relative(0.9))
+        .w(px(900.0).min(vp.width * 0.94))
+        .h(px(600.0).min(vp.height * 0.9))
         .flex()
         .rounded(px(16.0))
         .overflow_hidden()
@@ -411,6 +412,19 @@ fn reading(ws: &WeakEntity<Workspace>, st: &Style) -> AnyElement {
             change(ws, move |s| s.page_corners = c),
         ));
     }
+    let mut code_cards = div().flex().flex_wrap().gap(px(12.0));
+    for (ix, t) in kitab_theme::CodeTheme::ALL.into_iter().enumerate() {
+        code_cards = code_cards.child(choice_card(
+            ("code-theme", ix).into(),
+            st.code_theme == t,
+            t.label().into(),
+            Some(t.hint()),
+            code_preview(t, st),
+            150.0,
+            st,
+            change(ws, move |s| s.code_theme = t),
+        ));
+    }
     div()
         .flex()
         .flex_col()
@@ -422,6 +436,12 @@ fn reading(ws: &WeakEntity<Workspace>, st: &Style) -> AnyElement {
             st,
         ))
         .child(group("Page corners", None, corner_cards, st))
+        .child(group(
+            "Code colours",
+            Some("Syntax colours in Markdown code blocks."),
+            code_cards,
+            st,
+        ))
         .child(group(
             "Default app",
             Some("Kitab opens PDF and Markdown files you double-click. Windows asks you to confirm in Default apps."),
@@ -486,6 +506,50 @@ fn minimal_rows(ws: &WeakEntity<Workspace>, st: &Style) -> AnyElement {
             h.page_navigator,
             |s| s.minimal_hides.page_navigator = !s.minimal_hides.page_navigator,
         ))
+        .into_any_element()
+}
+
+/// A few lines of Rust in a code palette.
+fn code_preview(t: kitab_theme::CodeTheme, st: &Style) -> AnyElement {
+    let mut preview = st.clone();
+    preview.code_theme = t;
+    let k = |kind| crate::reader::code_color(&preview, kind);
+    use kitab_md::TokenKind as K;
+    let line = |parts: Vec<(&'static str, K)>| {
+        let mut row = div().flex().whitespace_nowrap();
+        for (text, kind) in parts {
+            row = row.child(div().text_color(k(kind)).child(text));
+        }
+        row
+    };
+    let bg = preview
+        .code_palette()
+        .map_or(st.c(|c| c.panel), |p| crate::style::hsla(p.background));
+    div()
+        .size_full()
+        .px(px(10.0))
+        .py(px(8.0))
+        .bg(bg)
+        .flex()
+        .flex_col()
+        .font_family("Consolas")
+        .text_size(px(10.5))
+        .line_height(px(15.0))
+        .child(line(vec![("// cache", K::Comment)]))
+        .child(line(vec![
+            ("fn ", K::Keyword),
+            ("evict", K::Function),
+            ("(n: ", K::Plain),
+            ("u32", K::Type),
+            (") {", K::Punctuation),
+        ]))
+        .child(line(vec![
+            ("  let s = ", K::Plain),
+            ("\"kitab\"", K::String),
+            (";", K::Punctuation),
+        ]))
+        .child(line(vec![("  n + ", K::Plain), ("42", K::Number)]))
+        .child(line(vec![("}", K::Punctuation)]))
         .into_any_element()
 }
 

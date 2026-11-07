@@ -5,7 +5,7 @@
 //! old and hand-edited files keep working. The app reads the file before the
 //! first frame (the theme is needed to draw it) and writes it off the UI thread.
 
-use kitab_theme::{Accent, Density};
+use kitab_theme::{Accent, CodeTheme, Density};
 use serde::{Deserialize, Serialize};
 
 /// The settings format version, independent of the app version (PLAN.md §11).
@@ -249,6 +249,8 @@ pub struct Settings {
     pub flat: bool,
     /// The dock keeps only zoom, find and ⋯.
     pub dock_compact: bool,
+    /// Colours of code blocks in Markdown.
+    pub code_theme: CodeTheme,
 }
 
 impl Settings {
@@ -313,6 +315,7 @@ impl Default for Settings {
             sidebar: true,
             flat: false,
             dock_compact: false,
+            code_theme: CodeTheme::Kitab,
         }
     }
 }
@@ -336,6 +339,8 @@ struct File {
     sidebar_open: bool,
     flat: bool,
     dock_compact: bool,
+    /// A `CodeTheme` id ("kitab", "github", …).
+    code_colours: String,
 }
 
 impl Default for File {
@@ -361,6 +366,7 @@ impl From<Settings> for File {
             sidebar_open: s.sidebar,
             flat: s.flat,
             dock_compact: s.dock_compact,
+            code_colours: s.code_theme.id().to_string(),
         }
     }
 }
@@ -391,6 +397,8 @@ impl Settings {
             sidebar: f.sidebar_open,
             flat: f.flat,
             dock_compact: f.dock_compact,
+            // A palette Kitab doesn't know falls back to the theme's colours.
+            code_theme: CodeTheme::from_id(&f.code_colours).unwrap_or_default(),
         })
     }
 
@@ -424,6 +432,7 @@ mod tests {
             sidebar: false,
             flat: true,
             dock_compact: true,
+            code_theme: CodeTheme::Dracula,
         };
         assert_eq!(Settings::from_json(&s.to_json()), Ok(s));
     }
