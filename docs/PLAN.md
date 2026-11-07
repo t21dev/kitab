@@ -393,7 +393,7 @@ Modelled on Turbo Reader's workflows.
 ## 11. Versioning and changes
 
 - **Semantic Versioning 2.0.0.** The version lives once, in the workspace `Cargo.toml` (`[workspace.package] version`). The app, installers, About and the landing site read it from there.
-- Before 1.0: each phase ships as a minor (`0.1.0`, `0.2.0`, …). Fixes are patches. Breaking changes to settings, keymap or database are allowed but must migrate automatically.
+- **The first release is `0.1.0`** (owner's decision): nothing is released before it, and it ships everything on `main` when it is cut, which by then is more than Phase 1 (formats, Markdown, find and the shell are already in). After it, each release is a minor (`0.2.0`, `0.3.0`, …) and the phase labels in §12 are the order of work, not fixed version numbers. Fixes are patches. Breaking changes to settings, keymap or database are allowed but must migrate automatically.
 - From 1.0: MAJOR for removed features or a data migration that can't roll back, MINOR for features, PATCH for fixes. Pre-releases are `1.1.0-beta.1`.
 - **Conventional Commits** (`feat:`, `fix:`, `perf:`, `docs:`, `test:`, `chore:`, `refactor:`, `build:`, `ci:`, with `!` for breaking). Every user-visible change adds a line under `## [Unreleased]` in [CHANGELOG.md](../CHANGELOG.md) (Keep a Changelog) in the same commit. A release commit `chore(release): X.Y.Z` moves Unreleased into a version section and tags `vX.Y.Z`.
 - Database schema and settings format each carry their own version and migrations, independent of the app version.
@@ -404,7 +404,7 @@ Modelled on Turbo Reader's workflows.
 
 Each phase ends with its exit criteria green in CI and a minor release. A phase does not start until the previous one's exit criteria pass, except Phase 0 spikes, which run in parallel.
 
-### Phase 0: Foundations and spikes → `0.0.x`
+### Phase 0: Foundations and spikes (not released)
 
 - Repo, workspace, CI (`build.yml`), `cargo deny`, licence headers, fixtures in CI, landing skeleton on the `landing` branch deployed to Cloudflare Workers.
 - **Spike A (go/no-go):** GPUI window on Windows, MuPDF renders `01` page 1 into a GPUI image (`RenderImage` / `paint_image`), scroll 40 pages. Measure S1/S2 against SumatraPDF and record `docs/perf/baseline.md`. **Gate:** projected S1/S2 within budget, or a written reason and plan.
