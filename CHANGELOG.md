@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Password (the lock in the title bar, ⋯ › Password…, or the palette): put a password on a PDF, change it, or take it off. Kitab saves a new copy (AES-256) and leaves the open file alone. A PDF whose owner restricts it keeps its password unless it was opened with the owner password. The password fields show dots and refuse copy and cut, and the password is never stored.
 - Print (Ctrl+P, ⋯ › Print…, the palette, or a toolbar button): choose all pages, this page or a range, fit to paper, actual size or shrink to fit, and whether pages turn to match the paper; then the system print dialog picks the printer and copies. Pages are drawn at the printer's resolution (up to 300 dpi) in the background, with progress in a toast. PDFs that forbid printing say so. On macOS and Linux the sheet also lists the printers CUPS knows (the default chosen) and takes the copies; the pages go to the printer as a PDF of vector pages.
 - `kitab --print <file> [--printer NAME] [--to FILE]` prints without a window, and Explorer's right-click Print uses it once Kitab is set up for the file type. On macOS and Linux it prints through CUPS, and `--to` keeps the PDF it would have sent.
 - Delete annotations a PDF already has: the bin on a row of the Marks pane, or the eraser on the page. They are outlined in red until you save (Ctrl+S or the dock's Save, which counts them), when they are taken out of the file incrementally; the arrow on the row keeps one after all.

@@ -155,6 +155,16 @@ impl DocEngine for MupdfEngine {
         kitab_mupdf::tools::extract_pages(src, password, pages, out)
     }
 
+    fn set_password(
+        &self,
+        src: &Path,
+        password: Option<&str>,
+        new_password: Option<&str>,
+        out: &Path,
+    ) -> Result<(), String> {
+        kitab_mupdf::tools::set_password(src, password, new_password, out)
+    }
+
     fn merge(&self, inputs: &[(PathBuf, Option<String>)], out: &Path) -> Result<u32, String> {
         kitab_mupdf::tools::merge(inputs, out)
     }

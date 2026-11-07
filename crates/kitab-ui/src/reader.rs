@@ -92,6 +92,10 @@ pub enum ReaderEvent {
     BookText(f32),
     /// Presentation mode started or ended (the workspace goes full screen).
     Presenting(bool),
+    /// The dock's Print button.
+    Print,
+    /// The dock's Password button.
+    Password,
 }
 
 /// What "Save page as…" writes.
@@ -823,6 +827,19 @@ impl Reader {
         self.info
             .as_ref()
             .is_some_and(|i| i.format == kitab_core::Format::Pdf)
+    }
+
+    /// A PDF's lock: whether it has a password (or an owner's lock), and
+    /// whether its owner restricts what this unlock may do. `None` for other
+    /// formats.
+    pub fn lock_state(&self) -> Option<(bool, bool)> {
+        let i = self
+            .info
+            .as_ref()
+            .filter(|i| i.format == kitab_core::Format::Pdf)?;
+        let p = &i.permissions;
+        let full = p.print && p.copy && p.annotate && p.fill_forms && p.modify && p.assemble;
+        Some((i.encryption.is_some(), !full))
     }
 
     /// Save one page as PNG (at `dpi`), plain text or a one-page PDF, at `out`.

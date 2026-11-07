@@ -83,6 +83,8 @@ actions!(
         Present,
         // Printing
         Print,
+        // A PDF's password
+        PdfPassword,
         // PDF tools
         ExtractPages,
         ToggleSplit,

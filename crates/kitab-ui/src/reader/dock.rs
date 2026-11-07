@@ -155,6 +155,7 @@ impl Reader {
         items.bookmark &= !t.bookmark;
         items.minimal &= !t.minimal;
         items.print &= !t.print;
+        items.password &= !t.password;
         let show_sidebar = items.sidebar && !compact;
         let show_history = items.history && !compact;
         let show_fit = items.fit && !compact;
@@ -380,9 +381,16 @@ impl Reader {
                         g.child(
                             dock_button("dock-print", "print", false, st)
                                 .tip("Print  Ctrl+P")
-                                .on_click(|_, window, cx| {
-                                    window.dispatch_action(Box::new(crate::actions::Print), cx)
-                                }),
+                                .on_click(cx.listener(|_, _, _, cx| cx.emit(ReaderEvent::Print))),
+                        )
+                    })
+                    .when(items.password && self.is_pdf(), |g| {
+                        g.child(
+                            dock_button("dock-password", "lock", false, st)
+                                .tip("Password")
+                                .on_click(
+                                    cx.listener(|_, _, _, cx| cx.emit(ReaderEvent::Password)),
+                                ),
                         )
                     })
                     .when(items.minimal, |g| {

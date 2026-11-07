@@ -66,6 +66,13 @@ pub const COMMANDS: &[Command] = &[
         ToggleSplit
     ),
     cmd!("File", "Print…", "printer paper", true, Print),
+    cmd!(
+        "File",
+        "Password…",
+        "protect lock encrypt unlock decrypt remove add",
+        true,
+        PdfPassword
+    ),
     // Navigate
     cmd!("Go", "Go to page…", "jump number", true, GoToPage),
     cmd!("Go", "Next page", "forward down", true, NextPage),

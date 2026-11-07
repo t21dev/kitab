@@ -1,11 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-//! PDF tools that write new files (PLAN.md Phase 9): extract pages and merge.
+//! PDF tools that write new files (PLAN.md Phase 9): extract pages, merge,
+//! and add, change or remove a password.
 //! Each opens its own copy of the source, so the open document a reader shows
 //! is never changed. Files are written next to the target and renamed, so a
 //! failure never leaves half a PDF behind.
 
-use mupdf::pdf::{InsertPdfOptions, PageSelection, PdfDocument, PdfWriteOptions};
+use mupdf::pdf::{
+    Encryption, InsertPdfOptions, PageSelection, PdfDocument, PdfWriteOptions, Permission,
+};
 use std::path::{Path, PathBuf};
 
 fn open(path: &Path, password: Option<&str>) -> Result<PdfDocument, String> {
@@ -24,7 +27,10 @@ fn open(path: &Path, password: Option<&str>) -> Result<PdfDocument, String> {
 }
 
 fn save(doc: &PdfDocument, out: &Path) -> Result<(), String> {
-    let mut options = PdfWriteOptions::default();
+    save_with(doc, out, PdfWriteOptions::default())
+}
+
+fn save_with(doc: &PdfDocument, out: &Path, mut options: PdfWriteOptions) -> Result<(), String> {
     // Drop objects only the removed pages used, and keep streams compressed.
     options.set_garbage(true).set_compress(true);
     let tmp: PathBuf = out.with_extension("pdf.kitab-tmp");
@@ -78,6 +84,65 @@ pub fn merge(inputs: &[(PathBuf, Option<String>)], out: &Path) -> Result<u32, St
     Ok(total)
 }
 
+/// The longest password Kitab writes, in bytes (MuPDF holds 128).
+pub const MAX_PASSWORD_BYTES: usize = 100;
+
+/// Write a copy of the PDF at `src` (opened with `password`) to `out`, locked
+/// with `new_password` (AES-256; the same password opens it and allows
+/// everything), or with no password at all when `None`.
+///
+/// A PDF whose owner restricts it (opened with its user password only) is
+/// refused: taking its password off, or putting a new one on, would lift
+/// restrictions the owner set.
+pub fn set_password(
+    src: &Path,
+    password: Option<&str>,
+    new_password: Option<&str>,
+    out: &Path,
+) -> Result<(), String> {
+    if same_file(src, out) {
+        return Err("choose a different file name than the original".into());
+    }
+    if let Some(pw) = new_password {
+        if pw.is_empty() {
+            return Err("the password is empty".into());
+        }
+        if pw.len() > MAX_PASSWORD_BYTES {
+            return Err(format!(
+                "the password is longer than {MAX_PASSWORD_BYTES} bytes"
+            ));
+        }
+    }
+    let doc = open(src, password)?;
+    let allowed = crate::ffi::permissions(&doc).unwrap_or_default();
+    let full = allowed.print
+        && allowed.copy
+        && allowed.annotate
+        && allowed.fill_forms
+        && allowed.modify
+        && allowed.assemble;
+    if !full {
+        return Err(
+            "this PDF's owner restricts it; open it with the owner password to change its password"
+                .into(),
+        );
+    }
+    let mut options = PdfWriteOptions::default();
+    match new_password {
+        Some(pw) => {
+            options
+                .set_encryption(Encryption::Aes256)
+                .set_user_password(pw)
+                .set_owner_password(pw)
+                .set_permissions(Permission::all());
+        }
+        None => {
+            options.set_encryption(Encryption::None);
+        }
+    }
+    save_with(&doc, out, options)
+}
+
 fn file_name(p: &Path) -> String {
     p.file_name()
         .map(|n| n.to_string_lossy().to_string())
@@ -113,6 +178,62 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("kitab-tools-{}", std::process::id()));
         std::fs::create_dir_all(&dir).expect("temp dir");
         dir.join(name)
+    }
+
+    fn needs_password(p: &Path) -> bool {
+        let name = p.to_str().expect("utf-8 temp path");
+        PdfDocument::open(name)
+            .expect("output opens")
+            .needs_password()
+            .expect("check")
+    }
+
+    #[test]
+    fn a_password_goes_on_and_comes_off() {
+        let plain = fixture("01-text-outline.pdf");
+        let locked = temp("locked.pdf");
+        set_password(&plain, None, Some("sésame 42"), &locked).expect("locks");
+        assert!(needs_password(&locked));
+        let name = locked.to_str().expect("utf-8");
+        let mut doc = PdfDocument::open(name).expect("opens");
+        assert!(!doc.authenticate("wrong").expect("auth"));
+        assert!(doc.authenticate("sésame 42").expect("auth"));
+        assert_eq!(
+            doc.page_count().expect("count") as usize,
+            page_count(&plain)
+        );
+        drop(doc);
+
+        // Changed, then taken off again.
+        let changed = temp("changed.pdf");
+        set_password(&locked, Some("sésame 42"), Some("new"), &changed).expect("changes");
+        let mut doc = PdfDocument::open(changed.to_str().expect("utf-8")).expect("opens");
+        assert!(doc.authenticate("new").expect("auth"));
+        drop(doc);
+        let open = temp("unlocked.pdf");
+        set_password(&changed, Some("new"), None, &open).expect("unlocks");
+        assert!(!needs_password(&open));
+        assert_eq!(page_count(&open), page_count(&plain));
+        for p in [locked, changed, open] {
+            let _ = std::fs::remove_file(p);
+        }
+    }
+
+    #[test]
+    fn password_mistakes_are_errors() {
+        let plain = fixture("01-text-outline.pdf");
+        let out = temp("never.pdf");
+        assert!(set_password(&plain, None, Some(""), &out).is_err());
+        assert!(set_password(&plain, None, Some(&"x".repeat(101)), &out).is_err());
+        assert!(set_password(&plain, None, Some("a"), &plain).is_err());
+        // The encrypted fixture without its password.
+        let locked = fixture("04a-encrypted-password-kitab.pdf");
+        assert!(set_password(&locked, None, None, &out).is_err());
+        // An owner-restricted PDF keeps its restrictions.
+        let restricted = fixture("04b-owner-restricted.pdf");
+        let e = set_password(&restricted, None, None, &out).expect_err("refused");
+        assert!(e.contains("owner"), "{e}");
+        assert!(!out.exists());
     }
 
     #[test]

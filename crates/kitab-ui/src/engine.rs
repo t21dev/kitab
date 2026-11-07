@@ -64,6 +64,18 @@ pub trait DocEngine: Send + Sync + 'static {
         pages: &[u32],
         out: &Path,
     ) -> Result<(), String>;
+    /// Write a copy of the PDF at `src` to `out` locked with `new_password`,
+    /// or with no password when `None`.
+    fn set_password(
+        &self,
+        src: &Path,
+        password: Option<&str>,
+        new_password: Option<&str>,
+        out: &Path,
+    ) -> Result<(), String> {
+        let _ = (src, password, new_password, out);
+        Err("this engine can't change passwords".into())
+    }
     /// Write all pages of `inputs` (path, password), in order, to `out`. Returns the page count.
     fn merge(&self, inputs: &[(PathBuf, Option<String>)], out: &Path) -> Result<u32, String>;
     /// Write `marks` into the PDF at `src` as annotations and put it at `out`

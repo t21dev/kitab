@@ -520,7 +520,7 @@ type Slot = (
 /// One row per toolbar button: title bar, dock or off. More can't be off;
 /// the dock's hide chevron always stays.
 fn toolbar_rows(ws: &WeakEntity<Workspace>, st: &Style) -> AnyElement {
-    let rows: [(&'static str, Slot); 10] = [
+    let rows: [(&'static str, Slot); 11] = [
         ("Sidebar", (|d| &mut d.sidebar, |t| &mut t.sidebar)),
         ("Back and forward", (|d| &mut d.history, |t| &mut t.history)),
         ("Zoom", (|d| &mut d.zoom, |t| &mut t.zoom)),
@@ -531,6 +531,7 @@ fn toolbar_rows(ws: &WeakEntity<Workspace>, st: &Style) -> AnyElement {
         ("Rotate", (|d| &mut d.rotate, |t| &mut t.rotate)),
         ("Minimal mode", (|d| &mut d.minimal, |t| &mut t.minimal)),
         ("Print", (|d| &mut d.print, |t| &mut t.print)),
+        ("Password", (|d| &mut d.password, |t| &mut t.password)),
     ];
     let mut col = div().flex().flex_col().gap(px(8.0));
     for (label, (dock, title)) in rows {

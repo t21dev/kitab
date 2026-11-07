@@ -29,6 +29,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 mod palette_ui;
+mod password_ui;
 mod print_ui;
 mod save_page;
 mod system;
@@ -109,6 +110,9 @@ pub struct Workspace {
     /// The print sheet (Ctrl+P), when open.
     print: Option<print_ui::PrintSheet>,
     print_serial: u64,
+    /// The password sheet, when open.
+    password: Option<password_ui::PasswordSheet>,
+    password_serial: u64,
 }
 
 /// The sidebar's panes for a document.
@@ -182,6 +186,8 @@ impl Workspace {
             title_squeezed: false,
             print: None,
             print_serial: 0,
+            password: None,
+            password_serial: 0,
         };
         // Leaving the hex field ends the edit.
         let hex_blur = cx.on_blur(&this.hex.focus, window, |ws, _, cx| {
@@ -299,6 +305,8 @@ impl Workspace {
                     ReaderEvent::MoreMenu(at) => this.more_menu(Some(*at), window, cx),
                     ReaderEvent::OpenPath(path) => this.open_tab(path.clone(), window, cx),
                     ReaderEvent::Presenting(on) => this.set_presenting(*on, window, cx),
+                    ReaderEvent::Print => this.open_print(window, cx),
+                    ReaderEvent::Password => this.open_password(window, cx),
                     ReaderEvent::BookText(pt) => {
                         // Remembered across launches (settings.json `book_text_size`).
                         let pt = *pt;
@@ -1936,6 +1944,9 @@ impl Render for Workspace {
                 .size_full()
                 .on_action(cx.listener(|ws, _: &Present, window, cx| ws.toggle_present(window, cx)))
                 .on_action(cx.listener(|ws, _: &Print, window, cx| ws.open_print(window, cx)))
+                .on_action(
+                    cx.listener(|ws, _: &PdfPassword, window, cx| ws.open_password(window, cx)),
+                )
                 .child(reader)
                 .into_any_element();
         }
@@ -2687,6 +2698,12 @@ impl Workspace {
             .key("Ctrl+P")
             .disabled(self.active.is_none()),
             MenuItem::new(
+                "Password…",
+                self.on_ws(cx, |ws, window, cx| ws.open_password(window, cx)),
+            )
+            .icon("lock")
+            .disabled(!self.active_reader().is_some_and(|r| r.read(cx).is_pdf())),
+            MenuItem::new(
                 "Command palette",
                 self.on_ws(cx, |ws, window, cx| ws.open_palette(window, cx)),
             )
@@ -3089,6 +3106,7 @@ impl Workspace {
         out.extend(self.update_dialog(st, cx));
         out.extend(self.palette_view(st, cx));
         out.extend(self.print_view(st, cx));
+        out.extend(self.password_view(st, cx));
 
         if let Some(section) = self.settings.or(self.settings_closing) {
             let closing = self.settings.is_none();

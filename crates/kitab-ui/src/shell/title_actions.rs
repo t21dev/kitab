@@ -22,7 +22,7 @@ pub(super) fn count(t: TitleItems, has_doc: bool) -> usize {
         return usize::from(t.more);
     }
     [
-        t.sidebar, t.find, t.bookmark, t.markup, t.rotate, t.minimal, t.print, t.more,
+        t.sidebar, t.find, t.bookmark, t.markup, t.rotate, t.minimal, t.print, t.password, t.more,
     ]
     .iter()
     .filter(|b| **b)
@@ -84,6 +84,13 @@ impl Workspace {
             .gap(px(2.0))
             .mr(px(10.0));
         if let Some(reader) = reader.as_ref() {
+            // Print and Password open the workspace's own sheets: called
+            // directly, as an action dispatched just after the focus moves
+            // to the reader doesn't reach the workspace.
+            let open_print =
+                cx.listener(|ws, _: &gpui::ClickEvent, window, cx| ws.open_print(window, cx));
+            let open_password =
+                cx.listener(|ws, _: &gpui::ClickEvent, window, cx| ws.open_password(window, cx));
             let r = reader.read(cx);
             let focus = r.focus_handle(cx);
             let refocus = move |window: &mut Window| window.focus(&focus);
@@ -199,13 +206,20 @@ impl Workspace {
                     ))
                 })
                 .when(t.print, |d| {
-                    d.child(button(
-                        "t-print",
-                        "print",
-                        false,
-                        "Print  Ctrl+P",
-                        Box::new(Print),
-                    ))
+                    d.child(
+                        icon_button("t-print", "print", false, st)
+                            .flex_none()
+                            .tip("Print  Ctrl+P")
+                            .on_click(open_print),
+                    )
+                })
+                .when(t.password && r.is_pdf(), |d| {
+                    d.child(
+                        icon_button("t-password", "lock", false, st)
+                            .flex_none()
+                            .tip("Password")
+                            .on_click(open_password),
+                    )
                 })
                 .when(t.minimal, |d| {
                     d.child(button(

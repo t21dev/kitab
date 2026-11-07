@@ -153,6 +153,7 @@ pub struct DockItems {
     pub bookmark: bool,
     pub minimal: bool,
     pub print: bool,
+    pub password: bool,
 }
 
 impl Default for DockItems {
@@ -168,6 +169,7 @@ impl Default for DockItems {
             bookmark: false,
             minimal: false,
             print: false,
+            password: false,
         }
     }
 }
@@ -188,6 +190,7 @@ pub struct TitleItems {
     pub bookmark: bool,
     pub minimal: bool,
     pub print: bool,
+    pub password: bool,
     pub more: bool,
 }
 
@@ -203,16 +206,18 @@ impl TitleItems {
         bookmark: false,
         minimal: false,
         print: false,
+        password: false,
         more: false,
     };
 }
 
 impl Default for TitleItems {
-    /// Find, Draw and More up top: the dock keeps paging and zoom.
+    /// Find, Draw, Password and More up top: the dock keeps paging and zoom.
     fn default() -> Self {
         Self {
             find: true,
             markup: true,
+            password: true,
             more: true,
             ..Self::NONE
         }

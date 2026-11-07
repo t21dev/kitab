@@ -36,6 +36,8 @@ pub struct TextField {
     focus: FocusHandle,
     multiline: bool,
     placeholder: SharedString,
+    /// A password: shown as dots, and never copied or cut.
+    secret: bool,
 }
 
 impl EventEmitter<FieldEvent> for TextField {}
@@ -49,6 +51,20 @@ impl Focusable for TextField {
 /// Tabs as spaces for display (shaping has no tab stops).
 fn display(text: &str) -> SharedString {
     text.replace('\t', "    ").into()
+}
+
+/// What a secret field shows for each character.
+const DOT: char = '•';
+
+/// A line as shown, and `col` (a byte offset in `text`) moved into it.
+fn shown(text: &str, col: usize, secret: bool) -> (SharedString, usize) {
+    if secret {
+        let n = text.get(..col).map_or(0, |s| s.chars().count());
+        let dots: String = std::iter::repeat_n(DOT, text.chars().count()).collect();
+        (dots.into(), n * DOT.len_utf8())
+    } else {
+        (display(text), col)
+    }
 }
 
 fn run(len: usize, color: gpui::Hsla, font: &Font) -> TextRun {
@@ -71,7 +87,13 @@ impl TextField {
             focus: cx.focus_handle(),
             multiline,
             placeholder: placeholder.to_string().into(),
+            secret: false,
         }
+    }
+
+    /// Show dots instead of the text, and refuse copy and cut (passwords).
+    pub fn set_secret(&mut self, on: bool) {
+        self.secret = on;
     }
 
     pub fn text(&self) -> String {
@@ -116,6 +138,7 @@ impl TextField {
             "home" => b.home(ctrl, shift),
             "end" => b.end(ctrl, shift),
             "a" if ctrl => b.select_all(),
+            "c" | "x" if ctrl && self.secret => {}
             "c" if ctrl => {
                 if b.has_selection() {
                     cx.write_to_clipboard(ClipboardItem::new_string(b.selected_text().to_string()));
@@ -165,13 +188,14 @@ impl TextField {
     fn caret_x(&self, line: usize, at: usize, window: &mut Window) -> f32 {
         let text = self.buf.line(line);
         let font = window.text_style().font();
+        let col = (at - self.buf.line_range(line).start).min(text.len());
+        let (text, col) = shown(text, col, self.secret);
         let shaped = window.text_system().shape_line(
-            display(text),
+            text.clone(),
             px(FONT_SIZE),
             &[run(text.len(), gpui::black(), &font)],
             None,
         );
-        let col = (at - self.buf.line_range(line).start).min(text.len());
         f32::from(shaped.x_for_index(col))
     }
 }
@@ -187,7 +211,9 @@ impl Render for TextField {
         let faint = st.c(|c| c.faint);
         let accent = st.c(|c| c.accent);
         let select_bg = st.c(|c| c.highlight);
-        let rows: Vec<String> = (0..lines).map(|i| self.buf.line(i).to_string()).collect();
+        let rows: Vec<SharedString> = (0..lines)
+            .map(|i| shown(self.buf.line(i), 0, self.secret).0)
+            .collect();
         let head_line = self.buf.line_of(self.buf.head);
         let head = self.buf.head;
         let sel = self.buf.selection();
@@ -249,7 +275,7 @@ impl Render for TextField {
                                 continue;
                             }
                             let shaped = window.text_system().shape_line(
-                                display(row),
+                                row.clone(),
                                 px(FONT_SIZE),
                                 &[run(row.len(), text_colour, &font)],
                                 None,
