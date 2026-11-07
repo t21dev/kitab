@@ -92,6 +92,8 @@ pub const PAGE_FIELD: &str = "PageField";
 pub const FIND_BAR: &str = "FindBar";
 /// The Markdown editor: typing keys are text here, not reader shortcuts.
 pub const MD_EDITOR: &str = "MdEditor";
+/// The markup colour picker's hex field.
+pub const MARKUP_HEX: &str = "MarkupHex";
 /// Settings and open menus: Escape closes them.
 pub const OVERLAY: &str = "Overlay";
 
@@ -234,4 +236,31 @@ pub fn bind_default_keys(cx: &mut App) {
         ]
         .map(|key| KeyBinding::new(key, NoAction, editor)),
     );
+    // Typing a hex colour: every key goes to the field, none to the reader.
+    let hex = Some(MARKUP_HEX);
+    let mut keys: Vec<String> = ('a'..='z').chain('0'..='9').map(String::from).collect();
+    keys.extend(('a'..='f').map(|c| format!("shift-{c}")));
+    keys.extend(
+        [
+            "space",
+            "backspace",
+            "enter",
+            "escape",
+            "left",
+            "right",
+            "home",
+            "end",
+            "/",
+            "-",
+            "ctrl-z",
+            "ctrl-y",
+            "ctrl-shift-z",
+            "ctrl-s",
+            "ctrl-shift-d",
+            "ctrl-c",
+            "ctrl-f",
+        ]
+        .map(String::from),
+    );
+    cx.bind_keys(keys.iter().map(|k| KeyBinding::new(k, NoAction, hex)));
 }

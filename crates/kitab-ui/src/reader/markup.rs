@@ -103,6 +103,9 @@ pub(super) struct MarkupState {
     pub use_custom_highlighter: bool,
     /// The colour picker is open.
     pub picker: bool,
+    /// The hex digits being typed in the picker (without '#'), while editing.
+    pub hex: Option<String>,
+    pub hex_focus: Option<FocusHandle>,
     next_local: u64,
 }
 
@@ -136,6 +139,8 @@ type Palette = &'static [(&'static str, (u8, u8, u8))];
 fn rgb((r, g, b): (u8, u8, u8)) -> Rgb8 {
     Rgb8 { r, g, b }
 }
+
+use kitab_theme::markup::{hex_of, parse_hex};
 
 /// A swatch fill for an ink colour.
 fn rgba((r, g, b): (u8, u8, u8)) -> gpui::Rgba {
@@ -358,6 +363,9 @@ impl Reader {
         let Some(tool) = self.markup.tool.filter(|_| self.markup.open) else {
             return false;
         };
+        // Drawing puts the colour picker away.
+        self.markup.picker = false;
+        self.markup.hex = None;
         let Some(at) = self.page_point(ix, e.position) else {
             return true;
         };
@@ -575,7 +583,12 @@ impl Reader {
     }
 
     /// The markup bar: tools, colours, sizes, undo, redo, save.
-    pub(super) fn markup_bar(&self, st: &Style, cx: &mut Context<Self>) -> Option<AnyElement> {
+    pub(super) fn markup_bar(
+        &self,
+        st: &Style,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) -> Option<AnyElement> {
         if !self.markup.open {
             return None;
         }
@@ -615,6 +628,9 @@ impl Reader {
                             .tip(t.label())
                             .on_click(cx.listener(move |r, _, _, cx| {
                                 r.markup.tool = Some(t);
+                                // Picking a tool puts the colour picker away.
+                                r.markup.picker = false;
+                                r.markup.hex = None;
                                 cx.notify();
                             }))
                             .into_any_element()
@@ -655,7 +671,7 @@ impl Reader {
                             .on_click(cx.listener(|r, _, _, cx| r.markup_redo(cx))),
                     ),
             );
-        let picker = self.colour_picker(st, cx);
+        let picker = self.colour_picker(st, window, cx);
         // The picker takes the note's place while it is open.
         let note = m
             .note
@@ -763,6 +779,7 @@ impl Reader {
                 .tip("More colours")
                 .on_click(cx.listener(|r, _, _, cx| {
                     r.markup.picker = !r.markup.picker;
+                    r.markup.hex = None;
                     cx.notify();
                 }))
                 .into_any_element(),
@@ -770,8 +787,163 @@ impl Reader {
         out
     }
 
+    /// Use `c` as the custom colour of the pen (or the highlighter).
+    fn use_custom(&mut self, c: (u8, u8, u8)) {
+        let m = &mut self.markup;
+        if m.tool == Some(Tool::Highlighter) {
+            m.custom_highlighter = Some(c);
+            m.use_custom_highlighter = true;
+        } else {
+            m.custom_pen = Some(c);
+            m.use_custom_pen = true;
+            if matches!(m.tool, Some(Tool::Eraser) | None) {
+                m.tool = Some(Tool::Pen);
+            }
+        }
+    }
+
+    /// Start typing a hex colour (a click on the field).
+    fn edit_hex(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let highlighter = self.markup.tool == Some(Tool::Highlighter);
+        let now = hex_of(self.markup.colour(highlighter));
+        let focus = self
+            .markup
+            .hex_focus
+            .get_or_insert_with(|| cx.focus_handle())
+            .clone();
+        self.markup.hex = Some(now);
+        window.focus(&focus);
+        cx.notify();
+    }
+
+    /// Typing in the hex field: hex digits and Backspace; six digits apply at
+    /// once; Enter applies three or six and closes; Esc closes.
+    fn hex_key(&mut self, e: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(text) = self.markup.hex.as_mut() else {
+            return;
+        };
+        let k = &e.keystroke;
+        match k.key.as_str() {
+            "backspace" => {
+                text.pop();
+            }
+            "enter" => {
+                if let Some(c) = parse_hex(text) {
+                    self.use_custom(c);
+                }
+                self.markup.hex = None;
+                self.markup.picker = false;
+                window.focus(&self.focus);
+            }
+            "escape" => {
+                self.markup.hex = None;
+                self.markup.picker = false;
+                window.focus(&self.focus);
+            }
+            _ => {
+                if let Some(ch) = k.key_char.as_ref() {
+                    let ch = ch.trim_start_matches('#');
+                    if !k.modifiers.control
+                        && ch.chars().all(|c| c.is_ascii_hexdigit())
+                        && text.len() + ch.len() <= 6
+                    {
+                        text.push_str(&ch.to_uppercase());
+                    }
+                }
+            }
+        }
+        if let Some(c) = self
+            .markup
+            .hex
+            .as_deref()
+            .filter(|t| t.len() == 6)
+            .and_then(parse_hex)
+        {
+            self.use_custom(c);
+        }
+        cx.stop_propagation();
+        cx.notify();
+    }
+
+    fn hex_field(&self, st: &Style, window: &Window, cx: &mut Context<Self>) -> AnyElement {
+        let highlighter = self.markup.tool == Some(Tool::Highlighter);
+        let now = self.markup.colour(highlighter);
+        let editing = self.markup.hex.is_some();
+        let focused = self
+            .markup
+            .hex_focus
+            .as_ref()
+            .is_some_and(|f| f.is_focused(window));
+        let shown = match &self.markup.hex {
+            Some(t) => format!("#{t}"),
+            None => format!("#{}", hex_of(now)),
+        };
+        let mut field = div()
+            .id("markup-hex")
+            .key_context(crate::actions::MARKUP_HEX)
+            .on_key_down(cx.listener(|r, e: &KeyDownEvent, window, cx| r.hex_key(e, window, cx)))
+            .on_click(cx.listener(|r, _, window, cx| r.edit_hex(window, cx)))
+            .w(px(104.0))
+            .h(px(26.0))
+            .px(px(8.0))
+            .flex()
+            .items_center()
+            .rounded(px(7.0))
+            .bg(st.c(|c| c.hover))
+            .shadow(st.well())
+            .border_1()
+            .border_color(if editing && focused {
+                st.c(|c| c.accent)
+            } else {
+                st.c(|c| c.line)
+            })
+            .cursor_text()
+            .text_size(px(12.0))
+            .text_color(st.c(|c| c.text))
+            .tip("Type a hex colour, like #2E8B57")
+            .child(shown)
+            .when(editing, |d| {
+                d.child(
+                    div()
+                        .ml(px(1.0))
+                        .w(px(1.0))
+                        .h(px(13.0))
+                        .bg(st.c(|c| c.accent)),
+                )
+            });
+        if let Some(f) = self.markup.hex_focus.as_ref() {
+            field = field.track_focus(f);
+        }
+        div()
+            .flex()
+            .items_center()
+            .gap(px(8.0))
+            .pt(px(8.0))
+            .child(
+                div()
+                    .size(px(20.0))
+                    .rounded(px(4.0))
+                    .bg(rgba(now))
+                    .border_1()
+                    .border_color(st.c(|c| c.line)),
+            )
+            .child(field)
+            .child(
+                div()
+                    .text_size(px(11.0))
+                    .text_color(st.c(|c| c.faint))
+                    .child("Hex, e.g. #2E8B57"),
+            )
+            .into_any_element()
+    }
+
     /// The colour picker: a grid of hues and shades, then greys.
-    fn colour_picker(&self, st: &Style, cx: &mut Context<Self>) -> Option<AnyElement> {
+    fn colour_picker(
+        &self,
+        st: &Style,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) -> Option<AnyElement> {
         if !self.markup.picker {
             return None;
         }
@@ -789,21 +961,14 @@ impl Reader {
                 .when(c == now, |d| d.border_2().border_color(st.c(|c| c.text)))
                 .hover(|d| d.border_color(st.c(|c| c.text)))
                 .on_click(cx.listener(move |r, _, _, cx| {
-                    let m = &mut r.markup;
-                    if m.tool == Some(Tool::Highlighter) {
-                        m.custom_highlighter = Some(c);
-                        m.use_custom_highlighter = true;
-                    } else {
-                        m.custom_pen = Some(c);
-                        m.use_custom_pen = true;
-                        if matches!(m.tool, Some(Tool::Eraser) | None) {
-                            m.tool = Some(Tool::Pen);
-                        }
-                    }
-                    m.picker = false;
+                    r.use_custom(c);
+                    r.markup.picker = false;
+                    r.markup.hex = None;
                     cx.notify();
                 }))
         });
+        let cells: Vec<_> = cells.collect();
+        let hex = self.hex_field(st, window, cx);
         let cell = 20.0;
         let gap = 4.0;
         let width = ink::PICKER_HUES as f32 * (cell + gap) - gap;
@@ -832,7 +997,8 @@ impl Reader {
                                 .flex_wrap()
                                 .gap(px(gap))
                                 .children(cells),
-                        ),
+                        )
+                        .child(hex),
                 )
                 .into_any_element(),
         )

@@ -1468,7 +1468,7 @@ impl Render for Reader {
             .children(self.dock_view(&st, inset, window, cx))
             .children(self.edit_button(&st, cx))
             .children(self.find_bar(&st, window, cx))
-            .children(self.markup_bar(&st, cx))
+            .children(self.markup_bar(&st, window, cx))
     }
 }
 

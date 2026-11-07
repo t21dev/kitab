@@ -57,9 +57,42 @@ pub fn picker_grid() -> Vec<(u8, u8, u8)> {
     out
 }
 
+/// `#RGB` or `#RRGGBB` (the '#' optional) as a colour.
+pub fn parse_hex(s: &str) -> Option<(u8, u8, u8)> {
+    let s = s.trim().trim_start_matches('#');
+    if !s.chars().all(|c| c.is_ascii_hexdigit()) {
+        return None;
+    }
+    let byte = |h: &str| u8::from_str_radix(h, 16).ok();
+    match s.len() {
+        6 => Some((byte(&s[0..2])?, byte(&s[2..4])?, byte(&s[4..6])?)),
+        3 => {
+            let d = |i: usize| byte(&s[i..i + 1]).map(|v| v * 17);
+            Some((d(0)?, d(1)?, d(2)?))
+        }
+        _ => None,
+    }
+}
+
+/// Six upper-case hex digits, no '#'.
+pub fn hex_of((r, g, b): (u8, u8, u8)) -> String {
+    format!("{r:02X}{g:02X}{b:02X}")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn hex_codes_parse_in_long_and_short_form() {
+        assert_eq!(parse_hex("#2E8B57"), Some((0x2E, 0x8B, 0x57)));
+        assert_eq!(parse_hex("2e8b57"), Some((0x2E, 0x8B, 0x57)));
+        assert_eq!(parse_hex("#F0A"), Some((0xFF, 0x00, 0xAA)));
+        assert_eq!(parse_hex("#12345"), None);
+        assert_eq!(parse_hex("#GG0000"), None);
+        assert_eq!(parse_hex(""), None);
+        assert_eq!(hex_of((0x2E, 0x8B, 0x57)), "2E8B57");
+    }
 
     #[test]
     fn the_picker_grid_is_full_distinct_and_has_black_and_white() {
