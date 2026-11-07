@@ -50,7 +50,9 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
-use kitab_core::{Bitmap, DocInfo, FindHit, FindOptions, Link, OpenError, RenderRequest};
+use kitab_core::{
+    Bitmap, BookLayout, DocInfo, FindHit, FindOptions, Link, OpenError, RenderRequest,
+};
 
 pub use doc::{MAX_PAGES, MAX_PIXELS, MAX_SIDE_PX, REFLOW_EM, REFLOW_H, REFLOW_W, ink_ratio};
 
@@ -100,6 +102,8 @@ struct DocEntry {
     path: PathBuf,
     password: Option<String>,
     page_count: u32,
+    /// The layout a book is at; helpers open it the same way.
+    layout: BookLayout,
     /// The newest generation the caller set; older render requests are dropped.
     generation: Arc<AtomicU64>,
 }
@@ -256,6 +260,17 @@ impl Engine {
     /// [`OpenError::NeedsPassword`] and a wrong password
     /// [`OpenError::WrongPassword`]. The password is not kept.
     pub fn open(&self, path: &Path, password: Option<&str>) -> Result<(DocId, DocInfo), OpenError> {
+        self.open_with(path, password, BookLayout::DEFAULT)
+    }
+
+    /// [`Engine::open`], laying a book out at `layout` (ignored for files
+    /// with their own pages).
+    pub fn open_with(
+        &self,
+        path: &Path,
+        password: Option<&str>,
+        layout: BookLayout,
+    ) -> Result<(DocId, DocInfo), OpenError> {
         let id = DocId(self.next_id.fetch_add(1, Ordering::Relaxed));
         let worker = self.pick_worker();
         let path: PathBuf = path.to_path_buf();
@@ -263,7 +278,7 @@ impl Engine {
         let (keep_path, keep_password) = (path.clone(), password.clone());
         let opened = self
             .call(worker, None, move |state| {
-                let (doc, info) = doc::open(&path, password.as_deref())?;
+                let (doc, info) = doc::open(&path, password.as_deref(), layout)?;
                 state.docs.insert(id, DocSlot { doc, crashes: 0 });
                 Ok(info)
             })
@@ -277,6 +292,7 @@ impl Engine {
                 path: keep_path,
                 password: keep_password,
                 page_count: info.page_count,
+                layout,
                 generation: Arc::new(AtomicU64::new(0)),
             },
         );
@@ -294,7 +310,11 @@ impl Engine {
 
     /// The least busy of `doc`'s workers for a render, with what a helper
     /// needs to open the file.
-    fn render_worker(&self, doc: DocId) -> Result<(usize, bool, PathBuf, Option<String>), String> {
+    #[allow(clippy::type_complexity)]
+    fn render_worker(
+        &self,
+        doc: DocId,
+    ) -> Result<(usize, bool, PathBuf, Option<String>, BookLayout), String> {
         let docs = lock(&self.docs);
         let e = docs
             .get(&doc)
@@ -310,7 +330,13 @@ impl Engine {
                 best = h;
             }
         }
-        Ok((best, best != e.worker, e.path.clone(), e.password.clone()))
+        Ok((
+            best,
+            best != e.worker,
+            e.path.clone(),
+            e.password.clone(),
+            e.layout,
+        ))
     }
 
     /// Mark every render request for `doc` older than `generation` as stale.
@@ -347,7 +373,7 @@ impl Engine {
         if stale() {
             return Ok(None);
         }
-        let (worker, helper, path, password) = self.render_worker(doc)?;
+        let (worker, helper, path, password, layout) = self.render_worker(doc)?;
         let stale_on_worker = stale.clone();
         let counter = &self.inflight[worker];
         counter.fetch_add(1, Ordering::Relaxed);
@@ -356,7 +382,7 @@ impl Engine {
                 return Ok::<_, String>(None);
             }
             if helper && !state.docs.contains_key(&doc) {
-                let (opened, _) = doc::open(&path, password.as_deref())
+                let (opened, _) = doc::open(&path, password.as_deref(), layout)
                     .map_err(|e| format!("a render helper could not open the file: {e:?}"))?;
                 state.docs.insert(
                     doc,
@@ -376,6 +402,39 @@ impl Engine {
         counter.fetch_sub(1, Ordering::Relaxed);
         let bitmap = result??;
         Ok(bitmap.filter(|_| !stale()))
+    }
+
+    /// Lay a book out again at `layout` and describe it anew (page count,
+    /// sizes and contents all change). Its render helpers drop their handles
+    /// and open the book again, at the new layout, on their next render.
+    /// Set a new generation afterwards so pages drawn at the old layout are
+    /// dropped.
+    pub fn relayout(&self, doc: DocId, layout: BookLayout) -> Result<DocInfo, String> {
+        let (worker, helpers) = {
+            let docs = lock(&self.docs);
+            let e = docs
+                .get(&doc)
+                .ok_or_else(|| "the document is not open".to_string())?;
+            (e.worker, e.helpers.clone())
+        };
+        let info = self.call(worker, Some(doc), move |state| {
+            let slot = state
+                .docs
+                .get_mut(&doc)
+                .ok_or_else(|| "the document was closed".to_string())?;
+            doc::relayout(&mut slot.doc, layout)
+        })??;
+        if let Some(e) = lock(&self.docs).get_mut(&doc) {
+            e.page_count = info.page_count;
+            e.layout = layout;
+        }
+        // Queued behind any render already sent to them, ahead of any later one.
+        for h in helpers {
+            let _ = self.call(h, None, move |state| {
+                state.docs.remove(&doc);
+            });
+        }
+        Ok(info)
     }
 
     /// The links on a page (0-based), with rectangles in page points.

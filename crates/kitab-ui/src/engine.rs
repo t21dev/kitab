@@ -4,7 +4,9 @@
 //! app; tests implement it with fakes. Every method is called from a background
 //! task, never from the UI thread (AGENTS.md rule 2).
 
-use kitab_core::{Bitmap, DocInfo, FindHit, FindOptions, Link, OpenError, RenderRequest, TextChar};
+use kitab_core::{
+    Bitmap, BookLayout, DocInfo, FindHit, FindOptions, Link, OpenError, RenderRequest, TextChar,
+};
 use std::path::{Path, PathBuf};
 
 /// An open document inside the engine.
@@ -64,5 +66,11 @@ pub trait DocEngine: Send + Sync + 'static {
     ) -> Result<(), String>;
     /// Write all pages of `inputs` (path, password), in order, to `out`. Returns the page count.
     fn merge(&self, inputs: &[(PathBuf, Option<String>)], out: &Path) -> Result<u32, String>;
+    /// Lay a reflowable book out again (new page size or text size) and
+    /// describe it anew: page count, sizes and contents change.
+    fn relayout(&self, doc: DocHandle, layout: BookLayout) -> Result<DocInfo, String> {
+        let _ = (doc, layout);
+        Err("this engine can't lay books out".into())
+    }
     fn close(&self, doc: DocHandle);
 }

@@ -111,7 +111,11 @@ impl Reader {
                 }
             })
         };
-        let percent = self.zoom_percent();
+        // A book shows its text size: zoom there changes the text, not the page.
+        let zoom_label = match self.book_text() {
+            Some(pt) => format!("{pt:.0} pt"),
+            None => format!("{} %", self.zoom_percent()),
+        };
         let compact = st.dock_compact;
         let mut dock = div()
             .id("dock")
@@ -184,7 +188,7 @@ impl Reader {
                             .flex()
                             .justify_center()
                             .text_color(st.c(|c| c.text))
-                            .child(format!("{percent} %")),
+                            .child(zoom_label),
                     )
                     .child(
                         dock_button("dock-zoom-in", "plus", false, st)

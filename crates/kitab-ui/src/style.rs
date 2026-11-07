@@ -31,6 +31,8 @@ pub struct Style {
     pub sidebar_open: bool,
     pub dock_compact: bool,
     pub code_theme: kitab_theme::CodeTheme,
+    /// Text size of books in points.
+    pub book_text: f32,
 }
 
 impl Global for Style {}
@@ -59,6 +61,7 @@ impl Style {
             sidebar_open: s.sidebar,
             dock_compact: s.dock_compact,
             code_theme: s.code_theme,
+            book_text: s.book_text,
         };
         style.resolve_accent();
         style
@@ -102,6 +105,7 @@ impl Style {
             flat: self.ultra,
             dock_compact: self.dock_compact,
             code_theme: self.code_theme,
+            book_text: self.book_text,
         }
     }
 

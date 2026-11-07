@@ -224,6 +224,11 @@ impl Workspace {
                     ReaderEvent::ContextMenu(at) => this.page_menu(reader.clone(), *at, window, cx),
                     ReaderEvent::MoreMenu(at) => this.more_menu(Some(*at), window, cx),
                     ReaderEvent::OpenPath(path) => this.open_tab(path.clone(), window, cx),
+                    ReaderEvent::BookText(pt) => {
+                        // Remembered across launches (settings.json `book_text_size`).
+                        let pt = *pt;
+                        this.change_style(&move |st: &mut Style| st.book_text = pt, cx);
+                    }
                 }
             },
         ));

@@ -63,6 +63,15 @@ impl DocEngine for MupdfEngine {
         self.engine.render_when(id, req, move || wanted())
     }
 
+    fn relayout(
+        &self,
+        doc: DocHandle,
+        layout: kitab_core::BookLayout,
+    ) -> Result<kitab_core::DocInfo, String> {
+        let id = self.id(doc).ok_or("document is closed")?;
+        self.engine.relayout(id, layout)
+    }
+
     fn set_generation(&self, doc: DocHandle, generation: u64) {
         if let Some(id) = self.id(doc) {
             self.engine.set_generation(id, generation);

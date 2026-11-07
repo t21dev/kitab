@@ -12,6 +12,44 @@ pub struct SizePt {
     pub h: f32,
 }
 
+/// How a reflowable book (EPUB, MOBI, FB2, TXT) is laid out on pages: page
+/// size in points and the body text size in points.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct BookLayout {
+    pub width: f32,
+    pub height: f32,
+    pub em: f32,
+}
+
+impl BookLayout {
+    /// Before the window size is known; also the fixture oracle's layout
+    /// (`pages_at_400x600_11pt` in expected.json).
+    pub const DEFAULT: BookLayout = BookLayout {
+        width: 400.0,
+        height: 600.0,
+        em: 11.0,
+    };
+    /// Text sizes Kitab offers for books, in points.
+    pub const EM_MIN: f32 = 8.0;
+    pub const EM_MAX: f32 = 32.0;
+
+    /// Page sides from 100 to 10,000 pt and a text size Kitab offers; anything
+    /// else is a caller bug or a hostile value, refused before MuPDF sees it.
+    pub fn is_valid(&self) -> bool {
+        let side = |v: f32| v.is_finite() && (100.0..=10_000.0).contains(&v);
+        side(self.width)
+            && side(self.height)
+            && self.em.is_finite()
+            && (Self::EM_MIN..=Self::EM_MAX).contains(&self.em)
+    }
+}
+
+impl Default for BookLayout {
+    fn default() -> Self {
+        Self::DEFAULT
+    }
+}
+
 /// A rectangle in points, page space (origin top-left).
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct RectPt {
@@ -73,6 +111,9 @@ pub struct DocInfo {
     pub encryption: Option<String>,
     /// MuPDF repaired a damaged file while opening it.
     pub repaired: bool,
+    /// A book whose pages come from a [`BookLayout`] (EPUB, MOBI, FB2, TXT),
+    /// not from the file.
+    pub reflowable: bool,
 }
 
 /// Why a document could not be opened. Every variant is a placeholder in the UI,

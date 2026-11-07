@@ -9,8 +9,8 @@ use std::io::Read;
 use std::path::Path;
 
 use kitab_core::{
-    Bitmap, DocInfo, Format, Link, LinkTarget, OpenError, OutlineItem, RectPt, RenderRequest,
-    SizePt,
+    Bitmap, BookLayout, DocInfo, Format, Link, LinkTarget, OpenError, OutlineItem, RectPt,
+    RenderRequest, SizePt,
 };
 use mupdf::pdf::{PdfDocument, PdfObject};
 use mupdf::{
@@ -34,12 +34,11 @@ const MAX_OUTLINE_DEPTH: usize = 64;
 /// Size used for a page whose own box cannot be read: US Letter.
 const FALLBACK_SIZE: SizePt = SizePt { w: 612.0, h: 792.0 };
 
-/// Reflowable books (EPUB, MOBI, FB2, TXT) are laid out on pages this size,
-/// in points, with this body font size. The fixture oracle counts pages at the
-/// same layout (`pages_at_400x600_11pt` in expected.json).
-pub const REFLOW_W: f32 = 400.0;
-pub const REFLOW_H: f32 = 600.0;
-pub const REFLOW_EM: f32 = 11.0;
+/// The layout books open with until the reader knows its window
+/// ([`BookLayout::DEFAULT`]; the fixture oracle counts pages at it).
+pub const REFLOW_W: f32 = BookLayout::DEFAULT.width;
+pub const REFLOW_H: f32 = BookLayout::DEFAULT.height;
+pub const REFLOW_EM: f32 = BookLayout::DEFAULT.em;
 
 /// A PDF keeps its PDF handle (passwords, permissions, repair state); every
 /// other format is a plain MuPDF document.
@@ -62,6 +61,9 @@ impl std::ops::Deref for Handle {
 pub(crate) struct OpenDoc {
     pub pdf: Handle,
     pub page_count: u32,
+    pub format: Format,
+    /// Laid out by Kitab (a book), not paged by the file.
+    pub reflowable: bool,
 }
 
 fn failed(e: impl std::fmt::Display) -> OpenError {
@@ -79,7 +81,14 @@ fn sniff_pdf(path: &Path) -> bool {
 }
 
 /// Open `path` and describe it fully. Runs on a worker.
-pub(crate) fn open(path: &Path, password: Option<&str>) -> Result<(OpenDoc, DocInfo), OpenError> {
+pub(crate) fn open(
+    path: &Path,
+    password: Option<&str>,
+    layout: BookLayout,
+) -> Result<(OpenDoc, DocInfo), OpenError> {
+    if !layout.is_valid() {
+        return Err(failed("bad book layout"));
+    }
     match std::fs::metadata(path) {
         Ok(m) if m.is_file() => {}
         Ok(_) => return Err(OpenError::Unsupported),
@@ -113,6 +122,7 @@ pub(crate) fn open(path: &Path, password: Option<&str>) -> Result<(OpenDoc, DocI
         Err(e) => return Err(failed(e)),
     };
 
+    let mut reflowable = false;
     let handle = if doc.is_pdf() {
         let mut pdf = PdfDocument::try_from(doc).map_err(|_| OpenError::Unsupported)?;
         if pdf.needs_password().map_err(failed)? {
@@ -127,7 +137,9 @@ pub(crate) fn open(path: &Path, password: Option<&str>) -> Result<(OpenDoc, DocI
     } else {
         // Books flow onto pages; comics and XPS have their own.
         if doc.is_reflowable().unwrap_or(false) {
-            doc.layout(REFLOW_W, REFLOW_H, REFLOW_EM).map_err(failed)?;
+            doc.layout(layout.width, layout.height, layout.em)
+                .map_err(failed)?;
+            reflowable = true;
         }
         Handle::Other(doc)
     };
@@ -145,11 +157,13 @@ pub(crate) fn open(path: &Path, password: Option<&str>) -> Result<(OpenDoc, DocI
     } else {
         format
     };
-    let info = describe(&handle, format, page_count);
+    let info = describe(&handle, format, page_count, reflowable);
     Ok((
         OpenDoc {
             pdf: handle,
             page_count,
+            format,
+            reflowable,
         },
         info,
     ))
@@ -182,7 +196,7 @@ fn non_empty(s: Result<String, mupdf::Error>) -> Option<String> {
     (!s.is_empty()).then(|| s.to_string())
 }
 
-fn describe(handle: &Handle, format: Format, page_count: u32) -> DocInfo {
+fn describe(handle: &Handle, format: Format, page_count: u32, reflowable: bool) -> DocInfo {
     let page_sizes = (0..page_count).map(|i| page_size(handle, i)).collect();
     let (outline, permissions, encryption, repaired) = match handle {
         Handle::Pdf(pdf) => (
@@ -212,7 +226,27 @@ fn describe(handle: &Handle, format: Format, page_count: u32) -> DocInfo {
         permissions,
         encryption,
         repaired,
+        reflowable,
     }
+}
+
+/// Lay a book out again and describe it anew. Runs on the document's worker.
+pub(crate) fn relayout(doc: &mut OpenDoc, layout: BookLayout) -> Result<DocInfo, String> {
+    if !doc.reflowable || !layout.is_valid() {
+        return Err("only a book can be laid out again, at a valid layout".into());
+    }
+    let Handle::Other(d) = &mut doc.pdf else {
+        return Err("only a book can be laid out again".into());
+    };
+    d.layout(layout.width, layout.height, layout.em)
+        .map_err(|e| e.to_string())?;
+    let count = doc.pdf.page_count().map_err(|e| e.to_string())?;
+    let page_count = u32::try_from(count).map_err(|e| e.to_string())?;
+    if page_count == 0 || page_count > MAX_PAGES {
+        return Err(format!("{page_count} pages after layout"));
+    }
+    doc.page_count = page_count;
+    Ok(describe(&doc.pdf, doc.format, page_count, true))
 }
 
 /// A page's own size with its /Rotate applied (MuPDF's page bounds).

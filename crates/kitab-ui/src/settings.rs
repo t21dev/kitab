@@ -251,6 +251,9 @@ pub struct Settings {
     pub dock_compact: bool,
     /// Colours of code blocks in Markdown.
     pub code_theme: CodeTheme,
+    /// Text size of books (EPUB, MOBI, FB2, TXT) in points; zoom in a book
+    /// changes it.
+    pub book_text: f32,
 }
 
 impl Settings {
@@ -316,6 +319,7 @@ impl Default for Settings {
             flat: false,
             dock_compact: false,
             code_theme: CodeTheme::Kitab,
+            book_text: BOOK_TEXT_DEFAULT,
         }
     }
 }
@@ -341,6 +345,21 @@ struct File {
     dock_compact: bool,
     /// A `CodeTheme` id ("kitab", "github", …).
     code_colours: String,
+    /// Points.
+    book_text_size: f32,
+}
+
+/// Books open at this text size (12 pt reads as 16 px at 100 %).
+pub const BOOK_TEXT_DEFAULT: f32 = 12.0;
+
+/// A text size Kitab offers; a hand-edited or broken value falls back.
+pub fn clamp_book_text(pt: f32) -> f32 {
+    use kitab_core::BookLayout;
+    if pt.is_finite() {
+        pt.clamp(BookLayout::EM_MIN, BookLayout::EM_MAX)
+    } else {
+        BOOK_TEXT_DEFAULT
+    }
 }
 
 impl Default for File {
@@ -367,6 +386,7 @@ impl From<Settings> for File {
             flat: s.flat,
             dock_compact: s.dock_compact,
             code_colours: s.code_theme.id().to_string(),
+            book_text_size: s.book_text,
         }
     }
 }
@@ -399,6 +419,7 @@ impl Settings {
             dock_compact: f.dock_compact,
             // A palette Kitab doesn't know falls back to the theme's colours.
             code_theme: CodeTheme::from_id(&f.code_colours).unwrap_or_default(),
+            book_text: clamp_book_text(f.book_text_size),
         })
     }
 
@@ -433,8 +454,18 @@ mod tests {
             flat: true,
             dock_compact: true,
             code_theme: CodeTheme::Dracula,
+            book_text: 15.0,
         };
         assert_eq!(Settings::from_json(&s.to_json()), Ok(s));
+    }
+
+    #[test]
+    fn book_text_is_kept_in_range() {
+        let s = Settings::from_json(r#"{"book_text_size": 400}"#).expect("parses");
+        assert_eq!(s.book_text, kitab_core::BookLayout::EM_MAX);
+        let s = Settings::from_json(r#"{"book_text_size": 1}"#).expect("parses");
+        assert_eq!(s.book_text, kitab_core::BookLayout::EM_MIN);
+        assert_eq!(Settings::default().book_text, BOOK_TEXT_DEFAULT);
     }
 
     #[test]

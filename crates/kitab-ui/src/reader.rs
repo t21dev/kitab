@@ -4,6 +4,7 @@
 //! pages render), zoom modes, rotation, keyboard navigation, the password prompt
 //! and the error placeholders (PLAN.md Phase 1, DESIGN.md § Page sheets).
 
+mod book;
 mod dock;
 mod editor;
 mod find;
@@ -74,6 +75,8 @@ pub enum ReaderEvent {
     MoreMenu(Point<Pixels>),
     /// A link in a Markdown document points at another file: open it in a tab.
     OpenPath(PathBuf),
+    /// Zoom in a book changed the text size (points), for every book.
+    BookText(f32),
 }
 
 /// What "Save page as…" writes.
@@ -158,6 +161,8 @@ pub struct Reader {
     top_inset: f32,
     /// A Markdown document: its blocks are the list's items instead of pages.
     md: Option<markdown::MdState>,
+    /// A book's layout (EPUB, MOBI, FB2, TXT); `None` for files with pages.
+    book: Option<book::BookState>,
 }
 
 impl Reader {
@@ -217,6 +222,7 @@ impl Reader {
             dock: dock::DockState::default(),
             top_inset: 0.0,
             md: None,
+            book: None,
         };
         this.open(None, cx);
         this
@@ -328,6 +334,7 @@ impl Reader {
                         permissions: Default::default(),
                         encryption: None,
                         repaired: false,
+                        reflowable: false,
                     };
                     let saved = library.opened(&path, &info);
                     Ok((doc, info, saved, text.into_owned()))
@@ -374,6 +381,8 @@ impl Reader {
     ) {
         match result {
             Ok((doc, info)) => {
+                // Books keep their saved place as a fraction (see book.rs).
+                self.start_book(&info);
                 if let Some(state) = self.restore {
                     self.zoom = state.zoom;
                     self.rotation = state.rotation;
@@ -541,11 +550,24 @@ impl Reader {
     }
 
     fn set_zoom(&mut self, zoom: ZoomMode, cx: &mut Context<Self>) {
+        if self.is_book() {
+            // Actual size (Ctrl+0) puts the text size back; a book page
+            // otherwise always fits the width.
+            if zoom == ZoomMode::ActualSize {
+                cx.emit(ReaderEvent::BookText(crate::settings::BOOK_TEXT_DEFAULT));
+            }
+            return;
+        }
         self.zoom = zoom;
         self.relayout(cx);
     }
 
     fn step_zoom(&mut self, up: bool, cx: &mut Context<Self>) {
+        // In a book, zoom is the text size: the page always fits the window.
+        if self.is_book() {
+            self.step_book_text(up, cx);
+            return;
+        }
         let current = self.px_per_pt(self.current_page()) / PX_PER_PT_AT_100;
         let next = if up {
             ZOOM_STEPS
@@ -1209,6 +1231,9 @@ impl Render for Reader {
                 cx.notify();
             }
         });
+        if self.is_book() {
+            self.check_book_layout(cx);
+        }
         if self.status == Status::Open && self.viewport.0 > 0.0 {
             if let Some(ReadingState {
                 locator: Locator::Fixed { page, y, .. },

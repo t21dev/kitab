@@ -305,3 +305,113 @@ fn kindle_books_from_gutenberg() {
         ));
     }
 }
+
+/// Books lay out again at a new page or text size: page count and sizes
+/// change, the default layout gives the oracle's count back, bad layouts and
+/// PDFs are refused, and pages drawn afterwards (on any worker) have the new
+/// size.
+#[test]
+fn books_lay_out_again() {
+    use kitab_core::BookLayout;
+    let name = "01-epub3-basic.epub";
+    let oracle = expected()["epub"][name]["pages_at_400x600_11pt"]
+        .as_u64()
+        .unwrap() as u32;
+    let (id, info) = engine().open(&epub(name), None).unwrap();
+    assert!(info.reflowable);
+    assert_eq!(info.page_count, oracle);
+
+    let wide = BookLayout {
+        width: 800.0,
+        height: 600.0,
+        em: 11.0,
+    };
+    let w = engine().relayout(id, wide).unwrap();
+    assert!(
+        w.page_count < oracle,
+        "wider pages: {} vs {oracle}",
+        w.page_count
+    );
+    assert!(
+        w.page_sizes
+            .iter()
+            .all(|s| (s.w - 800.0).abs() < 1.0 && (s.h - 600.0).abs() < 1.0)
+    );
+    assert!(
+        w.outline
+            .iter()
+            .all(|o| o.page.is_none_or(|p| p < w.page_count))
+    );
+
+    let big = BookLayout { em: 18.0, ..wide };
+    let b = engine().relayout(id, big).unwrap();
+    assert!(
+        b.page_count > w.page_count,
+        "bigger text: {} vs {}",
+        b.page_count,
+        w.page_count
+    );
+
+    // Every page after the change is drawn at the new size, whichever worker
+    // draws it (helpers reopen the book at the new layout).
+    engine().set_generation(id, 1);
+    let pages: Vec<u32> = (0..b.page_count.min(8)).collect();
+    let handles: Vec<_> = pages
+        .into_iter()
+        .map(|page| {
+            std::thread::spawn(move || {
+                engine()
+                    .render(
+                        id,
+                        RenderRequest {
+                            page,
+                            scale: 0.5,
+                            rotation: 0,
+                            tile: None,
+                            generation: 1,
+                        },
+                    )
+                    .unwrap()
+                    .unwrap()
+            })
+        })
+        .collect();
+    for h in handles {
+        let bmp = h.join().unwrap();
+        assert!(
+            (bmp.width as f32 - 400.0).abs() <= 1.0,
+            "width {}",
+            bmp.width
+        );
+        assert!(
+            (bmp.height as f32 - 300.0).abs() <= 1.0,
+            "height {}",
+            bmp.height
+        );
+    }
+
+    let back = engine().relayout(id, BookLayout::DEFAULT).unwrap();
+    assert_eq!(back.page_count, oracle);
+
+    for bad in [
+        BookLayout {
+            width: f32::NAN,
+            ..BookLayout::DEFAULT
+        },
+        BookLayout {
+            width: 50.0,
+            ..BookLayout::DEFAULT
+        },
+        BookLayout {
+            em: 200.0,
+            ..BookLayout::DEFAULT
+        },
+    ] {
+        assert!(engine().relayout(id, bad).is_err(), "{bad:?}");
+    }
+    engine().close(id);
+
+    let (pdf_id, _) = engine().open(&pdf("01-text-outline.pdf"), None).unwrap();
+    assert!(engine().relayout(pdf_id, BookLayout::DEFAULT).is_err());
+    engine().close(pdf_id);
+}
