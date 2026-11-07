@@ -45,6 +45,7 @@ pub struct Style {
     /// The quick dock's buttons.
     pub dock_items: crate::settings::DockItems,
     pub status_items: crate::settings::StatusItems,
+    pub title_items: crate::settings::TitleItems,
     /// Check for updates automatically (opt-in).
     pub update_check: bool,
     /// The release put off with Later.
@@ -85,6 +86,7 @@ impl Style {
             file_info_folded: s.file_info_folded,
             dock_items: s.dock_items,
             status_items: s.status_items,
+            title_items: s.title_items,
             update_check: s.update_check,
             skipped_update: s.skipped_update.clone(),
         };
@@ -138,6 +140,7 @@ impl Style {
             file_info_folded: self.file_info_folded,
             dock_items: self.dock_items,
             status_items: self.status_items,
+            title_items: self.title_items,
             update_check: self.update_check,
             skipped_update: self.skipped_update.clone(),
         }

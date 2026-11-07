@@ -380,9 +380,9 @@ fn appearance(
             st,
         ))
         .child(group(
-            "Dock items",
-            Some("Choose the buttons the dock shows. The compact dock trims these further."),
-            dock_item_rows(ws, st),
+            "Toolbar",
+            Some("Put each button in the title bar, beside the window buttons, or in the dock over the page, or turn it off. Title bar buttons act on the open tab. The compact dock trims the dock further."),
+            toolbar_rows(ws, st),
             st,
         ))
         .child(group(
@@ -503,54 +503,83 @@ fn reading(ws: &WeakEntity<Workspace>, st: &Style) -> AnyElement {
         .into_any_element()
 }
 
-/// Switches for the dock's buttons; More and the hide chevron always stay.
-fn dock_item_rows(ws: &WeakEntity<Workspace>, st: &Style) -> AnyElement {
-    let d = st.dock_items;
-    let row = |id: &'static str, label: &'static str, on: bool, f: fn(&mut Style)| {
-        well_row(label, "", switch(id, on, st, change(ws, f)), st)
-    };
-    div()
-        .flex()
-        .flex_col()
-        .gap(px(8.0))
-        .child(row("dock-i-sidebar", "Sidebar", d.sidebar, |s| {
-            s.dock_items.sidebar = !s.dock_items.sidebar
-        }))
-        .child(row("dock-i-history", "Back and forward", d.history, |s| {
-            s.dock_items.history = !s.dock_items.history
-        }))
-        .child(row("dock-i-zoom", "Zoom", d.zoom, |s| {
-            s.dock_items.zoom = !s.dock_items.zoom
-        }))
-        .child(row("dock-i-fit", "Fit width and fit page", d.fit, |s| {
-            s.dock_items.fit = !s.dock_items.fit
-        }))
-        .child(row("dock-i-find", "Find", d.find, |s| {
-            s.dock_items.find = !s.dock_items.find
-        }))
-        .child(row("dock-i-bookmark", "Bookmark", d.bookmark, |s| {
-            s.dock_items.bookmark = !s.dock_items.bookmark
-        }))
-        .child(row("dock-i-markup", "Draw and mark up", d.markup, |s| {
-            s.dock_items.markup = !s.dock_items.markup
-        }))
-        .child(row("dock-i-rotate", "Rotate", d.rotate, |s| {
-            s.dock_items.rotate = !s.dock_items.rotate
-        }))
-        .child(row("dock-i-minimal", "Minimal mode", d.minimal, |s| {
-            s.dock_items.minimal = !s.dock_items.minimal
-        }))
-        .child(well_row(
-            "More and Hide",
-            "Always there: everything else is in More, and Hide brings the dock back.",
-            div()
-                .text_size(px(12.0))
-                .text_color(st.c(|c| c.faint))
-                .child("Always on")
-                .into_any_element(),
-            st,
-        ))
-        .into_any_element()
+/// Where a toolbar button sits.
+#[derive(Clone, Copy, PartialEq)]
+enum Place {
+    Title,
+    Dock,
+    Off,
+}
+
+/// A button's two switches: shown in the dock, moved to the title bar.
+type Slot = (
+    fn(&mut crate::settings::DockItems) -> &mut bool,
+    fn(&mut crate::settings::TitleItems) -> &mut bool,
+);
+
+/// One row per toolbar button: title bar, dock or off. More can't be off;
+/// the dock's hide chevron always stays.
+fn toolbar_rows(ws: &WeakEntity<Workspace>, st: &Style) -> AnyElement {
+    let rows: [(&'static str, Slot); 9] = [
+        ("Sidebar", (|d| &mut d.sidebar, |t| &mut t.sidebar)),
+        ("Back and forward", (|d| &mut d.history, |t| &mut t.history)),
+        ("Zoom", (|d| &mut d.zoom, |t| &mut t.zoom)),
+        ("Fit width and fit page", (|d| &mut d.fit, |t| &mut t.fit)),
+        ("Find", (|d| &mut d.find, |t| &mut t.find)),
+        ("Bookmark", (|d| &mut d.bookmark, |t| &mut t.bookmark)),
+        ("Draw and mark up", (|d| &mut d.markup, |t| &mut t.markup)),
+        ("Rotate", (|d| &mut d.rotate, |t| &mut t.rotate)),
+        ("Minimal mode", (|d| &mut d.minimal, |t| &mut t.minimal)),
+    ];
+    let mut col = div().flex().flex_col().gap(px(8.0));
+    for (label, (dock, title)) in rows {
+        let (mut d, mut t) = (st.dock_items, st.title_items);
+        let now = if *title(&mut t) {
+            Place::Title
+        } else if *dock(&mut d) {
+            Place::Dock
+        } else {
+            Place::Off
+        };
+        let choices = [
+            ("Title bar", Place::Title),
+            ("Dock", Place::Dock),
+            ("Off", Place::Off),
+        ]
+        .into_iter()
+        .map(|(name, place)| {
+            let set = move |s: &mut Style| {
+                *title(&mut s.title_items) = place == Place::Title;
+                // A button moved to the title bar keeps its dock switch,
+                // so moving it back puts it where it was.
+                if place != Place::Title {
+                    *dock(&mut s.dock_items) = place == Place::Dock;
+                } else {
+                    *dock(&mut s.dock_items) = true;
+                }
+            };
+            (SharedString::from(name), now == place, change(ws, set))
+        })
+        .collect();
+        col = col.child(well_row(label, "", segmented(choices, st), st));
+    }
+    let more = [("Title bar", true), ("Dock", false)]
+        .into_iter()
+        .map(|(name, up)| {
+            (
+                SharedString::from(name),
+                st.title_items.more == up,
+                change(ws, move |s: &mut Style| s.title_items.more = up),
+            )
+        })
+        .collect();
+    col.child(well_row(
+        "More (⋯)",
+        "Everything else lives here, so it is always in one of the two.",
+        segmented(more, st),
+        st,
+    ))
+    .into_any_element()
 }
 
 fn minimal_rows(ws: &WeakEntity<Workspace>, st: &Style) -> AnyElement {

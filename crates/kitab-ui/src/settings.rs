@@ -170,6 +170,51 @@ impl Default for DockItems {
     }
 }
 
+/// The buttons that sit in the title bar instead of the dock (Settings ›
+/// Appearance › Toolbar). A button here is left out of the dock. More (⋯)
+/// lives in one of the two; the dock's hide chevron always stays.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct TitleItems {
+    pub sidebar: bool,
+    pub history: bool,
+    pub zoom: bool,
+    pub fit: bool,
+    pub find: bool,
+    pub markup: bool,
+    pub rotate: bool,
+    pub bookmark: bool,
+    pub minimal: bool,
+    pub more: bool,
+}
+
+impl TitleItems {
+    pub const NONE: TitleItems = TitleItems {
+        sidebar: false,
+        history: false,
+        zoom: false,
+        fit: false,
+        find: false,
+        markup: false,
+        rotate: false,
+        bookmark: false,
+        minimal: false,
+        more: false,
+    };
+}
+
+impl Default for TitleItems {
+    /// Find, Draw and More up top: the dock keeps paging and zoom.
+    fn default() -> Self {
+        Self {
+            find: true,
+            markup: true,
+            more: true,
+            ..Self::NONE
+        }
+    }
+}
+
 /// What the status bar shows (Settings › Reading › Status bar): facts about
 /// the file on the left, where you are on the right.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -337,6 +382,8 @@ pub struct Settings {
     pub dock_items: DockItems,
     /// The status bar's items.
     pub status_items: StatusItems,
+    /// Buttons in the title bar rather than the dock.
+    pub title_items: TitleItems,
     /// Ask GitHub for a newer release shortly after start-up and every six
     /// hours (Settings › About › Check on start-up). On by default, the
     /// owner's call (AGENTS.md rule 12); the switch turns it off.
@@ -416,6 +463,7 @@ impl Default for Settings {
             file_info_folded: false,
             dock_items: DockItems::default(),
             status_items: StatusItems::default(),
+            title_items: TitleItems::default(),
             update_check: true,
             skipped_update: String::new(),
         }
@@ -457,6 +505,7 @@ struct File {
     file_info_folded: bool,
     dock_items: DockItems,
     status_items: StatusItems,
+    title_items: TitleItems,
     check_for_updates: bool,
     skipped_update: String,
 }
@@ -538,6 +587,7 @@ impl From<Settings> for File {
             file_info_folded: s.file_info_folded,
             dock_items: s.dock_items,
             status_items: s.status_items,
+            title_items: s.title_items,
             check_for_updates: s.update_check,
             skipped_update: s.skipped_update,
         }
@@ -580,6 +630,7 @@ impl Settings {
             file_info_folded: f.file_info_folded,
             dock_items: f.dock_items,
             status_items: f.status_items,
+            title_items: f.title_items,
             update_check: f.check_for_updates,
             skipped_update: f.skipped_update.chars().take(32).collect(),
         })
@@ -635,6 +686,11 @@ mod tests {
                 zoom: true,
                 words: false,
                 ..StatusItems::default()
+            },
+            title_items: TitleItems {
+                zoom: true,
+                more: false,
+                ..TitleItems::default()
             },
             update_check: false,
             skipped_update: "0.2.0".into(),

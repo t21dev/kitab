@@ -1386,10 +1386,16 @@ impl Render for Reader {
             self.schedule_save(cx);
         }
 
-        if matches!(
-            self.status,
-            Status::NeedsPassword { .. } | Status::Failed(_)
-        ) {
+        // The splash (a first frame drawn before the GPU window) goes once
+        // this tab has something to show: an open Markdown file draws as
+        // text, a prompt or an error at once; PDF pages fire when drawn.
+        let markdown_open = self.md.is_some() && self.status == Status::Open;
+        if markdown_open
+            || matches!(
+                self.status,
+                Status::NeedsPassword { .. } | Status::Failed(_)
+            )
+        {
             crate::fire_first_paint(window, cx);
         }
         let status = self.render_status(window, cx);

@@ -31,12 +31,18 @@ use std::time::Duration;
 mod palette_ui;
 mod save_page;
 mod system;
+mod title_actions;
 mod tools_ui;
 pub use system::VERSION;
 use tools_ui::ToolsState;
 
 /// Writes settings.json (the app passes it in; called off the UI thread).
 pub struct SettingsSink(pub Arc<dyn Fn(String) + Send + Sync>);
+
+/// The title bar is too narrow for its buttons this frame: the dock shows
+/// them again (only More stays up top).
+pub struct TitleSqueezed(pub bool);
+impl gpui::Global for TitleSqueezed {}
 impl gpui::Global for SettingsSink {}
 
 /// Closed tabs remembered for Ctrl+Shift+T.
@@ -94,6 +100,11 @@ pub struct Workspace {
     /// The sidebar's width this frame: its full width, or less in a narrow
     /// window so the page keeps most of it.
     sidebar_w: f32,
+    /// When the window opened: the splash goes after a few seconds whatever
+    /// the tabs are doing.
+    born: std::time::Instant,
+    /// The window is too narrow for the title-bar buttons: only More shows.
+    title_squeezed: bool,
 }
 
 /// The sidebar's panes for a document.
@@ -163,6 +174,8 @@ impl Workspace {
             keymap_mtime: None,
             was_fullscreen: false,
             sidebar_w: crate::layout::SIDEBAR_W,
+            born: std::time::Instant::now(),
+            title_squeezed: false,
         };
         // Leaving the hex field ends the edit.
         let hex_blur = cx.on_blur(&this.hex.focus, window, |ws, _, cx| {
@@ -184,6 +197,8 @@ impl Workspace {
         }
         this.refresh_recent(cx);
         this.first_update_check(cx);
+        // A last resort for the splash: redraw after 3 s so render can close it.
+        this.after(Duration::from_secs(3), cx, |_, cx| cx.notify());
         // keymap.json: shortly after start-up, then whenever the window comes
         // back to the front (the user may have just edited it).
         this.after(Duration::from_millis(400), cx, |ws, cx| ws.load_keymap(cx));
@@ -546,8 +561,14 @@ impl Workspace {
         // button, a 96 px drag area and the three window buttons. Tabs share it
         // down to 120 px each; past that the strip scrolls.
         let n = self.tabs.len().max(1) as f32;
-        let fixed = 8.0 + 2.0 * st.m().icon_button + 17.0 + 40.0 + 96.0 + 3.0 * 46.0 + 12.0;
-        let room = (f32::from(window.viewport_size().width) - fixed).max(0.0);
+        let base = 8.0 + 2.0 * st.m().icon_button + 17.0 + 40.0 + 96.0 + 3.0 * 46.0 + 12.0;
+        let win_w = f32::from(window.viewport_size().width);
+        // The title-bar buttons give way (to More alone) before the tabs do.
+        let squeezed = win_w - base - self.title_actions_width(st, false) < 140.0;
+        self.title_squeezed = squeezed;
+        cx.set_global(TitleSqueezed(squeezed));
+        let fixed = base + self.title_actions_width(st, squeezed);
+        let room = (win_w - fixed).max(0.0);
         let tab_w = ((room - 4.0 * n) / n).clamp(120.0, 220.0);
         let crowded = n * 224.0 > room;
         if self.reveal_tab {
@@ -686,6 +707,7 @@ impl Workspace {
                 )
             });
         let pill = self.update_pill(st, cx);
+        let actions = self.title_actions(st, self.title_squeezed, cx);
         bar.child(
             div()
                 .id("drag")
@@ -695,6 +717,7 @@ impl Workspace {
                 .h_full()
                 .window_control_area(WindowControlArea::Drag),
         )
+        .children(actions)
         .children(pill)
         .child(window_button(
             "win-min",
@@ -1844,6 +1867,11 @@ fn cover(title: &str, width: f32, st: &Style) -> AnyElement {
 impl Render for Workspace {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let st = Style::get(cx).clone();
+        // Home has nothing to wait for; and no tab keeps the splash up for
+        // more than a few seconds.
+        if self.active.is_none() || self.born.elapsed() > Duration::from_millis(2900) {
+            crate::fire_first_paint(window, cx);
+        }
         // In a narrow window the sidebar gives way: 40 % of the width, at
         // least 180 px, never more than its full width.
         let win_w = f32::from(window.viewport_size().width);

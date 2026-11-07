@@ -131,7 +131,29 @@ impl Reader {
         let compact = st.dock_compact;
         // What the dock shows (Settings › Appearance › Dock items); the
         // compact preset trims the rest. More and Hide are always there.
-        let items = st.dock_items;
+        // What the title bar shows is left out of the dock (all but More come
+        // back here when the window is too narrow for them up there).
+        let squeezed = cx
+            .try_global::<crate::shell::TitleSqueezed>()
+            .is_some_and(|s| s.0);
+        let t = if squeezed {
+            crate::settings::TitleItems {
+                more: st.title_items.more,
+                ..crate::settings::TitleItems::NONE
+            }
+        } else {
+            st.title_items
+        };
+        let mut items = st.dock_items;
+        items.sidebar &= !t.sidebar;
+        items.history &= !t.history;
+        items.zoom &= !t.zoom;
+        items.fit &= !t.fit;
+        items.find &= !t.find;
+        items.markup &= !t.markup;
+        items.rotate &= !t.rotate;
+        items.bookmark &= !t.bookmark;
+        items.minimal &= !t.minimal;
         let show_sidebar = items.sidebar && !compact;
         let show_history = items.history && !compact;
         let show_fit = items.fit && !compact;
@@ -365,13 +387,15 @@ impl Reader {
                                 }),
                         )
                     })
-                    .child(
-                        dock_button("dock-more", "more-vertical", false, st)
-                            .tip("More")
-                            .on_click(cx.listener(|_, e: &gpui::ClickEvent, _, cx| {
-                                cx.emit(ReaderEvent::MoreMenu(e.position()))
-                            })),
-                    )
+                    .when(!t.more, |g| {
+                        g.child(
+                            dock_button("dock-more", "more-vertical", false, st)
+                                .tip("More")
+                                .on_click(cx.listener(|_, e: &gpui::ClickEvent, _, cx| {
+                                    cx.emit(ReaderEvent::MoreMenu(e.position()))
+                                })),
+                        )
+                    })
                     // Tuck the dock into a handle at its edge.
                     .child(
                         dock_button("dock-hide", toward_edge(at), false, st)

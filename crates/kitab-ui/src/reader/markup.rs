@@ -223,6 +223,11 @@ impl Reader {
     }
 
     /// Show or hide the markup bar (Ctrl+Shift+D, or the dock's pen).
+    /// The markup tools are out (the dock's or title bar's pen is lit).
+    pub fn markup_on(&self) -> bool {
+        self.markup.open
+    }
+
     pub fn toggle_markup(&mut self, cx: &mut Context<Self>) {
         if !Style::get(cx).markup {
             return;
