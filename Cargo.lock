@@ -3424,7 +3424,7 @@ checksum = "e2db585e1d738fc771bf08a151420d3ed193d9d895a36df7f6f8a9456b911ddc"
 
 [[package]]
 name = "kitab"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "embed-resource",
  "gpui",
@@ -3443,7 +3443,7 @@ dependencies = [
 
 [[package]]
 name = "kitab-bench"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "embed-resource",
  "kitab-os",
@@ -3455,11 +3455,11 @@ dependencies = [
 
 [[package]]
 name = "kitab-core"
-version = "0.0.1"
+version = "0.1.0"
 
 [[package]]
 name = "kitab-md"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "pulldown-cmark",
  "serde_json",
@@ -3468,7 +3468,7 @@ dependencies = [
 
 [[package]]
 name = "kitab-mupdf"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "flate2",
  "kitab-core",
@@ -3482,7 +3482,7 @@ dependencies = [
 
 [[package]]
 name = "kitab-os"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "libc",
  "serde_json",
@@ -3491,14 +3491,14 @@ dependencies = [
 
 [[package]]
 name = "kitab-print"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "windows 0.61.3",
 ]
 
 [[package]]
 name = "kitab-shell"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "kitab-os",
  "windows 0.61.3",
@@ -3507,7 +3507,7 @@ dependencies = [
 
 [[package]]
 name = "kitab-sign"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "cms 0.2.3",
  "const-oid 0.9.6",
@@ -3528,7 +3528,7 @@ dependencies = [
 
 [[package]]
 name = "kitab-store"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "file-id",
  "kitab-core",
@@ -3541,7 +3541,7 @@ dependencies = [
 
 [[package]]
 name = "kitab-theme"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -3549,7 +3549,7 @@ dependencies = [
 
 [[package]]
 name = "kitab-thumb"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "kitab-core",
  "kitab-md",
@@ -3561,7 +3561,7 @@ dependencies = [
 
 [[package]]
 name = "kitab-ui"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "gpui",

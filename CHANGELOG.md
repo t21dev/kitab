@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-11-08
+
 ### Added
 - Keyboard navigation: Tab and Shift+Tab move through the buttons and controls (title bar, tabs, dock, Home, Settings, dialogs) with an accent ring on the focused one; Enter or Space presses it. In a menu, Up and Down pick a row and Enter runs it. The ring shows only once you press Tab, and a click hands the keys back to the page, so the reader's one-key shortcuts keep working.
 - Gray theme: plain neutral greys on #191919 (Settings › Appearance, or the ⋯ menu).
@@ -113,3 +115,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Small windows no longer look broken: the dock stays inside the reading area and scrolls along its length (a mouse wheel over it scrolls it), the sidebar narrows to give the page room, and the window buttons always stay on screen.
 - Fit width and fit page follow a window resize even when no new page has to be drawn.
 - The Settings window shrinks to fit small windows instead of running off the left edge.
+
+[Unreleased]: https://github.com/t21dev/kitab/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/t21dev/kitab/releases/tag/v0.1.0
