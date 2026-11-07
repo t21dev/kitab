@@ -43,3 +43,7 @@ Checked on 7 November 2026; none of these changes start-up on its own.
 - Driver variance on hybrid-GPU laptops (waking the discrete GPU): measure on several machines.
 - A visible seam when the GDI first frame hands over to the GPU surface.
 - AccessKit in GPUI is new.
+
+## Update (8 November 2026): the GDI first frame is gone
+
+The owner found the stand-in window (a plain Win32 window painting page 1 while GPUI started, then replaced by the real one) jarring, and asked for another approach even at a cost of some milliseconds. The main window is now created hidden, shown under a DWM cloak (`kitab_os::cloak_window`) so it lays out and draws while off screen, and uncloaked on the frame after its first page (or Home) is drawn, or after 0.7 s at the latest (`kitab-ui/src/lib.rs`, `reveal`). Entrance animations that start before the window is on screen finish at once (`motion.rs`). The window now appears at about 200 ms with the page already in it, against 21 ms for the stand-in; measurements in docs/perf/baseline.md.

@@ -99,3 +99,18 @@ Findings:
 ## Internal trace marks (Kitab only)
 
 From ADR 0001 (milliseconds from `main`, 5 runs): window opened 262–275 ms, page 1 rendered by MuPDF 3–4 ms later, first page painted 281–290 ms. About 250 ms of that is GPUI's Windows platform set-up (D3D11 device created twice, DirectWrite) before the window exists.
+
+## Kitab 0.1 against SumatraPDF (8 November 2026)
+
+Same machine. `kitab-bench s2 --runs 15 --warmup 2`, medians. Kitab: release build with the static C runtime, no stand-in window (ADR 0002 update). The bench now ignores cloaked windows and also reports when page content is first seen in a capture (stable or not), because Kitab's window appears with the page already drawn and Windows' open animation changes its pixels for about 150 ms, which the "two identical captures" rule waits out. SumatraPDF's captures cost about 150 ms each, so its page times are coarse.
+
+| File | App | Window on screen | Page first seen | Page stable | CPU to page | Working set | Private | CPU in the 2 s after |
+|---|---|---|---|---|---|---|---|---|
+| 01-text-outline.pdf (40 pages) | Kitab | 201 ms | 231 ms | 326–385 ms | 312 ms | 106.6 MB | 155.0 MB | 3.9 % |
+| | SumatraPDF 3.6.1 | 76 ms (blank) | ≤ 285 ms | 76–298 ms | 218 ms | 42.7 MB | 15.0 MB | 0.0 % |
+| 06-large-20mb.pdf (300 images) | Kitab | 203 ms | 243 ms | 321–393 ms | 296 ms | 106.7 MB | 155.2 MB | 4.0 % |
+| | SumatraPDF 3.6.1 | 80 ms (blank) | ≤ 449 ms | 80–449 ms | 234 ms | 87.1 MB | 37.5 MB | 0.0 % |
+
+- Steady idle (after the first seconds) is 0 % with occasional single timer ticks; the "2 s after" column is start-up work settling (outline, bookmarks, the reader's neighbouring pages).
+- Start-up trace (`KITAB_TRACE_START=1`, `kitab_os::trace`): GPUI's `Application::new` takes about 110 ms of wall and CPU time before any window exists (Direct3D device and DirectWrite set-up); MuPDF opens the file in about 2 ms and renders page 1 in about 20 ms.
+- Fixed in this round: each visible page was rendered two or three times on open (a relayout at start-up cancelled renders in flight, and a soft preview ran before any page had been timed). Before: about 300 ms CPU at first paint, 129 MB working set, 186 MB private. After: about 205–235 ms CPU at first paint (trace), 107 MB, 155 MB.

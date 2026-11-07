@@ -10,7 +10,17 @@
 use gpui::{
     Animation, AnimationExt, AnyElement, ElementId, IntoElement, Styled, ease_out_quint, px,
 };
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
+
+/// Whether the window is on screen yet. Until it is (it opens cloaked, see
+/// lib.rs), entrances finish at once: the window appears whole, with nothing
+/// still sliding into place.
+static ON_SCREEN: AtomicBool = AtomicBool::new(false);
+
+pub(crate) fn set_on_screen() {
+    ON_SCREEN.store(true, Ordering::Relaxed);
+}
 
 /// Menus, tooltips, popovers.
 pub const FAST: Duration = Duration::from_millis(140);
@@ -62,6 +72,13 @@ where
     if !on {
         return el.into_any_element();
     }
+    // Drawn before the window shows: done by the time it does. (The
+    // animation still exists, so it doesn't start later instead.)
+    let (duration, delay) = if ON_SCREEN.load(Ordering::Relaxed) {
+        (duration, delay)
+    } else {
+        (Duration::from_millis(1), Duration::ZERO)
+    };
     let ease = ease_out_quint();
     if delay.is_zero() {
         return el

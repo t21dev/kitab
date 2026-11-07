@@ -225,6 +225,8 @@ impl Reader {
                 self.cache.clear();
                 self.layers = layer::Layers::default();
                 self.select = select::SelectState::default();
+                // New pages at the same scale: renders in flight are stale.
+                self.layout_sig = None;
                 self.relayout(cx);
                 self.list.scroll_to(ListOffset {
                     item_ix: page as usize,

@@ -7,6 +7,7 @@ pub mod assoc;
 pub mod instance;
 #[cfg(windows)]
 pub mod splash;
+pub mod trace;
 pub mod update;
 pub mod xdg;
 
@@ -100,5 +101,59 @@ pub fn reveal_in_folder(path: &std::path::Path) -> std::io::Result<()> {
             .arg(dir)
             .spawn()
             .map(|_| ())
+    }
+}
+
+/// Keep a window off the screen while it draws its first frame (`true`),
+/// then let it appear (`false`), with no visible step in between. The window
+/// is shown and renders as usual; DWM just doesn't composite it. Windows
+/// only; elsewhere this does nothing.
+pub fn cloak_window(hwnd: isize, cloaked: bool) {
+    #[cfg(windows)]
+    {
+        use windows::Win32::Foundation::HWND;
+        use windows::Win32::Graphics::Dwm::{DWMWA_CLOAK, DwmSetWindowAttribute};
+        // A Win32 BOOL.
+        let value: i32 = i32::from(cloaked);
+        // SAFETY: `hwnd` is the app's own live top-level window; the attribute
+        // value is a BOOL of the size passed.
+        let _ = unsafe {
+            DwmSetWindowAttribute(
+                HWND(hwnd as *mut core::ffi::c_void),
+                DWMWA_CLOAK,
+                (&value as *const i32).cast(),
+                std::mem::size_of::<i32>() as u32,
+            )
+        };
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = (hwnd, cloaked);
+    }
+}
+
+/// Whether DWM keeps a window off the screen (cloaked). Benchmarks count a
+/// window as shown only once it isn't. Windows only; `false` elsewhere.
+pub fn is_cloaked(hwnd: isize) -> bool {
+    #[cfg(windows)]
+    {
+        use windows::Win32::Foundation::HWND;
+        use windows::Win32::Graphics::Dwm::{DWMWA_CLOAKED, DwmGetWindowAttribute};
+        let mut value: u32 = 0;
+        // SAFETY: the attribute is a DWORD written into `value`, whose size is passed.
+        let ok = unsafe {
+            DwmGetWindowAttribute(
+                HWND(hwnd as *mut core::ffi::c_void),
+                DWMWA_CLOAKED,
+                (&mut value as *mut u32).cast(),
+                std::mem::size_of::<u32>() as u32,
+            )
+        };
+        ok.is_ok() && value != 0
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = hwnd;
+        false
     }
 }

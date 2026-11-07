@@ -54,6 +54,7 @@ fn main() {
         std::process::exit(code);
     }
 
+    kitab_os::trace::mark("main");
     let mut files: Vec<PathBuf> = Vec::new();
     for arg in std::env::args_os().skip(1) {
         let s = arg.to_string_lossy();
@@ -101,15 +102,12 @@ fn main() {
                 std::process::exit(1);
             }
         };
+    kitab_os::trace::mark("settings and theme");
     let engine: Arc<dyn DocEngine> = Arc::new(adapters::MupdfEngine::new());
+    kitab_os::trace::mark("engine");
     // The library database opens on its own io thread, off the start-up path.
     let library: Arc<dyn Library> =
         adapters::StoreLibrary::start(kitab_os::data_dir().map(|d| d.join("library.sqlite3")));
-
-    #[cfg(windows)]
-    if let Some(first) = files.first().cloned() {
-        first_frame::show(first, engine.clone(), &theme, settings.density);
-    }
 
     // Files from later launches arrive on a background thread (Windows,
     // Linux) or as "open" events from the system (macOS's Finder).
@@ -124,10 +122,9 @@ fn main() {
             }
         });
     }
+    kitab_os::trace::mark("gpui application");
     app.run(move |cx| {
-        #[cfg(windows)]
-        cx.set_global(FirstPaint(Some(Box::new(kitab_os::splash::close))));
-        #[cfg(not(windows))]
+        kitab_os::trace::mark("gpui running");
         cx.set_global(FirstPaint(None));
         listener.run(move |paths| {
             let _ = tx.send_blocking(paths);
@@ -145,6 +142,7 @@ fn main() {
             cx.background_spawn(async move { library.end_session() })
         })
         .detach();
+        kitab_os::trace::mark("opening window");
         if !kitab_ui::open_main_window(cx, engine, library, theme, settings, save_settings, files) {
             eprintln!("Kitab: could not open a window");
             cx.quit();
@@ -173,6 +171,16 @@ fn path_of_url(url: &str) -> Option<PathBuf> {
     path.is_absolute().then_some(path)
 }
 
+/// Write through a temporary file and rename, so a crash never leaves half a file.
+fn write_atomically(path: &std::path::Path, text: &str) -> std::io::Result<()> {
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir)?;
+    }
+    let tmp = path.with_extension("json.tmp");
+    std::fs::write(&tmp, text)?;
+    std::fs::rename(&tmp, path)
+}
+
 #[cfg(test)]
 mod url_tests {
     use super::path_of_url;
@@ -187,119 +195,5 @@ mod url_tests {
         assert_eq!(path_of_url("https://example.com/a.pdf"), None);
         assert_eq!(path_of_url("file://relative.pdf"), None);
         assert_eq!(path_of_url("file:///bad%zz"), None);
-    }
-}
-
-/// Write through a temporary file and rename, so a crash never leaves half a file.
-fn write_atomically(path: &std::path::Path, text: &str) -> std::io::Result<()> {
-    if let Some(dir) = path.parent() {
-        std::fs::create_dir_all(dir)?;
-    }
-    let tmp = path.with_extension("json.tmp");
-    std::fs::write(&tmp, text)?;
-    std::fs::rename(&tmp, path)
-}
-
-#[cfg(windows)]
-mod first_frame {
-    //! The GDI first frame: the window's skeleton in theme colours and page 1
-    //! where the GPU window will draw it (layout from `kitab_ui::layout`).
-
-    use kitab_core::RenderRequest;
-    use kitab_os::splash::{self, Fill, Frame, Page};
-    use kitab_theme::{Density, Rgba, Theme};
-    use kitab_ui::{DocEngine, layout};
-    use std::path::PathBuf;
-    use std::sync::Arc;
-
-    fn rgb(c: Rgba) -> (u8, u8, u8) {
-        let q = |v: f32| (v.clamp(0.0, 1.0) * 255.0).round() as u8;
-        (q(c.r), q(c.g), q(c.b))
-    }
-
-    pub fn show(file: PathBuf, engine: Arc<dyn DocEngine>, theme: &Theme, density: Density) {
-        splash::set_dpi_aware();
-        let colors = theme.colors.clone();
-        let dark = theme.appearance != kitab_theme::Appearance::Light;
-        splash::show(move |scale| {
-            let (doc, info) = engine.open(&file, None).ok()?;
-            let m = density.metrics();
-            let (w, h) = (layout::WINDOW_W, layout::WINDOW_H);
-            // The tab bar only: the dock floats over the page (no header row).
-            let top = m.title_bar;
-            let area_x = layout::SIDEBAR_W + 1.0;
-            let area_w = w - area_x;
-            let size = info.page_sizes.first().copied()?;
-            // Fit width, as the reader opens (PLAN.md Â§3.3).
-            let ppt = (area_w - 2.0 * layout::PAGE_GAP) / size.w.max(1.0);
-            let req = RenderRequest {
-                page: 0,
-                scale: ppt * scale,
-                rotation: 0,
-                tile: None,
-                generation: 0,
-            };
-            let bmp = engine.render(doc, req).ok().flatten();
-            engine.close(doc);
-            let bmp = bmp?;
-            let page_w = bmp.width as f32 / scale;
-            let fills = vec![
-                Fill {
-                    x: 0.0,
-                    y: 0.0,
-                    w,
-                    h,
-                    rgb: rgb(colors.bg),
-                },
-                Fill {
-                    x: 0.0,
-                    y: m.title_bar - 1.0,
-                    w,
-                    h: 1.0,
-                    rgb: rgb(colors.line),
-                },
-                Fill {
-                    x: 0.0,
-                    y: top - 1.0,
-                    w,
-                    h: 1.0,
-                    rgb: rgb(colors.line),
-                },
-                Fill {
-                    x: 0.0,
-                    y: top,
-                    w: layout::SIDEBAR_W,
-                    h: h - top,
-                    rgb: rgb(colors.panel),
-                },
-                Fill {
-                    x: layout::SIDEBAR_W,
-                    y: top,
-                    w: 1.0,
-                    h: h - top,
-                    rgb: rgb(colors.line),
-                },
-                Fill {
-                    x: area_x,
-                    y: top,
-                    w: area_w,
-                    h: h - top,
-                    rgb: rgb(colors.desk),
-                },
-            ];
-            Some(Frame {
-                client_w: w,
-                client_h: h,
-                fills,
-                page: Page {
-                    width: bmp.width,
-                    height: bmp.height,
-                    bgra: bmp.bgra,
-                },
-                page_x: area_x + (area_w - page_w) / 2.0,
-                page_y: top + layout::PAGE_GAP,
-                dark_title_bar: dark,
-            })
-        });
     }
 }

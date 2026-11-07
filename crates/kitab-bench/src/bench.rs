@@ -36,6 +36,9 @@ struct Run {
     page_hi_ms: f64,
     /// Midpoint of the bracket, used for the summary statistics.
     page_ms: f64,
+    /// The end of the first capture whose middle had page content at all,
+    /// stable or not (a window still in the system's open animation counts).
+    seen_ms: f64,
     captures: u32,
     capture_ms_avg: f64,
     /// CPU time (user + kernel, all threads) used up to the moment the page was found.
@@ -64,6 +67,7 @@ struct AppResult {
     page_ms: Stats,
     page_lo_ms: Stats,
     page_hi_ms: Stats,
+    seen_ms: Stats,
     cpu_ms_to_page: Stats,
     working_set_mb: Stats,
     private_mb: Stats,
@@ -171,6 +175,7 @@ pub fn run(args: Vec<String>) -> i32 {
             page_ms: stats(runs.iter().map(|r| r.page_ms).collect()),
             page_lo_ms: stats(runs.iter().map(|r| r.page_lo_ms).collect()),
             page_hi_ms: stats(runs.iter().map(|r| r.page_hi_ms).collect()),
+            seen_ms: stats(runs.iter().map(|r| r.seen_ms).collect()),
             cpu_ms_to_page: stats(runs.iter().map(|r| r.cpu_ms_to_page).collect()),
             working_set_mb: stats(runs.iter().map(|r| r.working_set_mb).collect()),
             private_mb: stats(runs.iter().map(|r| r.private_mb).collect()),
@@ -284,6 +289,7 @@ fn measure(pid: u32, start: Instant, save: Option<&Path>) -> Result<Run, String>
     // (hash, start of that capture, end of that capture, start of the capture before it)
     let mut last: Option<(u64, f64, f64, f64)> = None;
     let mut prev_start: Option<f64> = None;
+    let mut seen: Option<f64> = None;
     let mut captures = 0u32;
     let mut capture_total = Duration::ZERO;
     while start.elapsed() < TIMEOUT {
@@ -348,7 +354,14 @@ fn measure(pid: u32, start: Instant, save: Option<&Path>) -> Result<Run, String>
         let hash = hasher.finish();
         let started = ms(before.duration_since(start));
         let ended = ms(start.elapsed());
+        if std::env::var_os("KITAB_BENCH_DEBUG").is_some() {
+            eprintln!(
+                "    capture {started:.0}–{ended:.0} ms: ink {:.3}, dominant {dominant:?}, hash {hash:x}",
+                f64::from(ink) / total
+            );
+        }
         if f64::from(ink) / total >= INK_SHARE {
+            seen.get_or_insert(ended);
             if let Some((prev, _prev_start, prev_end, lo)) = last {
                 if prev == hash {
                     if let Some(path) = save {
@@ -359,6 +372,7 @@ fn measure(pid: u32, start: Instant, save: Option<&Path>) -> Result<Run, String>
                         page_lo_ms: lo,
                         page_hi_ms: prev_end,
                         page_ms: (lo + prev_end) / 2.0,
+                        seen_ms: seen.unwrap_or(prev_end),
                         cpu_ms_to_page: 0.0,
                         working_set_mb: 0.0,
                         private_mb: 0.0,
@@ -383,6 +397,8 @@ fn window_of(pid: u32) -> Option<Window> {
     all.into_iter()
         .filter(|w| w.pid().ok() == Some(pid))
         .filter(|w| !w.is_minimized().unwrap_or(true))
+        // A cloaked window is drawing but not on screen yet: not shown.
+        .filter(|w| !w.id().is_ok_and(|id| kitab_os::is_cloaked(id as isize)))
         .filter(|w| w.width().unwrap_or(0) >= 200 && w.height().unwrap_or(0) >= 200)
         .max_by_key(|w| u64::from(w.width().unwrap_or(0)) * u64::from(w.height().unwrap_or(0)))
 }
@@ -430,20 +446,29 @@ fn print_table(results: &[AppResult]) {
     println!();
     println!("S2: process start → first page on screen, ms (median over runs)");
     println!(
-        "{:<10} {:>24} {:>14} {:>16} {:>14}",
-        "app", "page between (lo – hi)", "page (mid)", "window shown", "capture cost"
+        "{:<10} {:>24} {:>14} {:>16} {:>16} {:>14}",
+        "app",
+        "page between (lo – hi)",
+        "page (mid)",
+        "window shown",
+        "page first seen",
+        "capture cost"
     );
     for r in results {
         println!(
-            "{:<10} {:>11.0} – {:<10.0} {:>14.0} {:>16.0} {:>11.1} ms",
+            "{:<10} {:>11.0} – {:<10.0} {:>14.0} {:>16.0} {:>16.0} {:>11.1} ms",
             r.app,
             r.page_lo_ms.median,
             r.page_hi_ms.median,
             r.page_ms.median,
             r.window_ms.median,
+            r.seen_ms.median,
             r.capture_interval_ms
         );
     }
+    println!(
+        "Page first seen: the first capture with page content, even while the window is still in Windows' open animation."
+    );
     println!(
         "A page time is a bracket: the last capture without the page, and the first one with it."
     );

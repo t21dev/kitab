@@ -205,6 +205,9 @@ pub struct Reader {
     placing: bool,
     /// A page to show once the document is laid out (a library search hit).
     pending_page: Option<u32>,
+    /// The anchor page's scale (×1000) and rotation at the last relayout:
+    /// when they haven't changed, renders in flight are still right.
+    layout_sig: Option<(i64, u16)>,
     /// The annotations already in the file, once the Marks panel asked.
     file_annots: Option<Vec<kitab_core::FileAnnot>>,
     /// Bookmarked pages (Ctrl+D), in page order.
@@ -294,6 +297,7 @@ impl Reader {
             signatures: None,
             placing: false,
             pending_page: None,
+            layout_sig: None,
             file_annots: None,
             bookmark_rows: Vec::new(),
             pages: pages::PagesState::default(),
@@ -366,7 +370,9 @@ impl Reader {
         cx.spawn(async move |this, cx| {
             let (result, saved) = cx
                 .background_spawn(async move {
+                    kitab_os::trace::mark("reader: open");
                     let result = engine.open(&path, password.as_deref());
+                    kitab_os::trace::mark("reader: opened");
                     // Per-file memory (PLAN.md Phase 1): ask the library while still off the UI thread.
                     let saved = result
                         .as_ref()
@@ -628,13 +634,23 @@ impl Reader {
         } else {
             0.0
         };
-        self.generation += 1;
-        if let Some(doc) = self.doc {
-            let (engine, generation) = (self.engine.clone(), self.generation);
-            cx.background_spawn(async move { engine.set_generation(doc, generation) })
-                .detach();
+        // Only a new scale or rotation makes queued renders stale. A taller
+        // or shorter view, or the title bar settling at start-up, keeps them
+        // (each page was otherwise rendered twice or three times on open).
+        let sig = (
+            (self.px_per_pt(page) * 1000.0).round() as i64,
+            self.rotation,
+        );
+        if self.layout_sig != Some(sig) {
+            self.layout_sig = Some(sig);
+            self.generation += 1;
+            if let Some(doc) = self.doc {
+                let (engine, generation) = (self.engine.clone(), self.generation);
+                cx.background_spawn(async move { engine.set_generation(doc, generation) })
+                    .detach();
+            }
+            self.pending.clear();
         }
-        self.pending.clear();
         self.list.reset(self.page_count());
         let after = self.page_size(page).h * self.px_per_pt(page) + GAP;
         self.list.scroll_to(ListOffset {
@@ -1130,6 +1146,10 @@ impl Reader {
                 }
                 match result {
                     Ok(Some(bmp)) => {
+                        kitab_os::trace::mark(&format!(
+                            "page {page} rendered ({}x{})",
+                            bmp.width, bmp.height
+                        ));
                         if let Some(since) = this.blank_since.remove(&page) {
                             eprintln!("blank page={page} ms={}", since.elapsed().as_millis());
                         }
@@ -1194,7 +1214,11 @@ impl Reader {
                 // A preview only pays when it is clearly faster than the page.
                 let preview_pays = match (self.quick_ms, self.sharp_ms) {
                     (Some(q), Some(s)) => q * 2.0 < s,
-                    _ => true,
+                    // Sharp pages are slow here: a soft preview first.
+                    (None, Some(s)) => s > 40.0,
+                    // Nothing timed yet (opening: the splash already shows
+                    // the page), so render it sharp straight away.
+                    _ => false,
                 };
                 if any.is_none() && preview_pays {
                     // Nothing yet: a quick soft render first, then the sharp one.

@@ -110,6 +110,9 @@ pub struct Workspace {
     /// When the window opened: the splash goes after a few seconds whatever
     /// the tabs are doing.
     born: std::time::Instant,
+    /// The previous session's tabs are still loading: Home isn't the first
+    /// thing to show, so it doesn't reveal the window.
+    restoring: bool,
     /// The window is too narrow for the title-bar buttons: only More shows.
     title_squeezed: bool,
     /// The print sheet (Ctrl+P), when open.
@@ -199,6 +202,7 @@ impl Workspace {
             was_fullscreen: false,
             sidebar_w: crate::layout::SIDEBAR_W,
             born: std::time::Instant::now(),
+            restoring: false,
             title_squeezed: false,
             print: None,
             print_serial: 0,
@@ -248,6 +252,7 @@ impl Workspace {
     }
 
     fn restore_session(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.restoring = true;
         let library = self.library.clone();
         let handle = window.window_handle();
         cx.spawn(async move |this, cx| {
@@ -256,6 +261,8 @@ impl Workspace {
                 .await;
             let _ = handle.update(cx, |_, window, cx| {
                 let _ = this.update(cx, |ws, cx| {
+                    ws.restoring = false;
+                    cx.notify();
                     let mut active = None;
                     for t in tabs.iter().filter(|t| t.path.exists()) {
                         ws.open_tab(t.path.clone(), window, cx);
@@ -1982,7 +1989,9 @@ impl Render for Workspace {
         let st = Style::get(cx).clone();
         // Home has nothing to wait for; and no tab keeps the splash up for
         // more than a few seconds.
-        if self.active.is_none() || self.born.elapsed() > Duration::from_millis(2900) {
+        if (self.active.is_none() && !self.restoring)
+            || self.born.elapsed() > Duration::from_millis(2900)
+        {
             crate::fire_first_paint(window, cx);
         }
         // In a narrow window the sidebar gives way: 40 % of the width, at
