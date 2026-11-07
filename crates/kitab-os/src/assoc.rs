@@ -48,6 +48,10 @@ mod imp {
     use windows::core::HSTRING;
 
     const CAPABILITIES: &str = r"Software\t21\Kitab\Capabilities";
+    /// `kitab_shell.dll`'s class (crate `kitab-shell`).
+    const THUMB_CLSID: &str = "{7080945F-C214-4A8A-B62B-FC5E2E3D047E}";
+    /// The shell's IThumbnailProvider handler slot.
+    const THUMB_SLOT: &str = "{E357FCCD-A995-4576-B01F-234630154E96}";
 
     fn set(path: &str, name: Option<&str>, value: &str) -> Result<(), String> {
         let mut key = HKEY::default();
@@ -132,13 +136,60 @@ mod imp {
             Some("FriendlyAppName"),
             "Kitab Reader",
         )?;
+        // Thumbnails, when kitab_shell.dll ships next to kitab.exe.
+        let dll = std::path::Path::new(&exe).with_file_name("kitab_shell.dll");
+        if dll.exists() {
+            let ids: Vec<&str> = FILE_TYPES.iter().map(|t| t.prog_id).collect();
+            register_thumbnails(&dll, &ids)?;
+        }
         // SAFETY: tells Explorer the associations changed; no pointers passed.
         unsafe { SHChangeNotify(SHCNE_ASSOCCHANGED, SHCNF_IDLIST, None, None) };
         Ok(())
     }
 
+    /// Register `dll` as the thumbnail provider for these ProgIDs only (never
+    /// for an extension, so another reader's thumbnails stay theirs until the
+    /// user makes Kitab the default).
+    pub fn register_thumbnails(dll: &std::path::Path, prog_ids: &[&str]) -> Result<(), String> {
+        let class = format!(r"Software\Classes\CLSID\{THUMB_CLSID}");
+        set(&class, None, "Kitab Reader thumbnails")?;
+        let server = format!(r"{class}\InprocServer32");
+        set(&server, None, &dll.to_string_lossy())?;
+        set(&server, Some("ThreadingModel"), "Apartment")?;
+        for id in prog_ids {
+            set(
+                &format!(r"Software\Classes\{id}\ShellEx\{THUMB_SLOT}"),
+                None,
+                THUMB_CLSID,
+            )?;
+        }
+        // SAFETY: tells Explorer the associations changed; no pointers passed.
+        unsafe { SHChangeNotify(SHCNE_ASSOCCHANGED, SHCNF_IDLIST, None, None) };
+        Ok(())
+    }
+
+    /// Remove the provider's class and its slot under these ProgIDs.
+    pub fn unregister_thumbnails(prog_ids: &[&str]) {
+        // SAFETY: deletes keys under HKEY_CURRENT_USER that Kitab created.
+        unsafe {
+            for id in prog_ids {
+                let _ = RegDeleteTreeW(
+                    HKEY_CURRENT_USER,
+                    &HSTRING::from(format!(r"Software\Classes\{id}\ShellEx\{THUMB_SLOT}")),
+                );
+            }
+            let _ = RegDeleteTreeW(
+                HKEY_CURRENT_USER,
+                &HSTRING::from(format!(r"Software\Classes\CLSID\{THUMB_CLSID}")),
+            );
+            SHChangeNotify(SHCNE_ASSOCCHANGED, SHCNF_IDLIST, None, None);
+        }
+    }
+
     /// Remove everything `register` wrote (uninstall, or "stop using Kitab").
     pub fn unregister() {
+        let ids: Vec<&str> = FILE_TYPES.iter().map(|t| t.prog_id).collect();
+        unregister_thumbnails(&ids);
         // SAFETY: deletes keys under HKEY_CURRENT_USER that Kitab created.
         unsafe {
             for t in FILE_TYPES {
@@ -240,6 +291,8 @@ mod imp {
 }
 
 pub use imp::{DEFAULTS_PAGE, register, unregister};
+#[cfg(windows)]
+pub use imp::{register_thumbnails, unregister_thumbnails};
 
 #[cfg(all(test, windows))]
 mod tests {

@@ -26,7 +26,7 @@ These are hard rules. CI enforces the ones marked **(CI)**. Reviewers enforce th
 
 8. **Every document is hostile.** Parsing and rendering happen in the pool with limits (page count in flight, image dimensions, decompression ratio). A failure is an error state, never a panic or a hang on the UI thread.
 9. **No `unwrap`/`expect`** in code that handles file data, user input or FFI results. They're allowed in tests and for programmer invariants with a message saying why they hold.
-10. **`unsafe` only in `kitab-mupdf`, `kitab-os`, `kitab-print` and `kitab-sign`**, each block with a `// SAFETY:` comment. No panics cross FFI boundaries (`catch_unwind` at every callback).
+10. **`unsafe` only in `kitab-mupdf`, `kitab-os`, `kitab-shell`, `kitab-print` and `kitab-sign`**, each block with a `// SAFETY:` comment. No panics cross FFI boundaries (`catch_unwind` at every callback).
 11. **No code runs from documents.** No PDF JavaScript, no EPUB scripts, Markdown HTML through the allow-list only (PLAN.md §3.4). `tests/fixtures/md/09-hostile.md` must stay inert. **(CI)**
 12. **No network without a user action or an opt-in setting.** Remote images, revocation checks, update checks and sync are off by default. A new network call needs a setting, a line in PRIVACY.md and a mention in the PR. No telemetry, ever.
 13. **Keys stay local.** Private keys, certificate passwords and documents are never sent anywhere and never written to logs. Logs never contain document text or file paths at info level or above.

@@ -96,6 +96,8 @@ pub fn render(source: Source<'_>, ext: &str, size: u32) -> Result<Thumb, String>
     match Format::from_extension(ext) {
         Some(Format::Markdown) => markdown::render(&text_head(&source)?, false, size),
         Some(Format::Txt) => markdown::render(&text_head(&source)?, true, size),
+        // Kitab doesn't view image files (the user's decision): no thumbnails.
+        Some(Format::Image) => Err("Kitab doesn't open image files".into()),
         Some(_) => first_page(&source, ext, size),
         None => Err(format!("Kitab doesn't read .{ext} files")),
     }

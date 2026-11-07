@@ -3120,6 +3120,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "kitab-shell"
+version = "0.0.1"
+dependencies = [
+ "kitab-os",
+ "windows 0.61.3",
+ "windows-core 0.61.2",
+]
+
+[[package]]
 name = "kitab-store"
 version = "0.0.1"
 dependencies = [

@@ -114,6 +114,8 @@ fn damaged_and_foreign_files_fail_cleanly() {
     assert!(render(Source::Bytes(b"not a document at all"), "pdf", 128).is_err());
     assert!(render(Source::Bytes(b""), "pdf", 128).is_err());
     assert!(render(Source::Bytes(b"x"), "docx", 128).is_err());
+    // Image files aren't a format Kitab views.
+    assert!(render(Source::Bytes(b"\x89PNG\r\n\x1a\n"), "png", 128).is_err());
 }
 
 #[test]
