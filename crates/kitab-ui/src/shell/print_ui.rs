@@ -581,10 +581,15 @@ impl Workspace {
 
 /// Kitab's window handle, so the system dialog sits in front of it.
 fn owner_of(window: &Window) -> isize {
-    use raw_window_handle::{HasWindowHandle, RawWindowHandle};
-    match HasWindowHandle::window_handle(window).map(|h| h.as_raw()) {
-        #[cfg(windows)]
-        Ok(RawWindowHandle::Win32(h)) => h.hwnd.get(),
-        _ => 0,
+    #[cfg(windows)]
+    {
+        use raw_window_handle::{HasWindowHandle, RawWindowHandle};
+        if let Ok(RawWindowHandle::Win32(h)) =
+            HasWindowHandle::window_handle(window).map(|h| h.as_raw())
+        {
+            return h.hwnd.get();
+        }
     }
+    let _ = window;
+    0
 }

@@ -1210,17 +1210,15 @@ impl Reader {
         } else {
             ix.wrapping_sub(1)
         };
-        for n in [ahead] {
-            if n < self.page_count() {
-                let s = self.px_per_pt(n) * window.scale_factor();
-                let k = PageKey {
-                    page: n as u32,
-                    scale_key: scale_key(s),
-                    rotation: self.rotation,
-                };
-                if !self.cache.contains(&k) {
-                    self.request(n, k, s, cx);
-                }
+        if ahead < self.page_count() {
+            let s = self.px_per_pt(ahead) * window.scale_factor();
+            let k = PageKey {
+                page: ahead as u32,
+                scale_key: scale_key(s),
+                rotation: self.rotation,
+            };
+            if !self.cache.contains(&k) {
+                self.request(ahead, k, s, cx);
             }
         }
         div()
