@@ -87,6 +87,8 @@ pub struct Workspace {
     system: SystemInfo,
     /// The command palette (Ctrl+K), when open.
     palette: Option<palette_ui::Palette>,
+    /// keymap.json's modified time when last read.
+    keymap_mtime: Option<std::time::SystemTime>,
 }
 
 /// The sidebar's panes for a document.
@@ -153,6 +155,7 @@ impl Workspace {
             peek: false,
             system: SystemInfo::default(),
             palette: None,
+            keymap_mtime: None,
         };
         // Leaving the hex field ends the edit.
         let hex_blur = cx.on_blur(&this.hex.focus, window, |ws, _, cx| {
@@ -174,6 +177,15 @@ impl Workspace {
         }
         this.refresh_recent(cx);
         this.first_update_check(cx);
+        // keymap.json: shortly after start-up, then whenever the window comes
+        // back to the front (the user may have just edited it).
+        this.after(Duration::from_millis(400), cx, |ws, cx| ws.load_keymap(cx));
+        let activation = cx.observe_window_activation(window, |ws, window, cx| {
+            if window.is_window_active() {
+                ws.load_keymap(cx);
+            }
+        });
+        this.subs.push(activation);
         this
     }
 
@@ -1998,6 +2010,7 @@ impl Render for Workspace {
                 ws.select_tab(last, window, cx)
             }))
             .on_action(cx.listener(|ws, _: &CycleTheme, _, cx| ws.cycle_theme(cx)))
+            .on_action(cx.listener(|ws, _: &OpenKeymap, _, cx| ws.edit_keymap(cx)))
             .on_action(
                 cx.listener(|ws, _: &CommandPalette, window, cx| ws.open_palette(window, cx)),
             )

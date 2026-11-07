@@ -2,7 +2,7 @@
 
 //! Every command is a GPUI action, bound in the default keymap (PLAN.md §3.10,
 //! AGENTS.md rule 19), and listed in the command palette (`palette.rs`).
-//! keymap.json overrides arrive with Phase 2.
+//! keymap.json adds to and overrides them (`keymap.rs`).
 
 use gpui::{App, KeyBinding, NoAction, actions};
 
@@ -78,6 +78,7 @@ actions!(
         ShowShortcuts,
         CommandPalette,
         CheckForUpdates,
+        OpenKeymap,
         // PDF tools
         ExtractPages,
         ToggleSplit,

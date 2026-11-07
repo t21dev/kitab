@@ -9,6 +9,7 @@ pub mod cache;
 pub mod edit_buffer;
 pub mod engine;
 pub mod icons;
+pub mod keymap;
 pub mod library;
 pub mod menu;
 pub mod motion;

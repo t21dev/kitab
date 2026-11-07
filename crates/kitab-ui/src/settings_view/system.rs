@@ -114,6 +114,25 @@ fn rows(items: Vec<AnyElement>) -> AnyElement {
         .into_any_element()
 }
 
+// ── Shortcuts ──
+
+/// Settings › Shortcuts' first row: keymap.json.
+pub(super) fn keymap_row(ws: &WeakEntity<Workspace>, st: &Style) -> AnyElement {
+    icon_row(
+        Some("keyboard"),
+        "Your own keys",
+        "keymap.json adds to these keys or changes them. Save it and come back to Kitab; it applies at once. The palette (Ctrl+K) shows the keys in force.",
+        button(
+            "keymap-edit",
+            "Edit keymap.json",
+            false,
+            st,
+            act(ws, |ws, cx| ws.edit_keymap(cx)),
+        ),
+        st,
+    )
+}
+
 // ── File types ───────────────────────────────────────────────────────────
 
 pub(super) fn file_types(ws: &WeakEntity<Workspace>, info: &SystemInfo, st: &Style) -> AnyElement {

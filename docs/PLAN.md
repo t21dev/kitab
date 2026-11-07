@@ -165,7 +165,7 @@ schema_version   via rusqlite_migration
 ```
 
 - Files are recognised after a move or rename by `file_key`, then `quick_hash`. Missing files stay in the library greyed out, with Locate….
-- Settings: `settings.json`. Keymap: `keymap.json` (contexts + actions, like Zed). Both sit in the data dir and are watched, so edits apply live. Invalid JSON keeps the last good value and shows a one-line error.
+- Settings: `settings.json`. Keymap: `keymap.json` (contexts + actions, like Zed). Both sit in the data dir. keymap.json is read after the window opens and again whenever Kitab's window comes back to the front, so an edit applies as soon as you switch back (no file watcher, nothing at idle); settings.json is written by Settings. Invalid JSON keeps the last good value and shows a one-line error.
 - Data dir: `%APPDATA%\t21\Kitab`, `~/Library/Application Support/dev.t21.kitab`, `$XDG_DATA_HOME/kitab`. Portable mode: a `portable` file beside the exe puts data in `data/` next to it (as in Turbo Reader).
 - Crash safety: WAL, a state write at most every 2 s plus on tab switch and quit, `closed_cleanly` to offer "Restore previous session" after a crash.
 
@@ -423,7 +423,7 @@ Each phase ends with its exit criteria green in CI and a minor release. A phase 
 
 - Tabs (pin, reorder, reopen closed, previews), session restore and the four startup modes, Home (continue reading, recent cards/list, library rail), Settings modal (General, Appearance with six themes, custom hex accent, density, icon style; Performance with Ultra mode and hardware acceleration), ⋯ menu, command palette, keymap.json and the Shortcuts page, cheat sheet.
 - Exit: D1–D4, E1–E3, F1–F7; S6, S7, S8, S14, S15 within budget; goldens for all themes.
-- Done since: the command palette (`palette.rs`, `shell/palette_ui.rs`), Ctrl+K / Ctrl+Shift+P and in the ⋯ menu, with every command that has an action; the cheat sheet is Settings › Shortcuts (Ctrl+/). Still to do here: keymap.json, Settings › Performance, startup modes.
+- Done since: the command palette (`palette.rs`, `shell/palette_ui.rs`), Ctrl+K / Ctrl+Shift+P and in the ⋯ menu, with every command that has an action; the cheat sheet is Settings › Shortcuts (Ctrl+/). keymap.json done since (`keymap.rs`: parse, apply over the defaults, NoAction for null, plain keys still type in fields). Still to do here: rebinding by key capture in Settings › Shortcuts, Settings › Performance, startup modes.
 - Done alongside: Settings › File types (association status per format from the registry or `xdg-mime`, Make default, Default apps, Remove), Advanced (clear cached pages, clear reading history, optimize the database, data folder) and About (version, links, update check through the system's `curl` against GitHub's latest release, on by default per the owner, title-bar Update pill and notes dialog; `kitab-os/src/update.rs`).
 
 ### Phase 3: Find and navigation → `0.3.0`

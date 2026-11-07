@@ -147,7 +147,7 @@ pub fn panel(
         Section::Appearance => appearance(&ws, st, themes, hex, window),
         Section::Reading => reading(&ws, st),
         Section::FileTypes => system::file_types(&ws, sys, st),
-        Section::Shortcuts => shortcuts_section(st),
+        Section::Shortcuts => shortcuts_section(&ws, st),
         Section::Advanced => system::advanced(&ws, sys, st),
         Section::About => system::about(&ws, sys, st),
     };
@@ -1435,8 +1435,12 @@ fn custom_picker(
 
 // ── shortcuts ────────────────────────────────────────────────────────────
 
-fn shortcuts_section(st: &Style) -> AnyElement {
-    let mut col = div().flex().flex_col().gap(px(24.0));
+fn shortcuts_section(ws: &WeakEntity<Workspace>, st: &Style) -> AnyElement {
+    let mut col = div()
+        .flex()
+        .flex_col()
+        .gap(px(24.0))
+        .child(system::keymap_row(ws, st));
     for g in shortcuts::GROUPS {
         let mut list = div()
             .flex()

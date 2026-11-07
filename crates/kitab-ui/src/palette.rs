@@ -175,6 +175,13 @@ pub const COMMANDS: &[Command] = &[
     ),
     cmd!(
         "Kitab",
+        "Edit keymap.json",
+        "keys bindings rebind customise customize",
+        false,
+        OpenKeymap
+    ),
+    cmd!(
+        "Kitab",
         "Check for updates",
         "version new release",
         false,

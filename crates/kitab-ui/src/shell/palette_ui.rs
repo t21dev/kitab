@@ -135,8 +135,14 @@ impl Workspace {
             let c = &COMMANDS[ix];
             let on = row == p.selected;
             let action = (c.action)();
-            // The first default binding is the main one (Ctrl+W before Ctrl+F4).
-            let keys = bindings.bindings_for_action(&*action).next().map(|b| {
+            // keymap.json's binding when it set one (it comes last); else the
+            // first default, the main one (Ctrl+W before Ctrl+F4).
+            let user = cx
+                .try_global::<crate::keymap::UserBound>()
+                .is_some_and(|u| u.0.contains(action.name()));
+            let mut all = bindings.bindings_for_action(&*action);
+            let pick = if user { all.next_back() } else { all.next() };
+            let keys = pick.map(|b| {
                 b.keystrokes()
                     .iter()
                     .map(|k| shortcuts::pretty(&k.inner().unparse()))

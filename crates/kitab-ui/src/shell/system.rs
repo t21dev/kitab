@@ -203,6 +203,93 @@ impl Workspace {
         }
     }
 
+    // ── keymap.json ──
+
+    /// Read keymap.json off the UI thread and apply it if it changed since
+    /// the last read (start-up, and whenever the window comes to the front).
+    pub(super) fn load_keymap(&mut self, cx: &mut Context<Self>) {
+        let Some(path) = kitab_os::data_dir().map(|d| d.join("keymap.json")) else {
+            return;
+        };
+        let known = self.keymap_mtime;
+        cx.spawn(async move |this, cx| {
+            let read = cx
+                .background_spawn(async move {
+                    let meta = std::fs::metadata(&path).ok();
+                    let mtime = meta.as_ref().and_then(|m| m.modified().ok());
+                    if mtime == known {
+                        return None;
+                    }
+                    let text = match meta {
+                        Some(m) if m.len() > crate::keymap::MAX_BYTES => {
+                            Some(Err("the file is too big".to_string()))
+                        }
+                        Some(_) => Some(std::fs::read_to_string(&path).map_err(|e| e.to_string())),
+                        None => None,
+                    };
+                    Some((mtime, text))
+                })
+                .await;
+            let Some((mtime, text)) = read else { return };
+            let _ = this.update(cx, |ws, cx| {
+                ws.keymap_mtime = mtime;
+                let parsed = match text {
+                    // Gone: back to the defaults.
+                    None => Ok(Vec::new()),
+                    Some(Ok(t)) => crate::keymap::parse(&t),
+                    Some(Err(e)) => Err(e),
+                };
+                match parsed {
+                    Ok(user) => {
+                        let errors = crate::keymap::apply(cx, &user);
+                        if let Some(first) = errors.first() {
+                            let more = match errors.len() {
+                                1 => String::new(),
+                                n => format!(" (and {} more)", n - 1),
+                            };
+                            ws.toast(format!("keymap.json: {first}{more}."), true, None, cx);
+                        }
+                    }
+                    Err(e) => ws.toast(
+                        format!("keymap.json: {e}. Keeping the keys you had."),
+                        true,
+                        None,
+                        cx,
+                    ),
+                }
+            });
+        })
+        .detach();
+    }
+
+    /// Edit keymap.json: write one with instructions if there isn't one,
+    /// then open it in the system's editor.
+    pub(crate) fn edit_keymap(&mut self, cx: &mut Context<Self>) {
+        let Some(path) = kitab_os::data_dir().map(|d| d.join("keymap.json")) else {
+            return;
+        };
+        let template = crate::keymap::template(cx.all_action_names());
+        cx.spawn(async move |this, cx| {
+            let p = path.clone();
+            let made = cx
+                .background_spawn(async move {
+                    if p.exists() {
+                        return Ok(());
+                    }
+                    if let Some(dir) = p.parent() {
+                        std::fs::create_dir_all(dir)?;
+                    }
+                    std::fs::write(&p, template)
+                })
+                .await;
+            let _ = this.update(cx, |ws, cx| match made {
+                Ok(()) => cx.open_with_system(&path),
+                Err(e) => ws.toast(format!("Couldn't make keymap.json: {e}"), true, None, cx),
+            });
+        })
+        .detach();
+    }
+
     // ── updates ──
 
     /// Start-up: the first automatic check, 10 s after the window opened, if
