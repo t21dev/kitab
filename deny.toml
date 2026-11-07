@@ -38,6 +38,8 @@ allow = [
     "ISC",
     "Zlib",
     "Unicode-3.0",
+    # libfuzzer-sys (rav1e, through GPUI's image crate): OSI and FSF free, AGPL-compatible.
+    "NCSA",
     "Unicode-DFS-2016",
     "CC0-1.0",
     "BSL-1.0",
