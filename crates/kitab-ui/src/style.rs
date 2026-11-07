@@ -41,6 +41,8 @@ pub struct Style {
     pub dock_hidden: bool,
     /// The file info chip is folded to its "i" button.
     pub file_info_folded: bool,
+    /// The quick dock's buttons.
+    pub dock_items: crate::settings::DockItems,
 }
 
 impl Global for Style {}
@@ -74,6 +76,7 @@ impl Style {
             file_info: s.file_info,
             dock_hidden: s.dock_hidden,
             file_info_folded: s.file_info_folded,
+            dock_items: s.dock_items,
         };
         style.resolve_accent();
         style
@@ -122,6 +125,7 @@ impl Style {
             file_info: self.file_info,
             dock_hidden: self.dock_hidden,
             file_info_folded: self.file_info_folded,
+            dock_items: self.dock_items,
         }
     }
 

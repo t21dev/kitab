@@ -137,6 +137,39 @@ impl Default for MinimalHides {
     }
 }
 
+/// What the quick dock shows (Settings › Appearance › Dock items). More (⋯)
+/// and the hide chevron are always there: everything else is reachable from
+/// More, and the chevron is how a hidden dock comes back.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct DockItems {
+    pub sidebar: bool,
+    pub history: bool,
+    pub zoom: bool,
+    pub fit: bool,
+    pub find: bool,
+    pub markup: bool,
+    pub rotate: bool,
+    pub bookmark: bool,
+    pub minimal: bool,
+}
+
+impl Default for DockItems {
+    fn default() -> Self {
+        Self {
+            sidebar: true,
+            history: true,
+            zoom: true,
+            fit: true,
+            find: true,
+            markup: true,
+            rotate: true,
+            bookmark: false,
+            minimal: false,
+        }
+    }
+}
+
 /// A whole-look preset (Settings › Appearance › Layout). Not stored: the
 /// current settings either match a preset or are "Custom".
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -262,6 +295,8 @@ pub struct Settings {
     pub dock_hidden: bool,
     /// The file info chip is folded to an "i" button (Ctrl+I).
     pub file_info_folded: bool,
+    /// The quick dock's buttons.
+    pub dock_items: DockItems,
 }
 
 impl Settings {
@@ -332,6 +367,7 @@ impl Default for Settings {
             file_info: true,
             dock_hidden: false,
             file_info_folded: false,
+            dock_items: DockItems::default(),
         }
     }
 }
@@ -363,6 +399,7 @@ struct File {
     file_info_chip: bool,
     dock_hidden: bool,
     file_info_folded: bool,
+    dock_items: DockItems,
 }
 
 /// Books open at this text size (12 pt reads as 16 px at 100 %).
@@ -407,6 +444,7 @@ impl From<Settings> for File {
             file_info_chip: s.file_info,
             dock_hidden: s.dock_hidden,
             file_info_folded: s.file_info_folded,
+            dock_items: s.dock_items,
         }
     }
 }
@@ -444,6 +482,7 @@ impl Settings {
             file_info: f.file_info_chip,
             dock_hidden: f.dock_hidden,
             file_info_folded: f.file_info_folded,
+            dock_items: f.dock_items,
         })
     }
 
@@ -483,6 +522,11 @@ mod tests {
             file_info: false,
             dock_hidden: true,
             file_info_folded: true,
+            dock_items: DockItems {
+                rotate: false,
+                bookmark: true,
+                ..DockItems::default()
+            },
         };
         assert_eq!(Settings::from_json(&s.to_json()), Ok(s));
     }

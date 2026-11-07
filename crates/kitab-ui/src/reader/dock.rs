@@ -120,6 +120,13 @@ impl Reader {
             None => format!("{} %", self.zoom_percent()),
         };
         let compact = st.dock_compact;
+        // What the dock shows (Settings › Appearance › Dock items); the
+        // compact preset trims the rest. More and Hide are always there.
+        let items = st.dock_items;
+        let show_sidebar = items.sidebar && !compact;
+        let show_history = items.history && !compact;
+        let show_fit = items.fit && !compact;
+        let show_rotate = items.rotate && !compact;
         let mut dock = div()
             .id("dock")
             .flex()
@@ -136,7 +143,7 @@ impl Reader {
             .text_color(st.c(|c| c.muted))
             .on_hover(cx.listener(|r, over: &bool, _, _| r.dock.hover = *over))
             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-            .when(!compact, |d| {
+            .when(show_sidebar, |d| {
                 d.child(
                     group().child(
                         dock_button("dock-sidebar", "sidebar", false, st)
@@ -146,7 +153,9 @@ impl Reader {
                             }),
                     ),
                 )
-                .child(
+            })
+            .when(show_history, |d| {
+                d.child(
                     group()
                         .child(
                             dock_button("dock-back", "arrow-left", false, st)
@@ -177,63 +186,88 @@ impl Reader {
             }
         }
         dock = dock
+            .when(items.zoom || show_fit, |d| {
+                d.child(
+                    group()
+                        .when(items.zoom, |g| {
+                            g.child(
+                                dock_button("dock-zoom-out", "minus", false, st)
+                                    .tip("Zoom out  Ctrl+−")
+                                    .on_click(cx.listener(|r, _, _, cx| r.zoom_step(false, cx))),
+                            )
+                            .child(
+                                div()
+                                    .when(!upright, |d| d.min_w(px(46.0)))
+                                    .when(upright, |d| d.py(px(2.0)).text_size(px(10.5)))
+                                    .flex()
+                                    .justify_center()
+                                    .text_color(st.c(|c| c.text))
+                                    .child(zoom_label),
+                            )
+                            .child(
+                                dock_button("dock-zoom-in", "plus", false, st)
+                                    .tip("Zoom in  Ctrl+=")
+                                    .on_click(cx.listener(|r, _, _, cx| r.zoom_step(true, cx))),
+                            )
+                        })
+                        .when(show_fit, |g| {
+                            g.child(
+                                dock_button(
+                                    "dock-fit-width",
+                                    "fit-width",
+                                    mode == ZoomMode::FitWidth,
+                                    st,
+                                )
+                                .tip("Fit width  Ctrl+2")
+                                .on_click(cx.listener(
+                                    |r, _, _, cx| r.set_zoom_mode(ZoomMode::FitWidth, cx),
+                                )),
+                            )
+                            .child(
+                                dock_button(
+                                    "dock-fit-page",
+                                    "fit-page",
+                                    mode == ZoomMode::FitPage,
+                                    st,
+                                )
+                                .tip("Fit page  Ctrl+0")
+                                .on_click(
+                                    cx.listener(|r, _, _, cx| {
+                                        r.set_zoom_mode(ZoomMode::FitPage, cx)
+                                    }),
+                                ),
+                            )
+                        }),
+                )
+            })
             .child(
                 group()
-                    .child(
-                        dock_button("dock-zoom-out", "minus", false, st)
-                            .tip("Zoom out  Ctrl+−")
-                            .on_click(cx.listener(|r, _, _, cx| r.zoom_step(false, cx))),
-                    )
-                    .child(
-                        div()
-                            .when(!upright, |d| d.min_w(px(46.0)))
-                            .when(upright, |d| d.py(px(2.0)).text_size(px(10.5)))
-                            .flex()
-                            .justify_center()
-                            .text_color(st.c(|c| c.text))
-                            .child(zoom_label),
-                    )
-                    .child(
-                        dock_button("dock-zoom-in", "plus", false, st)
-                            .tip("Zoom in  Ctrl+=")
-                            .on_click(cx.listener(|r, _, _, cx| r.zoom_step(true, cx))),
-                    )
-                    .child(
-                        dock_button(
-                            "dock-fit-width",
-                            "fit-width",
-                            mode == ZoomMode::FitWidth,
-                            st,
+                    .when(items.find, |g| {
+                        g.child(
+                            dock_button("dock-find", "search", self.find.open, st)
+                                .tip("Find  Ctrl+F")
+                                .on_click(cx.listener(|r, _, window, cx| {
+                                    if r.find.open && !r.find.closing {
+                                        r.close_find(window, cx)
+                                    } else {
+                                        r.open_find(window, cx)
+                                    }
+                                })),
                         )
-                        .when(compact, |b| b.hidden())
-                        .tip("Fit width  Ctrl+2")
-                        .on_click(
-                            cx.listener(|r, _, _, cx| r.set_zoom_mode(ZoomMode::FitWidth, cx)),
-                        ),
-                    )
-                    .child(
-                        dock_button("dock-fit-page", "fit-page", mode == ZoomMode::FitPage, st)
-                            .when(compact, |b| b.hidden())
-                            .tip("Fit page  Ctrl+0")
-                            .on_click(
-                                cx.listener(|r, _, _, cx| r.set_zoom_mode(ZoomMode::FitPage, cx)),
-                            ),
-                    ),
-            )
-            .child(
-                group()
-                    .child(
-                        dock_button("dock-find", "search", self.find.open, st)
-                            .tip("Find  Ctrl+F")
-                            .on_click(cx.listener(|r, _, window, cx| {
-                                if r.find.open && !r.find.closing {
-                                    r.close_find(window, cx)
+                    })
+                    .when(items.bookmark && self.can_bookmark(), |g| {
+                        let marked = self.is_bookmarked(self.current_page() as u32);
+                        g.child(
+                            dock_button("dock-bookmark", "bookmark", marked, st)
+                                .tip(if marked {
+                                    "Remove bookmark  Ctrl+D"
                                 } else {
-                                    r.open_find(window, cx)
-                                }
-                            })),
-                    )
-                    .when(self.can_markup(cx), |g| {
+                                    "Bookmark this page  Ctrl+D"
+                                })
+                                .on_click(cx.listener(|r, _, _, cx| r.toggle_bookmark(cx))),
+                        )
+                    })
+                    .when(items.markup && self.can_markup(cx), |g| {
                         g.child(
                             dock_button("dock-markup", "pen", self.markup.open, st)
                                 .tip("Draw and mark up  Ctrl+Shift+D")
@@ -276,12 +310,25 @@ impl Reader {
                                 ),
                         )
                     })
-                    .child(
-                        dock_button("dock-rotate", "rotate", false, st)
-                            .when(compact, |b| b.hidden())
-                            .tip("Rotate  Ctrl+Shift+=")
-                            .on_click(cx.listener(|r, _, _, cx| r.rotate(true, cx))),
-                    )
+                    .when(show_rotate, |g| {
+                        g.child(
+                            dock_button("dock-rotate", "rotate", false, st)
+                                .tip("Rotate  Ctrl+Shift+=")
+                                .on_click(cx.listener(|r, _, _, cx| r.rotate(true, cx))),
+                        )
+                    })
+                    .when(items.minimal, |g| {
+                        g.child(
+                            dock_button("dock-minimal", "focus", st.minimal, st)
+                                .tip("Minimal mode  F11")
+                                .on_click(|_, window, cx| {
+                                    window.dispatch_action(
+                                        Box::new(crate::actions::ToggleMinimal),
+                                        cx,
+                                    )
+                                }),
+                        )
+                    })
                     .child(
                         dock_button("dock-more", "more-vertical", false, st)
                             .tip("More")

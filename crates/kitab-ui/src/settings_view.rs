@@ -357,6 +357,12 @@ fn appearance(
             st,
         ))
         .child(group(
+            "Dock items",
+            Some("Choose the buttons the dock shows. The compact dock trims these further."),
+            dock_item_rows(ws, st),
+            st,
+        ))
+        .child(group(
             "Motion",
             None,
             div()
@@ -499,6 +505,56 @@ fn reading(ws: &WeakEntity<Workspace>, st: &Style) -> AnyElement {
             "Minimal mode",
             Some("F11 hides these for distraction-free reading. Point at the top edge for the window buttons and a way back."),
             minimal_rows(ws, st),
+            st,
+        ))
+        .into_any_element()
+}
+
+/// Switches for the dock's buttons; More and the hide chevron always stay.
+fn dock_item_rows(ws: &WeakEntity<Workspace>, st: &Style) -> AnyElement {
+    let d = st.dock_items;
+    let row = |id: &'static str, label: &'static str, on: bool, f: fn(&mut Style)| {
+        well_row(label, "", switch(id, on, st, change(ws, f)), st)
+    };
+    div()
+        .flex()
+        .flex_col()
+        .gap(px(8.0))
+        .child(row("dock-i-sidebar", "Sidebar", d.sidebar, |s| {
+            s.dock_items.sidebar = !s.dock_items.sidebar
+        }))
+        .child(row("dock-i-history", "Back and forward", d.history, |s| {
+            s.dock_items.history = !s.dock_items.history
+        }))
+        .child(row("dock-i-zoom", "Zoom", d.zoom, |s| {
+            s.dock_items.zoom = !s.dock_items.zoom
+        }))
+        .child(row("dock-i-fit", "Fit width and fit page", d.fit, |s| {
+            s.dock_items.fit = !s.dock_items.fit
+        }))
+        .child(row("dock-i-find", "Find", d.find, |s| {
+            s.dock_items.find = !s.dock_items.find
+        }))
+        .child(row("dock-i-bookmark", "Bookmark", d.bookmark, |s| {
+            s.dock_items.bookmark = !s.dock_items.bookmark
+        }))
+        .child(row("dock-i-markup", "Draw and mark up", d.markup, |s| {
+            s.dock_items.markup = !s.dock_items.markup
+        }))
+        .child(row("dock-i-rotate", "Rotate", d.rotate, |s| {
+            s.dock_items.rotate = !s.dock_items.rotate
+        }))
+        .child(row("dock-i-minimal", "Minimal mode", d.minimal, |s| {
+            s.dock_items.minimal = !s.dock_items.minimal
+        }))
+        .child(well_row(
+            "More and Hide",
+            "Always there: everything else is in More, and Hide brings the dock back.",
+            div()
+                .text_size(px(12.0))
+                .text_color(st.c(|c| c.faint))
+                .child("Always on")
+                .into_any_element(),
             st,
         ))
         .into_any_element()
