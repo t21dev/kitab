@@ -35,6 +35,8 @@ pub(super) struct DockState {
     pub serial: u64,
     pub last_activity: Option<Instant>,
     pub timer: bool,
+    /// The dock scrolls along its length when the window is too small for it.
+    pub scroll: gpui::ScrollHandle,
 }
 
 impl Reader {
@@ -89,13 +91,20 @@ impl Reader {
             return None;
         }
         let at = st.dock;
+        // The status bar, when shown, is the bottom edge the dock floats over.
+        let bar = if self.status_bar_shown(st) {
+            super::info::BAR_H
+        } else {
+            0.0
+        };
         if st.dock_hidden {
-            return Some(dock_handle(at, top_inset, st));
+            return Some(dock_handle(at, top_inset, bar, st));
         }
         let upright = at.upright();
         let mode = self.zoom;
         let group = || {
             div()
+                .flex_none()
                 .flex()
                 .when(upright, |d| d.flex_col())
                 .items_center()
@@ -143,6 +152,32 @@ impl Reader {
             .text_color(st.c(|c| c.muted))
             .on_hover(cx.listener(|r, over: &bool, _, _| r.dock.hover = *over))
             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+            // Never wider (or taller) than the reading area: in a small window
+            // the dock scrolls along its length instead of running off it.
+            .map(|d| {
+                let (vw, vh) = self.viewport;
+                if upright && vh > 0.0 {
+                    d.max_h(px((vh - top_inset - bar - 28.0).max(40.0)))
+                        .overflow_y_scroll()
+                } else if !upright && vw > 0.0 {
+                    d.max_w(px((vw - 16.0).max(40.0))).overflow_x_scroll()
+                } else {
+                    d
+                }
+            })
+            .track_scroll(&self.dock.scroll)
+            .on_scroll_wheel(cx.listener(move |r, e: &gpui::ScrollWheelEvent, _, cx| {
+                // A mouse wheel turns a sideways dock that doesn't fit.
+                let room = r.dock.scroll.max_offset();
+                let d = e.delta.pixel_delta(px(20.0));
+                if !upright && room.width > px(0.5) && d.y.abs() > d.x.abs() {
+                    let mut at = r.dock.scroll.offset();
+                    at.x = (at.x + d.y).clamp(-room.width, px(0.0));
+                    r.dock.scroll.set_offset(at);
+                    cx.stop_propagation();
+                    cx.notify();
+                }
+            }))
             .when(show_sidebar, |d| {
                 d.child(
                     group().child(
@@ -176,6 +211,7 @@ impl Reader {
             if let Some(parts) = self.nav_parts(st, window, cx) {
                 dock = dock.child(
                     div()
+                        .flex_none()
                         .flex()
                         .items_center()
                         .gap(px(10.0))
@@ -374,7 +410,7 @@ impl Reader {
                 .flex()
                 .justify_center(),
             DockAt::Bottom => place
-                .bottom(px(16.0))
+                .bottom(px(16.0 + bar))
                 .left_0()
                 .right_0()
                 .flex()
@@ -382,13 +418,13 @@ impl Reader {
             DockAt::Left => place
                 .left(px(14.0))
                 .top_0()
-                .bottom_0()
+                .bottom(px(bar))
                 .flex()
                 .items_center(),
             DockAt::Right => place
                 .right(px(14.0))
                 .top_0()
-                .bottom_0()
+                .bottom(px(bar))
                 .flex()
                 .items_center(),
         };
@@ -440,7 +476,7 @@ fn away_from_edge(at: DockAt) -> &'static str {
 }
 
 /// The hidden dock: a small handle at its edge. A click (or Ctrl+.) shows it.
-fn dock_handle(at: DockAt, top_inset: f32, st: &Style) -> AnyElement {
+fn dock_handle(at: DockAt, top_inset: f32, bar: f32, st: &Style) -> AnyElement {
     let upright = at.upright();
     let handle = div()
         .id("dock-handle")
@@ -467,7 +503,7 @@ fn dock_handle(at: DockAt, top_inset: f32, st: &Style) -> AnyElement {
     let place = div().absolute();
     match at {
         DockAt::Bottom => place
-            .bottom(px(6.0))
+            .bottom(px(6.0 + bar))
             .left_0()
             .right_0()
             .flex()

@@ -91,6 +91,9 @@ pub struct Workspace {
     keymap_mtime: Option<std::time::SystemTime>,
     /// The window was full screen before presenting (it stays so after).
     was_fullscreen: bool,
+    /// The sidebar's width this frame: its full width, or less in a narrow
+    /// window so the page keeps most of it.
+    sidebar_w: f32,
 }
 
 /// The sidebar's panes for a document.
@@ -159,6 +162,7 @@ impl Workspace {
             palette: None,
             keymap_mtime: None,
             was_fullscreen: false,
+            sidebar_w: crate::layout::SIDEBAR_W,
         };
         // Leaving the hex field ends the edit.
         let hex_blur = cx.on_blur(&this.hex.focus, window, |ws, _, cx| {
@@ -543,7 +547,7 @@ impl Workspace {
         // down to 120 px each; past that the strip scrolls.
         let n = self.tabs.len().max(1) as f32;
         let fixed = 8.0 + 2.0 * st.m().icon_button + 17.0 + 40.0 + 96.0 + 3.0 * 46.0 + 12.0;
-        let room = (f32::from(window.viewport_size().width) - fixed).max(120.0);
+        let room = (f32::from(window.viewport_size().width) - fixed).max(0.0);
         let tab_w = ((room - 4.0 * n) / n).clamp(120.0, 220.0);
         let crowded = n * 224.0 > room;
         if self.reveal_tab {
@@ -1167,7 +1171,7 @@ impl Workspace {
         let has_tabs = tabs_panel.is_some();
         div()
             .id("sidebar")
-            .w(px(crate::layout::SIDEBAR_W))
+            .w(px(self.sidebar_w))
             .flex_none()
             .h_full()
             .flex()
@@ -1232,12 +1236,20 @@ impl Workspace {
                             cx.notify();
                         }))
                 };
-                let contents_head = heading(pane.label())
+                // A narrow sidebar keeps its buttons and drops the title (the
+                // ringed button says which pane it is).
+                let title = if self.sidebar_w < 236.0 {
+                    ""
+                } else {
+                    pane.label()
+                };
+                let contents_head = heading(title)
                     .justify_between()
                     .pr(px(8.0))
                     .child(
                         div()
                             .flex()
+                            .flex_none()
                             .gap(px(2.0))
                             .ml_auto()
                             .child(pane_tab(SidePane::Contents, "outline", "Contents"))
@@ -1832,6 +1844,10 @@ fn cover(title: &str, width: f32, st: &Style) -> AnyElement {
 impl Render for Workspace {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let st = Style::get(cx).clone();
+        // In a narrow window the sidebar gives way: 40 % of the width, at
+        // least 180 px, never more than its full width.
+        let win_w = f32::from(window.viewport_size().width);
+        self.sidebar_w = (win_w * 0.4).clamp(180.0, crate::layout::SIDEBAR_W);
         // Presenting: the page alone, full screen.
         if let Some(reader) = self
             .active_reader()
@@ -1929,7 +1945,7 @@ impl Render for Workspace {
                             .top_0()
                             .right_0()
                             .left(px(if show_sidebar && side_tabs {
-                                crate::layout::SIDEBAR_W
+                                self.sidebar_w
                             } else {
                                 0.0
                             }))
@@ -2003,11 +2019,9 @@ impl Render for Workspace {
             .on_action(cx.listener(|ws, _: &ShowHome, window, cx| ws.show_home(window, cx)))
             .on_action(cx.listener(|ws, _: &ToggleSidebar, _, cx| ws.toggle_sidebar(cx)))
             .on_action(cx.listener(|ws, _: &ToggleFileInfo, _, cx| {
-                // Remembered across launches (settings.json `file_info_folded`).
-                ws.change_style(
-                    &|st: &mut Style| st.file_info_folded = !st.file_info_folded,
-                    cx,
-                );
+                // Show or hide the status bar, remembered across launches
+                // (settings.json `file_info_chip`).
+                ws.change_style(&|st: &mut Style| st.file_info = !st.file_info, cx);
             }))
             .on_action(cx.listener(|ws, _: &ToggleDock, _, cx| {
                 // Remembered across launches (settings.json `dock_hidden`).
@@ -2201,7 +2215,7 @@ impl Workspace {
     fn sidebar_slide(&self, inner: AnyElement, st: &Style) -> AnyElement {
         let frame = div()
             .relative()
-            .w(px(crate::layout::SIDEBAR_W))
+            .w(px(self.sidebar_w))
             .h_full()
             .flex_none()
             .child(inner);

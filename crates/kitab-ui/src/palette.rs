@@ -101,8 +101,8 @@ pub const COMMANDS: &[Command] = &[
     cmd!("View", "Hide or show the dock", "toolbar", true, ToggleDock),
     cmd!(
         "View",
-        "Fold or unfold the file info",
-        "size details chip",
+        "Show or hide the status bar",
+        "file info size details status",
         true,
         ToggleFileInfo
     ),

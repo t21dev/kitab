@@ -478,14 +478,9 @@ fn reading(ws: &WeakEntity<Workspace>, st: &Style) -> AnyElement {
             st,
         ))
         .child(group(
-            "File info",
-            Some("A line at the bottom left with the format, file size, pages and paper size. Point at it for the file's location."),
-            well_row(
-                "Show file info",
-                "",
-                switch("file-info", st.file_info, st, change(ws, |s: &mut Style| s.file_info = !s.file_info)),
-                st,
-            ),
+            "Status bar",
+            Some("A slim bar along the bottom of the page: facts about the file on the left (point at them for the file's location), where you are on the right. Ctrl+I shows or hides it."),
+            status_rows(ws, st),
             st,
         ))
         .child(group(
@@ -830,6 +825,74 @@ fn segmented(choices: Vec<(SharedString, bool, Click)>, st: &Style) -> AnyElemen
         );
     }
     row.into_any_element()
+}
+
+/// The status bar's switch and its items.
+fn status_rows(ws: &WeakEntity<Workspace>, st: &Style) -> AnyElement {
+    let i = st.status_items;
+    let row =
+        |id: &'static str, label: &'static str, note: &'static str, on: bool, f: fn(&mut Style)| {
+            well_row(label, note, switch(id, on, st, change(ws, f)), st)
+        };
+    let mut col = div().flex().flex_col().gap(px(8.0)).child(row(
+        "status-bar",
+        "Show the status bar",
+        "",
+        st.file_info,
+        |s| s.file_info = !s.file_info,
+    ));
+    if st.file_info {
+        col = col
+            .child(row(
+                "status-format",
+                "Format",
+                "PDF, EPUB, Markdown…",
+                i.format,
+                |s| s.status_items.format = !s.status_items.format,
+            ))
+            .child(row("status-size", "File size", "", i.size, |s| {
+                s.status_items.size = !s.status_items.size
+            }))
+            .child(row(
+                "status-pages",
+                "Pages",
+                "Lines in Markdown.",
+                i.pages,
+                |s| s.status_items.pages = !s.status_items.pages,
+            ))
+            .child(row(
+                "status-words",
+                "Word count",
+                "Markdown.",
+                i.words,
+                |s| s.status_items.words = !s.status_items.words,
+            ))
+            .child(row(
+                "status-time",
+                "Reading time",
+                "Markdown, at 230 words a minute.",
+                i.reading_time,
+                |s| s.status_items.reading_time = !s.status_items.reading_time,
+            ))
+            .child(row(
+                "status-paper",
+                "Paper size",
+                "The current page's, or a book's text size.",
+                i.paper,
+                |s| s.status_items.paper = !s.status_items.paper,
+            ))
+            .child(row(
+                "status-position",
+                "Position",
+                "On the right: page 3 of 40, or how far through.",
+                i.position,
+                |s| s.status_items.position = !s.status_items.position,
+            ))
+            .child(row("status-zoom", "Zoom", "On the right.", i.zoom, |s| {
+                s.status_items.zoom = !s.status_items.zoom
+            }));
+    }
+    col.into_any_element()
 }
 
 /// Typeface, line spacing and margins for flowing books.

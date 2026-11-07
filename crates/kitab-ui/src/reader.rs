@@ -1400,6 +1400,9 @@ impl Render for Reader {
             .track_focus(&self.focus)
             .size_full()
             .relative()
+            // The pages above, the status bar pinned below them.
+            .flex()
+            .flex_col()
             .bg(if self.md.is_some() {
                 st.c(|c| c.bg)
             } else {
@@ -1524,7 +1527,7 @@ impl Render for Reader {
                 })
                 .size_full();
                 // Editing Markdown: the source beside the live preview.
-                match self.editor_view(&st, window, cx) {
+                let body = match self.editor_view(&st, window, cx) {
                     Some(editor) => div()
                         .flex()
                         .size_full()
@@ -1532,8 +1535,16 @@ impl Render for Reader {
                         .child(div().flex_1().min_w_0().h_full().relative().child(pages))
                         .into_any_element(),
                     None => pages.into_any_element(),
-                }
+                };
+                div()
+                    .flex_1()
+                    .min_h_0()
+                    .w_full()
+                    .relative()
+                    .child(body)
+                    .children(status.map(|s| div().absolute().inset_0().child(s)))
             })
+            .children(self.status_bar(&st))
             // Ctrl+wheel zooms. This layer is painted after the list so it sees the
             // wheel first; it has no other handlers, so clicks pass through.
             .child(
@@ -1551,13 +1562,11 @@ impl Render for Reader {
                         }
                     })),
             )
-            .children(status)
             .children(self.page_nav(&st, window, cx))
             .children(self.dock_view(&st, inset, window, cx))
             .children(self.edit_button(&st, cx))
             .children(self.find_bar(&st, window, cx))
             .children(self.markup_bar(&st, window, cx))
-            .children(self.info_chip(&st))
             .children(self.writer(&st, cx))
             .children(self.note_view(&st, cx))
             .into_any_element()
@@ -1662,7 +1671,12 @@ impl Reader {
             motion::BASE,
             std::time::Duration::ZERO,
         );
-        let place = div().absolute().bottom(px(18.0));
+        let bar = if self.status_bar_shown(st) {
+            info::BAR_H
+        } else {
+            0.0
+        };
+        let place = div().absolute().bottom(px(18.0 + bar));
         Some(
             if corner {
                 place.right(px(22.0)).child(body)

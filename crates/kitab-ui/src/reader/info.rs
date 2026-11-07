@@ -1,13 +1,20 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-//! The file info chip: one quiet line at the bottom left of the reader with
-//! the format, file size, page count and the current page's paper size (or a
-//! book's text size, or a Markdown file's lines and words). Its tooltip is the
-//! file's full path. Settings › Reading turns it off.
+//! The status bar: a slim strip pinned to the bottom of the reader. Facts
+//! about the file on the left (format, size, pages or lines, words and
+//! reading time for Markdown, paper or text size), where you are on the
+//! right (position, zoom). Each item is a switch in Settings › Reading ›
+//! Status bar; Ctrl+I shows or hides the bar. The left side's tooltip is the
+//! file's full path.
 
 use super::*;
-use crate::settings::DockAt;
+use crate::settings::StatusItems;
 use kitab_core::Format;
+
+/// The bar's height; the dock and the page navigator float above it.
+pub const BAR_H: f32 = 26.0;
+/// Reading speed for "N min read".
+const WORDS_PER_MINUTE: usize = 230;
 
 /// "58.9 KB", "1.2 MB", "312 B".
 pub fn human_size(bytes: u64) -> String {
@@ -81,110 +88,116 @@ impl Reader {
         .detach();
     }
 
-    /// The chip's text: "PDF · 58.9 KB · 40 pages · A4".
-    pub(super) fn info_line(&self) -> Option<String> {
-        let info = self.info.as_ref()?;
-        let mut parts: Vec<String> = vec![format_label(info.format).to_string()];
-        if let Some(bytes) = self.file_size {
-            parts.push(human_size(bytes));
+    /// The left side: facts about the file.
+    pub(super) fn status_left(&self, items: StatusItems) -> Vec<String> {
+        let Some(info) = self.info.as_ref() else {
+            return Vec::new();
+        };
+        let mut parts = Vec::new();
+        if items.format {
+            parts.push(format_label(info.format).to_string());
+        }
+        if items.size {
+            if let Some(bytes) = self.file_size {
+                parts.push(human_size(bytes));
+            }
         }
         if let Some(md) = self.md.as_ref() {
-            let lines = md.source.lines().count();
             let words = md.source.split_whitespace().count();
-            parts.push(plural(lines, "line", "lines"));
-            parts.push(plural(words, "word", "words"));
+            if items.pages {
+                parts.push(plural(md.source.lines().count(), "line", "lines"));
+            }
+            if items.words {
+                parts.push(plural(words, "word", "words"));
+            }
+            if items.reading_time && words > 0 {
+                parts.push(format!("{} min read", words.div_ceil(WORDS_PER_MINUTE)));
+            }
         } else {
-            parts.push(plural(info.page_count as usize, "page", "pages"));
-            if let Some(pt) = self.book_text() {
-                parts.push(format!("{pt:.0} pt text"));
-            } else if let Some(size) = info.page_sizes.get(self.current_page()) {
-                let paper = paper_name(size.w, size.h)
-                    .map(str::to_string)
-                    .unwrap_or_else(|| format!("{:.0} × {:.0} pt", size.w, size.h));
-                parts.push(paper);
+            if items.pages {
+                parts.push(plural(info.page_count as usize, "page", "pages"));
+            }
+            if items.paper {
+                if let Some(pt) = self.book_text() {
+                    parts.push(format!("{pt:.0} pt text"));
+                } else if let Some(size) = info.page_sizes.get(self.current_page()) {
+                    let paper = paper_name(size.w, size.h)
+                        .map(str::to_string)
+                        .unwrap_or_else(|| format!("{:.0} × {:.0} pt", size.w, size.h));
+                    parts.push(paper);
+                }
             }
         }
         if info.encryption.is_some() {
             parts.push("Encrypted".into());
         }
-        Some(parts.join("  ·  "))
+        parts
     }
 
-    /// The chip, bottom left: above the dock when the dock is at the bottom.
-    pub(super) fn info_chip(&self, st: &Style) -> Option<AnyElement> {
-        if !st.file_info || self.status != Status::Open || st.minimal {
+    /// The right side: where you are.
+    pub(super) fn status_right(&self, items: StatusItems) -> Vec<String> {
+        let mut parts = Vec::new();
+        let count = self.page_count().max(1);
+        if items.position {
+            if self.md.is_some() {
+                let at = self.current_page();
+                let percent = if count > 1 {
+                    (at as f32 / (count - 1) as f32 * 100.0).round() as u32
+                } else {
+                    100
+                };
+                parts.push(format!("{percent} %"));
+            } else {
+                parts.push(format!("Page {} of {count}", self.current_page() + 1));
+            }
+        }
+        // A book's zoom is its text size, shown on the left.
+        if items.zoom && self.md.is_none() && self.book_text().is_none() {
+            parts.push(format!("{} %", self.zoom_percent()));
+        }
+        parts
+    }
+
+    /// Whether the bar shows: on in Settings, an open document, not in
+    /// minimal mode.
+    pub(super) fn status_bar_shown(&self, st: &Style) -> bool {
+        st.file_info && self.status == Status::Open && !st.minimal
+    }
+
+    /// The bar, pinned to the bottom of the reader.
+    pub(super) fn status_bar(&self, st: &Style) -> Option<AnyElement> {
+        if !self.status_bar_shown(st) {
             return None;
         }
-        let line = self.info_line()?;
-        let above_dock = st.shows_dock() && !st.dock_hidden && st.dock == DockAt::Bottom;
-        let bottom = if above_dock { 16.0 + 44.0 + 8.0 } else { 14.0 };
+        let left = self.status_left(st.status_items).join("  ·  ");
+        let right = self.status_right(st.status_items).join("  ·  ");
         let path: SharedString = self.path.to_string_lossy().to_string().into();
-        let toggle = |_: &gpui::ClickEvent, window: &mut Window, cx: &mut App| {
-            window.dispatch_action(Box::new(crate::actions::ToggleFileInfo), cx)
-        };
-        let surface = |d: gpui::Stateful<gpui::Div>| {
-            d.bg(st.c(|c| c.raised))
-                .border_1()
+        Some(
+            div()
+                .id("status-bar")
+                .flex_none()
+                .h(px(BAR_H))
+                .w_full()
+                .flex()
+                .items_center()
+                .gap(px(16.0))
+                .px(px(12.0))
+                .bg(st.c(|c| c.bg))
+                .border_t_1()
                 .border_color(st.c(|c| c.line))
-                .shadow(st.elev())
-        };
-        let chip = if st.file_info_folded {
-            // Folded: an "i" button; a click (or Ctrl+I) unfolds it.
-            surface(div().id("file-info"))
-                .size(px(26.0))
-                .rounded_full()
-                .flex()
-                .items_center()
-                .justify_center()
-                .hover(|d| d.bg(st.c(|c| c.hover)))
-                .tip("File info  Ctrl+I")
-                .on_click(toggle)
-                .child(
-                    svg()
-                        .path(icon("info"))
-                        .size(px(14.0))
-                        .text_color(st.c(|c| c.muted)),
-                )
-                .into_any_element()
-        } else {
-            surface(div().id("file-info"))
-                .flex()
-                .items_center()
-                .gap(px(6.0))
-                .pl(px(10.0))
-                .pr(px(4.0))
-                .py(px(2.0))
-                .rounded(px(8.0))
                 .text_size(px(11.5))
                 .text_color(st.c(|c| c.muted))
                 .whitespace_nowrap()
-                .child(div().id("file-info-line").tip(path).child(line))
                 .child(
                     div()
-                        .id("file-info-fold")
-                        .size(px(20.0))
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .rounded(px(5.0))
-                        .hover(|d| d.bg(st.c(|c| c.hover)))
-                        .tip("Fold to an i  Ctrl+I")
-                        .on_click(toggle)
-                        .child(
-                            svg()
-                                .path(icon("chevron-left"))
-                                .size(px(12.0))
-                                .text_color(st.c(|c| c.faint)),
-                        ),
+                        .id("status-left")
+                        .flex_1()
+                        .min_w_0()
+                        .truncate()
+                        .tip(path)
+                        .child(left),
                 )
-                .into_any_element()
-        };
-        Some(
-            div()
-                .absolute()
-                .bottom(px(bottom))
-                .left(px(16.0))
-                .child(chip)
+                .child(div().flex_none().child(right))
                 .into_any_element(),
         )
     }

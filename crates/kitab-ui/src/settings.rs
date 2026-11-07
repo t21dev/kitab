@@ -170,6 +170,41 @@ impl Default for DockItems {
     }
 }
 
+/// What the status bar shows (Settings › Reading › Status bar): facts about
+/// the file on the left, where you are on the right.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct StatusItems {
+    pub format: bool,
+    pub size: bool,
+    /// Pages, or lines in Markdown.
+    pub pages: bool,
+    /// Words in Markdown.
+    pub words: bool,
+    /// Minutes to read a Markdown file (at 230 words a minute).
+    pub reading_time: bool,
+    /// The current page's paper size, or a book's text size.
+    pub paper: bool,
+    /// "Page 3 of 40", or how far through a Markdown file.
+    pub position: bool,
+    pub zoom: bool,
+}
+
+impl Default for StatusItems {
+    fn default() -> Self {
+        Self {
+            format: true,
+            size: true,
+            pages: true,
+            words: true,
+            reading_time: false,
+            paper: true,
+            position: true,
+            zoom: false,
+        }
+    }
+}
+
 /// A whole-look preset (Settings › Appearance › Layout). Not stored: the
 /// current settings either match a preset or are "Custom".
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -300,6 +335,8 @@ pub struct Settings {
     pub file_info_folded: bool,
     /// The quick dock's buttons.
     pub dock_items: DockItems,
+    /// The status bar's items.
+    pub status_items: StatusItems,
     /// Ask GitHub for a newer release shortly after start-up and every six
     /// hours (Settings › About › Check on start-up). On by default, the
     /// owner's call (AGENTS.md rule 12); the switch turns it off.
@@ -378,6 +415,7 @@ impl Default for Settings {
             dock_hidden: false,
             file_info_folded: false,
             dock_items: DockItems::default(),
+            status_items: StatusItems::default(),
             update_check: true,
             skipped_update: String::new(),
         }
@@ -418,6 +456,7 @@ struct File {
     dock_hidden: bool,
     file_info_folded: bool,
     dock_items: DockItems,
+    status_items: StatusItems,
     check_for_updates: bool,
     skipped_update: String,
 }
@@ -498,6 +537,7 @@ impl From<Settings> for File {
             dock_hidden: s.dock_hidden,
             file_info_folded: s.file_info_folded,
             dock_items: s.dock_items,
+            status_items: s.status_items,
             check_for_updates: s.update_check,
             skipped_update: s.skipped_update,
         }
@@ -539,6 +579,7 @@ impl Settings {
             dock_hidden: f.dock_hidden,
             file_info_folded: f.file_info_folded,
             dock_items: f.dock_items,
+            status_items: f.status_items,
             update_check: f.check_for_updates,
             skipped_update: f.skipped_update.chars().take(32).collect(),
         })
@@ -589,6 +630,11 @@ mod tests {
                 rotate: false,
                 bookmark: true,
                 ..DockItems::default()
+            },
+            status_items: StatusItems {
+                zoom: true,
+                words: false,
+                ..StatusItems::default()
             },
             update_check: false,
             skipped_update: "0.2.0".into(),
