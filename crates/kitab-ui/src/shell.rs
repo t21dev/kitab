@@ -223,6 +223,7 @@ impl Workspace {
                     ReaderEvent::PageChanged => cx.notify(),
                     ReaderEvent::ContextMenu(at) => this.page_menu(reader.clone(), *at, window, cx),
                     ReaderEvent::MoreMenu(at) => this.more_menu(Some(*at), window, cx),
+                    ReaderEvent::OpenPath(path) => this.open_tab(path.clone(), window, cx),
                 }
             },
         ));
@@ -624,9 +625,11 @@ impl Workspace {
     ) -> AnyElement {
         let mut rows = Vec::new();
         let mut current = 0;
+        let mut markdown = false;
         if let Some(r) = reader.map(|r| r.read(cx)) {
             flatten(r.outline(), 0, &mut rows);
             current = r.current_page() as u32;
+            markdown = r.is_markdown();
         }
         let tabs_here = st.tabs == TabsAt::Sidebar && st.shows_tabs();
         let tabs_panel = tabs_here.then(|| self.vertical_tabs(st, cx));
@@ -714,7 +717,8 @@ impl Workspace {
                         .text_ellipsis()
                         .child(item.title),
                 )
-                .children(item.page.map(|p| {
+                // Markdown entries point at blocks, not pages: no number.
+                .children(item.page.filter(|_| !markdown).map(|p| {
                     div()
                         .text_size(px(11.5))
                         .text_color(st.c(|c| c.faint))

@@ -184,6 +184,51 @@ impl Reader {
         f.current = None;
         f.scanned = 0;
         let query = f.query.trim().to_string();
+        if let Some(md) = self.md.as_ref().filter(|_| !query.is_empty()) {
+            // Markdown: count hits per block off the UI thread.
+            f.done = false;
+            let (doc, generation) = (md.doc.clone(), f.generation);
+            let needle = query.to_lowercase();
+            cx.notify();
+            cx.spawn(async move |this, cx| {
+                cx.background_executor().timer(DEBOUNCE).await;
+                let hits = cx
+                    .background_spawn(async move {
+                        let mut out = BTreeMap::new();
+                        for (i, b) in doc.blocks.iter().enumerate() {
+                            let n = kitab_md::plain_text(b)
+                                .to_lowercase()
+                                .matches(&needle)
+                                .count();
+                            if n > 0 {
+                                out.insert(i as u32, vec![Vec::new(); n]);
+                            }
+                        }
+                        out
+                    })
+                    .await;
+                let _ = this.update(cx, |r, cx| {
+                    if r.find.generation != generation {
+                        return;
+                    }
+                    r.find.total = hits.values().map(Vec::len).sum::<usize>().min(MAX_HITS);
+                    r.find.hits = hits;
+                    r.find.done = true;
+                    let here = r.current_page() as u32;
+                    r.find.current = r
+                        .find
+                        .hits
+                        .range(here..)
+                        .next()
+                        .or_else(|| r.find.hits.iter().next())
+                        .map(|(p, _)| (*p, 0));
+                    r.reveal_hit(cx);
+                    cx.notify();
+                });
+            })
+            .detach();
+            return;
+        }
         let Some(doc) = self.doc.filter(|_| !query.is_empty()) else {
             f.done = true;
             cx.notify();
@@ -262,6 +307,15 @@ impl Reader {
         let Some((page, ix)) = self.find.current else {
             return;
         };
+        if self.md.is_some() {
+            // Markdown hits are whole blocks: bring the block to the top.
+            let _ = ix;
+            if self.current_page() != page as usize {
+                super::markdown::reveal_block(self, page as usize);
+            }
+            cx.notify();
+            return;
+        }
         let Some(first) = self.find.hits.get(&page).and_then(|h| h.get(ix)?.first()) else {
             return;
         };

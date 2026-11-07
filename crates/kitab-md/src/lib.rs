@@ -62,7 +62,11 @@ pub fn parse(source: &str) -> MdDoc {
 /// Markdown list markers, except inside code fences (md-viewer-pwa's
 /// `normalizeMarkdown`).
 pub fn normalise(source: &str) -> String {
-    let text = source.replace("\r\n", "\n").replace('\r', "\n");
+    let text = source
+        .strip_prefix('\u{feff}')
+        .unwrap_or(source)
+        .replace("\r\n", "\n")
+        .replace('\r', "\n");
     let mut out = String::with_capacity(text.len());
     let mut fence: Option<(char, usize)> = None;
     for line in text.split_inclusive('\n') {
@@ -85,7 +89,12 @@ pub fn normalise(source: &str) -> String {
             }
         }
         if fence.is_none() {
-            if let Some(b @ ('•' | '◦' | '▪' | '‣' | '⁃' | '●' | '○')) = marker {
+            // md-viewer-pwa's set: bullets pasted from docs and social posts.
+            if let Some(
+                b @ ('•' | '◦' | '▪' | '▫' | '‣' | '⁃' | '●' | '○' | '■' | '□' | '►' | '▸' | '➤'
+                | '➢' | '∙' | '·'),
+            ) = marker
+            {
                 let rest = &trimmed[b.len_utf8()..];
                 if rest.starts_with(' ') || rest.starts_with('\t') {
                     out.push_str(indent);

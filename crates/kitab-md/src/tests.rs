@@ -257,3 +257,17 @@ fn large_document_parses_quickly() {
     // Generous for debug builds and slow CI; release is far faster.
     assert!(ms < 3000, "{ms} ms");
 }
+
+#[test]
+fn frontmatter_edge_cases_from_md_viewer_pwa() {
+    // BOM, trailing spaces on the fence, `...` closing it.
+    let doc = parse("\u{feff}---  \ntitle: Hi\n...\n# Body\n");
+    assert_eq!(doc.title.as_deref(), Some("Hi"));
+    assert!(matches!(&doc.blocks[1], Block::Heading { .. }));
+    // A horizontal rule later in the file isn't frontmatter.
+    let doc = parse("# Title\n\n---\n\ntext\n");
+    assert!(doc.blocks.iter().any(|b| matches!(b, Block::Rule)));
+    // More bullet glyphs.
+    let doc = parse("► one\n➤ two\n· three\n");
+    assert!(matches!(&doc.blocks[0], Block::List { items, .. } if items.len() == 3));
+}

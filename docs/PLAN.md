@@ -85,7 +85,7 @@ kitab/
 │  ├─ kitab-theme/            tokens, the six themes, accent and contrast maths, density
 │  ├─ kitab-core/             Document trait, locators, text model, search, history, format detection
 │  ├─ kitab-mupdf/            safe wrapper over `mupdf`, worker pool, tiles, stext, reflow
-│  ├─ kitab-markdown/         parse (comrak, GFM), layout to GPUI, highlight, mermaid, math, frontmatter
+│  ├─ kitab-md/               parse (pulldown-cmark, GFM) into a sanitised block tree, frontmatter, slugs
 │  ├─ kitab-store/            SQLite schema, migrations, session, library, annotations, FTS5
 │  ├─ kitab-sign/             verify + sign (MuPDF pkcs7, Windows CNG, macOS Keychain; PKCS#11 later)
 │  ├─ kitab-print/            native print: Windows, macOS, GTK/CUPS
@@ -124,7 +124,7 @@ pub trait Document: Send + Sync {
 
 ### 3.4 Markdown pipeline
 
-`file → normalize (Unicode bullets, CRLF) → frontmatter split (YAML) → comrak (GFM: tables, task lists, strikethrough, autolinks, footnotes) → sanitize → block tree → GPUI elements`
+`file → normalize (Unicode bullets, CRLF) → frontmatter split (YAML) → pulldown-cmark (GFM: tables, task lists, strikethrough, footnotes, math; autolinks added by Kitab) → sanitize → block tree → GPUI elements`
 
 - **Code:** syntax highlighting with `syntect`, or `tree-sitter-highlight` for the top languages; choose in Phase 5 by size and speed. Copy button, sideways scroll, line wrap toggle.
 - **Mermaid:** fenced ` ```mermaid ` → native renderer → SVG → `resvg` → image at device scale, themed to match (dark/light/paper variants). Cache key = hash(source, theme, scale). An invalid diagram shows the source and the error inline (`md/02-mermaid.md` last block).
@@ -320,7 +320,7 @@ The `perf` job runs S1, S2, S6(50), S9 and S11 on a fixed Windows runner. It fai
 ### 7.2 Layers
 
 1. **Unit** (`cargo test`): locators, search normalisation, contrast maths, keymap parsing, Markdown sanitiser (every `09-hostile.md` case), migrations, signature status mapping.
-2. **Engine** (`kitab-mupdf`, `kitab-markdown`): open every fixture, compare page counts, sizes, outline, search counts and signature states with `expected.json`. Fuzz the open path (`cargo fuzz`, MuPDF and comrak) in the nightly job.
+2. **Engine** (`kitab-mupdf`, `kitab-md`): open every fixture, compare page counts, sizes, outline, search counts and signature states with `expected.json`. Fuzz the open path (`cargo fuzz`, MuPDF and pulldown-cmark) in the nightly job.
 3. **View** (`#[gpui::test]`, `TestAppContext` / `VisualTestContext`): simulate keystrokes and actions (`ctrl-f`, `f3`, `ctrl-g`), assert view state (current page, hits, focus, panel visibility).
 4. **End-to-end** (`kitab-e2e`): the real release-profile binary, built with the `e2e` feature under identifier `dev.t21.kitab.e2e`, with its own data dir, wiped per test file. The binary exposes a local automation channel (named pipe / Unix socket, JSON-RPC: dispatch action, send keys, query state, capture window). The feature does not exist in release builds, and CI checks that. Assert UI state **and** SQLite state, as Turbo Reader does. Native dialogs (open, save, print, Default apps) are tested at the command layer behind them.
 5. **Visual**: golden screenshots of key screens in all six themes and three densities at 1280×800 and 1920×1080 @150 %, compared with a perceptual threshold. Windows first.

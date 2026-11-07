@@ -15,6 +15,8 @@ an environment switch to turn it off so it can still be benchmarked:
   Lean    Single-sampled path texture instead of a window-sized 4x MSAA one, and 2
           swap-chain buffers instead of 3. Off: KITAB_GPUI_FULL=1.
   Heap    The manifest enables the Windows segment heap.
+  RTL     Right-to-left glyph runs (Arabic, Hebrew) are placed at DirectWrite's
+          origin and advance leftwards, instead of left to right.
 
 Run `python tools/patch_gpui.py` once after cloning (and after a gpui version bump).
 
@@ -165,6 +167,53 @@ fn kitab_buffer_count() -> u32 {
         """            <dpiAwareness xmlns="http://schemas.microsoft.com/SMI/2016/WindowsSettings">PerMonitorV2</dpiAwareness>
             <heapType xmlns="http://schemas.microsoft.com/SMI/2020/WindowsSettings">SegmentHeap</heapType>""",
     )])
+    # 5. Right-to-left text: DirectWrite shapes Arabic and Hebrew and runs the
+    #    bidi algorithm, then hands each glyph run with its origin and bidi
+    #    level. gpui ignored both and laid every run left to right after the
+    #    previous one, so RTL words came out backwards. Place each run at its
+    #    origin; odd-level runs advance leftwards.
+    edit("src/platform/windows/direct_write.rs", [
+        ("""        _baselineoriginx: f32,
+        _baselineoriginy: f32,
+        _measuringmode: DWRITE_MEASURING_MODE,
+        glyphrun: *const DWRITE_GLYPH_RUN,""",
+         """        baselineoriginx: f32,
+        _baselineoriginy: f32,
+        _measuringmode: DWRITE_MEASURING_MODE,
+        glyphrun: *const DWRITE_GLYPH_RUN,"""),
+        ("""        let mut cluster_analyzer = ClusterAnalyzer::new(cluster_map, glyph_count);""",
+         """        // Kitab: runs sit at DirectWrite's origin; RTL runs advance leftwards.
+        let rtl = glyphrun.bidiLevel % 2 == 1;
+        let mut pen = baselineoriginx;
+        let mut cluster_analyzer = ClusterAnalyzer::new(cluster_map, glyph_count);"""),
+        ("""                let this_glyph_idx = glyph_idx + cluster_glyph_idx;
+                glyphs.push(ShapedGlyph {
+                    id,
+                    position: point(
+                        px(context.width + glyph_offsets[this_glyph_idx].advanceOffset),
+                        px(0.0),
+                    ),""",
+         """                let this_glyph_idx = glyph_idx + cluster_glyph_idx;
+                let advance = glyph_advances[this_glyph_idx];
+                let offset = glyph_offsets[this_glyph_idx].advanceOffset;
+                let x = if rtl { pen - advance - offset } else { pen + offset };
+                pen = if rtl { pen - advance } else { pen + advance };
+                glyphs.push(ShapedGlyph {
+                    id,
+                    position: point(px(x), px(0.0)),"""),
+        ("""                context.width += glyph_advances[this_glyph_idx];
+            }""",
+         """            }"""),
+    ])
+    # The line's width is the right edge of the rightmost run so far (runs come
+    # in visual order).
+    edit("src/platform/windows/direct_write.rs", [
+        ("""            glyph_idx += cluster_glyph_count;
+        }""",
+         """            glyph_idx += cluster_glyph_count;
+        }
+        context.width = context.width.max(if rtl { baselineoriginx } else { pen });"""),
+    ])
     print(f"patched gpui copy: {DEST}")
 
 

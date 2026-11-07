@@ -3124,6 +3124,7 @@ dependencies = [
  "gpui",
  "image",
  "kitab-core",
+ "kitab-md",
  "kitab-os",
  "kitab-theme",
  "log",

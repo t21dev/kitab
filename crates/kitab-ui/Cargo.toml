@@ -9,6 +9,7 @@ repository.workspace = true
 publish = false
 
 [dependencies]
+kitab-md = { path = "../kitab-md" }
 gpui = { workspace = true }
 kitab-core = { workspace = true }
 kitab-theme = { workspace = true }

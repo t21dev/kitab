@@ -9,6 +9,7 @@ mod find;
 pub use dock::TOP_INSET;
 mod geom;
 mod layer;
+mod markdown;
 mod select;
 
 use crate::actions::*;
@@ -70,6 +71,8 @@ pub enum ReaderEvent {
     ContextMenu(Point<Pixels>),
     /// The dock's ⋯ button, at this window position.
     MoreMenu(Point<Pixels>),
+    /// A link in a Markdown document points at another file: open it in a tab.
+    OpenPath(PathBuf),
 }
 
 /// What "Save page as…" writes.
@@ -152,6 +155,8 @@ pub struct Reader {
     dock: dock::DockState,
     /// Room kept free above the first page (sidebar tabs: the window buttons).
     top_inset: f32,
+    /// A Markdown document: its blocks are the list's items instead of pages.
+    md: Option<markdown::MdState>,
 }
 
 impl Reader {
@@ -210,6 +215,7 @@ impl Reader {
             select: select::SelectState::default(),
             dock: dock::DockState::default(),
             top_inset: 0.0,
+            md: None,
         };
         this.open(None, cx);
         this
@@ -263,6 +269,10 @@ impl Reader {
 
     fn open(&mut self, password: Option<String>, cx: &mut Context<Self>) {
         self.status = Status::Opening;
+        if is_markdown_path(&self.path) {
+            self.open_markdown(cx);
+            return;
+        }
         let engine = self.engine.clone();
         let library = self.library.clone();
         let path = self.path.clone();
@@ -287,6 +297,67 @@ impl Reader {
                     this.unlock = tried;
                 }
                 this.on_opened(result, cx)
+            });
+        })
+        .detach();
+    }
+
+    /// Read and parse a Markdown file off the UI thread.
+    fn open_markdown(&mut self, cx: &mut Context<Self>) {
+        let (library, path) = (self.library.clone(), self.path.clone());
+        cx.spawn(async move |this, cx| {
+            let loaded = cx
+                .background_spawn(async move {
+                    // Large enough for any real document, small enough to refuse a disk image.
+                    const MAX_BYTES: u64 = 64 << 20;
+                    let meta = std::fs::metadata(&path).map_err(|_| OpenError::NotFound)?;
+                    if meta.len() > MAX_BYTES {
+                        return Err(OpenError::Unsupported);
+                    }
+                    let bytes = std::fs::read(&path).map_err(|_| OpenError::NotFound)?;
+                    let text = String::from_utf8_lossy(&bytes);
+                    let doc = kitab_md::parse(&text);
+                    let info = DocInfo {
+                        format: kitab_core::Format::Markdown,
+                        title: doc.title.clone(),
+                        author: doc.author.clone(),
+                        page_count: doc.blocks.len().max(1) as u32,
+                        page_sizes: Vec::new(),
+                        outline: markdown::outline(&doc),
+                        permissions: Default::default(),
+                        encryption: None,
+                        repaired: false,
+                    };
+                    let saved = library.opened(&path, &info);
+                    Ok((doc, info, saved))
+                })
+                .await;
+            let _ = this.update(cx, |this, cx| match loaded {
+                Ok((doc, info, saved)) => {
+                    this.restore = saved;
+                    let dir = this
+                        .path
+                        .parent()
+                        .map(|p| p.to_path_buf())
+                        .unwrap_or_default();
+                    this.md = Some(markdown::MdState {
+                        doc: Arc::new(doc),
+                        dir,
+                        open_details: Default::default(),
+                    });
+                    if let Some(state) = this.restore {
+                        this.zoom = state.zoom;
+                    }
+                    this.list.reset(info.page_count as usize);
+                    this.info = Some(info);
+                    this.status = Status::Open;
+                    cx.emit(ReaderEvent::Opened);
+                    cx.notify();
+                }
+                Err(e) => {
+                    this.status = Status::Failed(e);
+                    cx.notify();
+                }
             });
         })
         .detach();
@@ -420,6 +491,9 @@ impl Reader {
     /// Logical pixels per point for page `ix` in the current zoom mode. Fit modes
     /// fit each page on its own, so mixed sizes keep their shape (PLAN.md §3.3).
     fn px_per_pt(&self, ix: usize) -> f32 {
+        if self.md.is_some() {
+            return self.md_scale() * PX_PER_PT_AT_100;
+        }
         let s = self.page_size(ix);
         let (vw, vh) = self.viewport;
         let (vw, vh) = (
@@ -560,7 +634,7 @@ impl Reader {
 
     /// Start typing a page number (Ctrl+G, or a click on the number).
     pub fn edit_page(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.status != Status::Open {
+        if self.status != Status::Open || self.md.is_some() {
             return;
         }
         self.page_edit = Some(String::new());
@@ -613,6 +687,11 @@ impl Reader {
     /// The password that opened the document, for tools that reopen the file.
     pub fn unlock(&self) -> Option<String> {
         self.unlock.clone()
+    }
+
+    /// A Markdown document (blocks, not pages).
+    pub fn is_markdown(&self) -> bool {
+        self.md.is_some()
     }
 
     pub fn is_pdf(&self) -> bool {
@@ -686,6 +765,10 @@ impl Reader {
 
     /// Copy one page's text to the clipboard (worked out off the UI thread).
     pub fn copy_page_text(&self, page: usize, cx: &mut Context<Self>) {
+        if let Some(text) = self.md_block_text(page) {
+            cx.write_to_clipboard(gpui::ClipboardItem::new_string(text));
+            return;
+        }
         let Some(doc) = self.doc.filter(|_| self.may_copy()) else {
             return;
         };
@@ -834,6 +917,9 @@ impl Reader {
                 }
             }
             self.last_frame = Some(now);
+        }
+        if self.md.is_some() {
+            return self.md_element(ix, cx);
         }
         let st = Style::get(cx).clone();
         let size = self.page_size(ix);
@@ -1163,7 +1249,11 @@ impl Render for Reader {
             .track_focus(&self.focus)
             .size_full()
             .relative()
-            .bg(st.c(|c| c.desk))
+            .bg(if self.md.is_some() {
+                st.c(|c| c.bg)
+            } else {
+                st.c(|c| c.desk)
+            })
             .on_action(cx.listener(|r, _: &NextPage, _, cx| r.go_to_page(r.current_page() + 1, cx)))
             .on_action(cx.listener(|r, _: &PrevPage, _, cx| {
                 r.go_to_page(r.current_page().saturating_sub(1), cx)
@@ -1285,6 +1375,21 @@ impl Reader {
         cx: &mut Context<Self>,
     ) -> Option<Vec<AnyElement>> {
         let count = self.page_count().max(1);
+        if self.md.is_some() {
+            if st.page_nav == PageNav::Hidden {
+                return None;
+            }
+            let at = self.current_page();
+            let percent = if count > 1 {
+                (at as f32 / (count - 1) as f32 * 100.0).round() as u32
+            } else {
+                100
+            };
+            return Some(vec![
+                self.track_element(st, cx),
+                div().child(format!("{percent} %")).into_any_element(),
+            ]);
+        }
         let field = self.page_field(st, window, cx);
         Some(match st.page_nav {
             PageNav::Scrubber => vec![
@@ -1534,6 +1639,14 @@ pub fn open_reader(
     cx: &mut App,
 ) -> Entity<Reader> {
     cx.new(|cx| Reader::new(path, engine, library, window, cx))
+}
+
+/// Files Kitab reads as Markdown.
+pub fn is_markdown_path(path: &std::path::Path) -> bool {
+    path.extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.to_ascii_lowercase())
+        .is_some_and(|e| matches!(e.as_str(), "md" | "markdown" | "mdown" | "mkd" | "mkdn"))
 }
 
 #[cfg(test)]

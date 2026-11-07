@@ -12,17 +12,25 @@ pub enum Front {
 
 /// Split `---` frontmatter from the body. `None` when there is none.
 pub fn split(text: &str) -> (Option<Front>, &str) {
-    let Some(rest) = text.strip_prefix("---\n") else {
+    // `---` (trailing spaces allowed) opens; `---` or `...` closes
+    // (md-viewer-pwa's FRONTMATTER rule).
+    let Some(first_end) = text.find('\n') else {
         return (None, text);
     };
-    let (raw, body) = match rest.find("\n---\n") {
-        Some(i) => (&rest[..i], &rest[i + 5..]),
-        None => match rest.strip_suffix("\n---") {
-            Some(raw) => (raw, ""),
-            None => return (None, text),
-        },
-    };
-    (Some(read(raw)), body)
+    if text[..first_end].trim_end_matches([' ', '\t']) != "---" {
+        return (None, text);
+    }
+    let rest = &text[first_end + 1..];
+    let mut offset = 0;
+    for line in rest.split_inclusive('\n') {
+        let bare = line.trim_end_matches('\n').trim_end_matches([' ', '\t']);
+        if bare == "---" || bare == "..." {
+            let raw = rest[..offset].strip_suffix('\n').unwrap_or(&rest[..offset]);
+            return (Some(read(raw)), &rest[offset + line.len()..]);
+        }
+        offset += line.len();
+    }
+    (None, text)
 }
 
 fn balanced(v: &str) -> bool {
