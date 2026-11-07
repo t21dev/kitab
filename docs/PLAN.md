@@ -195,7 +195,8 @@ The Kitab print sheet covers range (all, current, "11–13"), copies, scaling (f
 | Make default | Can't be set silently on Windows 10+. "Make Kitab the default…" opens `ms-settings:defaultapps?registeredAppUser=Kitab` | `NSWorkspace.setDefaultApplication(at:toOpen:)` (macOS 12+), with confirmation | `xdg-mime default kitab.desktop <type>` |
 | Open from shell | argv, Open With, Send to, drag onto the exe or dock | Apple Events `openURLs` | argv, D-Bus activation |
 | One window | Named mutex + named pipe forwards argv to the running instance, which opens tabs and focuses | Native (one app instance) | Unix socket in `$XDG_RUNTIME_DIR` |
-| Extras | Jump list (recent, pinned), taskbar progress for long tools, Explorer thumbnail provider for EPUB/MD (later) | Dock menu recents, Quick Look extension (later) | AppStream metainfo |
+| Thumbnails | `IThumbnailProvider` + `IInitializeWithStream` in `kitab_thumb.dll` (Rust COM, `windows` crate), registered under Kitab's own ProgIDs (`Kitab.PDF\ShellEx\{e357fccd-…}`) so it never replaces another reader's handler; runs in Explorer's isolated `dllhost`. Shares MuPDF with kitab.exe as one `mupdf.dll` (no second copy against the 15 MB budget). Preview pane (`IPreviewHandler`) later | Quick Look Thumbnail extension (`QLThumbnailProvider` .appex) for EPUB, MD, CBZ, MOBI, FB2 (macOS draws PDF itself); calls a Rust static lib. Quick Look preview extension later | `kitab --thumbnail -s SIZE IN OUT` (exits before any UI) + `/usr/share/thumbnailers/kitab.thumbnailer` (GNOME Files, Nemo, Caja, Thunar via tumbler); Dolphin needs a KIO plugin (check KF6) |
+| Extras | Jump list (recent, pinned), taskbar progress for long tools | Dock menu recents | AppStream metainfo |
 | Portable | `portable` marker file; no registry writes | n/a | AppImage |
 
 The CLI is `kitab [files…] [--page N] [--find TEXT] [--new-window] [--print] [--bench …]`.
