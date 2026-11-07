@@ -346,7 +346,7 @@ fn books_lay_out_again() {
     let wide = BookLayout {
         width: 800.0,
         height: 600.0,
-        em: 11.0,
+        ..BookLayout::DEFAULT
     };
     let w = engine().relayout(id, wide).unwrap();
     assert!(
@@ -414,6 +414,29 @@ fn books_lay_out_again() {
 
     let back = engine().relayout(id, BookLayout::DEFAULT).unwrap();
     assert_eq!(back.page_count, oracle);
+
+    // Typography opens the book again under the reader's style sheet: roomier
+    // lines and margins take more pages; the default brings the oracle back.
+    let roomy = BookLayout {
+        style: kitab_core::BookStyle {
+            face: kitab_core::BookFace::Sans,
+            line_spacing: Some(2.4),
+            margin: Some(4.0),
+        },
+        ..BookLayout::DEFAULT
+    };
+    let r = engine().relayout(id, roomy).unwrap();
+    assert!(r.page_count > oracle, "roomy: {} vs {oracle}", r.page_count);
+    let plain = engine().relayout(id, BookLayout::DEFAULT).unwrap();
+    assert_eq!(plain.page_count, oracle);
+    let bad_style = BookLayout {
+        style: kitab_core::BookStyle {
+            line_spacing: Some(9.0),
+            ..kitab_core::BookStyle::DEFAULT
+        },
+        ..BookLayout::DEFAULT
+    };
+    assert!(engine().relayout(id, bad_style).is_err());
 
     for bad in [
         BookLayout {

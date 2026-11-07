@@ -412,19 +412,38 @@ impl Engine {
     /// Set a new generation afterwards so pages drawn at the old layout are
     /// dropped.
     pub fn relayout(&self, doc: DocId, layout: BookLayout) -> Result<DocInfo, String> {
-        let (worker, helpers) = {
+        let (worker, helpers, path, password, old) = {
             let docs = lock(&self.docs);
             let e = docs
                 .get(&doc)
                 .ok_or_else(|| "the document is not open".to_string())?;
-            (e.worker, e.helpers.clone())
+            (
+                e.worker,
+                e.helpers.clone(),
+                e.path.clone(),
+                e.password.clone(),
+                e.layout,
+            )
         };
+        // A book keeps the styles it was opened with: new typography means
+        // opening it again; a new size or text size is a layout.
+        let restyle = layout.style != old.style;
         let info = self.call(worker, Some(doc), move |state| {
             let slot = state
                 .docs
                 .get_mut(&doc)
                 .ok_or_else(|| "the document was closed".to_string())?;
-            doc::relayout(&mut slot.doc, layout)
+            if restyle {
+                if !slot.doc.reflowable || !layout.is_valid() {
+                    return Err("only a book can be restyled, at a valid layout".to_string());
+                }
+                let (fresh, info) =
+                    doc::open(&path, password.as_deref(), layout).map_err(|e| format!("{e:?}"))?;
+                slot.doc = fresh;
+                Ok(info)
+            } else {
+                doc::relayout(&mut slot.doc, layout)
+            }
         })??;
         if let Some(e) = lock(&self.docs).get_mut(&doc) {
             e.page_count = info.page_count;

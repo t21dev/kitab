@@ -34,6 +34,11 @@ const MAX_OUTLINE_DEPTH: usize = 64;
 /// Size used for a page whose own box cannot be read: US Letter.
 const FALLBACK_SIZE: SizePt = SizePt { w: 612.0, h: 792.0 };
 
+/// MuPDF's user style sheet lives in the style context every worker shares,
+/// and a book takes it when it is opened and first laid out (a later layout
+/// keeps the styles it was parsed with). Set it and open under this lock.
+static STYLE: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 /// The layout books open with until the reader knows its window
 /// ([`BookLayout::DEFAULT`]; the fixture oracle counts pages at it).
 pub const REFLOW_W: f32 = BookLayout::DEFAULT.width;
@@ -117,6 +122,25 @@ pub(crate) fn open(
     let file = path
         .to_str()
         .ok_or_else(|| failed("path is not valid Unicode"))?;
+    // What MuPDF doesn't read from an EPUB's package document.
+    let meta = (format == Format::Epub)
+        .then(|| crate::epub::read(path))
+        .flatten();
+    // Flowing books take the reader's typography; fixed-layout books, comics,
+    // XPS and PDF keep their own. The lock is held through the first layout.
+    let flows = matches!(
+        format,
+        Format::Epub | Format::Mobi | Format::Fb2 | Format::Txt
+    ) && !meta.as_ref().is_some_and(|m| m.fixed_layout);
+    let _style = if flows {
+        let guard = STYLE.lock().unwrap_or_else(|p| p.into_inner());
+        mupdf::Context::get()
+            .set_user_css(&layout.style.css())
+            .map_err(failed)?;
+        Some(guard)
+    } else {
+        None
+    };
     let mut doc = match Document::open(file) {
         Ok(doc) => doc,
         Err(_) if format != Format::Pdf => return Err(OpenError::Unsupported),
@@ -137,10 +161,6 @@ pub(crate) fn open(
         }
         Handle::Pdf(pdf)
     } else {
-        // What MuPDF doesn't read from an EPUB's package document.
-        let meta = (format == Format::Epub)
-            .then(|| crate::epub::read(path))
-            .flatten();
         right_to_left = meta.as_ref().is_some_and(|m| m.right_to_left);
         match meta.filter(|m| m.fixed_layout) {
             // Fixed layout: pages at the book's own viewport, like a PDF.

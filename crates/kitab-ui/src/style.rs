@@ -33,6 +33,7 @@ pub struct Style {
     pub code_theme: kitab_theme::CodeTheme,
     /// Text size of books in points.
     pub book_text: f32,
+    pub book_style: kitab_core::BookStyle,
     /// Drawing and markup tools are on.
     pub markup: bool,
     /// The file info chip shows.
@@ -76,6 +77,7 @@ impl Style {
             dock_compact: s.dock_compact,
             code_theme: s.code_theme,
             book_text: s.book_text,
+            book_style: s.book_style,
             markup: s.markup,
             file_info: s.file_info,
             dock_hidden: s.dock_hidden,
@@ -127,6 +129,7 @@ impl Style {
             dock_compact: self.dock_compact,
             code_theme: self.code_theme,
             book_text: self.book_text,
+            book_style: self.book_style,
             markup: self.markup,
             file_info: self.file_info,
             dock_hidden: self.dock_hidden,

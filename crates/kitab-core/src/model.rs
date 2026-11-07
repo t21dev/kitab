@@ -12,13 +12,86 @@ pub struct SizePt {
     pub h: f32,
 }
 
+/// The typeface a book is set in (Settings › Reading › Books).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum BookFace {
+    /// The book's own fonts.
+    #[default]
+    Book,
+    Serif,
+    Sans,
+    Mono,
+}
+
+impl BookFace {
+    /// MuPDF's built-in face for it (no font files needed).
+    pub fn family(self) -> Option<&'static str> {
+        match self {
+            BookFace::Book => None,
+            BookFace::Serif => Some("Times"),
+            BookFace::Sans => Some("Helvetica"),
+            BookFace::Mono => Some("Courier"),
+        }
+    }
+}
+
+/// The reader's typography for flowing books, applied over the book's own
+/// styles. The default changes nothing, so a book looks as its maker set it.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct BookStyle {
+    pub face: BookFace,
+    /// Line height as a multiple of the text size.
+    pub line_spacing: Option<f32>,
+    /// Page margins in em.
+    pub margin: Option<f32>,
+}
+
+impl BookStyle {
+    pub const DEFAULT: BookStyle = BookStyle {
+        face: BookFace::Book,
+        line_spacing: None,
+        margin: None,
+    };
+    pub const LINE_MIN: f32 = 1.0;
+    pub const LINE_MAX: f32 = 2.5;
+    pub const MARGIN_MAX: f32 = 6.0;
+
+    pub fn is_valid(&self) -> bool {
+        let line = self
+            .line_spacing
+            .is_none_or(|v| v.is_finite() && (Self::LINE_MIN..=Self::LINE_MAX).contains(&v));
+        let margin = self
+            .margin
+            .is_none_or(|v| v.is_finite() && (0.0..=Self::MARGIN_MAX).contains(&v));
+        line && margin
+    }
+
+    /// The style sheet laid over the book's own (empty for the default).
+    pub fn css(&self) -> String {
+        let mut css = String::new();
+        if let Some(family) = self.face.family() {
+            css.push_str(&format!("* {{ font-family: {family} !important }}\n"));
+        }
+        if let Some(line) = self.line_spacing {
+            css.push_str(&format!(
+                "p, li, div, blockquote, dd, td {{ line-height: {line:.2} !important }}\n"
+            ));
+        }
+        if let Some(m) = self.margin {
+            css.push_str(&format!("@page {{ margin: {m:.2}em }}\n"));
+        }
+        css
+    }
+}
+
 /// How a reflowable book (EPUB, MOBI, FB2, TXT) is laid out on pages: page
-/// size in points and the body text size in points.
+/// size in points, the body text size in points, and the reader's typography.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct BookLayout {
     pub width: f32,
     pub height: f32,
     pub em: f32,
+    pub style: BookStyle,
 }
 
 impl BookLayout {
@@ -28,6 +101,7 @@ impl BookLayout {
         width: 400.0,
         height: 600.0,
         em: 11.0,
+        style: BookStyle::DEFAULT,
     };
     /// Text sizes Kitab offers for books, in points.
     pub const EM_MIN: f32 = 8.0;
@@ -41,6 +115,7 @@ impl BookLayout {
             && side(self.height)
             && self.em.is_finite()
             && (Self::EM_MIN..=Self::EM_MAX).contains(&self.em)
+            && self.style.is_valid()
     }
 }
 
@@ -239,4 +314,50 @@ pub struct ReadingState {
     pub rotation: u16,
     /// 0.0..=1.0, for the library's progress bars.
     pub progress: f32,
+}
+
+#[cfg(test)]
+mod book_style_tests {
+    use super::*;
+
+    #[test]
+    fn the_default_style_adds_nothing() {
+        assert_eq!(BookStyle::DEFAULT.css(), "");
+        assert!(BookLayout::DEFAULT.is_valid());
+    }
+
+    #[test]
+    fn choices_become_css() {
+        let s = BookStyle {
+            face: BookFace::Sans,
+            line_spacing: Some(1.6),
+            margin: Some(2.0),
+        };
+        let css = s.css();
+        assert!(css.contains("font-family: Helvetica !important"));
+        assert!(css.contains("line-height: 1.60 !important"));
+        assert!(css.contains("@page { margin: 2.00em }"));
+    }
+
+    #[test]
+    fn out_of_range_styles_are_refused() {
+        let bad = |style| BookLayout {
+            style,
+            ..BookLayout::DEFAULT
+        };
+        let line = |v| BookStyle {
+            line_spacing: Some(v),
+            ..BookStyle::DEFAULT
+        };
+        assert!(!bad(line(0.2)).is_valid());
+        assert!(!bad(line(f32::NAN)).is_valid());
+        assert!(
+            !bad(BookStyle {
+                margin: Some(99.0),
+                ..BookStyle::DEFAULT
+            })
+            .is_valid()
+        );
+        assert!(bad(line(1.5)).is_valid());
+    }
 }

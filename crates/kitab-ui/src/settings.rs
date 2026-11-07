@@ -287,6 +287,9 @@ pub struct Settings {
     /// Text size of books (EPUB, MOBI, FB2, TXT) in points; zoom in a book
     /// changes it.
     pub book_text: f32,
+    /// Typeface, line spacing and margins for flowing books (the default
+    /// keeps the book's own).
+    pub book_style: kitab_core::BookStyle,
     /// Drawing and markup tools (the dock's pen, Ctrl+Shift+D).
     pub markup: bool,
     /// The file info chip at the bottom left (format, size, pages, paper).
@@ -369,6 +372,7 @@ impl Default for Settings {
             dock_compact: false,
             code_theme: CodeTheme::Kitab,
             book_text: BOOK_TEXT_DEFAULT,
+            book_style: kitab_core::BookStyle::DEFAULT,
             markup: true,
             file_info: true,
             dock_hidden: false,
@@ -403,6 +407,12 @@ struct File {
     code_colours: String,
     /// Points.
     book_text_size: f32,
+    /// "book", "serif", "sans" or "mono".
+    book_face: String,
+    /// Line height in text sizes; null keeps the book's.
+    book_line_spacing: Option<f32>,
+    /// Page margins in em; null keeps the book's.
+    book_margin: Option<f32>,
     markup_tools: bool,
     file_info_chip: bool,
     dock_hidden: bool,
@@ -410,6 +420,36 @@ struct File {
     dock_items: DockItems,
     check_for_updates: bool,
     skipped_update: String,
+}
+
+fn face_name(f: kitab_core::BookFace) -> &'static str {
+    use kitab_core::BookFace::*;
+    match f {
+        Book => "book",
+        Serif => "serif",
+        Sans => "sans",
+        Mono => "mono",
+    }
+}
+
+/// Book typography from settings.json; a value out of range falls back to
+/// the book's own.
+fn book_style_from(face: &str, line: Option<f32>, margin: Option<f32>) -> kitab_core::BookStyle {
+    use kitab_core::{BookFace, BookStyle};
+    let face = match face {
+        "serif" => BookFace::Serif,
+        "sans" => BookFace::Sans,
+        "mono" => BookFace::Mono,
+        _ => BookFace::Book,
+    };
+    let line =
+        line.filter(|v| v.is_finite() && (BookStyle::LINE_MIN..=BookStyle::LINE_MAX).contains(v));
+    let margin = margin.filter(|v| v.is_finite() && (0.0..=BookStyle::MARGIN_MAX).contains(v));
+    BookStyle {
+        face,
+        line_spacing: line,
+        margin,
+    }
 }
 
 /// Books open at this text size (12 pt reads as 16 px at 100 %).
@@ -450,6 +490,9 @@ impl From<Settings> for File {
             dock_compact: s.dock_compact,
             code_colours: s.code_theme.id().to_string(),
             book_text_size: s.book_text,
+            book_face: face_name(s.book_style.face).into(),
+            book_line_spacing: s.book_style.line_spacing,
+            book_margin: s.book_style.margin,
             markup_tools: s.markup,
             file_info_chip: s.file_info,
             dock_hidden: s.dock_hidden,
@@ -490,6 +533,7 @@ impl Settings {
             // A palette Kitab doesn't know falls back to the theme's colours.
             code_theme: CodeTheme::from_id(&f.code_colours).unwrap_or_default(),
             book_text: clamp_book_text(f.book_text_size),
+            book_style: book_style_from(&f.book_face, f.book_line_spacing, f.book_margin),
             markup: f.markup_tools,
             file_info: f.file_info_chip,
             dock_hidden: f.dock_hidden,
@@ -532,6 +576,11 @@ mod tests {
             dock_compact: true,
             code_theme: CodeTheme::Dracula,
             book_text: 15.0,
+            book_style: kitab_core::BookStyle {
+                face: kitab_core::BookFace::Sans,
+                line_spacing: Some(1.6),
+                margin: Some(2.5),
+            },
             markup: false,
             file_info: false,
             dock_hidden: true,
@@ -545,6 +594,19 @@ mod tests {
             skipped_update: "0.2.0".into(),
         };
         assert_eq!(Settings::from_json(&s.to_json()), Ok(s));
+    }
+
+    #[test]
+    fn book_typography_out_of_range_falls_back() {
+        let s = Settings::from_json(
+            r#"{"book_face": "comic", "book_line_spacing": 40, "book_margin": -1}"#,
+        )
+        .expect("parses");
+        assert_eq!(s.book_style, kitab_core::BookStyle::DEFAULT);
+        let s = Settings::from_json(r#"{"book_face": "serif", "book_line_spacing": 1.5}"#)
+            .expect("parses");
+        assert_eq!(s.book_style.face, kitab_core::BookFace::Serif);
+        assert_eq!(s.book_style.line_spacing, Some(1.5));
     }
 
     #[test]

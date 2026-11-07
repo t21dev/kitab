@@ -472,6 +472,12 @@ fn reading(ws: &WeakEntity<Workspace>, st: &Style) -> AnyElement {
             st,
         ))
         .child(group(
+            "Books",
+            Some("Typeface, line spacing and margins for EPUB, MOBI, FB2 and text files. Book's own keeps what the book sets. Zoom in a book changes its text size."),
+            book_rows(ws, st),
+            st,
+        ))
+        .child(group(
             "File info",
             Some("A line at the bottom left with the format, file size, pages and paper size. Point at it for the file's location."),
             well_row(
@@ -776,14 +782,113 @@ fn icon_row(
                         .text_color(st.c(|c| c.text))
                         .child(title.to_string()),
                 )
-                .child(
-                    div()
-                        .text_size(px(12.0))
-                        .text_color(st.c(|c| c.muted))
-                        .child(body.to_string()),
-                ),
+                .when(!body.is_empty(), |d| {
+                    d.child(
+                        div()
+                            .text_size(px(12.0))
+                            .text_color(st.c(|c| c.muted))
+                            .child(body.to_string()),
+                    )
+                }),
         )
         .child(div().flex_none().child(control))
+        .into_any_element()
+}
+
+/// A row of choices, one of them on (Settings › Reading › Books).
+fn segmented(choices: Vec<(SharedString, bool, Click)>, st: &Style) -> AnyElement {
+    let mut row = div()
+        .flex()
+        .flex_none()
+        .p(px(2.0))
+        .gap(px(2.0))
+        .rounded(px(8.0))
+        .bg(st.c(|c| c.hover))
+        .shadow(st.well());
+    for (i, (label, on, click)) in choices.into_iter().enumerate() {
+        row = row.child(
+            div()
+                .id(ElementId::NamedInteger(label.clone(), i as u64))
+                .h(px(26.0))
+                .px(px(10.0))
+                .flex()
+                .items_center()
+                .rounded(px(6.0))
+                .text_size(px(12.5))
+                .cursor_pointer()
+                .when(on, |d| {
+                    d.bg(st.c(|c| c.raised))
+                        .shadow(st.elev())
+                        .text_color(st.c(|c| c.text))
+                })
+                .when(!on, |d| {
+                    d.text_color(st.c(|c| c.muted))
+                        .hover(|d| d.text_color(st.c(|c| c.text)))
+                })
+                .on_click(move |_, window, cx| click(window, cx))
+                .child(label),
+        );
+    }
+    row.into_any_element()
+}
+
+/// Typeface, line spacing and margins for flowing books.
+fn book_rows(ws: &WeakEntity<Workspace>, st: &Style) -> AnyElement {
+    use kitab_core::BookFace;
+    let b = st.book_style;
+    let faces = [
+        ("Book's own", BookFace::Book),
+        ("Serif", BookFace::Serif),
+        ("Sans", BookFace::Sans),
+        ("Mono", BookFace::Mono),
+    ]
+    .into_iter()
+    .map(|(label, f)| {
+        (
+            SharedString::from(label),
+            b.face == f,
+            change(ws, move |s: &mut Style| s.book_style.face = f),
+        )
+    })
+    .collect();
+    let lines = [
+        ("Book's own", None),
+        ("1.2", Some(1.2)),
+        ("1.5", Some(1.5)),
+        ("1.8", Some(1.8)),
+        ("2.2", Some(2.2)),
+    ]
+    .into_iter()
+    .map(|(label, v): (&str, Option<f32>)| {
+        (
+            SharedString::from(label),
+            b.line_spacing == v,
+            change(ws, move |s: &mut Style| s.book_style.line_spacing = v),
+        )
+    })
+    .collect();
+    let margins = [
+        ("Book's own", None),
+        ("Narrow", Some(1.0)),
+        ("Medium", Some(2.5)),
+        ("Wide", Some(4.0)),
+    ]
+    .into_iter()
+    .map(|(label, v): (&str, Option<f32>)| {
+        (
+            SharedString::from(label),
+            b.margin == v,
+            change(ws, move |s: &mut Style| s.book_style.margin = v),
+        )
+    })
+    .collect();
+    div()
+        .flex()
+        .flex_col()
+        .gap(px(8.0))
+        .child(well_row("Typeface", "", segmented(faces, st), st))
+        .child(well_row("Line spacing", "", segmented(lines, st), st))
+        .child(well_row("Margins", "", segmented(margins, st), st))
         .into_any_element()
 }
 

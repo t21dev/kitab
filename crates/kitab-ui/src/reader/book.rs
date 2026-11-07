@@ -108,8 +108,9 @@ impl Reader {
         });
     }
 
-    /// The layout that fills the reading area at 100 %, at text size `em`.
-    fn layout_for_window(&self, em: f32) -> Option<BookLayout> {
+    /// The layout that fills the reading area at 100 %, at text size `em`,
+    /// in the reader's typography.
+    fn layout_for_window(&self, em: f32, style: kitab_core::BookStyle) -> Option<BookLayout> {
         let (vw, vh) = self.viewport;
         if vw <= 0.0 || vh <= 0.0 {
             return None;
@@ -119,6 +120,7 @@ impl Reader {
             width: side(vw - 2.0 * GAP),
             height: side(vh - 2.0 * GAP - self.top_inset),
             em: crate::settings::clamp_book_text(em),
+            style,
         })
     }
 
@@ -129,8 +131,11 @@ impl Reader {
         if self.status != Status::Open {
             return;
         }
-        let em = Style::get(cx).book_text;
-        let Some(want) = self.layout_for_window(em) else {
+        let (em, style) = {
+            let st = Style::get(cx);
+            (st.book_text, st.book_style)
+        };
+        let Some(want) = self.layout_for_window(em, style) else {
             return;
         };
         let Some(book) = self.book.as_mut() else {
@@ -139,7 +144,8 @@ impl Reader {
         let now = book.wanted.unwrap_or(book.layout);
         let resized =
             (want.width - now.width).abs() > 4.0 || (want.height - now.height).abs() > 4.0;
-        let retexted = (want.em - now.em).abs() > 0.01;
+        // New typography counts as new text: it runs at once.
+        let retexted = (want.em - now.em).abs() > 0.01 || want.style != now.style;
         if !resized && !retexted {
             return;
         }
