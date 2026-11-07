@@ -1,0 +1,22 @@
+[package]
+name = "kitab-thumb"
+description = "Kitab Reader: file-manager thumbnails (first page of a document, a page preview of Markdown)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish = false
+
+[dependencies]
+kitab-core = { workspace = true }
+kitab-md = { path = "../kitab-md" }
+kitab-theme = { workspace = true }
+mupdf = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }
+
+[lints]
+workspace = true

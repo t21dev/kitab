@@ -3069,6 +3069,7 @@ dependencies = [
  "kitab-os",
  "kitab-store",
  "kitab-theme",
+ "kitab-thumb",
  "kitab-ui",
  "log",
  "smol",
@@ -3135,6 +3136,17 @@ name = "kitab-theme"
 version = "0.0.1"
 dependencies = [
  "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "kitab-thumb"
+version = "0.0.1"
+dependencies = [
+ "kitab-core",
+ "kitab-md",
+ "kitab-theme",
+ "mupdf",
  "serde_json",
 ]
 

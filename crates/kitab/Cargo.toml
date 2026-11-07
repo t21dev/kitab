@@ -19,6 +19,8 @@ kitab-core = { workspace = true }
 kitab-theme = { workspace = true }
 kitab-ui = { path = "../kitab-ui" }
 kitab-os = { path = "../kitab-os" }
+# `kitab --thumbnail`: file-manager thumbnails, sharing kitab.exe's MuPDF.
+kitab-thumb = { path = "../kitab-thumb" }
 
 [build-dependencies]
 # Already in the tree through gpui: embeds the icons in kitab.exe.

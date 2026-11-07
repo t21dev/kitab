@@ -10,6 +10,7 @@ mod code;
 mod color;
 mod density;
 mod theme;
+mod thumb;
 
 pub use accent::{Accent, AccentPreset, hue_swatch};
 pub use code::{CodePalette, CodeTheme};
@@ -18,3 +19,4 @@ pub use density::{Density, DensityMetrics};
 pub use theme::{
     Appearance, BUILTIN_IDS, Colors, Depth, Shadow, Theme, ThemeError, builtin, builtin_all,
 };
+pub use thumb::{ThumbPalette, thumb_palette};

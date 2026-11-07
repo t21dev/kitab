@@ -14,6 +14,28 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 fn main() {
+    // File-manager thumbnails (PLAN.md §3.9): a separate short-lived process
+    // the shell starts; no settings, no instance check, no window.
+    if std::env::args_os()
+        .nth(1)
+        .is_some_and(|a| a == "--thumbnail")
+    {
+        // `args()` would panic on a path that isn't Unicode; refuse it instead.
+        let args: Option<Vec<String>> = std::env::args_os()
+            .skip(2)
+            .map(|a| a.into_string().ok())
+            .collect();
+        let code = match args {
+            Some(args) => kitab_thumb::cli(
+                &args,
+                &mut std::io::stdin().lock(),
+                &mut std::io::stdout().lock(),
+            ),
+            None => 1,
+        };
+        std::process::exit(code);
+    }
+
     let mut files: Vec<PathBuf> = Vec::new();
     for arg in std::env::args_os().skip(1) {
         let s = arg.to_string_lossy();
