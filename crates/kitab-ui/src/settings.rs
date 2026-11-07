@@ -214,6 +214,8 @@ pub struct Settings {
     pub dock_fade: bool,
     pub tabs: TabsAt,
     pub minimal: MinimalHides,
+    /// The sidebar (contents, and tabs when they live there) was open last time.
+    pub sidebar: bool,
 }
 
 impl Default for Settings {
@@ -229,6 +231,7 @@ impl Default for Settings {
             dock_fade: false,
             tabs: TabsAt::default(),
             minimal: MinimalHides::default(),
+            sidebar: true,
         }
     }
 }
@@ -249,6 +252,7 @@ struct File {
     dock_fade: bool,
     tabs: TabsAt,
     minimal: MinimalHides,
+    sidebar_open: bool,
 }
 
 impl Default for File {
@@ -271,6 +275,7 @@ impl From<Settings> for File {
             dock_fade: s.dock_fade,
             tabs: s.tabs,
             minimal: s.minimal,
+            sidebar_open: s.sidebar,
         }
     }
 }
@@ -298,6 +303,7 @@ impl Settings {
             dock_fade: f.dock_fade,
             tabs: f.tabs,
             minimal: f.minimal,
+            sidebar: f.sidebar_open,
         })
     }
 
@@ -328,6 +334,7 @@ mod tests {
                 dock: true,
                 page_navigator: false,
             },
+            sidebar: false,
         };
         assert_eq!(Settings::from_json(&s.to_json()), Ok(s));
     }

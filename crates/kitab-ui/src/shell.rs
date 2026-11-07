@@ -95,7 +95,7 @@ impl Workspace {
             recent: Vec::new(),
             tabs: Vec::new(),
             active: None,
-            sidebar: true,
+            sidebar: Style::get(cx).sidebar_open,
             focus,
             subs: Vec::new(),
             menu: None,
@@ -1612,6 +1612,9 @@ impl Workspace {
     }
 
     fn toggle_sidebar(&mut self, cx: &mut Context<Self>) {
+        // Remembered across launches (settings.json `sidebar_open`).
+        let open = !(self.sidebar && !self.sidebar_closing);
+        self.change_style(&move |st: &mut Style| st.sidebar_open = open, cx);
         let animate = Style::get(cx).animations;
         if self.sidebar && !self.sidebar_closing {
             if animate {

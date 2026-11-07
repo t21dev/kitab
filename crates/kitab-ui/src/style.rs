@@ -28,6 +28,7 @@ pub struct Style {
     pub minimal_hides: MinimalHides,
     /// Minimal mode is on (F11). For this session only; not saved.
     pub minimal: bool,
+    pub sidebar_open: bool,
 }
 
 impl Global for Style {}
@@ -53,6 +54,7 @@ impl Style {
             tabs: s.tabs,
             minimal_hides: s.minimal,
             minimal: false,
+            sidebar_open: s.sidebar,
         };
         style.resolve_accent();
         style
@@ -92,6 +94,7 @@ impl Style {
             dock_fade: self.dock_fade,
             tabs: self.tabs,
             minimal: self.minimal_hides,
+            sidebar: self.sidebar_open,
         }
     }
 
