@@ -252,6 +252,47 @@ impl Library for StoreLibrary {
         .flatten()
     }
 
+    fn bookmarks(&self, path: &Path) -> Vec<(i64, u32, String)> {
+        let path = path.to_path_buf();
+        self.call(move |s| {
+            let store = s.store.as_ref()?;
+            let id = Self::doc_id(store, &path)?;
+            let rows = store.bookmarks(id).ok()?;
+            Some(
+                rows.into_iter()
+                    .map(|b| {
+                        let kitab_core::Locator::Fixed { page, .. } = b.locator;
+                        (b.id.0, page, b.title)
+                    })
+                    .collect(),
+            )
+        })
+        .flatten()
+        .unwrap_or_default()
+    }
+
+    fn add_bookmark(&self, path: &Path, page: u32, title: &str) -> Option<i64> {
+        let (path, title) = (path.to_path_buf(), title.to_string());
+        self.call(move |s| {
+            let store = s.store.as_mut()?;
+            let id = Self::doc_id(store, &path)?;
+            let at = kitab_core::Locator::Fixed {
+                page,
+                x: 0.0,
+                y: 0.0,
+            };
+            store.add_bookmark(id, &at, &title).ok().map(|b| b.0)
+        })
+        .flatten()
+    }
+
+    fn remove_bookmark(&self, id: i64) {
+        let _ = self.call(move |s| {
+            let store = s.store.as_mut()?;
+            store.remove_bookmark(kitab_store::BookmarkId(id)).ok()
+        });
+    }
+
     fn delete_mark(&self, id: i64) {
         let _ = self.call(move |s| {
             let store = s.store.as_mut()?;

@@ -33,6 +33,7 @@ actions!(
         // Markup
         ToggleMarkup,
         HighlightSelection,
+        ToggleBookmark,
         ToggleDock,
         MarkupUndo,
         MarkupRedo,
@@ -136,6 +137,7 @@ pub fn bind_default_keys(cx: &mut App) {
         // Navigate (SumatraPDF-compatible where Sumatra has a binding)
         KeyBinding::new("ctrl-shift-d", ToggleMarkup, r),
         KeyBinding::new("h", HighlightSelection, r),
+        KeyBinding::new("ctrl-d", ToggleBookmark, r),
         KeyBinding::new("ctrl-z", MarkupUndo, r),
         KeyBinding::new("ctrl-y", MarkupRedo, r),
         KeyBinding::new("ctrl-shift-z", MarkupRedo, r),

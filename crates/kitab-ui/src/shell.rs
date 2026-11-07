@@ -88,6 +88,7 @@ pub enum SidePane {
     #[default]
     Contents,
     Marks,
+    Bookmarks,
 }
 
 impl SidePane {
@@ -95,6 +96,7 @@ impl SidePane {
         match self {
             SidePane::Contents => "Contents",
             SidePane::Marks => "Marks",
+            SidePane::Bookmarks => "Bookmarks",
         }
     }
 }
@@ -699,6 +701,10 @@ impl Workspace {
             let pane = self.marks_pane(&reader, st, cx);
             return self.sidebar_frame(tabs_panel, Some(pane), st, cx);
         }
+        if self.side_pane == SidePane::Bookmarks {
+            let pane = self.bookmarks_pane(&reader, st, cx);
+            return self.sidebar_frame(tabs_panel, Some(pane), st, cx);
+        }
         let mut col = div().flex().flex_col().gap(px(1.0)).p(px(8.0));
         if rows.is_empty() {
             col = col.child(
@@ -955,6 +961,105 @@ impl Workspace {
         col.into_any_element()
     }
 
+    /// The Bookmarks pane: one row per bookmarked page.
+    fn bookmarks_pane(
+        &mut self,
+        reader: &Entity<Reader>,
+        st: &Style,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let (rows, current, can) = {
+            let r = reader.read(cx);
+            (
+                r.bookmarks().to_vec(),
+                r.current_page() as u32,
+                r.can_bookmark(),
+            )
+        };
+        let mut col = div().flex().flex_col().gap(px(1.0)).p(px(8.0));
+        if rows.is_empty() {
+            let hint = if can {
+                "No bookmarks. Press Ctrl+D on a page to add one."
+            } else {
+                "Books that re-flow don't take bookmarks yet."
+            };
+            col = col.child(
+                div()
+                    .px(px(8.0))
+                    .py(px(6.0))
+                    .text_size(st.px(|m| m.ui_text))
+                    .text_color(st.c(|c| c.faint))
+                    .child(hint),
+            );
+        }
+        for (ix, b) in rows.into_iter().enumerate() {
+            let page = b.page;
+            let on = page == current;
+            let (jump, del) = (reader.clone(), reader.clone());
+            col = col.child(
+                div()
+                    .id(("bm-row", ix))
+                    .group("bm-row")
+                    .flex()
+                    .items_center()
+                    .gap(px(8.0))
+                    .h(st.px(|m| m.list_row))
+                    .px(px(8.0))
+                    .rounded(st.px(|m| m.control_radius))
+                    .text_size(st.px(|m| m.ui_text))
+                    .text_color(if on {
+                        st.c(|c| c.text)
+                    } else {
+                        st.c(|c| c.muted)
+                    })
+                    .when(on, |d| d.bg(st.c(|c| c.raised)).shadow(st.elev()))
+                    .hover(|d| d.bg(st.c(|c| c.hover)).text_color(st.c(|c| c.text)))
+                    .on_click(move |_, _, cx| jump.update(cx, |r, cx| r.jump_to(page, cx)))
+                    .child(
+                        svg()
+                            .path(icon("bookmark"))
+                            .size(px(13.0))
+                            .flex_none()
+                            .text_color(st.c(|c| c.accent)),
+                    )
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .overflow_hidden()
+                            .whitespace_nowrap()
+                            .text_ellipsis()
+                            .child(b.title),
+                    )
+                    .child(
+                        div()
+                            .id(("bm-del", ix))
+                            .size(px(22.0))
+                            .flex_none()
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .rounded(px(6.0))
+                            .opacity(0.0)
+                            .group_hover("bm-row", |s| s.opacity(1.0))
+                            .hover(|d| d.bg(st.c(|c| c.raised)))
+                            .tip("Remove bookmark")
+                            .child(
+                                svg()
+                                    .path(icon("close"))
+                                    .size(px(12.0))
+                                    .text_color(st.c(|c| c.muted)),
+                            )
+                            .on_click(move |_, _, cx| {
+                                cx.stop_propagation();
+                                del.update(cx, |r, cx| r.remove_bookmark(page, cx));
+                            }),
+                    ),
+            );
+        }
+        col.into_any_element()
+    }
+
     /// Save the marks as Markdown or CSV next to the document.
     fn export_marks(&mut self, reader: &Entity<Reader>, csv: bool, cx: &mut Context<Self>) {
         let (content, name, dir) = reader.update(cx, |r, cx| {
@@ -1088,6 +1193,11 @@ impl Workspace {
                                 SidePane::Marks,
                                 "highlight",
                                 "Marks and annotations",
+                            ))
+                            .child(pane_tab(
+                                SidePane::Bookmarks,
+                                "bookmark",
+                                "Bookmarks  Ctrl+D",
                             )),
                     )
                     .when(!has_tabs, |h| {
@@ -2471,6 +2581,26 @@ impl Workspace {
             })
             .icon("hash")
             .key("Ctrl+G"),
+            {
+                let marked = reader.read(cx).is_bookmarked(page as u32);
+                let label = if marked {
+                    "Remove bookmark"
+                } else {
+                    "Bookmark this page"
+                };
+                MenuItem::new(label, {
+                    let reader = reader.clone();
+                    move |_, cx: &mut App| {
+                        reader.update(cx, |r, cx| {
+                            r.jump_to(page as u32, cx);
+                            r.toggle_bookmark(cx)
+                        })
+                    }
+                })
+                .icon("bookmark")
+                .key("Ctrl+D")
+                .disabled(!reader.read(cx).can_bookmark())
+            },
             MenuItem::Separator,
         ];
         if let Some(preview) = sel_preview {

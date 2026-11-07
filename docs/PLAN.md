@@ -450,6 +450,7 @@ Each phase ends with its exit criteria green in CI and a minor release. A phase 
 - Done since: the Marks pane (sidebar) lists Kitab's marks and the PDF's own annotations (`Engine::annotations`, tested against `annot_kinds_page1`/`annot_notes_page1` of fixture 09) with quotes for text markup, jump and delete, and exports Markdown or CSV (H3, H4).
 - Still to do: erasing or editing annotations already in a PDF; text highlights in re-flowing books.
 - Exit: H1–H4.
+- Bookmarks (Phase 3 leftover) done alongside: Ctrl+D toggles a bookmark on the current page, named after its chapter (`reader/bookmarks.rs`), kept in the library's `bookmarks` table, listed in the sidebar's Bookmarks pane, with a ribbon on the page. Books that re-flow wait for a layout-free locator.
 
 ### Phase 7: Native print → `0.7.0`
 

@@ -5,9 +5,11 @@
 //! and the error placeholders (PLAN.md Phase 1, DESIGN.md § Page sheets).
 
 mod book;
+mod bookmarks;
 mod dock;
 mod editor;
 mod find;
+pub use bookmarks::BookmarkRow;
 pub use dock::TOP_INSET;
 pub use marks_list::{MarkRow, MarkSource};
 mod geom;
@@ -173,6 +175,8 @@ pub struct Reader {
     file_size: Option<u64>,
     /// The annotations already in the file, once the Marks panel asked.
     file_annots: Option<Vec<kitab_core::FileAnnot>>,
+    /// Bookmarked pages (Ctrl+D), in page order.
+    bookmark_rows: Vec<bookmarks::BookmarkRow>,
 }
 
 impl Reader {
@@ -236,6 +240,7 @@ impl Reader {
             markup: markup::MarkupState::default(),
             file_size: None,
             file_annots: None,
+            bookmark_rows: Vec::new(),
         };
         this.load_file_size(cx);
         this.open(None, cx);
@@ -408,6 +413,7 @@ impl Reader {
                 self.status = Status::Open;
                 self.password.clear();
                 self.load_marks(cx);
+                self.load_bookmarks(cx);
                 cx.emit(ReaderEvent::Opened);
             }
             Err(OpenError::NeedsPassword) => self.status = Status::NeedsPassword { wrong: false },
@@ -1085,6 +1091,7 @@ impl Reader {
                     }))
                     .children(self.markup_overlay(ix, ppt))
                     .children(self.note_pins(ix, ppt, &st, cx))
+                    .children(self.bookmark_ribbon(ix, &st))
                     .children(self.selection_marks(ix, ppt, &st))
                     .children(self.find_marks(ix, ppt, &st))
                     .children(self.link_marks(ix, ppt, &st, cx)),
@@ -1364,6 +1371,7 @@ impl Render for Reader {
             .on_action(cx.listener(|r, _: &MarkupUndo, _, cx| r.markup_undo(cx)))
             .on_action(cx.listener(|r, _: &MarkupRedo, _, cx| r.markup_redo(cx)))
             .on_action(cx.listener(|r, _: &SaveMarks, _, cx| r.save_marks(cx)))
+            .on_action(cx.listener(|r, _: &ToggleBookmark, _, cx| r.toggle_bookmark(cx)))
             .on_action(cx.listener(|r, _: &HighlightSelection, _, cx| {
                 if r.can_markup(cx) {
                     r.mark_selection("highlight", cx)

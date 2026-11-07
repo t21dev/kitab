@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Bookmarks: Ctrl+D (or the page's right-click menu) bookmarks the page, named after its chapter, and again removes it. Bookmarked pages carry a ribbon, and the sidebar's Bookmarks pane lists them. Re-flowing books don't take bookmarks yet.
 - A Marks pane in the sidebar (the highlighter icon beside Contents): every mark and every annotation already in the PDF, in page order, with the words a highlight covers and a note's text; a click goes to the page, and Kitab's own marks can be deleted there. Export them to Markdown or CSV.
 - Hide the quick dock to its edge (the chevron at its end, or Ctrl+.): it becomes a small handle, and a click on the handle or Ctrl+. brings it back. Remembered across launches.
 - Highlight, underline or strike through selected text (H, or the right-click menu), and add notes and text boxes with the new Text and Note tools: notes are pins whose text shows when you point at them, and a click edits them. Typing works with input methods (Bangla, Arabic, CJK). In a PDF they save as Highlight, Underline, StrikeOut, Text and FreeText annotations.

@@ -59,6 +59,18 @@ pub trait Library: Send + Sync + 'static {
     fn clear_marks(&self, path: &Path) {
         let _ = path;
     }
+    /// Bookmarks of `path`: (library id, page, name).
+    fn bookmarks(&self, path: &Path) -> Vec<(i64, u32, String)> {
+        let _ = path;
+        Vec::new()
+    }
+    fn add_bookmark(&self, path: &Path, page: u32, title: &str) -> Option<i64> {
+        let _ = (path, page, title);
+        None
+    }
+    fn remove_bookmark(&self, id: i64) {
+        let _ = id;
+    }
 }
 
 /// A library that remembers nothing (tests, or when the data folder can't be opened).
