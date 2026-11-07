@@ -423,6 +423,37 @@ fn reading(ws: &WeakEntity<Workspace>, st: &Style) -> AnyElement {
         ))
         .child(group("Page corners", None, corner_cards, st))
         .child(group(
+            "Default app",
+            Some("Kitab opens PDF and Markdown files you double-click. Windows asks you to confirm in Default apps."),
+            well_row(
+                "Open PDF and Markdown files with Kitab",
+                "Registers Kitab for .pdf and .md for your account, then opens Default apps.",
+                div()
+                    .id("make-default")
+                    .h(px(28.0))
+                    .px(px(12.0))
+                    .flex()
+                    .items_center()
+                    .rounded(px(7.0))
+                    .bg(st.c(|c| c.raised))
+                    .shadow(st.elev())
+                    .text_size(px(12.5))
+                    .text_color(st.c(|c| c.text))
+                    .cursor_pointer()
+                    .hover(|b| b.bg(st.c(|c| c.hover)))
+                    .on_click({
+                        let ws = ws.clone();
+                        move |_, _, cx| {
+                            let _ = ws.update(cx, |ws, cx| ws.make_default(cx));
+                        }
+                    })
+                    .child("Make default…")
+                    .into_any_element(),
+                st,
+            ),
+            st,
+        ))
+        .child(group(
             "Minimal mode",
             Some("F11 hides these for distraction-free reading. Point at the top edge for the window buttons and a way back."),
             minimal_rows(ws, st),

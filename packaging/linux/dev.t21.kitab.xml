@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
+<!-- shared-mime-info: Markdown is missing on some distributions; Kitab's
+     document icons for its types. Installed to /usr/share/mime/packages/. -->
+<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
+  <mime-type type="text/markdown">
+    <comment>Markdown document</comment>
+    <sub-class-of type="text/plain"/>
+    <icon name="dev.t21.kitab-md"/>
+    <glob pattern="*.md"/>
+    <glob pattern="*.markdown"/>
+    <glob pattern="*.mdown"/>
+    <glob pattern="*.mkd"/>
+  </mime-type>
+  <mime-type type="application/pdf">
+    <icon name="dev.t21.kitab-pdf"/>
+  </mime-type>
+</mime-info>

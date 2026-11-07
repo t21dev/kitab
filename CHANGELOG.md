@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Kitab has its app icon (a bookmark ribbon on amber) and document icons that name the format (PDF, Markdown, and EPUB, MOBI, FB2, CBZ, XPS, TXT for later). Settings › Reading › Default app registers Kitab for PDF and Markdown and opens Default apps; macOS and Linux packages declare the same types.
 - Edit Markdown in place (Edit, or Ctrl+E): the source beside a live preview, with undo/redo, clipboard, input methods, list continuation, line numbers and Ctrl+S to save. Closing with unsaved changes asks first.
 - Code blocks in Markdown have syntax colours that follow the theme (Rust, JavaScript and TypeScript, Python, Go, C and C++, C#, Java, shell, SQL, YAML, JSON, HTML, CSS and more).
 - The sidebar has its own hide button in its header.

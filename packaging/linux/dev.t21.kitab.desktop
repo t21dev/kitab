@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+[Desktop Entry]
+Type=Application
+Name=Kitab Reader
+GenericName=Document Reader
+Comment=A fast, native reader for PDF and Markdown
+Exec=kitab %F
+Icon=dev.t21.kitab
+Terminal=false
+Categories=Office;Viewer;Utility;
+MimeType=application/pdf;text/markdown;text/x-markdown;
+Keywords=pdf;markdown;reader;viewer;ebook;
+StartupWMClass=dev.t21.kitab
+SingleMainWindow=true

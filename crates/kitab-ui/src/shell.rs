@@ -1666,6 +1666,32 @@ impl Workspace {
         }
     }
 
+    /// Settings › Reading › Default app: register the file types for this
+    /// user (off the UI thread), then open the system's default-apps page.
+    pub(crate) fn make_default(&mut self, cx: &mut Context<Self>) {
+        cx.spawn(async move |this, cx| {
+            let result = cx
+                .background_spawn(async { kitab_os::assoc::register() })
+                .await;
+            let _ = this.update(cx, |ws, cx| match result {
+                Ok(()) => {
+                    let page = kitab_os::assoc::DEFAULTS_PAGE;
+                    if !page.is_empty() {
+                        cx.open_url(page);
+                    }
+                    ws.toast(
+                        "Kitab is registered for PDF and Markdown. Pick it in Default apps.",
+                        false,
+                        None,
+                        cx,
+                    );
+                }
+                Err(e) => ws.toast(format!("Couldn't register Kitab: {e}"), true, None, cx),
+            });
+        })
+        .detach();
+    }
+
     /// F11: hide what Settings › Reading › Minimal mode lists, or show it again.
     pub(crate) fn toggle_minimal(&mut self, cx: &mut Context<Self>) {
         let style = cx.global_mut::<Style>();
