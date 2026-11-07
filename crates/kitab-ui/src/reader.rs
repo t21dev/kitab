@@ -1063,7 +1063,7 @@ impl Reader {
                         MouseButton::Left,
                         cx.listener(move |r, e: &MouseDownEvent, window, cx| {
                             // A markup tool draws; otherwise the click selects text.
-                            if !r.markup_down(ix, e, cx) {
+                            if !r.markup_down(ix, e, window, cx) {
                                 r.select_down(ix, e, window, cx)
                             }
                         }),
@@ -1079,6 +1079,7 @@ impl Reader {
                             .rounded(radius)
                     }))
                     .children(self.markup_overlay(ix, ppt))
+                    .children(self.note_pins(ix, ppt, &st, cx))
                     .children(self.selection_marks(ix, ppt, &st))
                     .children(self.find_marks(ix, ppt, &st))
                     .children(self.link_marks(ix, ppt, &st, cx)),
@@ -1358,6 +1359,11 @@ impl Render for Reader {
             .on_action(cx.listener(|r, _: &MarkupUndo, _, cx| r.markup_undo(cx)))
             .on_action(cx.listener(|r, _: &MarkupRedo, _, cx| r.markup_redo(cx)))
             .on_action(cx.listener(|r, _: &SaveMarks, _, cx| r.save_marks(cx)))
+            .on_action(cx.listener(|r, _: &HighlightSelection, _, cx| {
+                if r.can_markup(cx) {
+                    r.mark_selection("highlight", cx)
+                }
+            }))
             .on_action(cx.listener(|r, _: &FindNext, window, cx| r.find_step(true, window, cx)))
             .on_action(cx.listener(|r, _: &FindPrev, window, cx| r.find_step(false, window, cx)))
             .on_action(cx.listener(|r, _: &HistoryBack, _, cx| r.history(true, cx)))
@@ -1475,6 +1481,7 @@ impl Render for Reader {
             .children(self.find_bar(&st, window, cx))
             .children(self.markup_bar(&st, window, cx))
             .children(self.info_chip(&st))
+            .children(self.writer(&st, cx))
     }
 }
 

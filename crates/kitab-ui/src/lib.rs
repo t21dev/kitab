@@ -18,6 +18,7 @@ pub mod settings_view;
 pub mod shell;
 pub mod shortcuts;
 pub mod style;
+pub mod text_field;
 pub mod tooltip;
 
 use gpui::{

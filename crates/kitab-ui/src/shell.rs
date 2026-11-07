@@ -2247,6 +2247,24 @@ impl Workspace {
                 .icon("search")
                 .key("Ctrl+F"),
             );
+            // Text markup from the selection (when markup is on here).
+            if reader.read(cx).can_markup(cx) {
+                for (label, kind, icon_name, key) in [
+                    ("Highlight", "highlight", "highlight", Some("H")),
+                    ("Underline", "underline", "minus", None),
+                    ("Strike through", "strike", "line", None),
+                ] {
+                    let item = MenuItem::new(label, {
+                        let reader = reader.clone();
+                        move |_, cx: &mut App| reader.update(cx, |r, cx| r.mark_selection(kind, cx))
+                    })
+                    .icon(icon_name);
+                    items.push(match key {
+                        Some(k) => item.key(k),
+                        None => item,
+                    });
+                }
+            }
             items.push(MenuItem::Separator);
         }
         items.extend([

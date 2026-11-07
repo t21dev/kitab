@@ -66,6 +66,7 @@ pub const GROUPS: &[Group] = &[
             ("Straight lines at 45°, squares, circles", "Hold Shift"),
             ("Undo / redo a mark", "Ctrl+Z / Ctrl+Y"),
             ("Redo a mark", "Ctrl+Shift+Z"),
+            ("Highlight the selected text", "H"),
             ("Save marks into the PDF", "Ctrl+S"),
             ("Put the pen down", "Esc"),
         ],

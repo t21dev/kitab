@@ -239,6 +239,10 @@ const ICONS: &[(&str, &[u8])] = &[
         "icons/undo.svg",
         include_bytes!("../../../assets/icons/undo.svg"),
     ),
+    (
+        "icons/note.svg",
+        include_bytes!("../../../assets/icons/note.svg"),
+    ),
 ];
 
 pub struct Assets;

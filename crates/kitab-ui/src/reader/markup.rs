@@ -25,17 +25,23 @@ pub enum Tool {
     Arrow,
     Rect,
     Ellipse,
+    /// Text written on the page.
+    Text,
+    /// A note pinned to the page.
+    Note,
     Eraser,
 }
 
 impl Tool {
-    pub const ALL: [Tool; 7] = [
+    pub const ALL: [Tool; 9] = [
         Tool::Pen,
         Tool::Highlighter,
         Tool::Line,
         Tool::Arrow,
         Tool::Rect,
         Tool::Ellipse,
+        Tool::Text,
+        Tool::Note,
         Tool::Eraser,
     ];
 
@@ -47,6 +53,8 @@ impl Tool {
             Tool::Arrow => "arrow-diagonal",
             Tool::Rect => "square",
             Tool::Ellipse => "circle",
+            Tool::Text => "text",
+            Tool::Note => "note",
             Tool::Eraser => "eraser",
         }
     }
@@ -59,6 +67,8 @@ impl Tool {
             Tool::Arrow => "Arrow  Shift keeps it at 45°",
             Tool::Rect => "Rectangle  Shift for a square",
             Tool::Ellipse => "Ellipse  Shift for a circle",
+            Tool::Text => "Text  click where it goes",
+            Tool::Note => "Note  click to pin one",
             Tool::Eraser => "Eraser  click a mark",
         }
     }
@@ -70,6 +80,23 @@ pub(super) struct Placed {
     pub id: Option<i64>,
     pub mark: Mark,
 }
+
+/// A note or text box being written, at a page point.
+pub(super) struct Writing {
+    pub page: u32,
+    pub at: PointPt,
+    pub note: bool,
+    pub field: Entity<crate::text_field::TextField>,
+    /// The mark this replaces (editing an existing note or text).
+    pub replaces: Option<u64>,
+    pub colour: (u8, u8, u8),
+    pub size: f32,
+    _sub: gpui::Subscription,
+}
+
+/// Text sizes for the Text tool by width setting, in points.
+const TEXT_SIZES: [f32; 3] = [12.0, 16.0, 22.0];
+const TEXT_LINE: f32 = 1.3;
 
 /// One step of undo history.
 #[derive(Debug, Clone)]
@@ -103,6 +130,8 @@ pub(super) struct MarkupState {
     pub use_custom_highlighter: bool,
     /// The colour picker is open.
     pub picker: bool,
+    /// A note or text box being written.
+    pub writing: Option<Writing>,
     /// The hex digits being typed in the picker (without '#'), while editing.
     pub hex: Option<String>,
     pub hex_focus: Option<FocusHandle>,
@@ -358,6 +387,7 @@ impl Reader {
         &mut self,
         ix: usize,
         e: &MouseDownEvent,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
         let Some(tool) = self.markup.tool.filter(|_| self.markup.open) else {
@@ -386,6 +416,18 @@ impl Reader {
             }
             return true;
         }
+        if matches!(tool, Tool::Text | Tool::Note) {
+            self.start_writing(
+                page,
+                at,
+                tool == Tool::Note,
+                None,
+                String::new(),
+                window,
+                cx,
+            );
+            return true;
+        }
         let highlighter = tool == Tool::Highlighter;
         let m = &self.markup;
         let colour = m.colour(highlighter);
@@ -412,7 +454,7 @@ impl Reader {
             Tool::Ellipse => MarkShape::Ellipse {
                 rect: rect_between(at, at),
             },
-            Tool::Eraser => return true,
+            Tool::Eraser | Tool::Text | Tool::Note => return true,
         };
         self.markup.drawing = Some((
             Mark {
@@ -476,6 +518,293 @@ impl Reader {
         cx.notify();
     }
 
+    /// Open the writer for a note or a text box at `at` on `page`.
+    #[allow(clippy::too_many_arguments)]
+    fn start_writing(
+        &mut self,
+        page: u32,
+        at: PointPt,
+        note: bool,
+        replaces: Option<u64>,
+        text: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let placeholder = if note {
+            "Write a note"
+        } else {
+            "Type on the page"
+        };
+        let field = cx.new(|cx| crate::text_field::TextField::new(&text, true, placeholder, cx));
+        field.read(cx).focus(window);
+        // The click that opened the writer is still being handled (the page
+        // takes focus back on it): focus the field again once it's drawn.
+        let again = field.clone();
+        cx.on_next_frame(window, move |_, window, cx| again.read(cx).focus(window));
+        let sub = cx.subscribe(
+            &field,
+            |r, _, ev: &crate::text_field::FieldEvent, cx| match ev {
+                crate::text_field::FieldEvent::Submit => r.finish_writing(cx),
+                crate::text_field::FieldEvent::Cancel => r.cancel_writing(cx),
+                crate::text_field::FieldEvent::Changed => cx.notify(),
+            },
+        );
+        let m = &self.markup;
+        self.markup.writing = Some(Writing {
+            page,
+            at,
+            note,
+            field,
+            replaces,
+            colour: m.colour(false),
+            size: TEXT_SIZES[m.size % 3],
+            _sub: sub,
+        });
+        cx.notify();
+    }
+
+    fn cancel_writing(&mut self, cx: &mut Context<Self>) {
+        self.markup.writing = None;
+        cx.notify();
+    }
+
+    /// Keep what was written (Ctrl+Enter or Done). Empty text keeps nothing,
+    /// and empties an edited note away.
+    pub(super) fn finish_writing(&mut self, cx: &mut Context<Self>) {
+        let Some(w) = self.markup.writing.take() else {
+            return;
+        };
+        let text = w.field.read(cx).text().trim_end().to_string();
+        if let Some(old) = w.replaces.and_then(|l| self.unplace(l, cx)) {
+            self.markup.undo.push(Edit::Removed(old));
+        }
+        if text.trim().is_empty() {
+            cx.notify();
+            return;
+        }
+        let shape = if w.note {
+            MarkShape::Note { at: w.at, text }
+        } else {
+            // A box the text fits: about half an em per character.
+            let longest = text.lines().map(|l| l.chars().count()).max().unwrap_or(1) as f32;
+            let lines = text.lines().count().max(1) as f32;
+            MarkShape::Text {
+                rect: RectPt {
+                    x: w.at.x,
+                    y: w.at.y,
+                    w: (longest * w.size * 0.55).max(w.size * 2.0),
+                    h: lines * w.size * TEXT_LINE,
+                },
+                text,
+                size: w.size,
+            }
+        };
+        let mark = Mark {
+            page: w.page,
+            shape,
+            color: rgb(w.colour),
+            width: 1.0,
+            opacity: 1.0,
+        };
+        if mark.is_valid() {
+            self.place(mark.clone(), cx);
+            self.markup.undo.push(Edit::Added(mark));
+            self.markup.redo.clear();
+        }
+        cx.notify();
+    }
+
+    /// Highlight, underline or strike the selected text: one box per line.
+    pub fn mark_selection(&mut self, kind: &str, cx: &mut Context<Self>) {
+        let Some(((p0, i0), (p1, i1))) = self.select.range() else {
+            return;
+        };
+        let highlighter = kind == "highlight";
+        let colour = rgb(self.markup.colour(highlighter));
+        for page in p0..=p1 {
+            let Some(chars) = self.layers.chars.get(&page).cloned() else {
+                continue;
+            };
+            let a = if page == p0 { i0 } else { 0 };
+            let b = if page == p1 { i1 } else { chars.len() };
+            let mut lines: Vec<(u32, RectPt)> = Vec::new();
+            for c in chars.iter().take(b.min(chars.len())).skip(a) {
+                if c.ch.is_whitespace() && lines.last().is_none_or(|(l, _)| *l != c.line) {
+                    continue;
+                }
+                match lines.last_mut() {
+                    Some((l, r)) if *l == c.line => {
+                        let (x1, y1) = (
+                            (r.x + r.w).max(c.rect.x + c.rect.w),
+                            (r.y + r.h).max(c.rect.y + c.rect.h),
+                        );
+                        r.x = r.x.min(c.rect.x);
+                        r.y = r.y.min(c.rect.y);
+                        r.w = x1 - r.x;
+                        r.h = y1 - r.y;
+                    }
+                    _ => lines.push((c.line, c.rect)),
+                }
+            }
+            let rects: Vec<RectPt> = lines
+                .into_iter()
+                .map(|(_, r)| r)
+                .filter(|r| r.w > 0.0)
+                .collect();
+            if rects.is_empty() {
+                continue;
+            }
+            let (shape, opacity) = match kind {
+                "underline" => (MarkShape::Underline { rects }, 1.0),
+                "strike" => (MarkShape::Strike { rects }, 1.0),
+                _ => (MarkShape::Highlight { rects }, ink::HIGHLIGHTER_OPACITY),
+            };
+            let mark = Mark {
+                page,
+                shape,
+                color: colour,
+                width: 1.5,
+                opacity,
+            };
+            if mark.is_valid() {
+                self.place(mark.clone(), cx);
+                self.markup.undo.push(Edit::Added(mark));
+            }
+        }
+        self.markup.redo.clear();
+        self.clear_selection(cx);
+    }
+
+    /// Notes on page `ix`: pins with their text as a tooltip; a click edits.
+    pub(super) fn note_pins(
+        &self,
+        ix: usize,
+        ppt: f32,
+        st: &Style,
+        cx: &mut Context<Self>,
+    ) -> Vec<AnyElement> {
+        let page = ix as u32;
+        let (size, rotation) = (self.raw_page_size(ix), self.rotation);
+        self.markup
+            .marks
+            .iter()
+            .filter(|p| p.mark.page == page)
+            .filter_map(|p| match &p.mark.shape {
+                MarkShape::Note { at, text } => Some((p.local, *at, text.clone(), p.mark.color)),
+                _ => None,
+            })
+            .map(|(local, at, text, c)| {
+                let (u, v) = point_to_view(at.x, at.y, size, rotation);
+                let fill = rgba((c.r, c.g, c.b));
+                div()
+                    .id(("note-pin", local))
+                    .absolute()
+                    .left(px(u * ppt))
+                    .top(px(v * ppt))
+                    .size(px(20.0))
+                    .rounded(px(5.0))
+                    .bg(fill)
+                    .shadow(st.elev())
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .child(
+                        svg()
+                            .path(icon("note"))
+                            .size(px(13.0))
+                            .text_color(gpui::white()),
+                    )
+                    .tip(SharedString::from(text.clone()))
+                    .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                    .on_click(cx.listener(move |r, _, window, cx| {
+                        if r.markup.tool == Some(Tool::Eraser) && r.markup.open {
+                            if let Some(mark) = r.unplace(local, cx) {
+                                r.markup.undo.push(Edit::Removed(mark));
+                            }
+                            return;
+                        }
+                        r.start_writing(page, at, true, Some(local), text.clone(), window, cx);
+                    }))
+                    .into_any_element()
+            })
+            .collect()
+    }
+
+    /// The writer for a note or text box, by where it goes on the page.
+    pub(super) fn writer(&self, st: &Style, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let w = self.markup.writing.as_ref()?;
+        let ix = w.page as usize;
+        let b = self.sheet_bounds(ix)?;
+        let (u, v) = point_to_view(w.at.x, w.at.y, self.raw_page_size(ix), self.rotation);
+        let ppt = self.px_per_pt(ix);
+        let at = gpui::point(b.origin.x + px(u * ppt), b.origin.y + px(v * ppt + 22.0));
+        let title = if w.note { "Note" } else { "Text" };
+        let button = |id: &'static str, label: &'static str, primary: bool| {
+            div()
+                .id(id)
+                .px(px(10.0))
+                .h(px(26.0))
+                .flex()
+                .items_center()
+                .rounded(px(7.0))
+                .text_size(px(12.0))
+                .when(primary, |d| {
+                    d.bg(st.c(|c| c.accent)).text_color(st.c(|c| c.bg))
+                })
+                .when(!primary, |d| d.hover(|d| d.bg(st.c(|c| c.hover))))
+                .child(label)
+        };
+        Some(
+            gpui::deferred(
+                gpui::anchored().position(at).child(
+                    div()
+                        .id("markup-writer")
+                        .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                        .w(px(280.0))
+                        .p(px(10.0))
+                        .flex()
+                        .flex_col()
+                        .gap(px(8.0))
+                        .rounded(px(12.0))
+                        .bg(st.c(|c| c.raised))
+                        .shadow(st.float())
+                        .border_1()
+                        .border_color(st.c(|c| c.line))
+                        .child(
+                            div()
+                                .text_size(px(11.0))
+                                .text_color(st.c(|c| c.muted))
+                                .child(format!("{title}  ·  Ctrl+Enter to keep, Esc to drop")),
+                        )
+                        .child(
+                            div()
+                                .min_h(px(60.0))
+                                .px(px(8.0))
+                                .py(px(6.0))
+                                .rounded(px(8.0))
+                                .bg(st.c(|c| c.hover))
+                                .child(w.field.clone()),
+                        )
+                        .child(
+                            div()
+                                .flex()
+                                .justify_end()
+                                .gap(px(6.0))
+                                .child(
+                                    button("writer-cancel", "Cancel", false)
+                                        .on_click(cx.listener(|r, _, _, cx| r.cancel_writing(cx))),
+                                )
+                                .child(
+                                    button("writer-done", "Done", true)
+                                        .on_click(cx.listener(|r, _, _, cx| r.finish_writing(cx))),
+                                ),
+                        ),
+                ),
+            )
+            .into_any_element(),
+        )
+    }
+
     /// The marks on page `ix` (and the one being drawn), painted over the page.
     pub(super) fn markup_overlay(&self, ix: usize, ppt: f32) -> Option<AnyElement> {
         let page = ix as u32;
@@ -496,9 +825,9 @@ impl Reader {
         Some(
             canvas(
                 |_, _, _| (),
-                move |bounds, _, window, _| {
+                move |bounds, _, window, cx| {
                     for m in &marks {
-                        paint_mark(m, bounds, size, rotation, ppt, window);
+                        paint_mark(m, bounds, size, rotation, ppt, window, cx);
                     }
                 },
             )
@@ -1015,6 +1344,7 @@ fn paint_mark(
     rotation: u16,
     ppt: f32,
     window: &mut Window,
+    cx: &mut App,
 ) {
     let to_px = |p: PointPt| {
         let (u, v) = point_to_view(p.x, p.y, page, rotation);
@@ -1142,8 +1472,36 @@ fn paint_mark(
                 window,
             )
         }),
-        MarkShape::Text { rect, .. } => quad(*rect, window),
-        MarkShape::Note { .. } => quad(m.bounds(), window),
+        MarkShape::Text { rect, text, size } => {
+            let font = window.text_style().font();
+            let colour: gpui::Hsla = colour.into();
+            for (i, line) in text.lines().enumerate() {
+                if line.is_empty() {
+                    continue;
+                }
+                let origin = to_px(PointPt {
+                    x: rect.x,
+                    y: rect.y + i as f32 * size * TEXT_LINE,
+                });
+                let run = gpui::TextRun {
+                    len: line.len(),
+                    font: font.clone(),
+                    color: colour,
+                    background_color: None,
+                    underline: None,
+                    strikethrough: None,
+                };
+                let shaped = window.text_system().shape_line(
+                    SharedString::from(line.to_string()),
+                    px(size * ppt),
+                    &[run],
+                    None,
+                );
+                let _ = shaped.paint(origin, px(size * TEXT_LINE * ppt), window, cx);
+            }
+        }
+        // Notes are pins with tooltips (note_pins), not paint.
+        MarkShape::Note { .. } => {}
     }
 }
 

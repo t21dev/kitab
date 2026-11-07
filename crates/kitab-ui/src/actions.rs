@@ -32,6 +32,7 @@ actions!(
         PageLeft,
         // Markup
         ToggleMarkup,
+        HighlightSelection,
         MarkupUndo,
         MarkupRedo,
         SaveMarks,
@@ -132,6 +133,7 @@ pub fn bind_default_keys(cx: &mut App) {
         KeyBinding::new("f11", ToggleMinimal, w),
         // Navigate (SumatraPDF-compatible where Sumatra has a binding)
         KeyBinding::new("ctrl-shift-d", ToggleMarkup, r),
+        KeyBinding::new("h", HighlightSelection, r),
         KeyBinding::new("ctrl-z", MarkupUndo, r),
         KeyBinding::new("ctrl-y", MarkupRedo, r),
         KeyBinding::new("ctrl-shift-z", MarkupRedo, r),
@@ -263,4 +265,21 @@ pub fn bind_default_keys(cx: &mut App) {
         .map(String::from),
     );
     cx.bind_keys(keys.iter().map(|k| KeyBinding::new(k, NoAction, hex)));
+    // A text field (notes, text boxes) takes every key it types with.
+    let field = Some(crate::text_field::TEXT_FIELD);
+    cx.bind_keys(keys.iter().map(|k| KeyBinding::new(k, NoAction, field)));
+    cx.bind_keys(
+        [
+            "up",
+            "down",
+            "pageup",
+            "pagedown",
+            "delete",
+            "ctrl-a",
+            "ctrl-x",
+            "ctrl-v",
+            "ctrl-enter",
+        ]
+        .map(|k| KeyBinding::new(k, NoAction, field)),
+    );
 }

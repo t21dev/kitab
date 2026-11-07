@@ -446,7 +446,8 @@ Each phase ends with its exit criteria green in CI and a minor release. A phase 
 
 - Highlights (5 colours), notes, underline, strike, ink, existing PDF annotations, Annotations panel, export (Markdown, CSV, text), optional save into PDF (incremental).
 - Done: drawing and markup (pen, highlighter, line, arrow, rectangle, ellipse, eraser, colour picker, widths, undo/redo) on PDFs, comics, XPS and fixed-layout books; marks kept in the library as they are drawn (schema 2, `marks`), and saved into PDFs as standard annotations, incrementally (`kitab-mupdf/src/marks.rs`). A Settings switch hides the tools.
-- Still to do: highlight, underline and strike from a text selection; text boxes and notes; erasing or editing annotations already in a PDF; the Annotations panel and export; text highlights in re-flowing books.
+- Done since: highlight, underline and strike-through from a text selection (H, right-click menu); Note and Text tools with a small writer (`text_field.rs`: a reusable field with input methods, clipboard, undo); notes are pins with their text as a tooltip.
+- Still to do: erasing or editing annotations already in a PDF; the Annotations panel and export; text highlights in re-flowing books.
 - Exit: H1–H4.
 
 ### Phase 7: Native print → `0.7.0`
