@@ -26,6 +26,7 @@
 
 mod bookmarks;
 mod codec;
+mod collections;
 mod documents;
 mod error;
 mod identity;
@@ -38,6 +39,7 @@ mod store;
 mod upkeep;
 
 pub use bookmarks::{Bookmark, BookmarkId};
+pub use collections::{Collection, CollectionId, MAX_SHELF, Shelf};
 pub use documents::{DocMeta, DocumentId, DocumentRecord, RecentEntry};
 pub use error::{Error, Result};
 pub use identity::{FileIdentity, QUICK_HASH_SPAN, identify};

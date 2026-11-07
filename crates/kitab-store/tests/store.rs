@@ -691,3 +691,68 @@ fn library_search_and_reading_stats() {
     assert_eq!(s.recent_days[6], 150);
     assert_eq!(s.top, vec![(id, 300)]);
 }
+
+#[test]
+fn collections_and_shelves() {
+    let mut store = Store::open_in_memory().unwrap();
+    let a = store
+        .upsert_document(
+            &fake_ident(21),
+            std::path::Path::new("/b/a.pdf"),
+            &DocMeta::new(Format::Pdf),
+        )
+        .unwrap();
+    let b = store
+        .upsert_document(
+            &fake_ident(22),
+            std::path::Path::new("/b/b.pdf"),
+            &DocMeta::new(Format::Pdf),
+        )
+        .unwrap();
+    let work = store.create_collection("Work").unwrap();
+    // Same name, any case: the same collection.
+    assert_eq!(store.create_collection(" work ").unwrap(), work);
+    store.set_in_collection(work, a, true).unwrap();
+    store.set_in_collection(work, a, true).unwrap();
+    let cs = store.collections().unwrap();
+    assert_eq!((cs.len(), cs[0].count), (1, 1));
+    assert_eq!(store.collections_of(a).unwrap(), [work]);
+    assert_eq!(
+        store
+            .shelf(kitab_store::Shelf::Collection(work))
+            .unwrap()
+            .len(),
+        1
+    );
+    assert_eq!(store.shelf(kitab_store::Shelf::All).unwrap().len(), 2);
+    store.set_favourite(b, true).unwrap();
+    let fav = store.shelf(kitab_store::Shelf::Favourites).unwrap();
+    assert_eq!(fav.iter().map(|e| e.id).collect::<Vec<_>>(), [b]);
+    assert!(store.is_favourite(b).unwrap());
+    store.set_finished(a, true).unwrap();
+    assert_eq!(store.shelf(kitab_store::Shelf::Finished).unwrap()[0].id, a);
+    store.set_in_collection(work, a, false).unwrap();
+    assert!(
+        store
+            .shelf(kitab_store::Shelf::Collection(work))
+            .unwrap()
+            .is_empty()
+    );
+    store.rename_collection(work, "Office").unwrap();
+    assert_eq!(store.collections().unwrap()[0].name, "Office");
+    store.delete_collection(work).unwrap();
+    assert!(store.collections().unwrap().is_empty());
+    assert_eq!(
+        store.shelf(kitab_store::Shelf::All).unwrap().len(),
+        2,
+        "documents stay"
+    );
+
+    store.watch_folder(std::path::Path::new("/books")).unwrap();
+    store.watch_folder(std::path::Path::new("/books")).unwrap();
+    assert_eq!(store.watched_folders().unwrap().len(), 1);
+    store
+        .unwatch_folder(std::path::Path::new("/books"))
+        .unwrap();
+    assert!(store.watched_folders().unwrap().is_empty());
+}

@@ -406,6 +406,42 @@ impl StoreLibrary {
     }
 }
 
+/// The most files one scan of the watched folders looks at, and how deep.
+const SCAN_FILES: usize = 20_000;
+const SCAN_DEPTH: u32 = 8;
+
+/// Documents Kitab opens under `dir` (not image files, not hidden folders).
+fn walk_documents(dir: &Path, depth: u32, out: &mut Vec<(PathBuf, kitab_core::Format)>) {
+    if depth > SCAN_DEPTH || out.len() >= SCAN_FILES {
+        return;
+    }
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for e in entries.flatten() {
+        let path = e.path();
+        let hidden = path
+            .file_name()
+            .is_some_and(|n| n.to_string_lossy().starts_with('.'));
+        let Ok(kind) = e.file_type() else { continue };
+        if hidden || kind.is_symlink() {
+            continue;
+        }
+        if kind.is_dir() {
+            walk_documents(&path, depth + 1, out);
+        } else if let Some(format) = path
+            .extension()
+            .and_then(|x| kitab_core::Format::from_extension(&x.to_string_lossy()))
+            .filter(|f| *f != kitab_core::Format::Image)
+        {
+            out.push((path, format));
+            if out.len() >= SCAN_FILES {
+                return;
+            }
+        }
+    }
+}
+
 fn title_or_name(title: Option<String>, path: &Path) -> String {
     title.filter(|t| !t.trim().is_empty()).unwrap_or_else(|| {
         path.file_name()
@@ -613,6 +649,188 @@ impl Library for StoreLibrary {
             let doc = store.document_by_path(&path).ok().flatten()?;
             store.save_reading_state(doc.id, &state).ok()
         });
+    }
+
+    fn shelf(&self, kind: kitab_ui::ShelfKind) -> Vec<RecentItem> {
+        use kitab_store::Shelf;
+        use kitab_ui::ShelfKind as K;
+        let shelf = match kind {
+            K::Recent => return self.recent(kitab_store::MAX_SHELF),
+            K::All => Shelf::All,
+            K::Favourites => Shelf::Favourites,
+            K::InProgress => Shelf::InProgress,
+            K::Finished => Shelf::Finished,
+            K::Collection(id) => Shelf::Collection(kitab_store::CollectionId(id)),
+        };
+        self.call(move |s| {
+            let store = s.store.as_ref()?;
+            Some(
+                store
+                    .shelf(shelf)
+                    .ok()?
+                    .into_iter()
+                    .map(|e| RecentItem {
+                        title: title_or_name(e.title, &e.path),
+                        missing: e.missing || !e.path.exists(),
+                        path: e.path,
+                        author: e.author,
+                        format: e.format,
+                        progress: e.progress.unwrap_or(0.0),
+                        last_opened_ms: e.last_opened_at,
+                    })
+                    .collect(),
+            )
+        })
+        .flatten()
+        .unwrap_or_default()
+    }
+
+    fn collections(&self) -> Vec<kitab_ui::CollectionInfo> {
+        self.call(|s| {
+            let store = s.store.as_ref()?;
+            Some(
+                store
+                    .collections()
+                    .ok()?
+                    .into_iter()
+                    .map(|c| kitab_ui::CollectionInfo {
+                        id: c.id.0,
+                        name: c.name,
+                        count: c.count,
+                    })
+                    .collect(),
+            )
+        })
+        .flatten()
+        .unwrap_or_default()
+    }
+
+    fn create_collection(&self, name: &str) -> Option<i64> {
+        let name = name.to_string();
+        self.call(move |s| s.store.as_mut()?.create_collection(&name).ok().map(|c| c.0))
+            .flatten()
+    }
+
+    fn rename_collection(&self, id: i64, name: &str) {
+        let name = name.to_string();
+        let _ = self.call(move |s| {
+            s.store
+                .as_mut()?
+                .rename_collection(kitab_store::CollectionId(id), &name)
+                .ok()
+        });
+    }
+
+    fn delete_collection(&self, id: i64) {
+        let _ = self.call(move |s| {
+            s.store
+                .as_mut()?
+                .delete_collection(kitab_store::CollectionId(id))
+                .ok()
+        });
+    }
+
+    fn set_in_collection(&self, id: i64, path: &Path, inside: bool) {
+        let path = path.to_path_buf();
+        let _ = self.call(move |s| {
+            let store = s.store.as_mut()?;
+            let doc = Self::doc_id(store, &path)?;
+            store
+                .set_in_collection(kitab_store::CollectionId(id), doc, inside)
+                .ok()
+        });
+    }
+
+    fn doc_flags(&self, path: &Path) -> Option<(bool, Vec<i64>)> {
+        let path = path.to_path_buf();
+        self.call(move |s| {
+            let store = s.store.as_ref()?;
+            let doc = Self::doc_id(store, &path)?;
+            let fav = store.is_favourite(doc).ok()?;
+            let cs = store
+                .collections_of(doc)
+                .ok()?
+                .into_iter()
+                .map(|c| c.0)
+                .collect();
+            Some((fav, cs))
+        })
+        .flatten()
+    }
+
+    fn set_favourite(&self, path: &Path, favourite: bool) {
+        let path = path.to_path_buf();
+        let _ = self.call(move |s| {
+            let store = s.store.as_mut()?;
+            let doc = Self::doc_id(store, &path)?;
+            store.set_favourite(doc, favourite).ok()
+        });
+    }
+
+    fn set_finished(&self, path: &Path, finished: bool) {
+        let path = path.to_path_buf();
+        let _ = self.call(move |s| {
+            let store = s.store.as_mut()?;
+            let doc = Self::doc_id(store, &path)?;
+            store.set_finished(doc, finished).ok()
+        });
+    }
+
+    fn watched_folders(&self) -> Vec<PathBuf> {
+        self.call(|s| s.store.as_ref()?.watched_folders().ok())
+            .flatten()
+            .unwrap_or_default()
+    }
+
+    fn watch_folder(&self, path: &Path) {
+        let path = path.to_path_buf();
+        let _ = self.call(move |s| s.store.as_mut()?.watch_folder(&path).ok());
+    }
+
+    fn unwatch_folder(&self, path: &Path) {
+        let path = path.to_path_buf();
+        let _ = self.call(move |s| s.store.as_mut()?.unwatch_folder(&path).ok());
+    }
+
+    fn scan_watched(&self) -> u32 {
+        let folders = self.watched_folders();
+        // Walk off the io thread; only the new files go to the store.
+        let mut found = Vec::new();
+        for f in folders {
+            walk_documents(&f, 0, &mut found);
+        }
+        // Which are new (on the io thread, a lookup each), then their
+        // identity (reading the files, here), then one write.
+        let unknown: Vec<(PathBuf, kitab_core::Format)> = self
+            .call(move |s| {
+                let store = s.store.as_ref()?;
+                Some(
+                    found
+                        .into_iter()
+                        .filter(|(p, _)| store.document_by_path(p).ok().flatten().is_none())
+                        .collect(),
+                )
+            })
+            .flatten()
+            .unwrap_or_default();
+        let new: Vec<_> = unknown
+            .into_iter()
+            .filter_map(|(p, f)| kitab_store::identify(&p).ok().map(|i| (p, f, i)))
+            .collect();
+        self.call(move |s| {
+            let store = s.store.as_mut()?;
+            let mut added = 0u32;
+            for (path, format, ident) in new {
+                let mut meta = kitab_store::DocMeta::new(format);
+                meta.title = path.file_stem().map(|s| s.to_string_lossy().to_string());
+                if store.upsert_document(&ident, &path, &meta).is_ok() {
+                    added += 1;
+                }
+            }
+            Some(added)
+        })
+        .flatten()
+        .unwrap_or(0)
     }
 
     fn recent(&self, limit: usize) -> Vec<RecentItem> {

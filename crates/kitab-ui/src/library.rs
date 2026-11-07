@@ -48,6 +48,28 @@ pub struct StatsView {
     pub indexed: u64,
 }
 
+/// A list Home can show.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ShelfKind {
+    /// Continue reading and Recent (opened documents, newest first).
+    #[default]
+    Recent,
+    /// Every document the library knows.
+    All,
+    Favourites,
+    InProgress,
+    Finished,
+    Collection(i64),
+}
+
+/// A collection and how many documents it holds.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CollectionInfo {
+    pub id: i64,
+    pub name: String,
+    pub count: u32,
+}
+
 /// A tab to restore at start-up.
 #[derive(Debug, Clone, PartialEq)]
 pub struct SessionTab {
@@ -133,6 +155,53 @@ pub trait Library: Send + Sync + 'static {
     fn reading_stats(&self, today: &str) -> Option<StatsView> {
         let _ = today;
         None
+    }
+    /// The documents on a shelf (not Recent; that's [`Library::recent`]).
+    fn shelf(&self, kind: ShelfKind) -> Vec<RecentItem> {
+        let _ = kind;
+        Vec::new()
+    }
+    fn collections(&self) -> Vec<CollectionInfo> {
+        Vec::new()
+    }
+    /// A new collection (or the one with that name); its id.
+    fn create_collection(&self, name: &str) -> Option<i64> {
+        let _ = name;
+        None
+    }
+    fn rename_collection(&self, id: i64, name: &str) {
+        let _ = (id, name);
+    }
+    fn delete_collection(&self, id: i64) {
+        let _ = id;
+    }
+    fn set_in_collection(&self, id: i64, path: &Path, inside: bool) {
+        let _ = (id, path, inside);
+    }
+    /// A document's favourite flag and collections.
+    fn doc_flags(&self, path: &Path) -> Option<(bool, Vec<i64>)> {
+        let _ = path;
+        None
+    }
+    fn set_favourite(&self, path: &Path, favourite: bool) {
+        let _ = (path, favourite);
+    }
+    fn set_finished(&self, path: &Path, finished: bool) {
+        let _ = (path, finished);
+    }
+    fn watched_folders(&self) -> Vec<PathBuf> {
+        Vec::new()
+    }
+    fn watch_folder(&self, path: &Path) {
+        let _ = path;
+    }
+    fn unwatch_folder(&self, path: &Path) {
+        let _ = path;
+    }
+    /// Add the documents in the watched folders that the library doesn't
+    /// know yet. Returns how many were added.
+    fn scan_watched(&self) -> u32 {
+        0
     }
 }
 

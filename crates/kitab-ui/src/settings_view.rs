@@ -32,6 +32,7 @@ pub enum Section {
     #[default]
     Appearance,
     Reading,
+    Library,
     FileTypes,
     Shortcuts,
     Signing,
@@ -40,9 +41,10 @@ pub enum Section {
 }
 
 impl Section {
-    const ALL: [Section; 7] = [
+    const ALL: [Section; 8] = [
         Section::Appearance,
         Section::Reading,
+        Section::Library,
         Section::FileTypes,
         Section::Shortcuts,
         Section::Signing,
@@ -54,6 +56,7 @@ impl Section {
         match self {
             Section::Appearance => "Appearance",
             Section::Reading => "Reading",
+            Section::Library => "Library",
             Section::FileTypes => "File types",
             Section::Shortcuts => "Shortcuts",
             Section::Signing => "Signing",
@@ -66,6 +69,7 @@ impl Section {
         match self {
             Section::Appearance => "sun",
             Section::Reading => "book",
+            Section::Library => "folder-open",
             Section::FileTypes => "file",
             Section::Shortcuts => "keyboard",
             Section::Signing => "shield",
@@ -150,6 +154,7 @@ pub fn panel(
     let body = match section {
         Section::Appearance => appearance(&ws, st, themes, hex, window),
         Section::Reading => reading(&ws, st),
+        Section::Library => system::library(&ws, sys, st),
         Section::FileTypes => system::file_types(&ws, sys, st),
         Section::Shortcuts => shortcuts_section(&ws, st),
         Section::Signing => system::signing(&ws, sys, st),

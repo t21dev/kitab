@@ -40,6 +40,7 @@ const FROZEN: &[&str] = &[
     include_str!("schema/v1.sql"),
     include_str!("schema/v2.sql"),
     include_str!("schema/v3.sql"),
+    include_str!("schema/v4.sql"),
 ];
 
 /// The live migrations, read straight from the source tree.
@@ -47,11 +48,12 @@ const LIVE: &[&str] = &[
     include_str!("../src/migrations/0001_initial.sql"),
     include_str!("../src/migrations/0002_marks.sql"),
     include_str!("../src/migrations/0003_search_stats.sql"),
+    include_str!("../src/migrations/0004_collections.sql"),
 ];
 
 /// One fixture builder per released schema version.
 type Builder = fn(&Connection);
-const FIXTURES: &[(u32, Builder)] = &[(1, build_v1), (2, build_v2), (3, build_v3)];
+const FIXTURES: &[(u32, Builder)] = &[(1, build_v1), (2, build_v2), (3, build_v3), (4, build_v4)];
 
 fn normalise(s: &str) -> String {
     s.replace("\r\n", "\n")
@@ -111,6 +113,20 @@ fn build_v3(conn: &Connection) {
          INSERT INTO page_text (body, document_id, page) VALUES ('the lease ends in June', 7, 4);
          INSERT INTO text_index (document_id, file_mtime, pages, indexed_at) VALUES (7, 1000, 12, 2200);
          INSERT INTO reading_days (day, document_id, seconds) VALUES ('2026-11-06', 7, 600);",
+    )
+    .unwrap();
+}
+
+/// Schema 4: version 3's seed plus a collection holding the document and a
+/// watched folder.
+fn build_v4(conn: &Connection) {
+    build_v3(conn);
+    conn.execute_batch(FROZEN[3]).unwrap();
+    conn.execute_batch(
+        "PRAGMA user_version = 4;
+         INSERT INTO collections (id, name, created_at) VALUES (2, 'Leases', 2300);
+         INSERT INTO collection_items (collection_id, document_id, added_at) VALUES (2, 7, 2300);
+         INSERT INTO watched_folders (path, added_at) VALUES ('/books', 2300);",
     )
     .unwrap();
 }
@@ -175,6 +191,15 @@ fn check_seed(store: &mut Store) {
         let stats = store.reading_stats("2026-11-07", 7).unwrap();
         assert_eq!(stats.streak_days, 1);
         assert_eq!(stats.week_seconds, 600);
+    }
+
+    // Schema 4: collections and watched folders, when the version had them.
+    let collections = store.collections().unwrap();
+    if let Some(c) = collections.first() {
+        assert_eq!((c.name.as_str(), c.count), ("Leases", 1));
+        let shelf = store.shelf(kitab_store::Shelf::Collection(c.id)).unwrap();
+        assert_eq!(shelf[0].id, id);
+        assert_eq!(store.watched_folders().unwrap(), [Path::new("/books")]);
     }
 }
 

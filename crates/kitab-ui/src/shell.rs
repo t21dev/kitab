@@ -34,6 +34,7 @@ mod palette_ui;
 mod password_ui;
 mod print_ui;
 mod save_page;
+mod shelves_ui;
 mod sign_ui;
 mod signatures_ui;
 mod system;
@@ -124,6 +125,8 @@ pub struct Workspace {
     page_tools_serial: u64,
     /// Home's library search and reading stats.
     lib: library_ui::LibraryState,
+    /// Home's shelves and collections.
+    shelves: shelves_ui::ShelfState,
 }
 
 /// The sidebar's panes for a document.
@@ -205,6 +208,7 @@ impl Workspace {
             page_tools: None,
             page_tools_serial: 0,
             lib: library_ui::LibraryState::new(cx),
+            shelves: Default::default(),
         };
         this.start_library(window, cx);
         // Leaving the hex field ends the edit.
@@ -227,6 +231,8 @@ impl Workspace {
         }
         this.refresh_recent(cx);
         this.first_update_check(cx);
+        // New files in the watched folders, a little after start-up.
+        this.after(Duration::from_secs(2), cx, |ws, cx| ws.scan_watched(cx));
         // A last resort for the splash: redraw after 3 s so render can close it.
         this.after(Duration::from_secs(3), cx, |_, cx| cx.notify());
         // keymap.json: shortly after start-up, then whenever the window comes
@@ -268,6 +274,7 @@ impl Workspace {
 
     fn refresh_recent(&mut self, cx: &mut Context<Self>) {
         self.refresh_stats(cx);
+        self.refresh_shelves(cx);
         let library = self.library.clone();
         cx.spawn(async move |this, cx| {
             let recent = cx.background_spawn(async move { library.recent(24) }).await;
@@ -1719,6 +1726,10 @@ impl Workspace {
         if !self.lib.query.trim().is_empty() {
             return page.child(self.search_results(st, cx)).into_any_element();
         }
+        page = page.child(self.shelf_chips(st, cx));
+        if self.shelves.kind != crate::library::ShelfKind::Recent {
+            return page.child(self.shelf_grid(st, cx)).into_any_element();
+        }
         page = page.children(self.stats_strip(st));
         if !continuing.is_empty() {
             let mut row = div().flex().gap(px(16.0)).px(px(40.0)).pt(px(12.0));
@@ -1758,7 +1769,7 @@ impl Workspace {
             .on_mouse_down(
                 MouseButton::Right,
                 cx.listener(move |ws, e: &MouseDownEvent, window, cx| {
-                    ws.card_menu(menu_path.clone(), e.position, window, cx)
+                    ws.card_menu_flags(menu_path.clone(), e.position, window, cx)
                 }),
             )
             .flex()
@@ -1825,7 +1836,7 @@ impl Workspace {
             .on_mouse_down(
                 MouseButton::Right,
                 cx.listener(move |ws, e: &MouseDownEvent, window, cx| {
-                    ws.card_menu(menu_path.clone(), e.position, window, cx)
+                    ws.card_menu_flags(menu_path.clone(), e.position, window, cx)
                 }),
             )
             .flex()
@@ -3062,9 +3073,11 @@ impl Workspace {
         &mut self,
         path: PathBuf,
         at: Point<Pixels>,
+        flags: Option<(bool, Vec<i64>)>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        let shelf_items = self.shelf_items(&path, flags, cx);
         let exists = path.exists();
         let open = path.clone();
         let items = vec![
@@ -3084,11 +3097,13 @@ impl Workspace {
             })
             .icon("sidebar")
             .disabled(!exists || self.tabs.is_empty()),
-            MenuItem::Separator,
-            file_item_copy(&path),
-            file_item_reveal(&path).disabled(!exists),
         ];
-        self.open_menu(at, false, 230.0, items, window, cx);
+        let mut items = items;
+        items.extend(shelf_items);
+        items.push(MenuItem::Separator);
+        items.push(file_item_copy(&path));
+        items.push(file_item_reveal(&path).disabled(!exists));
+        self.open_menu(at, false, 240.0, items, window, cx);
     }
 
     fn toc_menu(
@@ -3186,6 +3201,7 @@ impl Workspace {
         out.extend(self.sign_view(st, cx));
         out.extend(self.sign_confirm_view(st, cx));
         out.extend(self.page_tools_view(st, cx));
+        out.extend(self.naming_view(st, cx));
 
         if let Some(section) = self.settings.or(self.settings_closing) {
             let closing = self.settings.is_none();

@@ -22,6 +22,8 @@ pub struct SystemInfo {
     pub types: Option<Vec<TypeStatus>>,
     /// The library database's size; loaded when Advanced opens.
     pub db_size: Option<u64>,
+    /// Watched folders; loaded when Library opens.
+    pub watched: Option<Vec<std::path::PathBuf>>,
     /// Certificates trusted for signatures; loaded when Signing opens.
     pub trusted: Option<Vec<crate::engine::TrustedCert>>,
     pub update: UpdateState,
@@ -288,6 +290,79 @@ pub(super) fn file_types(ws: &WeakEntity<Workspace>, info: &SystemInfo, st: &Sty
 }
 
 // ── Advanced ─────────────────────────────────────────────────────────────
+
+// ── Library ──────────────────────────────────────────────────────────────
+
+const WATCH_IDS: [&str; 10] = [
+    "watch-0", "watch-1", "watch-2", "watch-3", "watch-4", "watch-5", "watch-6", "watch-7",
+    "watch-8", "watch-9",
+];
+
+pub(super) fn library(ws: &WeakEntity<Workspace>, info: &SystemInfo, st: &Style) -> AnyElement {
+    let mut list = Vec::new();
+    match info.watched.as_deref() {
+        None => list.push(icon_row(Some("folder-open"), "Loading…", "", status("…", false, st), st)),
+        Some([]) => list.push(icon_row(
+            Some("folder-open"),
+            "No watched folders",
+            "Documents in a watched folder (and the folders inside it) join your library without being opened: they show in Home › All and can go in collections. Search covers each one after it has been opened once.",
+            div().into_any_element(),
+            st,
+        )),
+        Some(folders) => {
+            for (i, f) in folders.iter().enumerate() {
+                let path = f.clone();
+                let ws = ws.clone();
+                let remove: Click = Box::new(move |_, cx| {
+                    let path = path.clone();
+                    let _ = ws.update(cx, move |ws, cx| ws.unwatch_folder(path, cx));
+                });
+                let name = f
+                    .file_name()
+                    .map(|n| n.to_string_lossy().to_string())
+                    .unwrap_or_else(|| f.display().to_string());
+                list.push(icon_row(
+                    Some("folder-open"),
+                    &name,
+                    &f.display().to_string(),
+                    button(WATCH_IDS[i % WATCH_IDS.len()], "Remove", true, st, remove),
+                    st,
+                ));
+            }
+        }
+    }
+    list.push(
+        div()
+            .flex()
+            .gap(px(8.0))
+            .child(button(
+                "watch-add",
+                "Add folder…",
+                false,
+                st,
+                act(ws, |ws, cx| ws.watch_folder(cx)),
+            ))
+            .child(button(
+                "watch-scan",
+                "Look again now",
+                false,
+                st,
+                act(ws, |ws, cx| ws.scan_watched(cx)),
+            ))
+            .into_any_element(),
+    );
+    div()
+        .flex()
+        .flex_col()
+        .gap(px(28.0))
+        .child(group(
+            "Watched folders",
+            Some("Kitab looks in these folders when it starts and when you ask. Nothing is moved or changed; removing a folder keeps the documents already found."),
+            rows(list),
+            st,
+        ))
+        .into_any_element()
+}
 
 // ── Signing ──────────────────────────────────────────────────────────────
 

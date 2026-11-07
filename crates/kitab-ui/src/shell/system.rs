@@ -48,8 +48,67 @@ impl Workspace {
             }
             Section::Advanced => self.load_db_size(cx),
             Section::Signing => self.load_trusted(cx),
+            Section::Library => self.load_watched(cx),
             _ => {}
         }
+    }
+
+    fn load_watched(&mut self, cx: &mut Context<Self>) {
+        let library = self.library.clone();
+        cx.spawn(async move |this, cx| {
+            let list = cx
+                .background_spawn(async move { library.watched_folders() })
+                .await;
+            let _ = this.update(cx, |ws, cx| {
+                ws.system.watched = Some(list);
+                cx.notify();
+            });
+        })
+        .detach();
+    }
+
+    /// Library › Add folder…: watch a folder and look in it now.
+    pub(crate) fn watch_folder(&mut self, cx: &mut Context<Self>) {
+        let rx = cx.prompt_for_paths(gpui::PathPromptOptions {
+            files: false,
+            directories: true,
+            multiple: false,
+            prompt: Some("Watch".into()),
+        });
+        let library = self.library.clone();
+        cx.spawn(async move |this, cx| {
+            let Ok(Ok(Some(mut picked))) = rx.await else {
+                return;
+            };
+            let Some(dir) = picked.pop() else { return };
+            let added = cx
+                .background_spawn(async move {
+                    library.watch_folder(&dir);
+                    library.scan_watched()
+                })
+                .await;
+            let _ = this.update(cx, |ws, cx| {
+                let what = if added == 1 {
+                    "1 new document".to_string()
+                } else {
+                    format!("{added} new documents")
+                };
+                ws.toast(format!("Watching the folder: {what}."), false, None, cx);
+                ws.load_watched(cx);
+                ws.refresh_shelves(cx);
+            });
+        })
+        .detach();
+    }
+
+    pub(crate) fn unwatch_folder(&mut self, path: std::path::PathBuf, cx: &mut Context<Self>) {
+        let library = self.library.clone();
+        cx.spawn(async move |this, cx| {
+            cx.background_spawn(async move { library.unwatch_folder(&path) })
+                .await;
+            let _ = this.update(cx, |ws, cx| ws.load_watched(cx));
+        })
+        .detach();
     }
 
     fn load_trusted(&mut self, cx: &mut Context<Self>) {

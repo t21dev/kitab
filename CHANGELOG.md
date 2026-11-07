@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Shelves on Home: Recent, All, Favourites, In progress, Finished, and your own collections (a document can be in several, so they work as tags). Right-click a book for Favourite, Mark finished, a tick per collection and New collection…; right-click a collection to rename or delete it. Settings › Library watches folders: their documents join the library (Home › All) without being opened, found at start-up and on Look again now.
 - Library search: the search box on Home finds words across every document you've opened (indexed in the background a few seconds after each opens, again when the file changes; prefix matches, accents ignored, Bangla and Arabic marks kept with their letters). Results show the page and the words around the match; clicking one opens the document at that page.
 - Reading stats on Home: time read today and this week, the current and longest streak (a day counts with a minute of reading), and a bar per day for four weeks. Time counts while you're active in a document (input in the last two minutes), stored per day in Kitab's library.
 - Page tools… (⋯ menu, the page and tab menus, or the palette): delete, move or turn pages, compress, add page numbers or a watermark, or save the text or the pictures. Each writes a new file and reports what it did (compress says how much smaller). Numbers and watermarks sit level on turned pages too.
