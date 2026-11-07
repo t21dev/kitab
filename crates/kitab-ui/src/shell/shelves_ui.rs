@@ -25,6 +25,11 @@ pub(super) struct ShelfState {
     pub collections: Vec<CollectionInfo>,
     pub naming: Option<NameSheet>,
     pub serial: u64,
+    /// How many documents the library has (watched folders included), so
+    /// Home knows "nothing yet" from "nothing opened yet".
+    pub library_size: usize,
+    /// The watched folders are being looked through.
+    pub scanning: bool,
 }
 
 /// Naming a collection: a new one (and the document to put in it), or a
@@ -44,10 +49,16 @@ impl Workspace {
         let library = self.library.clone();
         let kind = self.shelves.kind;
         cx.spawn(async move |this, cx| {
-            let (collections, items) = cx
+            let (collections, items, size) = cx
                 .background_spawn(async move {
-                    let items = (kind != ShelfKind::Recent).then(|| library.shelf(kind));
-                    (library.collections(), items)
+                    let all = library.shelf(ShelfKind::All);
+                    let size = all.len();
+                    let items = match kind {
+                        ShelfKind::Recent => None,
+                        ShelfKind::All => Some(all),
+                        _ => Some(library.shelf(kind)),
+                    };
+                    (library.collections(), items, size)
                 })
                 .await;
             let _ = this.update(cx, |ws, cx| {
@@ -58,6 +69,19 @@ impl Workspace {
                     }
                 }
                 ws.shelves.collections = collections;
+                ws.shelves.library_size = size;
+                // Documents from watched folders, none opened yet: Home
+                // shows them (All) rather than an empty Recent.
+                if ws.shelves.kind == ShelfKind::Recent && ws.recent.is_empty() && size > 0 {
+                    ws.shelves.kind = ShelfKind::All;
+                    ws.refresh_shelves(cx);
+                    return;
+                }
+                kitab_os::trace::mark(&format!(
+                    "shelf {:?}: {} items",
+                    ws.shelves.kind,
+                    items.as_ref().map_or(0, Vec::len)
+                ));
                 ws.shelves.items = items;
                 cx.notify();
             });
@@ -67,15 +91,36 @@ impl Workspace {
 
     /// Look in the watched folders, then refresh what Home shows.
     pub(crate) fn scan_watched(&mut self, cx: &mut Context<Self>) {
+        self.scan_watched_then(false, cx);
+    }
+
+    /// Look through the watched folders; `say` reports the outcome even
+    /// when nothing was new (a folder just added, or Look again now).
+    pub(crate) fn scan_watched_then(&mut self, say: bool, cx: &mut Context<Self>) {
+        if self.shelves.scanning {
+            return;
+        }
+        self.shelves.scanning = true;
+        cx.notify();
         let library = self.library.clone();
         cx.spawn(async move |this, cx| {
             let added = cx
                 .background_spawn(async move { library.scan_watched() })
                 .await;
             let _ = this.update(cx, |ws, cx| {
+                ws.shelves.scanning = false;
                 if added > 0 {
                     ws.refresh_shelves(cx);
                 }
+                if added > 0 || say {
+                    let text = match added {
+                        0 => "No new documents in your watched folders.".to_string(),
+                        1 => "Found 1 new document. It's on Home under All.".to_string(),
+                        n => format!("Found {n} new documents. They're on Home under All."),
+                    };
+                    ws.toast(text, false, None, cx);
+                }
+                cx.notify();
             });
         })
         .detach();
@@ -177,12 +222,15 @@ impl Workspace {
     }
 
     /// A shelf other than Recent, as a grid of cards.
-    pub(super) fn shelf_grid(&mut self, st: &Style, cx: &mut Context<Self>) -> AnyElement {
+    /// The shelf's title above its cards, or why it is empty (the cards
+    /// themselves are rows of Home's list).
+    pub(super) fn shelf_heading(&self, st: &Style) -> AnyElement {
         let name = self.shelf_name(self.shelves.kind);
-        let mut col = div().flex().flex_col();
-        col = col.child(super::section_title(&name, st));
-        match self.shelves.items.clone() {
-            None => col.into_any_element(),
+        let col = div()
+            .flex()
+            .flex_col()
+            .child(super::section_title(&name, st));
+        match self.shelves.items.as_ref() {
             Some(items) if items.is_empty() => col
                 .child(
                     div()
@@ -205,20 +253,7 @@ impl Workspace {
                         }),
                 )
                 .into_any_element(),
-            Some(items) => {
-                let mut grid = div()
-                    .flex()
-                    .flex_wrap()
-                    .gap(px(20.0))
-                    .px(px(40.0))
-                    .pt(px(12.0))
-                    .pb(px(40.0));
-                for (i, item) in items.into_iter().enumerate() {
-                    let card = self.recent_card(i + 100, item, st, cx);
-                    grid = grid.child(card);
-                }
-                col.child(grid).into_any_element()
-            }
+            _ => col.into_any_element(),
         }
     }
 

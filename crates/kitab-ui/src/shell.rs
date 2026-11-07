@@ -28,6 +28,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::time::Duration;
 
+mod home_ui;
 mod library_ui;
 mod page_tools_ui;
 mod palette_ui;
@@ -84,6 +85,8 @@ pub struct Workspace {
     /// Settings › Advanced asked for the guide; opened on the next frame
     /// (opening a tab needs the window).
     welcome_pending: bool,
+    /// Home's list, covers and scroll bar (home_ui.rs).
+    home: home_ui::HomeView,
     /// Focus mode with the sidebar called back (Ctrl+B or the corner
     /// button); focus mode itself stays on.
     focus_sidebar: bool,
@@ -197,6 +200,7 @@ impl Workspace {
             overlay_focus: cx.focus_handle(),
             focus_check: false,
             focus_sidebar: false,
+            home: home_ui::HomeView::new(),
             tab_ghost: None,
             tab_ghost_serial: 0,
             welcome_pending: false,
@@ -402,6 +406,13 @@ impl Workspace {
             let title = t.read(cx).title();
             window.set_window_title(&format!("{title} · Kitab"));
             window.focus(&t.focus_handle(cx));
+            // Reading, not browsing: after a while Home's covers go (the
+            // disk cache brings them back quickly).
+            self.after(Duration::from_secs(30), cx, |ws, _| {
+                if ws.active.is_some() {
+                    ws.home.drop_covers();
+                }
+            });
         }
         cx.notify();
     }
@@ -420,6 +431,7 @@ impl Workspace {
     fn show_home(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.active.is_some() {
             self.home_serial += 1;
+            self.home.arrived();
         }
         self.active = None;
         self.watch_active(cx);
@@ -1750,7 +1762,7 @@ impl Workspace {
             .into_any_element()
     }
 
-    fn home(&mut self, st: &Style, cx: &mut Context<Self>) -> AnyElement {
+    fn home(&mut self, st: &Style, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
         // Home's two buttons, alike: an icon and a word each.
         let button = |id: &'static str, name: &str, label: &'static str| {
             crate::kbd::stop_solid(div().id(id), st)
@@ -1779,7 +1791,7 @@ impl Workspace {
             .tip("Settings  Ctrl+,")
             .on_click(cx.listener(|ws, _, window, cx| ws.open_settings(window, cx)));
 
-        if self.recent.is_empty() {
+        if self.recent.is_empty() && self.shelves.library_size == 0 {
             return div()
                 .size_full()
                 .flex()
@@ -1820,17 +1832,10 @@ impl Workspace {
                 .into_any_element();
         }
 
-        let continuing: Vec<RecentItem> = self
-            .recent
-            .iter()
-            .filter(|r| !r.missing && r.progress > 0.0 && r.progress < 0.995)
-            .take(3)
-            .cloned()
-            .collect();
-        let mut page = div()
-            .id("home")
-            .size_full()
-            .overflow_y_scroll()
+        // Pinned: the title, search and buttons, and the shelf chips; the
+        // cards scroll beneath them (a virtual list, home_ui.rs).
+        let header = div()
+            .flex_none()
             .bg(st.c(|c| c.bg))
             .child(
                 div()
@@ -1841,10 +1846,24 @@ impl Workspace {
                     .child(
                         div()
                             .flex_1()
-                            .text_size(px(22.0))
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(st.c(|c| c.text))
-                            .child("Home"),
+                            .flex()
+                            .items_baseline()
+                            .gap(px(14.0))
+                            .child(
+                                div()
+                                    .text_size(px(22.0))
+                                    .font_weight(FontWeight::SEMIBOLD)
+                                    .text_color(st.c(|c| c.text))
+                                    .child("Home"),
+                            )
+                            .when(self.shelves.scanning, |d| {
+                                d.child(
+                                    div()
+                                        .text_size(px(12.5))
+                                        .text_color(st.c(|c| c.muted))
+                                        .child("Looking in your folders…"),
+                                )
+                            }),
                     )
                     .child(
                         div()
@@ -1855,37 +1874,27 @@ impl Workspace {
                             .child(settings_button)
                             .child(open_button),
                     ),
-            );
-        // A query: its results instead of the lists.
-        if !self.lib.query.trim().is_empty() {
-            return page.child(self.search_results(st, cx)).into_any_element();
-        }
-        page = page.child(self.shelf_chips(st, cx));
-        if self.shelves.kind != crate::library::ShelfKind::Recent {
-            return page.child(self.shelf_grid(st, cx)).into_any_element();
-        }
-        page = page.children(self.stats_strip(st));
-        if !continuing.is_empty() {
-            let mut row = div().flex().gap(px(16.0)).px(px(40.0)).pt(px(12.0));
-            for (i, item) in continuing.into_iter().enumerate() {
-                let card = self.continue_card(i, item, st, cx);
-                row = row.child(self.card_enter(card, "continue-in", i, st));
-            }
-            page = page.child(section_title("Continue reading", st)).child(row);
-        }
-        let mut grid = div()
+            )
+            .child(self.shelf_chips(st, cx));
+        let body = if !self.lib.query.trim().is_empty() {
+            div()
+                .id("home-search")
+                .flex_1()
+                .min_h_0()
+                .overflow_y_scroll()
+                .child(self.search_results(st, cx))
+                .into_any_element()
+        } else {
+            self.home_list(st, window, cx)
+        };
+        div()
+            .id("home")
+            .size_full()
             .flex()
-            .flex_wrap()
-            .gap(px(20.0))
-            .px(px(40.0))
-            .pt(px(12.0))
-            .pb(px(40.0));
-        for (i, item) in self.recent.clone().into_iter().enumerate() {
-            let card = self.recent_card(i, item, st, cx);
-            grid = grid.child(self.card_enter(card, "recent-in", i + 3, st));
-        }
-        page.child(section_title("Recent", st))
-            .child(grid)
+            .flex_col()
+            .bg(st.c(|c| c.bg))
+            .child(header)
+            .child(body)
             .into_any_element()
     }
 
@@ -1915,7 +1924,7 @@ impl Workspace {
             .shadow(st.elev())
             .hover(|d| d.bg(st.hover_bg()))
             .on_click(cx.listener(move |ws, _, window, cx| ws.open_tab(path.clone(), window, cx)))
-            .child(cover(&item.title, 56.0, st))
+            .child(self.book_cover(usize::MAX - i, &item, 56.0, st, cx))
             .child(
                 div()
                     .flex()
@@ -2058,10 +2067,11 @@ impl Workspace {
                     cx.listener(move |ws, _, window, cx| ws.open_tab(path.clone(), window, cx)),
                 )
             })
+            .on_hover(cx.listener(move |ws, over: &bool, _, cx| ws.card_hover(i, *over, cx)))
             .child(
                 div()
                     .relative()
-                    .child(cover(&item.title, 132.0, st))
+                    .child(self.book_cover(i, &item, 132.0, st, cx))
                     // A favourite wears a ribbon over the cover's top edge.
                     .when(item.favourite, |d| {
                         d.child(
@@ -2285,7 +2295,13 @@ impl Render for Workspace {
                     .into_any_element()
             }
             None => {
-                let home = self.home(&st, cx);
+                let side_w = if side_tabs && show_sidebar {
+                    self.sidebar_w
+                } else {
+                    0.0
+                };
+                self.home.width = win_w - side_w;
+                let home = self.home(&st, window, cx);
                 // Tabs in the sidebar: the open documents stay listed on Home.
                 let side = (side_tabs && show_sidebar).then(|| {
                     let inner = self.sidebar_view(None, &st, cx);
@@ -2372,6 +2388,7 @@ impl Render for Workspace {
         if self.tools.split.is_some() && self.tools.split.as_ref() == self.active_reader() {
             self.tools.split = None;
         }
+        self.home.free_dropped(window);
         if std::mem::take(&mut self.welcome_pending) {
             let ws = cx.entity();
             window.defer(cx, move |window, cx| {

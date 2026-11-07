@@ -795,6 +795,33 @@ impl Library for StoreLibrary {
         });
     }
 
+    fn cover(&self, path: &Path, size: u32) -> Option<Vec<u8>> {
+        use std::hash::{Hash, Hasher};
+        // Not on the store's thread: drawing a page takes a while.
+        let meta = std::fs::metadata(path).ok()?;
+        let modified = meta
+            .modified()
+            .ok()
+            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+            .map_or(0, |d| d.as_secs());
+        let mut h = std::collections::hash_map::DefaultHasher::new();
+        (path, modified, meta.len(), size).hash(&mut h);
+        let dir = kitab_os::data_dir()?.join("covers");
+        let file = dir.join(format!("{:016x}.png", h.finish()));
+        if let Ok(png) = std::fs::read(&file) {
+            return Some(png);
+        }
+        let ext = path.extension()?.to_str()?.to_ascii_lowercase();
+        let png = kitab_thumb::render(kitab_thumb::Source::Path(path), &ext, size)
+            .ok()?
+            .to_png()
+            .ok()?;
+        if std::fs::create_dir_all(&dir).is_ok() {
+            let _ = std::fs::write(&file, &png);
+        }
+        Some(png)
+    }
+
     fn watched_folders(&self) -> Vec<PathBuf> {
         self.call(|s| s.store.as_ref()?.watched_folders().ok())
             .flatten()

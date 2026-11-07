@@ -158,6 +158,13 @@ pub trait Library: Send + Sync + 'static {
         let _ = today;
         None
     }
+    /// A picture of the document's first page for its card on Home, as
+    /// PNG, about `size` px on its longer side. Cached on disk, so it is
+    /// drawn once per file version. `None` if it can't be drawn.
+    fn cover(&self, path: &Path, size: u32) -> Option<Vec<u8>> {
+        let _ = (path, size);
+        None
+    }
     /// The documents on a shelf (not Recent; that's [`Library::recent`]).
     fn shelf(&self, kind: ShelfKind) -> Vec<RecentItem> {
         let _ = kind;

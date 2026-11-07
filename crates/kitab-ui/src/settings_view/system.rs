@@ -348,7 +348,7 @@ pub(super) fn library(ws: &WeakEntity<Workspace>, info: &SystemInfo, st: &Style)
                 "Look again now",
                 false,
                 st,
-                act(ws, |ws, cx| ws.scan_watched(cx)),
+                act(ws, |ws, cx| ws.scan_watched_then(true, cx)),
             ))
             .into_any_element(),
     );

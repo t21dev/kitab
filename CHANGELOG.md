@@ -18,6 +18,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Icons beside the reading stats on Home.
 
 ### Changed
+- Home is built for big libraries: the title, search and shelf chips stay put while the books scroll beneath them, only the rows on screen are drawn, and a scroll bar runs down the right. Books show their own first page as the cover (drawn in the background for the cards on screen, kept on disk so each is drawn once), and a cover lifts a little under the pointer.
+- With 400 documents in a watched folder Home uses about 96 MB, scrolling through them about 127 MB, and once you've been reading for half a minute the covers are let go (about 137 MB with a document open, down from over 200). `tools/bench_library.py` repeats the measurement.
+- Adding a watched folder says it's looking, and then how many documents it found; Look again now says so even when there's nothing new. Home shows "Looking in your folders…" meanwhile.
+- When the library's documents come only from watched folders (nothing opened yet), Home opens on All instead of saying there are no books.
 - The + in the title bar opens Home (Open file… and your recent books) instead of going straight to the Open dialog; Ctrl+O still does.
 - Home's Settings button matches Open file…, with an icon and a word.
 - About › Links: each row is the link, with an arrow, instead of an Open button.

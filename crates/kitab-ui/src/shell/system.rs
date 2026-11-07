@@ -81,6 +81,15 @@ impl Workspace {
                 return;
             };
             let Some(dir) = picked.pop() else { return };
+            let name = dir
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_else(|| dir.display().to_string());
+            let _ = this.update(cx, |ws, cx| {
+                ws.shelves.scanning = true;
+                ws.toast(format!("Looking in {name}…"), false, None, cx);
+                cx.notify();
+            });
             let added = cx
                 .background_spawn(async move {
                     library.watch_folder(&dir);
@@ -88,12 +97,13 @@ impl Workspace {
                 })
                 .await;
             let _ = this.update(cx, |ws, cx| {
-                let what = if added == 1 {
-                    "1 new document".to_string()
-                } else {
-                    format!("{added} new documents")
+                ws.shelves.scanning = false;
+                let what = match added {
+                    0 => "no new documents".to_string(),
+                    1 => "1 new document, on Home under All".to_string(),
+                    n => format!("{n} new documents, on Home under All"),
                 };
-                ws.toast(format!("Watching the folder: {what}."), false, None, cx);
+                ws.toast(format!("Watching {name}: {what}."), false, None, cx);
                 ws.load_watched(cx);
                 ws.refresh_shelves(cx);
             });
@@ -293,6 +303,7 @@ impl Workspace {
         for tab in self.tabs.clone() {
             tab.update(cx, |r, cx| r.drop_cached_pages(cx));
         }
+        self.home.drop_covers();
         let engine = self.engine.clone();
         cx.background_spawn(async move { engine.shrink_caches() })
             .detach();
