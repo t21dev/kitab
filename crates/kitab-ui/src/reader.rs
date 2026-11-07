@@ -335,6 +335,7 @@ impl Reader {
                         encryption: None,
                         repaired: false,
                         reflowable: false,
+                        right_to_left: false,
                     };
                     let saved = library.opened(&path, &info);
                     Ok((doc, info, saved, text.into_owned()))
@@ -646,6 +647,21 @@ impl Reader {
         self.rotation = (self.rotation + if clockwise { 90 } else { 270 }) % 360;
         self.cache.clear();
         self.relayout(cx);
+    }
+
+    /// Right or left arrow: next or previous page, the other way round in a
+    /// book whose pages advance right to left (MANIFEST 04).
+    fn page_arrow(&mut self, right: bool, cx: &mut Context<Self>) {
+        if page_arrow_goes_forward(right, self.right_to_left()) {
+            self.next_page(cx);
+        } else {
+            self.prev_page(cx);
+        }
+    }
+
+    /// Pages advance right to left (from the book's package document).
+    pub fn right_to_left(&self) -> bool {
+        self.info.as_ref().is_some_and(|i| i.right_to_left)
     }
 
     pub fn next_page(&mut self, cx: &mut Context<Self>) {
@@ -1300,6 +1316,8 @@ impl Render for Reader {
             .on_action(cx.listener(|r, _: &PrevPage, _, cx| {
                 r.go_to_page(r.current_page().saturating_sub(1), cx)
             }))
+            .on_action(cx.listener(|r, _: &PageRight, _, cx| r.page_arrow(true, cx)))
+            .on_action(cx.listener(|r, _: &PageLeft, _, cx| r.page_arrow(false, cx)))
             .on_action(cx.listener(|r, _: &FirstPage, _, cx| r.jump(0, cx)))
             .on_action(cx.listener(|r, _: &LastPage, _, cx| r.jump(usize::MAX, cx)))
             .on_action(cx.listener(|r, _: &GoToPage, window, cx| r.edit_page(window, cx)))
@@ -1720,5 +1738,21 @@ mod page_field_tests {
         assert_eq!(parse_page("0", 40), None);
         assert_eq!(parse_page("", 40), None);
         assert_eq!(parse_page("3", 0), None);
+    }
+}
+
+/// Whether an arrow key moves forward through the book.
+fn page_arrow_goes_forward(right: bool, right_to_left: bool) -> bool {
+    right != right_to_left
+}
+
+#[cfg(test)]
+mod arrow_tests {
+    #[test]
+    fn arrows_follow_the_reading_direction() {
+        use super::page_arrow_goes_forward as forward;
+        assert!(forward(true, false) && !forward(false, false));
+        // Right to left: the left arrow is the next page.
+        assert!(forward(false, true) && !forward(true, true));
     }
 }

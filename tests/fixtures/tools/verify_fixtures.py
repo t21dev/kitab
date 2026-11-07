@@ -118,6 +118,38 @@ def sig_info(path: Path) -> list[dict]:
     return out
 
 
+def opf_facts(p: Path) -> dict:
+    """What the package document says, read with Python's own zip and XML
+    readers (not MuPDF): fixed layout, its viewport, page direction, spine size."""
+    import zipfile
+    import xml.etree.ElementTree as ET
+    out = {"fixed_layout": False, "viewport": None, "right_to_left": False, "spine_items": None}
+    try:
+        z = zipfile.ZipFile(p)
+        container = ET.fromstring(z.read("META-INF/container.xml"))
+        root = next(e.get("full-path") for e in container.iter() if e.tag.endswith("rootfile"))
+        opf = ET.fromstring(z.read(root))
+    except Exception:  # noqa: BLE001
+        return out
+    for m in opf.iter():
+        if m.tag.endswith("meta") and m.get("property") == "rendition:layout":
+            out["fixed_layout"] = (m.text or "").strip() == "pre-paginated"
+    spine = next((e for e in opf.iter() if e.tag.endswith("spine")), None)
+    if spine is not None:
+        out["right_to_left"] = spine.get("page-progression-direction") == "rtl"
+        refs = [e.get("idref") for e in spine if e.tag.endswith("itemref")]
+        out["spine_items"] = len(refs)
+        if out["fixed_layout"] and refs:
+            items = {e.get("id"): e.get("href") for e in opf.iter() if e.tag.endswith("item")}
+            base = root.rsplit("/", 1)[0] + "/" if "/" in root else ""
+            first = z.read(base + items[refs[0]]).decode("utf-8", "replace")
+            import re as _re
+            m = _re.search(r'name="viewport"\s+content="width=(\d+),\s*height=(\d+)"', first)
+            if m:
+                out["viewport"] = [int(m.group(1)), int(m.group(2))]
+    return out
+
+
 def main() -> int:
     exp: dict = {"pdf": {}, "epub": {}, "md": {}}
     fails: list[str] = []
@@ -143,7 +175,7 @@ def main() -> int:
             d = fitz.open(str(p))
             d.layout(width=400, height=600, fontsize=11)
             exp["epub"][p.name] = {"opens": True, "pages_at_400x600_11pt": d.page_count, "outline": len(d.get_toc()),
-                                   "title": (d.metadata or {}).get("title")}
+                                   "title": (d.metadata or {}).get("title"), **opf_facts(p)}
         except Exception as e:  # noqa: BLE001
             exp["epub"][p.name] = {"opens": False, "error": type(e).__name__}
 

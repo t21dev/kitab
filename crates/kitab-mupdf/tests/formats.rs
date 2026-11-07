@@ -85,9 +85,31 @@ fn every_epub_matches_expected_json() {
         if info.format != Format::Epub {
             fail(format!("format {:?}", info.format));
         }
-        let pages = exp["pages_at_400x600_11pt"].as_u64().unwrap_or(0) as u32;
+        // Fixed layout: one page per spine document, at the book's viewport,
+        // and no re-flow. Otherwise the oracle's count at the default layout.
+        let fixed = exp["fixed_layout"] == true;
+        let pages = if fixed {
+            exp["spine_items"].as_u64().unwrap_or(0) as u32
+        } else {
+            exp["pages_at_400x600_11pt"].as_u64().unwrap_or(0) as u32
+        };
         if info.page_count != pages {
             fail(format!("{} pages, expected {pages}", info.page_count));
+        }
+        if info.reflowable == fixed {
+            fail(format!(
+                "reflowable {} for fixed layout {fixed}",
+                info.reflowable
+            ));
+        }
+        if let Some(vp) = exp["viewport"].as_array() {
+            let w = vp[0].as_f64().unwrap_or(0.0) as f32;
+            if info.page_sizes.iter().any(|s| s.w < w) {
+                fail(format!("pages narrower than the {w} px viewport"));
+            }
+        }
+        if info.right_to_left != (exp["right_to_left"] == true) {
+            fail(format!("right_to_left {}", info.right_to_left));
         }
         let outline = exp["outline"].as_u64().unwrap_or(0) as usize;
         if count_outline(&info.outline) != outline {

@@ -38,6 +38,7 @@
 //! a document whose jobs panic twice is closed (quarantined).
 
 mod doc;
+pub mod epub;
 mod ffi;
 mod find;
 pub mod fonts;

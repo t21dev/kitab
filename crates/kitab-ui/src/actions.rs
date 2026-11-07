@@ -27,6 +27,9 @@ actions!(
         // Navigate
         NextPage,
         PrevPage,
+        // The arrow keys: next/previous, swapped in a right-to-left book.
+        PageRight,
+        PageLeft,
         FirstPage,
         LastPage,
         ScrollDown,
@@ -121,8 +124,8 @@ pub fn bind_default_keys(cx: &mut App) {
         KeyBinding::new("ctrl-shift-l", CycleTheme, w),
         KeyBinding::new("f11", ToggleMinimal, w),
         // Navigate (SumatraPDF-compatible where Sumatra has a binding)
-        KeyBinding::new("right", NextPage, r),
-        KeyBinding::new("left", PrevPage, r),
+        KeyBinding::new("right", PageRight, r),
+        KeyBinding::new("left", PageLeft, r),
         KeyBinding::new("n", NextPage, r),
         KeyBinding::new("p", PrevPage, r),
         KeyBinding::new("home", FirstPage, r),

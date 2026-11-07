@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Fixed-layout EPUBs show one page per spread at their own size, like a PDF, and don't re-flow. In right-to-left books (Arabic, Hebrew, manga) the left arrow goes to the next page.
 - Books (EPUB, MOBI, FB2, TXT) fill the window: pages re-flow when the window settles at a new size, and zoom changes the text size (8–32 pt, remembered; Ctrl+0 resets it). The reader keeps its place in the chapter.
 - Kitab opens EPUB, MOBI, FB2, CBZ comics, XPS and plain-text files, with their contents lists, search and thumbnails. Books in Bangla, Arabic, Hebrew, Chinese, Japanese, Korean and other scripts use the system's fonts. Kindle KF8 (.azw3) books aren't supported yet, and image files are not opened.
 - Tabs show an icon for the file's format: book, comic, text or page.

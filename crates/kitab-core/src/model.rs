@@ -114,6 +114,8 @@ pub struct DocInfo {
     /// A book whose pages come from a [`BookLayout`] (EPUB, MOBI, FB2, TXT),
     /// not from the file.
     pub reflowable: bool,
+    /// Pages advance right to left (an EPUB's `page-progression-direction`).
+    pub right_to_left: bool,
 }
 
 /// Why a document could not be opened. Every variant is a placeholder in the UI,

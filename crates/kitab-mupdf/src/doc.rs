@@ -64,6 +64,7 @@ pub(crate) struct OpenDoc {
     pub format: Format,
     /// Laid out by Kitab (a book), not paged by the file.
     pub reflowable: bool,
+    pub right_to_left: bool,
 }
 
 fn failed(e: impl std::fmt::Display) -> OpenError {
@@ -123,6 +124,7 @@ pub(crate) fn open(
     };
 
     let mut reflowable = false;
+    let mut right_to_left = false;
     let handle = if doc.is_pdf() {
         let mut pdf = PdfDocument::try_from(doc).map_err(|_| OpenError::Unsupported)?;
         if pdf.needs_password().map_err(failed)? {
@@ -135,11 +137,21 @@ pub(crate) fn open(
         }
         Handle::Pdf(pdf)
     } else {
-        // Books flow onto pages; comics and XPS have their own.
-        if doc.is_reflowable().unwrap_or(false) {
-            doc.layout(layout.width, layout.height, layout.em)
-                .map_err(failed)?;
-            reflowable = true;
+        // What MuPDF doesn't read from an EPUB's package document.
+        let meta = (format == Format::Epub)
+            .then(|| crate::epub::read(path))
+            .flatten();
+        right_to_left = meta.as_ref().is_some_and(|m| m.right_to_left);
+        match meta.filter(|m| m.fixed_layout) {
+            // Fixed layout: pages at the book's own viewport, like a PDF.
+            Some(m) => fit_fixed_layout(&mut doc, &m, layout.em).map_err(failed)?,
+            // Books flow onto pages; comics and XPS have their own.
+            None if doc.is_reflowable().unwrap_or(false) => {
+                doc.layout(layout.width, layout.height, layout.em)
+                    .map_err(failed)?;
+                reflowable = true;
+            }
+            None => {}
         }
         Handle::Other(doc)
     };
@@ -157,13 +169,15 @@ pub(crate) fn open(
     } else {
         format
     };
-    let info = describe(&handle, format, page_count, reflowable);
+    let mut info = describe(&handle, format, page_count, reflowable);
+    info.right_to_left = right_to_left;
     Ok((
         OpenDoc {
             pdf: handle,
             page_count,
             format,
             reflowable,
+            right_to_left,
         },
         info,
     ))
@@ -227,7 +241,28 @@ fn describe(handle: &Handle, format: Format, page_count: u32, reflowable: bool) 
         encryption,
         repaired,
         reflowable,
+        right_to_left: false,
     }
+}
+
+/// Lay a fixed-layout EPUB out at its viewport. MuPDF adds its own page
+/// margins, so a viewport-sized page spills onto a second one: grow the page
+/// until each spine document fits on one (at most half again as tall).
+fn fit_fixed_layout(
+    doc: &mut Document,
+    meta: &crate::epub::EpubMeta,
+    em: f32,
+) -> Result<(), mupdf::Error> {
+    let (w, h) = meta.viewport.unwrap_or((600.0, 800.0));
+    let target = i32::try_from(meta.spine_items.max(1)).unwrap_or(i32::MAX);
+    for step in 0..=10 {
+        let grow = 1.0 + 0.05 * step as f32;
+        doc.layout(w + 40.0, h * grow + 40.0, em)?;
+        if doc.page_count()? <= target {
+            break;
+        }
+    }
+    Ok(())
 }
 
 /// Lay a book out again and describe it anew. Runs on the document's worker.
@@ -246,7 +281,9 @@ pub(crate) fn relayout(doc: &mut OpenDoc, layout: BookLayout) -> Result<DocInfo,
         return Err(format!("{page_count} pages after layout"));
     }
     doc.page_count = page_count;
-    Ok(describe(&doc.pdf, doc.format, page_count, true))
+    let mut info = describe(&doc.pdf, doc.format, page_count, true);
+    info.right_to_left = doc.right_to_left;
+    Ok(info)
 }
 
 /// A page's own size with its /Rotate applied (MuPDF's page bounds).

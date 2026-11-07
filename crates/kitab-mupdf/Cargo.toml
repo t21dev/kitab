@@ -17,6 +17,10 @@ mupdf = { workspace = true }
 mupdf-sys = "0.8.0"
 # Find: diacritic-insensitive matching (NFD, then drop combining marks). MIT/Apache-2.0, ~300 KB of tables.
 unicode-normalization = "0.1"
+# EPUB package documents (fixed layout, page direction): a bounded ZIP and XML
+# read. Both are already in kitab.exe through GPUI, so they add no size.
+flate2 = "1"
+roxmltree = "0.20"
 
 [dev-dependencies]
 serde_json = { workspace = true }

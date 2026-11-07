@@ -3104,9 +3104,11 @@ dependencies = [
 name = "kitab-mupdf"
 version = "0.0.1"
 dependencies = [
+ "flate2",
  "kitab-core",
  "mupdf",
  "mupdf-sys",
+ "roxmltree",
  "serde_json",
  "sha2 0.10.9",
  "unicode-normalization",

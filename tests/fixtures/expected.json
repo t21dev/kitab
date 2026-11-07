@@ -746,37 +746,61 @@
       "opens": true,
       "pages_at_400x600_11pt": 17,
       "outline": 5,
-      "title": "Kitab fixture: EPUB 3 basic"
+      "title": "Kitab fixture: EPUB 3 basic",
+      "fixed_layout": false,
+      "viewport": null,
+      "right_to_left": false,
+      "spine_items": 5
     },
     "02-epub2-ncx.epub": {
       "opens": true,
       "pages_at_400x600_11pt": 8,
       "outline": 4,
-      "title": "Kitab fixture: EPUB 2 with NCX"
+      "title": "Kitab fixture: EPUB 2 with NCX",
+      "fixed_layout": false,
+      "viewport": null,
+      "right_to_left": false,
+      "spine_items": 4
     },
     "03-footnotes-images.epub": {
       "opens": true,
       "pages_at_400x600_11pt": 4,
       "outline": 2,
-      "title": "Kitab fixture: footnotes, images, table"
+      "title": "Kitab fixture: footnotes, images, table",
+      "fixed_layout": false,
+      "viewport": null,
+      "right_to_left": false,
+      "spine_items": 2
     },
     "04-rtl-arabic.epub": {
       "opens": true,
       "pages_at_400x600_11pt": 3,
       "outline": 3,
-      "title": "كتاب: اختبار من اليمين إلى اليسار"
+      "title": "كتاب: اختبار من اليمين إلى اليسار",
+      "fixed_layout": false,
+      "viewport": null,
+      "right_to_left": true,
+      "spine_items": 3
     },
     "05-bangla-cjk.epub": {
       "opens": true,
       "pages_at_400x600_11pt": 3,
       "outline": 3,
-      "title": "Kitab fixture: Bangla and CJK"
+      "title": "Kitab fixture: Bangla and CJK",
+      "fixed_layout": false,
+      "viewport": null,
+      "right_to_left": false,
+      "spine_items": 3
     },
     "06-large-300-chapters.epub": {
       "opens": true,
       "pages_at_400x600_11pt": 1200,
       "outline": 300,
-      "title": "Kitab fixture: 300 chapters"
+      "title": "Kitab fixture: 300 chapters",
+      "fixed_layout": false,
+      "viewport": null,
+      "right_to_left": false,
+      "spine_items": 300
     },
     "07a-broken-no-container.epub": {
       "opens": false,
@@ -786,7 +810,11 @@
       "opens": true,
       "pages_at_400x600_11pt": 3,
       "outline": 3,
-      "title": "Broken: spine points at a missing file"
+      "title": "Broken: spine points at a missing file",
+      "fixed_layout": false,
+      "viewport": null,
+      "right_to_left": false,
+      "spine_items": 3
     },
     "07c-not-a-zip.epub": {
       "opens": false,
@@ -796,13 +824,24 @@
       "opens": true,
       "pages_at_400x600_11pt": 12,
       "outline": 6,
-      "title": "Kitab fixture: fixed layout"
+      "title": "Kitab fixture: fixed layout",
+      "fixed_layout": true,
+      "viewport": [
+        600,
+        800
+      ],
+      "right_to_left": false,
+      "spine_items": 6
     },
     "09-no-toc.epub": {
       "opens": true,
       "pages_at_400x600_11pt": 8,
       "outline": 0,
-      "title": "Kitab fixture: no table of contents"
+      "title": "Kitab fixture: no table of contents",
+      "fixed_layout": false,
+      "viewport": null,
+      "right_to_left": false,
+      "spine_items": 4
     }
   },
   "md": {
