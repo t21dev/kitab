@@ -60,6 +60,10 @@ jobs:
         run: cargo fmt --all --check
       - name: Clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
+      # The thumbnail provider's tests run the real kitab.exe (Windows).
+      - name: Build kitab for the provider tests
+        if: runner.os == 'Windows'
+        run: cargo build -p kitab
       - name: Test
         run: cargo test --workspace
 
