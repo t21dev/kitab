@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="assets/brand/kitab-1024.png" alt="Kitab Reader logo: a dark bookmark ribbon on an amber tile" width="128" height="128">
+
 # Kitab Reader
 
 **Read beautifully. Work efficiently.**
@@ -10,18 +12,19 @@ Rust and GPUI on the GPU, with MuPDF underneath. No browser engine inside.
 By **[t21 dev](https://github.com/t21dev)** and **[TriptoAfsin](https://github.com/TriptoAfsin)**
 
 [![Licence: AGPL-3.0](https://img.shields.io/badge/licence-AGPL--3.0-blue?style=flat-square)](LICENSE)
-![Status: Phase 0](https://img.shields.io/badge/status-phase%200-lightgrey?style=flat-square)
+![Status: pre-release](https://img.shields.io/badge/status-pre--release-orange?style=flat-square)
+![Built with Rust and GPUI](https://img.shields.io/badge/built%20with-Rust%20%2B%20GPUI-b7410e?style=flat-square)
 
 </div>
 
 ---
 
-> **Status: Phase 0 (foundations).** There is no app to download yet. This repository holds the plan, the design system, the test corpus and the first workspace crates. Work lands phase by phase. See the [roadmap](docs/PLAN.md#12-roadmap).
+> **Status: before the first release (0.1.0).** The reader works and is built from `main`; there is no download yet. Work lands phase by phase. See the [roadmap](docs/PLAN.md#12-roadmap) and the [changelog](CHANGELOG.md).
 
 ## What it will do
 
 - **Open fast.** The goal is to start and show the first page as fast as SumatraPDF on the same machine, or faster. It is measured in CI, not claimed ([how](docs/PLAN.md#6-performance)).
-- **Read anything:** PDF, EPUB, MOBI/AZW3 (without DRM), FB2, XPS, CBZ, images, TXT, and **Markdown with Mermaid diagrams, code highlighting and math**.
+- **Read anything:** PDF, EPUB, MOBI (without DRM), FB2, XPS, CBZ, TXT, and **Markdown with Mermaid diagrams, code highlighting and math**. (Kitab is a document reader: image files open in your image viewer.)
 - **Tabs and memory:** many documents in one window, restored after restart with the same page, zoom and layout. Choose what happens on start-up: restore the session, open Home, open the last file, or an empty window.
 - **Home and library:** continue reading, recent files as cards or a list, collections, tags, and full-text search across your books.
 - **Find (Ctrl+F)** with match case, whole word and accent-insensitive matching, plus a results list.
