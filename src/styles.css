@@ -124,6 +124,7 @@
 .hero h1 { margin: var(--space-lg) 0 0; font: 600 clamp(42px, 7.6vw, 92px)/1.0 var(--font-serif); letter-spacing: -0.025em; text-wrap: balance; overflow-wrap: anywhere; }
 .hero h1 span { color: var(--faint); }
 .hero .lede { margin: var(--space-lg) 0 0; max-width: 600px; font: 400 clamp(17px, 2vw, 20px)/1.6 var(--font-serif); color: var(--read); }
+.hero .lede__lead { display: block; margin-bottom: var(--space-sm, 8px); color: var(--text); font-weight: 500; }
 .ctas { display: flex; flex-wrap: wrap; gap: 10px; margin-top: var(--space-xl); }
 .facts { display: flex; flex-wrap: wrap; gap: 6px 20px; margin: var(--space-lg) 0 0; padding: 0; list-style: none; font-size: 13px; color: var(--faint); }
 .facts b { color: var(--muted); font-weight: 500; }

@@ -8,7 +8,8 @@ export const SITE = {
   name: "Kitab Reader",
   shortName: "Kitab",
   url: "https://kitab.t21.dev",
-  tagline: "The most beautiful PDF reader. Fast by design.",
+  tagline: "Your library has a fast lane now.",
+  subtitle: "Rust underneath, a calm page on top. Kitab never makes you wait.",
   description:
     "Kitab Reader is a beautiful, modern PDF reader built with an eye for performance: native, drawn on the GPU, open in a blink and idle at 0 % CPU. Free and open source, for PDF, EPUB, Markdown and comics, on Windows, macOS and Linux. Your files stay on your computer.",
   repo: "https://github.com/t21dev/kitab",
@@ -20,7 +21,7 @@ export const SITE = {
   author: { name: "TriptoAfsin", github: "https://github.com/TriptoAfsin" },
   license: { name: "AGPL-3.0-or-later", url: "https://www.gnu.org/licenses/agpl-3.0.html" },
   status: "In development. There is no release to download yet.",
-  phase: "Phase 2: shell, Home and Settings",
+  phase: "Before 0.1.0: reader, tabs, books, Markdown and markup work; printing and signatures are next",
   locale: "en",
 } as const;
 
@@ -46,10 +47,10 @@ export const STEPS: Step[] = [
     phase: 0,
     shot: {
       file: "pages.png",
-      alt: "Kitab rendering a PDF whose pages are A4 portrait, A4 landscape and A5, each at its own size.",
-      caption: "Real capture: Kitab 0.0.1 (Phase 0 build) rendering 02-mixed-page-sizes.pdf from the test corpus.",
-      width: 1000,
-      height: 998,
+      alt: "Kitab at 25 % zoom showing an A4 portrait page above an A4 landscape page, each at its own size, with the status bar reading PDF, 3.9 KB, 6 pages, A4.",
+      caption: "Real capture of the current build from main, on the 02-mixed-page-sizes.pdf fixture from the test corpus.",
+      width: 1773,
+      height: 1041,
     },
   },
   {
@@ -57,7 +58,7 @@ export const STEPS: Step[] = [
     title: "Fast is a feature",
     body: [
       "A reader should be open before you have finished double-clicking. Kitab shows the first page as soon as its window appears, and stays smooth with dozens of tabs open and while you resize the window.",
-      "Speed is tested, not assumed. A benchmark starts Kitab and watches its window until the page is drawn and stable, fifteen times per scenario. A change that makes Kitab slower fails the build until it is fixed.",
+      "Speed is tested, not assumed. A benchmark starts Kitab and watches its window until the page is drawn and stable, fifteen times per scenario, against SumatraPDF on the same machine.",
     ],
     points: ["Results are published with each release, along with the machine they ran on."],
     phase: 1,
@@ -68,24 +69,45 @@ export const STEPS: Step[] = [
     body: [
       "Open as many documents as you like in tabs. Close Kitab and open it again: every tab comes back on the same page, at the same zoom. Home shows what you were reading and where you stopped.",
     ],
-    points: ["PDF, EPUB, MOBI, AZW3, FB2, XPS, CBZ, Markdown, text and images", "Pin, reorder and reopen closed tabs"],
+    points: ["PDF, EPUB, MOBI, FB2, XPS, CBZ, Markdown and text", "Reopen closed tabs, split view, and a command palette (Ctrl+K)"],
     phase: 2,
+    shot: {
+      file: "tabs.png",
+      alt: "Kitab with three tabs open (an EPUB, a Markdown file and a PDF), the PDF showing with its contents in the sidebar and the status bar at the bottom.",
+      caption: "Real capture of the current build from main, on the 01-text-outline.pdf fixture from the test corpus.",
+      width: 1773,
+      height: 1041,
+    },
   },
   {
     id: "find",
     title: "Find works the same everywhere",
     body: [
-      "Press Ctrl+F in a PDF, a book or a Markdown file. Match case, whole word, accents ignored, and a list of every hit with its line.",
+      "Press Ctrl+F in a PDF, a book or a Markdown file. Every hit is highlighted on the page, with match case, whole word and accents ignored.",
     ],
     phase: 3,
+    shot: {
+      file: "find.png",
+      alt: "Find in Kitab: the word kerning highlighted across a page, the find bar reading 2 of 331.",
+      caption: "Real capture of the current build from main, on the 01-text-outline.pdf fixture from the test corpus.",
+      width: 1773,
+      height: 1041,
+    },
   },
   {
     id: "markdown",
     title: "Markdown, rendered properly",
     body: [
-      "Markdown renders like GitHub, with Mermaid diagrams, highlighted code and math, and reloads when you save the file. Books reflow in Literata or Atkinson Hyperlegible.",
+      "Markdown renders like GitHub, with Mermaid diagrams drawn in your theme's colours, highlighted code and typeset math, and reloads when you save the file. Books reflow in your choice of typeface, line spacing and margins.",
     ],
     phase: 5,
+    shot: {
+      file: "markdown.png",
+      alt: "A Markdown file in Kitab with a Mermaid flowchart and a sequence diagram drawn in the theme's colours.",
+      caption: "Real capture of the current build from main, on the 02-mermaid.md fixture from the test corpus.",
+      width: 1773,
+      height: 1041,
+    },
   },
   {
     id: "forms",
@@ -106,7 +128,7 @@ export const STEPS: Step[] = [
   },
 ];
 
-export const FORMATS = ["PDF", "EPUB", "MOBI", "AZW3", "FB2", "XPS", "CBZ", "Markdown", "TXT", "PNG", "JPEG", "SVG"];
+export const FORMATS = ["PDF", "EPUB", "MOBI", "FB2", "XPS", "CBZ", "Markdown", "TXT"];
 
 export type Spec = { what: string; value: string };
 
@@ -114,7 +136,7 @@ export type Spec = { what: string; value: string };
 export const SPECS: Spec[] = [
   { what: "Engine", value: "MuPDF, for fast, accurate rendering of PDF, EPUB and more" },
   { what: "Interface", value: "Native, drawn on the GPU (DirectX, Metal, Vulkan). No browser engine inside" },
-  { what: "Formats", value: "PDF, EPUB, MOBI, AZW3, FB2, XPS, CBZ, Markdown, text and images" },
+  { what: "Formats", value: "PDF, EPUB, MOBI, FB2, XPS, CBZ, Markdown and text" },
   { what: "Markdown", value: "GitHub-style, with Mermaid diagrams, highlighted code and math" },
   { what: "Library", value: "Home, collections, tags and full-text search" },
   { what: "Reading memory", value: "Page, zoom, rotation and layout per file, and the whole session" },
@@ -144,7 +166,7 @@ export const FAQ: FaqItem[] = [
   },
   {
     q: "Which file formats does it open?",
-    a: "PDF, EPUB, MOBI and AZW3 without DRM, FB2, XPS, CBZ, common image formats, plain text and Markdown. DjVu and CBR are planned after version 1.0.",
+    a: "PDF, EPUB and MOBI without DRM, FB2, XPS, CBZ comics, plain text and Markdown. Kitab is a document reader, so image files stay with your image viewer. DjVu, CBR and Kindle KF8 (AZW3) are planned after version 1.0.",
   },
   {
     q: "Does Kitab send my documents or usage data anywhere?",
@@ -172,13 +194,13 @@ export type Phase = { n: number; title: string; version: string; summary: string
 
 export const ROADMAP: Phase[] = [
   { n: 0, title: "Foundations and spikes", version: "0.0.x", summary: "Workspace, CI, and the first spike: a GPU-drawn window showing real PDF pages, with start-up timed.", state: "now" },
-  { n: 1, title: "PDF reader core", version: "0.1.0", summary: "Open (including password-protected files), progressive rendering, true page sizes, zoom, keyboard navigation, position memory. First release, with brew, scoop and winget.", state: "next" },
-  { n: 2, title: "Shell, Home and Settings", version: "0.2.0", summary: "Tabs, session restore, Home, the six themes, Ultra mode, command palette.", state: "later" },
-  { n: 3, title: "Find and navigation", version: "0.3.0", summary: "Find bar, outline, thumbnails, bookmarks, history.", state: "later" },
-  { n: 4, title: "Books and other formats", version: "0.4.0", summary: "EPUB reflow, MOBI, FB2, CBZ, XPS, images, text.", state: "later" },
-  { n: 5, title: "Markdown", version: "0.5.0", summary: "GitHub-flavoured Markdown, code, Mermaid, math, live reload.", state: "later" },
-  { n: 6, title: "Annotations and forms", version: "0.6.0", summary: "Highlights, notes, ink, export; fill and save PDF forms.", state: "later" },
-  { n: 7, title: "Native print", version: "0.7.0", summary: "Print on all three systems, per-page orientation.", state: "later" },
+  { n: 1, title: "PDF reader core", version: "0.1.0", summary: "Open (including password-protected files), progressive rendering, true page sizes, zoom, keyboard navigation, position memory. First release, with brew, scoop and winget.", state: "now" },
+  { n: 2, title: "Shell, Home and Settings", version: "0.2.0", summary: "Tabs, session restore, Home, the themes, command palette, keymap.json.", state: "now" },
+  { n: 3, title: "Find and navigation", version: "0.3.0", summary: "Find bar, outline, thumbnails, bookmarks, history, presentation mode.", state: "now" },
+  { n: 4, title: "Books and other formats", version: "0.4.0", summary: "EPUB reflow, MOBI, FB2, CBZ, XPS, text, typography, footnotes.", state: "now" },
+  { n: 5, title: "Markdown", version: "0.5.0", summary: "GitHub-flavoured Markdown, code, Mermaid, math, live reload.", state: "now" },
+  { n: 6, title: "Annotations and forms", version: "0.6.0", summary: "Highlights, notes, ink, export; fill and save PDF forms.", state: "now" },
+  { n: 7, title: "Native print", version: "0.7.0", summary: "Print on all three systems, per-page orientation.", state: "next" },
   { n: 8, title: "Signatures", version: "0.8.0", summary: "Verify and sign PDFs, locally.", state: "later" },
   { n: 9, title: "PDF tools and library search", version: "0.9.0", summary: "Merge, split, compress, full-text library search, collections.", state: "later" },
   { n: 10, title: "Polish and distribution", version: "1.0.0", summary: "Accessibility, the full published benchmark, signed installers, Flathub.", state: "later" },
@@ -293,9 +315,9 @@ export const ROUTES: Route[] = [
     path: "/",
     file: "index.html",
     md: "index.md",
-    title: "Kitab Reader: the most beautiful, modern PDF reader, built for performance",
+    title: "Kitab Reader: your library has a fast lane now",
     description:
-      "A beautiful, modern PDF reader with an eye for performance. Native and GPU-drawn, quick to open, idle at 0 % CPU. Free and open source for Windows, macOS and Linux, with tabs, split view, PDF tools, forms, signatures and no telemetry.",
+      "Rust underneath, a calm page on top. Kitab is a free, open source reader for PDF, EPUB, Markdown and comics, drawn on the GPU with GPUI, with tabs, split view, find, markup and no telemetry.",
     changefreq: "weekly",
     priority: 1,
   },
