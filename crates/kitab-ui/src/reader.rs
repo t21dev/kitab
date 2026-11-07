@@ -20,6 +20,7 @@ mod markdown;
 mod marks_list;
 mod markup;
 mod pages;
+mod present;
 mod select;
 
 use crate::actions::*;
@@ -85,6 +86,8 @@ pub enum ReaderEvent {
     OpenPath(PathBuf),
     /// Zoom in a book changed the text size (points), for every book.
     BookText(f32),
+    /// Presentation mode started or ended (the workspace goes full screen).
+    Presenting(bool),
 }
 
 /// What "Save page as…" writes.
@@ -181,6 +184,8 @@ pub struct Reader {
     bookmark_rows: Vec<bookmarks::BookmarkRow>,
     /// The sidebar's Pages pane (thumbnails).
     pages: pages::PagesState,
+    /// Presentation mode (F5), when on.
+    present: Option<present::Present>,
 }
 
 /// What a page render is for: the reading view (a quick preview or the sharp
@@ -254,6 +259,7 @@ impl Reader {
             file_annots: None,
             bookmark_rows: Vec::new(),
             pages: pages::PagesState::default(),
+            present: None,
         };
         this.load_file_size(cx);
         this.open(None, cx);
@@ -1288,6 +1294,9 @@ impl Render for Reader {
         for image in self.cache.take_evicted() {
             let _ = window.drop_image(image);
         }
+        if self.present.is_some() {
+            return self.present_view(window, cx);
+        }
         // Fit modes follow the viewport: re-measure when it changes.
         let vb = self.list.viewport_bounds();
         let vp = (f32::from(vb.size.width), f32::from(vb.size.height));
@@ -1531,6 +1540,7 @@ impl Render for Reader {
             .children(self.markup_bar(&st, window, cx))
             .children(self.info_chip(&st))
             .children(self.writer(&st, cx))
+            .into_any_element()
     }
 }
 

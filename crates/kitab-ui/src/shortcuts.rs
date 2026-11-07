@@ -96,6 +96,7 @@ pub const GROUPS: &[Group] = &[
             ("Rotate counter-clockwise", "Ctrl+Shift+-"),
             ("Next theme", "Ctrl+Shift+L"),
             ("Minimal mode", "F11"),
+            ("Presentation mode (Esc ends it)", "F5"),
         ],
     },
     Group {

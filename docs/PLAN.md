@@ -430,6 +430,7 @@ Each phase ends with its exit criteria green in CI and a minor release. A phase 
 
 - Find bar with options and results list, outline panel (grouped status rings), thumbnails, bookmarks, Ctrl+G, links, history back/forward, presentation mode.
 - Exit: B3–B5, C1–C4, C6; S11 within budget.
+- Done since: presentation mode (`reader/present.rs`): F5 toggles, the window goes full screen and back (unless it already was), pages fit the screen on black and come from the reader's renderer and byte-bounded cache with the next page rendered ahead; one wheel swipe turns one page.
 
 ### Phase 4: Books and other formats → `0.4.0`
 

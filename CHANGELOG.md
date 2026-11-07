@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Presentation mode (F5, or the palette): the document full screen on black, one page at a time fitted to the screen. Right, Down, Space, PgDn, a click or the wheel go forward; Left, Up, PgUp or a right click go back; Home and End jump; Esc or F5 ends it on the page you were showing. The next page is drawn ahead.
 - keymap.json: your own keys on top of the defaults, Zed-style (`[{ "context": "Reader", "bindings": { "ctrl-k": "FindNext", "n": null } }]`, `//` comments allowed, null removes a key). Edit keymap.json (Settings › Shortcuts or the palette) creates one listing every action and opens it; saved changes apply when you switch back to Kitab. Mistakes show in a toast and keep the keys you had. The palette shows the keys in force.
 - Command palette (Ctrl+K or Ctrl+Shift+P, or ⋯ › Command palette): every command by name with its keys; type a few letters ("gtp" finds Go to page), Up and Down to choose, Enter to run. Commands that need a document hide on Home.
 - Settings › About: version, Check for updates (asks GitHub for the latest release; on start-up and every six hours, which Check on start-up turns off), and links to the source, changelog, issues, privacy policy, licence and notices. A newer release shows an Update button in the title bar with its notes, Later and Download (opens the release page).

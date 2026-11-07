@@ -89,6 +89,8 @@ pub struct Workspace {
     palette: Option<palette_ui::Palette>,
     /// keymap.json's modified time when last read.
     keymap_mtime: Option<std::time::SystemTime>,
+    /// The window was full screen before presenting (it stays so after).
+    was_fullscreen: bool,
 }
 
 /// The sidebar's panes for a document.
@@ -156,6 +158,7 @@ impl Workspace {
             system: SystemInfo::default(),
             palette: None,
             keymap_mtime: None,
+            was_fullscreen: false,
         };
         // Leaving the hex field ends the edit.
         let hex_blur = cx.on_blur(&this.hex.focus, window, |ws, _, cx| {
@@ -270,6 +273,7 @@ impl Workspace {
                     ReaderEvent::ContextMenu(at) => this.page_menu(reader.clone(), *at, window, cx),
                     ReaderEvent::MoreMenu(at) => this.more_menu(Some(*at), window, cx),
                     ReaderEvent::OpenPath(path) => this.open_tab(path.clone(), window, cx),
+                    ReaderEvent::Presenting(on) => this.set_presenting(*on, window, cx),
                     ReaderEvent::BookText(pt) => {
                         // Remembered across launches (settings.json `book_text_size`).
                         let pt = *pt;
@@ -1815,6 +1819,20 @@ fn cover(title: &str, width: f32, st: &Style) -> AnyElement {
 impl Render for Workspace {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let st = Style::get(cx).clone();
+        // Presenting: the page alone, full screen.
+        if let Some(reader) = self
+            .active_reader()
+            .filter(|r| r.read(cx).presenting())
+            .cloned()
+        {
+            return div()
+                .id("workspace")
+                .key_context(WORKSPACE)
+                .size_full()
+                .on_action(cx.listener(|ws, _: &Present, window, cx| ws.toggle_present(window, cx)))
+                .child(reader)
+                .into_any_element();
+        }
         let side_tabs = st.tabs == TabsAt::Sidebar;
         let title_bar = (!side_tabs && st.shows_tabs()).then(|| self.title_bar(&st, window, cx));
         let show_sidebar = self.sidebar && st.shows_sidebar();
@@ -2011,6 +2029,7 @@ impl Render for Workspace {
             }))
             .on_action(cx.listener(|ws, _: &CycleTheme, _, cx| ws.cycle_theme(cx)))
             .on_action(cx.listener(|ws, _: &OpenKeymap, _, cx| ws.edit_keymap(cx)))
+            .on_action(cx.listener(|ws, _: &Present, window, cx| ws.toggle_present(window, cx)))
             .on_action(
                 cx.listener(|ws, _: &CommandPalette, window, cx| ws.open_palette(window, cx)),
             )
@@ -2028,6 +2047,7 @@ impl Render for Workspace {
             .children(title_bar)
             .child(body)
             .children(overlays)
+            .into_any_element()
     }
 }
 
@@ -2096,6 +2116,36 @@ impl Workspace {
             });
         })
         .detach();
+    }
+
+    /// F5: present the active document full screen, or stop.
+    fn toggle_present(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(reader) = self.active_reader().cloned() else {
+            return;
+        };
+        self.menu = None;
+        reader.update(cx, |r, cx| {
+            if r.presenting() {
+                r.stop_presenting(cx)
+            } else {
+                r.start_presenting(cx)
+            }
+        });
+        window.focus(&reader.focus_handle(cx));
+    }
+
+    /// The window follows presentation mode in and out of full screen; a
+    /// window that was full screen already stays so.
+    fn set_presenting(&mut self, on: bool, window: &mut Window, cx: &mut Context<Self>) {
+        if on {
+            self.was_fullscreen = window.is_fullscreen();
+            if !self.was_fullscreen {
+                window.toggle_fullscreen();
+            }
+        } else if !self.was_fullscreen && window.is_fullscreen() {
+            window.toggle_fullscreen();
+        }
+        cx.notify();
     }
 
     /// F11: hide what Settings › Reading › Minimal mode lists, or show it again.

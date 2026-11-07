@@ -120,6 +120,13 @@ pub const COMMANDS: &[Command] = &[
         false,
         CycleTheme
     ),
+    cmd!(
+        "View",
+        "Presentation mode",
+        "slides present full screen slideshow",
+        true,
+        Present
+    ),
     // Markup
     cmd!(
         "Mark up",

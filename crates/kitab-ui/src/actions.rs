@@ -79,6 +79,8 @@ actions!(
         CommandPalette,
         CheckForUpdates,
         OpenKeymap,
+        // Presentation mode
+        Present,
         // PDF tools
         ExtractPages,
         ToggleSplit,
@@ -142,6 +144,7 @@ pub fn bind_default_keys(cx: &mut App) {
         KeyBinding::new("escape", CloseOverlay, Some(OVERLAY)),
         KeyBinding::new("ctrl-shift-l", CycleTheme, w),
         KeyBinding::new("f11", ToggleMinimal, w),
+        KeyBinding::new("f5", Present, w),
         // Navigate (SumatraPDF-compatible where Sumatra has a binding)
         KeyBinding::new("ctrl-shift-d", ToggleMarkup, r),
         KeyBinding::new("h", HighlightSelection, r),
