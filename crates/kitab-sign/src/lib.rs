@@ -9,6 +9,7 @@
 
 mod algo;
 mod names;
+pub mod sign;
 pub mod store;
 
 pub use names::{common_name, subject_line};
@@ -87,11 +88,11 @@ fn der_extent(b: &[u8]) -> Option<usize> {
     Some(2 + n + len)
 }
 
-const SIGNED_DATA: der::asn1::ObjectIdentifier =
+pub(crate) const SIGNED_DATA: der::asn1::ObjectIdentifier =
     der::asn1::ObjectIdentifier::new_unwrap("1.2.840.113549.1.7.2");
-const MESSAGE_DIGEST: der::asn1::ObjectIdentifier =
+pub(crate) const MESSAGE_DIGEST: der::asn1::ObjectIdentifier =
     der::asn1::ObjectIdentifier::new_unwrap("1.2.840.113549.1.9.4");
-const SIGNING_TIME: der::asn1::ObjectIdentifier =
+pub(crate) const SIGNING_TIME: der::asn1::ObjectIdentifier =
     der::asn1::ObjectIdentifier::new_unwrap("1.2.840.113549.1.9.5");
 const SUBJECT_KEY_ID: der::asn1::ObjectIdentifier =
     der::asn1::ObjectIdentifier::new_unwrap("2.5.29.14");

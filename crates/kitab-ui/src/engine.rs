@@ -9,6 +9,29 @@ use kitab_core::{
     SignatureCheck, TextChar,
 };
 
+/// A signature to add (Sign…): where it goes and what it says. The key's
+/// password travels with the request only (AGENTS.md rule 13).
+#[derive(Clone)]
+pub struct SignRequest {
+    /// The `.pfx`/`.p12` file and its password.
+    pub key_file: PathBuf,
+    pub password: String,
+    pub page: u32,
+    /// The box in page points from the top-left: x0, y0, x1, y1.
+    pub rect: [f32; 4],
+    pub reason: Option<String>,
+    pub location: Option<String>,
+}
+
+impl std::fmt::Debug for SignRequest {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SignRequest")
+            .field("key_file", &self.key_file)
+            .field("page", &self.page)
+            .finish_non_exhaustive()
+    }
+}
+
 /// A certificate the user trusts for signatures (Settings › Signing).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TrustedCert {
@@ -82,6 +105,17 @@ pub trait DocEngine: Send + Sync + 'static {
     ) -> Result<Vec<SignatureCheck>, String> {
         let _ = (src, password);
         Ok(Vec::new())
+    }
+    /// Who a key file signs as: (name, full subject). Checks the password.
+    fn signer_of(&self, key_file: &Path, password: &str) -> Result<(String, String), String> {
+        let _ = (key_file, password);
+        Err("this engine can't sign".into())
+    }
+    /// Sign the PDF at `src` into a new file at `out` (an incremental
+    /// update, so earlier signatures stay valid).
+    fn sign_pdf(&self, src: &Path, req: &SignRequest, out: &Path) -> Result<(), String> {
+        let _ = (src, req, out);
+        Err("this engine can't sign".into())
     }
     /// The certificates trusted for signatures.
     fn trusted_certs(&self) -> Vec<TrustedCert> {

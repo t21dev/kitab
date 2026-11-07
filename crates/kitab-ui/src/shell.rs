@@ -32,6 +32,7 @@ mod palette_ui;
 mod password_ui;
 mod print_ui;
 mod save_page;
+mod sign_ui;
 mod signatures_ui;
 mod system;
 mod title_actions;
@@ -114,6 +115,8 @@ pub struct Workspace {
     /// The password sheet, when open.
     password: Option<password_ui::PasswordSheet>,
     password_serial: u64,
+    /// Sign…: the key sheet, the placement, the confirm.
+    sign: sign_ui::SignState,
 }
 
 /// The sidebar's panes for a document.
@@ -191,6 +194,7 @@ impl Workspace {
             print_serial: 0,
             password: None,
             password_serial: 0,
+            sign: Default::default(),
         };
         // Leaving the hex field ends the edit.
         let hex_blur = cx.on_blur(&this.hex.focus, window, |ws, _, cx| {
@@ -310,6 +314,7 @@ impl Workspace {
                     ReaderEvent::Presenting(on) => this.set_presenting(*on, window, cx),
                     ReaderEvent::Print => this.open_print(window, cx),
                     ReaderEvent::Password => this.open_password(window, cx),
+                    ReaderEvent::SignaturePlaced(spot) => this.signature_placed(*spot, cx),
                     ReaderEvent::Signatures => cx.notify(),
                     ReaderEvent::ShowSignatures => {
                         this.side_pane = SidePane::Signatures;
@@ -1970,6 +1975,7 @@ impl Render for Workspace {
                 .on_action(
                     cx.listener(|ws, _: &PdfPassword, window, cx| ws.open_password(window, cx)),
                 )
+                .on_action(cx.listener(|ws, _: &SignPdf, window, cx| ws.open_sign(window, cx)))
                 .child(reader)
                 .into_any_element();
         }
@@ -2732,6 +2738,12 @@ impl Workspace {
             .key("Ctrl+P")
             .disabled(self.active.is_none()),
             MenuItem::new(
+                "Sign…",
+                self.on_ws(cx, |ws, window, cx| ws.open_sign(window, cx)),
+            )
+            .icon("shield")
+            .disabled(!self.active_reader().is_some_and(|r| r.read(cx).is_pdf())),
+            MenuItem::new(
                 "Password…",
                 self.on_ws(cx, |ws, window, cx| ws.open_password(window, cx)),
             )
@@ -3141,6 +3153,8 @@ impl Workspace {
         out.extend(self.palette_view(st, cx));
         out.extend(self.print_view(st, cx));
         out.extend(self.password_view(st, cx));
+        out.extend(self.sign_view(st, cx));
+        out.extend(self.sign_confirm_view(st, cx));
 
         if let Some(section) = self.settings.or(self.settings_closing) {
             let closing = self.settings.is_none();

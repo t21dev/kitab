@@ -24,6 +24,7 @@ mod markup;
 mod math_view;
 mod mermaid;
 mod pages;
+mod place_sig;
 mod present;
 mod select;
 mod signatures;
@@ -102,6 +103,9 @@ pub enum ReaderEvent {
     Signatures,
     /// The status bar's signature badge: show the Signatures pane.
     ShowSignatures,
+    /// Sign…: the page and box (page points from the top-left) the user
+    /// clicked, or `None` when placing was cancelled.
+    SignaturePlaced(Option<(u32, [f32; 4])>),
 }
 
 /// What "Save page as…" writes.
@@ -194,6 +198,8 @@ pub struct Reader {
     file_size: Option<u64>,
     /// The PDF's signatures, verified off the UI thread after opening.
     signatures: Option<Vec<kitab_core::SignatureCheck>>,
+    /// Sign…: the next click on a page places the signature.
+    placing: bool,
     /// The annotations already in the file, once the Marks panel asked.
     file_annots: Option<Vec<kitab_core::FileAnnot>>,
     /// Bookmarked pages (Ctrl+D), in page order.
@@ -279,6 +285,7 @@ impl Reader {
             markup: markup::MarkupState::default(),
             file_size: None,
             signatures: None,
+            placing: false,
             file_annots: None,
             bookmark_rows: Vec::new(),
             pages: pages::PagesState::default(),
@@ -1172,16 +1179,21 @@ impl Reader {
                     .shadow(st.sheet())
                     .overflow_hidden()
                     .relative()
-                    .cursor(if self.markup.open && self.markup.tool.is_some() {
-                        gpui::CursorStyle::Crosshair
-                    } else {
-                        gpui::CursorStyle::IBeam
-                    })
+                    .cursor(
+                        if self.placing || self.markup.open && self.markup.tool.is_some() {
+                            gpui::CursorStyle::Crosshair
+                        } else {
+                            gpui::CursorStyle::IBeam
+                        },
+                    )
                     .on_mouse_down(
                         MouseButton::Left,
                         cx.listener(move |r, e: &MouseDownEvent, window, cx| {
-                            // A markup tool draws; otherwise the click selects text.
-                            if !r.markup_down(ix, e, window, cx) {
+                            // Placing a signature takes the click; a markup
+                            // tool draws; otherwise the click selects text.
+                            if r.placing {
+                                r.place_signature(ix, e, cx);
+                            } else if !r.markup_down(ix, e, window, cx) {
                                 r.select_down(ix, e, window, cx)
                             }
                         }),
@@ -1520,7 +1532,14 @@ impl Render for Reader {
                 MouseButton::Navigate(gpui::NavigationDirection::Forward),
                 cx.listener(|r, _, _, cx| r.history(false, cx)),
             )
-            .on_key_down(cx.listener(|r, _: &gpui::KeyDownEvent, _, cx| r.wake_dock(cx)))
+            .on_key_down(cx.listener(|r, e: &gpui::KeyDownEvent, _, cx| {
+                if r.placing && e.keystroke.key == "escape" {
+                    r.stop_placing(cx);
+                    cx.stop_propagation();
+                    return;
+                }
+                r.wake_dock(cx)
+            }))
             .on_mouse_move(cx.listener(|r, e: &MouseMoveEvent, _, cx| {
                 r.wake_dock(cx);
                 if r.markup.drawing.is_some() {
@@ -1621,6 +1640,7 @@ impl Render for Reader {
             .children(self.dock_view(&st, inset, window, cx))
             .children(self.edit_button(&st, cx))
             .children(self.find_bar(&st, window, cx))
+            .children(self.placing_banner(&st, cx))
             .children(self.markup_bar(&st, window, cx))
             .children(self.writer(&st, cx))
             .children(self.note_view(&st, cx))

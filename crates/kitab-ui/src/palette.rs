@@ -73,6 +73,13 @@ pub const COMMANDS: &[Command] = &[
         true,
         PdfPassword
     ),
+    cmd!(
+        "File",
+        "Sign…",
+        "signature certificate pfx p12 digital",
+        true,
+        SignPdf
+    ),
     // Navigate
     cmd!("Go", "Go to page…", "jump number", true, GoToPage),
     cmd!("Go", "Next page", "forward down", true, NextPage),

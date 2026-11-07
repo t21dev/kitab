@@ -386,7 +386,7 @@ impl Reader {
     }
 
     /// The page point under window point `p` on page `ix`.
-    fn page_point(&self, ix: usize, p: Point<Pixels>) -> Option<PointPt> {
+    pub(super) fn page_point(&self, ix: usize, p: Point<Pixels>) -> Option<PointPt> {
         let b = self.sheet_bounds(ix)?;
         let size = self.raw_page_size(ix);
         let (x, y) = view_to_point(

@@ -349,6 +349,202 @@ fn classify(now: &PdfObject, before: Option<&PdfObject>) -> SigModification {
     Other
 }
 
+/// Room for the CMS blob, in bytes: enough for a chain of a few RSA-4096
+/// certificates.
+pub const SIG_ROOM: usize = 16_384;
+
+/// The byte-range placeholder kitab-sign looks for and rewrites in place.
+pub const RANGE_MARK: &str = "1111111111 1222222222 1333333333";
+
+/// What a new signature looks like and says.
+#[derive(Debug, Clone, Default)]
+pub struct NewSignature {
+    pub field: String,
+    pub page: u32,
+    /// Where on the page, in page points as Kitab shows it (from the
+    /// top-left, the page's /Rotate applied): x0, y0, x1, y1.
+    pub rect: [f32; 4],
+    /// The lines drawn in the box ("Digitally signed by …", the date…).
+    pub lines: Vec<String>,
+    pub name: Option<String>,
+    pub reason: Option<String>,
+    pub location: Option<String>,
+    /// `/M`, a PDF date ("D:20261107093000Z").
+    pub when: String,
+}
+
+/// A PDF string literal: parentheses and backslashes escaped, anything
+/// outside printable ASCII replaced, so it is safe in content streams too.
+fn literal(s: &str) -> String {
+    let mut out = String::from("(");
+    for c in s.chars() {
+        match c {
+            '(' | ')' | '\\' => {
+                out.push('\\');
+                out.push(c);
+            }
+            ' '..='~' => out.push(c),
+            _ => out.push('?'),
+        }
+    }
+    out.push(')');
+    out
+}
+
+/// The file at `src` with a new signature field appended as an incremental
+/// update, its `/Contents` all zeros and `/ByteRange` a placeholder: what
+/// kitab-sign fills in. The earlier bytes are untouched, so signatures
+/// already in the file stay valid.
+pub fn prepare_signature(src: &Path, new: &NewSignature) -> Result<Vec<u8>, String> {
+    let original = std::fs::read(src).map_err(|e| format!("could not read the file: {e}"))?;
+    let name = src.to_str().ok_or("the file name is not valid Unicode")?;
+    let mut doc = PdfDocument::open(name).map_err(|e| format!("could not open: {e}"))?;
+    if doc.needs_password().unwrap_or(false) {
+        return Err("a PDF with a password can't be signed yet; remove the password first".into());
+    }
+    if !doc.can_be_saved_incrementally() {
+        return Err(
+            "this PDF had to be repaired to open, so it can't be signed without breaking it".into(),
+        );
+    }
+    let err = |e: mupdf::Error| e.to_string();
+    let page = doc
+        .find_page(i32::try_from(new.page).map_err(|e| e.to_string())?)
+        .map_err(err)?;
+    let page_num = page
+        .as_indirect()
+        .map_err(|_| "the page isn't an object of its own".to_string())?;
+    // The box in the page's own PDF space (bottom-left origin, unrotated).
+    let to_pdf = doc
+        .load_pdf_page(i32::try_from(new.page).map_err(|e| e.to_string())?)
+        .and_then(|p| p.ctm())
+        .map_err(err)?
+        .invert()
+        .ok_or("the page can't be mapped")?;
+    let (ax, ay) = to_pdf.transform_xy(new.rect[0], new.rect[1]);
+    let (bx, by) = to_pdf.transform_xy(new.rect[2], new.rect[3]);
+    let (x0, y0, x1, y1) = (ax.min(bx), ay.min(by), ax.max(bx), ay.max(by));
+    let (w, h) = ((x1 - x0).max(20.0), (y1 - y0).max(12.0));
+
+    // The look: a light box, the lines in Helvetica.
+    let size = (h / (new.lines.len().max(1) as f32 + 1.0)).clamp(5.0, 10.0);
+    let mut ap = format!(
+        "q 0.5 0.5 0.5 RG 0.75 w 0.5 0.5 {:.2} {:.2} re S Q\nBT /Helv {size:.2} Tf ",
+        w - 1.0,
+        h - 1.0
+    );
+    let y = h - size - 4.0;
+    ap.push_str(&format!("6 {y:.2} Td "));
+    for (i, line) in new.lines.iter().enumerate() {
+        if i > 0 {
+            ap.push_str(&format!("0 {:.2} Td ", -(size + 3.0)));
+        }
+        ap.push_str(&format!("{} Tj ", literal(line)));
+    }
+    ap.push_str("ET\n");
+    let ap_dict = doc
+        .new_object_from_str(&format!(
+            "<< /Type /XObject /Subtype /Form /BBox [0 0 {w:.2} {h:.2}] /Resources << /Font << /Helv << /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >> >> >> >>"
+        ))
+        .map_err(err)?;
+    let mut buf = mupdf::Buffer::with_capacity(ap.len());
+    std::io::Write::write_all(&mut buf, ap.as_bytes()).map_err(|e| e.to_string())?;
+    let ap_ref = doc.add_stream(&buf, Some(&ap_dict), false).map_err(err)?;
+    let ap_num = ap_ref.as_indirect().map_err(err)?;
+
+    let mut sig = format!(
+        "<< /Type /Sig /Filter /Adobe.PPKLite /SubFilter /adbe.pkcs7.detached /M {} /ByteRange [0 {RANGE_MARK}] /Contents <{}>",
+        literal(&new.when),
+        "0".repeat(SIG_ROOM * 2)
+    );
+    for (key, value) in [
+        ("Name", &new.name),
+        ("Reason", &new.reason),
+        ("Location", &new.location),
+    ] {
+        if let Some(v) = value {
+            sig.push_str(&format!(" /{key} {}", literal(v)));
+        }
+    }
+    sig.push_str(" >>");
+    let sig_obj = doc.new_object_from_str(&sig).map_err(err)?;
+    let sig_num = doc
+        .add_object(&sig_obj)
+        .map_err(err)?
+        .as_indirect()
+        .map_err(err)?;
+
+    let widget = doc
+        .new_object_from_str(&format!(
+            "<< /Type /Annot /Subtype /Widget /FT /Sig /F 4 /T {} /Rect [{x0:.2} {y0:.2} {x1:.2} {y1:.2}] /P {page_num} 0 R /V {sig_num} 0 R /AP << /N {ap_num} 0 R >> >>",
+            literal(&new.field)
+        ))
+        .map_err(err)?;
+    let widget_ref = doc.add_object(&widget).map_err(err)?;
+
+    // On the page, and in the form.
+    let mut page = page;
+    match page.get_dict("Annots").map_err(err)? {
+        Some(mut annots) => annots
+            .array_push(widget_ref.try_clone().map_err(err)?)
+            .map_err(err)?,
+        None => {
+            let mut annots = doc.new_array().map_err(err)?;
+            annots
+                .array_push(widget_ref.try_clone().map_err(err)?)
+                .map_err(err)?;
+            page.dict_put("Annots", annots).map_err(err)?;
+        }
+    }
+    let mut catalog = doc.catalog().map_err(err)?;
+    let form = match catalog.get_dict("AcroForm").map_err(err)? {
+        Some(f) => f,
+        None => {
+            let f = doc.new_object_from_str("<< /Fields [] >>").map_err(err)?;
+            let f = doc.add_object(&f).map_err(err)?;
+            catalog
+                .dict_put("AcroForm", f.try_clone().map_err(err)?)
+                .map_err(err)?;
+            f
+        }
+    };
+    let mut form = form;
+    match form.get_dict("Fields").map_err(err)? {
+        Some(mut fields) => fields.array_push(widget_ref).map_err(err)?,
+        None => {
+            let mut fields = doc.new_array().map_err(err)?;
+            fields.array_push(widget_ref).map_err(err)?;
+            form.dict_put("Fields", fields).map_err(err)?;
+        }
+    }
+    form.dict_put("SigFlags", doc.new_int(3).map_err(err)?)
+        .map_err(err)?;
+
+    // Append the update after the original bytes.
+    let tmp = std::env::temp_dir().join(format!(
+        "kitab-sign-{}-{}.pdf",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |d| d.as_nanos())
+    ));
+    std::fs::write(&tmp, &original).map_err(|e| e.to_string())?;
+    let mut options = mupdf::pdf::PdfWriteOptions::default();
+    options.set_incremental(true);
+    let tmp_name = tmp
+        .to_str()
+        .ok_or("the temporary folder's name is not valid Unicode")?;
+    let saved = doc.save_with_options(tmp_name, options).map_err(err);
+    drop(doc);
+    let out = saved.and_then(|_| std::fs::read(&tmp).map_err(|e| e.to_string()));
+    let _ = std::fs::remove_file(&tmp);
+    let out = out?;
+    if !out.starts_with(&original) {
+        return Err("the update didn't keep the original bytes".into());
+    }
+    Ok(out)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

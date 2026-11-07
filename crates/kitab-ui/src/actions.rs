@@ -85,6 +85,8 @@ actions!(
         Print,
         // A PDF's password
         PdfPassword,
+        // Signing
+        SignPdf,
         // PDF tools
         ExtractPages,
         ToggleSplit,

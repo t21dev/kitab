@@ -182,6 +182,61 @@ impl DocEngine for MupdfEngine {
             .collect())
     }
 
+    fn signer_of(&self, key_file: &Path, password: &str) -> Result<(String, String), String> {
+        let bytes = std::fs::read(key_file).map_err(|e| e.to_string())?;
+        let key = kitab_sign::sign::load_pfx(&bytes, password)?;
+        Ok((key.name(), key.subject()))
+    }
+
+    fn sign_pdf(
+        &self,
+        src: &Path,
+        req: &kitab_ui::engine::SignRequest,
+        out: &Path,
+    ) -> Result<(), String> {
+        if out == src {
+            return Err("choose a different file name than the original".into());
+        }
+        let bytes = std::fs::read(&req.key_file).map_err(|e| e.to_string())?;
+        let key = kitab_sign::sign::load_pfx(&bytes, &req.password)?;
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |d| d.as_secs());
+        let stamp = kitab_sign::format_unix(now);
+        let digits: String = stamp.chars().filter(char::is_ascii_digit).collect();
+        let taken = kitab_mupdf::sigs::signed_fields(src, None)
+            .map(|f| f.len())
+            .unwrap_or(0);
+        let mut lines = vec![format!("Digitally signed by {}", key.name()), stamp.clone()];
+        if let Some(r) = &req.reason {
+            lines.push(format!("Reason: {r}"));
+        }
+        let new = kitab_mupdf::sigs::NewSignature {
+            field: format!("Signature{}", taken + 1),
+            page: req.page,
+            rect: req.rect,
+            lines,
+            name: Some(key.name()),
+            reason: req.reason.clone(),
+            location: req.location.clone(),
+            when: format!("D:{digits}00Z"),
+        };
+        let mut pdf = kitab_mupdf::sigs::prepare_signature(src, &new)?;
+        kitab_sign::sign::fill(
+            &mut pdf,
+            kitab_mupdf::sigs::RANGE_MARK,
+            kitab_mupdf::sigs::SIG_ROOM,
+            &key,
+            now,
+        )?;
+        let tmp = out.with_extension("pdf.kitab-tmp");
+        std::fs::write(&tmp, &pdf).map_err(|e| format!("could not write: {e}"))?;
+        std::fs::rename(&tmp, out).map_err(|e| {
+            let _ = std::fs::remove_file(&tmp);
+            format!("could not save: {e}")
+        })
+    }
+
     fn trusted_certs(&self) -> Vec<kitab_ui::engine::TrustedCert> {
         trust_dir()
             .map(|d| kitab_sign::store::list(&d))
