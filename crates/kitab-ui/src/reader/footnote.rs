@@ -126,7 +126,7 @@ impl Reader {
                                             .rounded(px(6.0))
                                             .text_color(st.c(|c| c.accent))
                                             .cursor_pointer()
-                                            .hover(|d| d.bg(st.c(|c| c.hover)))
+                                            .hover(|d| d.bg(st.hover_bg()))
                                             .tip("Jump to the note; Alt+Left comes back")
                                             .on_click(cx.listener(|r, _, _, cx| r.go_to_note(cx)))
                                             .child("Go to note"),

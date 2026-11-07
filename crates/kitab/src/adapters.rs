@@ -695,6 +695,7 @@ impl Library for StoreLibrary {
                         format: e.format,
                         progress: e.progress.unwrap_or(0.0),
                         last_opened_ms: e.last_opened_at,
+                        favourite: e.favourite,
                     })
                     .collect(),
             )
@@ -866,6 +867,7 @@ impl Library for StoreLibrary {
                         progress: e.progress.unwrap_or(0.0),
                         last_opened_ms: e.last_opened_at,
                         missing: e.missing,
+                        favourite: e.favourite,
                     })
                     .collect(),
             )

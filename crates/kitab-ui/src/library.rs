@@ -19,6 +19,8 @@ pub struct RecentItem {
     /// Unix milliseconds.
     pub last_opened_ms: i64,
     pub missing: bool,
+    /// A favourite: its card wears a ribbon.
+    pub favourite: bool,
 }
 
 /// A page that matches a library search.

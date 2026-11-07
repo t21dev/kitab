@@ -35,7 +35,7 @@ fn subtype(shape: &MarkShape) -> PdfAnnotationType {
     match shape {
         MarkShape::Ink { .. } => PdfAnnotationType::Ink,
         MarkShape::Line { .. } => PdfAnnotationType::Line,
-        MarkShape::Rect { .. } => PdfAnnotationType::Square,
+        MarkShape::Rect { .. } | MarkShape::Cover { .. } => PdfAnnotationType::Square,
         MarkShape::Ellipse { .. } => PdfAnnotationType::Circle,
         MarkShape::Highlight { .. } => PdfAnnotationType::Highlight,
         MarkShape::Underline { .. } => PdfAnnotationType::Underline,
@@ -65,6 +65,13 @@ fn fill(a: &mut PdfAnnotation, m: &Mark) -> Result<(), mupdf::Error> {
             a.set_rect(r(rect))?;
             a.set_border_width(m.width)?;
             a.set_color(c)?;
+        }
+        // A square filled with its own colour, so every reader shows a box.
+        MarkShape::Cover { rect } => {
+            a.set_rect(r(rect))?;
+            a.set_border_width(0.0)?;
+            a.set_color(c)?;
+            a.set_interior_color(c)?;
         }
         MarkShape::Highlight { rects }
         | MarkShape::Underline { rects }
@@ -236,6 +243,9 @@ mod tests {
             MarkShape::Rect { rect },
             MarkShape::Ellipse {
                 rect: RectPt { y: 200.0, ..rect },
+            },
+            MarkShape::Cover {
+                rect: RectPt { y: 520.0, ..rect },
             },
             MarkShape::Highlight {
                 rects: vec![RectPt {

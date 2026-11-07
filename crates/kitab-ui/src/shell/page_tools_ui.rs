@@ -305,7 +305,7 @@ impl Workspace {
                         d.border_1()
                             .border_color(st.c(|c| c.line))
                             .text_color(st.c(|c| c.muted))
-                            .hover(|d| d.bg(st.c(|c| c.hover)))
+                            .hover(|d| d.bg(st.hover_bg()))
                     })
                     .on_click(cx.listener(move |ws, _, window, cx| {
                         if let Some(s) = ws.page_tools.as_mut() {

@@ -142,7 +142,7 @@ impl Workspace {
                 })
                 .when(!on, |d| {
                     d.text_color(st.c(|c| c.muted))
-                        .hover(|d| d.bg(st.c(|c| c.hover)))
+                        .hover(|d| d.bg(st.hover_bg()))
                 })
                 .on_click(cx.listener(move |ws, _, _, cx| ws.show_shelf(kind, cx)))
                 .child(label);
@@ -167,7 +167,7 @@ impl Workspace {
                 .text_size(px(12.5))
                 .text_color(st.c(|c| c.faint))
                 .cursor_pointer()
-                .hover(|d| d.bg(st.c(|c| c.hover)).text_color(st.c(|c| c.text)))
+                .hover(|d| d.bg(st.hover_bg()).text_color(st.c(|c| c.text)))
                 .on_click(
                     cx.listener(|ws, _, window, cx| ws.name_collection(None, None, window, cx)),
                 )

@@ -498,7 +498,7 @@ impl Workspace {
                             .cursor_pointer()
                             .when(on, |d| d.bg(st.c(|c| c.hover)).text_color(st.c(|c| c.text)))
                             .when(!on, |d| d.text_color(st.c(|c| c.muted)))
-                            .hover(|d| d.bg(st.c(|c| c.hover)))
+                            .hover(|d| d.bg(st.hover_bg()))
                             .on_click(cx.listener(move |ws, _, _, cx| {
                                 if let Some(s) = ws.print.as_mut() {
                                     s.printer = Some(name.clone());
@@ -536,7 +536,7 @@ impl Workspace {
                 .bg(st.c(|c| c.raised))
                 .shadow(st.elev())
                 .cursor_pointer()
-                .hover(|d| d.bg(st.c(|c| c.hover)))
+                .hover(|d| d.bg(st.hover_bg()))
                 .on_click(cx.listener(move |ws, _, _, cx| {
                     if let Some(s) = ws.print.as_mut() {
                         s.copies = (s.copies as i32 + delta).clamp(1, 99) as u32;

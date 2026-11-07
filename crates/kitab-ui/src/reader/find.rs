@@ -674,6 +674,6 @@ fn bar_button(
         .justify_center()
         .rounded(st.px(|m| m.control_radius))
         .when(on, |d| d.bg(st.c(|c| c.hover)).shadow(st.well()))
-        .when(!on && !disabled, |d| d.hover(|d| d.bg(st.c(|c| c.hover))))
+        .when(!on && !disabled, |d| d.hover(|d| d.bg(st.hover_bg())))
         .child(svg().path(icon(name)).size(px(16.0)).text_color(fg))
 }

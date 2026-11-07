@@ -206,17 +206,23 @@ mod imp {
             .iter()
             .map(|t| {
                 let command = format!(r"Software\Classes\{}\shell\open\command", t.prog_id);
+                // Newer Windows 11 keeps the choice in UserChoiceLatest\ProgId
+                // and leaves the old UserChoice key behind with the previous
+                // app in it; read the new one first.
                 let choice = t.extensions.first().and_then(|ext| {
-                    let key = format!(
-                        r"Software\Microsoft\Windows\CurrentVersion\Explorer\FileExts\.{ext}\UserChoice"
+                    let base = format!(
+                        r"Software\Microsoft\Windows\CurrentVersion\Explorer\FileExts\.{ext}"
                     );
-                    get(&key, Some("ProgId"))
+                    get(&format!(r"{base}\UserChoiceLatest\ProgId"), Some("ProgId"))
+                        .filter(|p| !p.is_empty())
+                        .or_else(|| get(&format!(r"{base}\UserChoice"), Some("ProgId")))
                 });
                 let slot = format!(r"Software\Classes\{}\ShellEx\{THUMB_SLOT}", t.prog_id);
                 TypeStatus {
                     registered: get(&command, None).is_some(),
                     default: Some(choice.as_deref() == Some(t.prog_id)),
-                    thumbnails: get(&slot, None).is_some_and(|c| c.eq_ignore_ascii_case(THUMB_CLSID)),
+                    thumbnails: get(&slot, None)
+                        .is_some_and(|c| c.eq_ignore_ascii_case(THUMB_CLSID)),
                 }
             })
             .collect()

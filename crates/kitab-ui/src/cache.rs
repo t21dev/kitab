@@ -85,6 +85,12 @@ impl PageCache {
         }
     }
 
+    /// Keep up to `bytes` (at least what is on screen); a lower budget
+    /// takes effect at the next insert.
+    pub fn set_budget(&mut self, bytes: usize) {
+        self.budget = bytes;
+    }
+
     /// Images removed since the last call; free their atlas space.
     pub fn take_evicted(&mut self) -> Vec<Arc<RenderImage>> {
         std::mem::take(&mut self.evicted)

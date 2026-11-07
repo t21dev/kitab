@@ -301,7 +301,7 @@ pub fn panel(
                         .text_color(fg)
                         .when(menu.hi == Some(i), |d| d.bg(st.c(|c| c.hover)))
                         .when(!disabled, |d| {
-                            d.hover(|d| d.bg(st.c(|c| c.hover)))
+                            d.hover(|d| d.bg(st.hover_bg()))
                                 .on_click(move |_, window, cx| {
                                     close(window, cx);
                                     run(window, cx);

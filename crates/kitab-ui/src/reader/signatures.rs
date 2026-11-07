@@ -96,7 +96,7 @@ impl Reader {
                 .rounded(px(5.0))
                 .cursor_pointer()
                 .text_color(colour)
-                .hover(|d| d.bg(st.c(|c| c.hover)))
+                .hover(|d| d.bg(st.hover_bg()))
                 .tip("Show signatures")
                 .on_click(cx.listener(|_, _, _, cx| cx.emit(ReaderEvent::ShowSignatures)))
                 .child(svg().path(icon("shield")).size(px(12.0)).text_color(colour))

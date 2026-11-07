@@ -84,6 +84,8 @@ pub struct RecentEntry {
     pub last_opened_at: i64,
     /// The file was not found the last time anyone looked (greyed out, "Locate…").
     pub missing: bool,
+    /// Marked a favourite (a ribbon on its card).
+    pub favourite: bool,
 }
 
 /// Paths are stored as text; non-Unicode paths are rejected rather than mangled.
@@ -413,7 +415,7 @@ impl Store {
         let limit = i64::try_from(limit.min(MAX_RECENT)).unwrap_or(0);
         let mut stmt = self.conn.prepare_cached(
             "SELECT d.id, d.path, d.title, d.author, d.format, rs.progress,
-                    d.last_opened_at, d.missing
+                    d.last_opened_at, d.missing, d.favourite
              FROM documents d INDEXED BY documents_recent
              LEFT JOIN reading_state rs ON rs.document_id = d.id
              WHERE d.last_opened_at IS NOT NULL
@@ -430,11 +432,13 @@ impl Store {
                 r.get::<_, Option<f64>>(5)?,
                 r.get::<_, i64>(6)?,
                 r.get::<_, bool>(7)?,
+                r.get::<_, bool>(8)?,
             ))
         })?;
         let mut out = Vec::new();
         for row in rows {
-            let (id, path, title, author, format, progress, last_opened_at, missing) = row?;
+            let (id, path, title, author, format, progress, last_opened_at, missing, favourite) =
+                row?;
             out.push(RecentEntry {
                 id: DocumentId(id),
                 path: PathBuf::from(path),
@@ -444,6 +448,7 @@ impl Store {
                 progress: progress.map(|p| clamp_progress(p as f32)),
                 last_opened_at,
                 missing,
+                favourite,
             });
         }
         Ok(out)

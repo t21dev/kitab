@@ -241,6 +241,42 @@ fn kitab_buffer_count() -> u32 {
         }
         context.width = context.width.max(if rtl { baselineoriginx } else { pen });"""),
     ])
+    # 6. The title bar: dragging the window, and its minimise, maximise and
+    #    close buttons. gpui sends a press there through the app first and,
+    #    when something prevented the default, swallows it. Any focusable
+    #    ancestor does that (click-to-focus calls prevent_default), so a drag
+    #    never reached Windows and the buttons never recorded their press.
+    #    The app still sees the press; Windows always gets it on these areas.
+    edit("src/platform/windows/events.rs", [
+        ("""            let result = func(input);
+            let handled = !result.propagate || result.default_prevented;
+            self.state.borrow_mut().callbacks.input = Some(func);
+
+            if handled {
+                return Some(0);
+            }
+        } else {
+            drop(lock);
+        };
+
+        // Since these are handled in handle_nc_mouse_up_msg we must prevent the default window proc""",
+         """            let result = func(input);
+            let handled = !result.propagate || result.default_prevented;
+            self.state.borrow_mut().callbacks.input = Some(func);
+
+            let caption = matches!(
+                wparam.0 as u32,
+                HTCAPTION | HTMINBUTTON | HTMAXBUTTON | HTCLOSE
+            );
+            if handled && !caption {
+                return Some(0);
+            }
+        } else {
+            drop(lock);
+        };
+
+        // Since these are handled in handle_nc_mouse_up_msg we must prevent the default window proc"""),
+    ])
     print(f"patched gpui copy: {DEST}")
 
 

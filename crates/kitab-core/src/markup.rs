@@ -41,6 +41,11 @@ pub enum MarkShape {
     Ellipse {
         rect: RectPt,
     },
+    /// A filled box that covers what is under it on the page. Only a cover:
+    /// the text and pictures beneath stay in the file.
+    Cover {
+        rect: RectPt,
+    },
     /// Text markup over these boxes (one per line of selected text).
     Highlight {
         rects: Vec<RectPt>,
@@ -190,7 +195,7 @@ impl Mark {
                         .all(|s| !s.is_empty() && s.iter().all(ok_point))
             }
             MarkShape::Line { from, to, .. } => ok_point(from) && ok_point(to),
-            MarkShape::Rect { rect } | MarkShape::Ellipse { rect } => {
+            MarkShape::Rect { rect } | MarkShape::Ellipse { rect } | MarkShape::Cover { rect } => {
                 ok_rect(rect) && (rect.w > 0.0 || rect.h > 0.0)
             }
             MarkShape::Highlight { rects }
@@ -234,6 +239,7 @@ impl Mark {
                 grow(rect_between(*from, *to), pad + head)
             }
             MarkShape::Rect { rect } | MarkShape::Ellipse { rect } => grow(*rect, pad),
+            MarkShape::Cover { rect } => *rect,
             MarkShape::Highlight { rects }
             | MarkShape::Underline { rects }
             | MarkShape::Strike { rects } => union(rects.iter().copied()).unwrap_or_default(),
@@ -282,6 +288,8 @@ impl Mark {
                 ];
                 (0..4).any(|i| segment_distance(p, corners[i], corners[(i + 1) % 4]) <= reach)
             }
+            // A cover is solid: anywhere on it.
+            MarkShape::Cover { rect } => in_rect(p, rect, tolerance),
             MarkShape::Ellipse { rect } => {
                 let (rx, ry) = (rect.w / 2.0, rect.h / 2.0);
                 if rx <= 0.0 || ry <= 0.0 {
@@ -308,6 +316,7 @@ impl Mark {
             MarkShape::Line { arrow: true, .. } => "arrow",
             MarkShape::Rect { .. } => "rect",
             MarkShape::Ellipse { .. } => "ellipse",
+            MarkShape::Cover { .. } => "cover",
             MarkShape::Highlight { .. } => "highlight",
             MarkShape::Underline { .. } => "underline",
             MarkShape::Strike { .. } => "strike",

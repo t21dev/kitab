@@ -99,7 +99,7 @@ pub(super) fn dialog_button(
             b.bg(st.c(|c| c.raised))
                 .text_color(st.c(|c| c.text))
                 .shadow(st.elev())
-                .hover(|b| b.bg(st.c(|c| c.hover)))
+                .hover(|b| b.bg(st.hover_bg()))
         })
         .child(label)
 }
@@ -193,7 +193,7 @@ impl Workspace {
                 .items_center()
                 .rounded_full()
                 .text_color(st.c(|c| c.accent))
-                .hover(|d| d.bg(st.c(|c| c.hover)))
+                .hover(|d| d.bg(st.hover_bg()))
                 .cursor_pointer()
                 .on_click(cx.listener(move |ws, _, window, cx| {
                     if is_pdf {
@@ -255,7 +255,7 @@ impl Workspace {
                         .justify_center()
                         .rounded_full()
                         .cursor_pointer()
-                        .hover(|d| d.bg(st.c(|c| c.hover)))
+                        .hover(|d| d.bg(st.hover_bg()))
                         .on_click(cx.listener(move |ws, _, _, cx| ws.dismiss_toast(serial, cx)))
                         .child(
                             svg()

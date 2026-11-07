@@ -24,6 +24,8 @@ pub enum Tool {
     Line,
     Arrow,
     Rect,
+    /// A filled box, to cover something up.
+    Cover,
     Ellipse,
     /// Text written on the page.
     Text,
@@ -33,12 +35,13 @@ pub enum Tool {
 }
 
 impl Tool {
-    pub const ALL: [Tool; 9] = [
+    pub const ALL: [Tool; 10] = [
         Tool::Pen,
         Tool::Highlighter,
         Tool::Line,
         Tool::Arrow,
         Tool::Rect,
+        Tool::Cover,
         Tool::Ellipse,
         Tool::Text,
         Tool::Note,
@@ -52,6 +55,7 @@ impl Tool {
             Tool::Line => "line",
             Tool::Arrow => "arrow-diagonal",
             Tool::Rect => "square",
+            Tool::Cover => "cover",
             Tool::Ellipse => "circle",
             Tool::Text => "text",
             Tool::Note => "note",
@@ -66,6 +70,9 @@ impl Tool {
             Tool::Line => "Line  Shift keeps it at 45°",
             Tool::Arrow => "Arrow  Shift keeps it at 45°",
             Tool::Rect => "Rectangle  Shift for a square",
+            Tool::Cover => {
+                "Cover  a filled box over what you hide (the text under it stays in the file)"
+            }
             Tool::Ellipse => "Ellipse  Shift for a circle",
             Tool::Text => "Text  click where it goes",
             Tool::Note => "Note  click to pin one",
@@ -210,7 +217,9 @@ fn square_from(a: PointPt, b: PointPt) -> PointPt {
 fn worth_keeping(m: &Mark) -> bool {
     match &m.shape {
         MarkShape::Line { from, to, .. } => (to.x - from.x).hypot(to.y - from.y) >= 2.0,
-        MarkShape::Rect { rect } | MarkShape::Ellipse { rect } => rect.w >= 2.0 && rect.h >= 2.0,
+        MarkShape::Rect { rect } | MarkShape::Ellipse { rect } | MarkShape::Cover { rect } => {
+            rect.w >= 2.0 && rect.h >= 2.0
+        }
         _ => m.is_valid(),
     }
 }
@@ -494,6 +503,9 @@ impl Reader {
             Tool::Rect => MarkShape::Rect {
                 rect: rect_between(at, at),
             },
+            Tool::Cover => MarkShape::Cover {
+                rect: rect_between(at, at),
+            },
             Tool::Ellipse => MarkShape::Ellipse {
                 rect: rect_between(at, at),
             },
@@ -539,7 +551,7 @@ impl Reader {
                 }
             }
             MarkShape::Line { to, .. } => *to = if shift { snap_45(start, at) } else { at },
-            MarkShape::Rect { rect } | MarkShape::Ellipse { rect } => {
+            MarkShape::Rect { rect } | MarkShape::Ellipse { rect } | MarkShape::Cover { rect } => {
                 let end = if shift { square_from(start, at) } else { at };
                 *rect = rect_between(start, end);
             }
@@ -794,7 +806,7 @@ impl Reader {
                 .when(primary, |d| {
                     d.bg(st.c(|c| c.accent)).text_color(st.c(|c| c.bg))
                 })
-                .when(!primary, |d| d.hover(|d| d.bg(st.c(|c| c.hover))))
+                .when(!primary, |d| d.hover(|d| d.bg(st.hover_bg())))
                 .child(label)
         };
         Some(
@@ -1055,6 +1067,10 @@ impl Reader {
                     .text_size(px(12.0))
                     .text_color(st.c(|c| c.muted))
                     .id("markup-bar-inner")
+                    // The page's drawing cross stops at the bar: it is a
+                    // toolbar, with the ordinary pointer.
+                    .occlude()
+                    .cursor_default()
                     // Never wider than the reading area: it scrolls instead.
                     .when(self.viewport.0 > 0.0, |d| {
                         d.max_w(px((self.viewport.0 - 24.0).max(120.0)))
@@ -1086,7 +1102,7 @@ impl Reader {
                             .justify_center()
                             .rounded(px(7.0))
                             .when(m.size == i, |d| d.bg(st.c(|c| c.hover)))
-                            .hover(|d| d.bg(st.c(|c| c.hover)))
+                            .hover(|d| d.bg(st.hover_bg()))
                             .tip(["Thin", "Medium", "Thick"][i])
                             .child(div().size(px(dot)).rounded_full().bg(st.c(|c| c.text)))
                             .on_click(cx.listener(move |r, _, _, cx| {
@@ -1500,6 +1516,7 @@ fn paint_mark(
         ));
     };
     match &m.shape {
+        MarkShape::Cover { rect } => quad(*rect, window),
         MarkShape::Ink { strokes } => {
             for s in strokes {
                 let pts: Vec<_> = s.iter().map(|p| to_px(*p)).collect();

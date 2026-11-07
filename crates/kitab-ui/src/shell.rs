@@ -15,11 +15,11 @@ use crate::settings_view::{self, HexState, Section, SystemInfo};
 use crate::style::Style;
 use crate::tooltip::Tip;
 use gpui::{
-    AnyElement, App, AppContext, ClipboardItem, Context, ElementId, Entity, ExternalPaths,
-    FocusHandle, Focusable, FontWeight, InteractiveElement, IntoElement, KeyDownEvent, MouseButton,
-    MouseDownEvent, ParentElement, PathPromptOptions, Pixels, Point, Render, SharedString,
-    StatefulInteractiveElement, Styled, Subscription, Window, WindowControlArea, anchored,
-    deferred, div, point, prelude::FluentBuilder, px, svg,
+    AnimationExt, AnyElement, App, AppContext, ClipboardItem, Context, ElementId, Entity,
+    ExternalPaths, FocusHandle, Focusable, FontWeight, InteractiveElement, IntoElement,
+    KeyDownEvent, MouseButton, MouseDownEvent, ParentElement, PathPromptOptions, Pixels, Point,
+    Render, SharedString, StatefulInteractiveElement, Styled, Subscription, Window,
+    WindowControlArea, anchored, deferred, div, point, prelude::FluentBuilder, px, svg,
 };
 use kitab_core::{OutlineItem, ZoomMode};
 use kitab_theme::{Accent, AccentPreset, Theme};
@@ -77,6 +77,16 @@ pub struct Workspace {
     overlay_focus: FocusHandle,
     /// After a click ends keyboard navigation: check where focus went.
     focus_check: bool,
+    /// A tab just closed, narrowing to nothing where it was (index, width,
+    /// title, icon, serial).
+    tab_ghost: Option<(usize, f32, String, &'static str, u64)>,
+    tab_ghost_serial: u64,
+    /// Settings › Advanced asked for the guide; opened on the next frame
+    /// (opening a tab needs the window).
+    welcome_pending: bool,
+    /// Focus mode with the sidebar called back (Ctrl+B or the corner
+    /// button); focus mode itself stays on.
+    focus_sidebar: bool,
     /// Built-in themes, parsed when Settings first opens.
     themes: Vec<Theme>,
     closed: Vec<PathBuf>,
@@ -186,6 +196,10 @@ impl Workspace {
             settings_serial: 0,
             overlay_focus: cx.focus_handle(),
             focus_check: false,
+            focus_sidebar: false,
+            tab_ghost: None,
+            tab_ghost_serial: 0,
+            welcome_pending: false,
             themes: Vec::new(),
             closed: Vec::new(),
             sidebar_closing: false,
@@ -252,6 +266,11 @@ impl Workspace {
             ws.window_active = window.is_window_active();
             if ws.window_active {
                 ws.load_keymap(cx);
+                // Back from Windows' Default apps (or Finder): File types
+                // shows what was just chosen there.
+                if let Some(section @ crate::settings_view::Section::FileTypes) = ws.settings {
+                    ws.load_system_info(section, cx);
+                }
             } else {
                 ws.release_when_idle(cx);
             }
@@ -452,6 +471,27 @@ impl Workspace {
         if ix >= self.tabs.len() {
             return;
         }
+        // Its place in the strip narrows away instead of the others jumping.
+        if Style::get(cx).animations {
+            if let Some(b) = self.tab_scroll.bounds_for_item(ix) {
+                let r = self.tabs[ix].read(cx);
+                self.tab_ghost_serial += 1;
+                let serial = self.tab_ghost_serial;
+                self.tab_ghost = Some((
+                    ix,
+                    f32::from(b.size.width),
+                    r.title().to_string(),
+                    tab_icon_for(&r.path),
+                    serial,
+                ));
+                self.after(motion::EXIT_BASE, cx, move |ws, cx| {
+                    if ws.tab_ghost.as_ref().is_some_and(|g| g.4 == serial) {
+                        ws.tab_ghost = None;
+                        cx.notify();
+                    }
+                });
+            }
+        }
         let closing = self.tabs.remove(ix);
         if self.tools.split.as_ref() == Some(&closing) {
             self.tools.split = None;
@@ -532,8 +572,10 @@ fn icon_button(
             st.c(|c| c.muted)
         })
         .when(on, |d| d.bg(st.c(|c| c.raised)).shadow(st.elev()))
-        .hover(|d| d.bg(st.c(|c| c.hover)).text_color(st.c(|c| c.text)))
-        .active(|d| d.bg(st.c(|c| c.hover)))
+        .when(!on, |d| {
+            d.hover(|d| d.bg(st.hover_bg()).text_color(st.c(|c| c.text)))
+        })
+        .active(|d| d.bg(st.ca(|c| c.text, 0.12)))
         .child(
             svg()
                 .path(icon(name))
@@ -556,7 +598,7 @@ fn window_button(
     let hover_bg = if danger {
         st.ca(|c| c.bad, 0.9)
     } else {
-        st.c(|c| c.hover)
+        st.hover_bg()
     };
     div()
         .id(id)
@@ -660,7 +702,41 @@ impl Workspace {
             .h_full()
             .overflow_x_scroll()
             .track_scroll(&self.tab_scroll);
+        let ghost = self.tab_ghost.clone().map(|(at, w, title, name, serial)| {
+            let el = div()
+                .flex()
+                .flex_none()
+                .items_center()
+                .gap(px(8.0))
+                .h(st.px(|m| m.control_height))
+                .pl(px(10.0))
+                .overflow_hidden()
+                .whitespace_nowrap()
+                .rounded(st.px(|m| m.control_radius))
+                .text_size(st.px(|m| m.ui_text))
+                .text_color(st.c(|c| c.muted))
+                .child(
+                    svg()
+                        .path(icon(name))
+                        .size(px(14.0))
+                        .text_color(st.c(|c| c.faint)),
+                )
+                .child(title)
+                .with_animation(
+                    ElementId::NamedInteger("tab-out".into(), serial),
+                    gpui::Animation::new(motion::EXIT_BASE).with_easing(gpui::ease_out_quint()),
+                    // The others slide over as it narrows; no fade.
+                    move |el, v| el.w(px(w * (1.0 - v))),
+                );
+            (at, el)
+        });
+        let mut ghost = ghost;
         for (ix, tab) in self.tabs.iter().enumerate() {
+            if ghost.as_ref().is_some_and(|g| g.0 == ix) {
+                if let Some((_, el)) = ghost.take() {
+                    strip = strip.child(el);
+                }
+            }
             let on = self.active == Some(ix);
             // The tab shown in the side pane of a split view.
             let side = !on && self.tools.split.as_ref() == Some(tab);
@@ -700,7 +776,9 @@ impl Workspace {
                     st.c(|c| c.muted)
                 })
                 .when(on, |d| d.bg(st.c(|c| c.raised)).shadow(st.elev()))
-                .hover(|d| d.text_color(st.c(|c| c.text)))
+                .when(!on, |d| {
+                    d.hover(|d| d.bg(st.hover_bg()).text_color(st.c(|c| c.text)))
+                })
                 .when(side, |d| {
                     d.bg(st.c(|c| c.hover)).text_color(st.c(|c| c.text))
                 })
@@ -725,7 +803,7 @@ impl Workspace {
                             d.absolute().right(px(6.0)).bg(st.c(|c| c.bg))
                         })
                         .group_hover("tab", |d| d.visible())
-                        .hover(|d| d.bg(st.c(|c| c.hover)))
+                        .hover(|d| d.bg(st.hover_bg()))
                         .tip("Close tab  Ctrl+W")
                         .on_click(cx.listener(move |ws, _, window, cx| {
                             cx.stop_propagation();
@@ -738,26 +816,30 @@ impl Workspace {
                                 .text_color(st.c(|c| c.faint)),
                         ),
                 );
-            strip = strip.child(motion::enter(
+            strip = strip.child(motion::slide_in(
                 tab_el,
                 ElementId::NamedInteger("tab-in".into(), tab_id),
                 animate,
-                motion::From::Above(6.0),
+                28.0,
                 motion::BASE,
-                Duration::ZERO,
             ));
+        }
+        // The last tab closed: its ghost goes at the end.
+        if let Some((_, el)) = ghost {
+            strip = strip.child(el);
         }
 
         // "All tabs" appears once the strip overflows: a menu of every tab.
         let overflowing = self.tab_scroll.max_offset().width > px(0.5);
         bar = bar
             .child(strip)
-            // New tab: the system Open dialog (Ctrl+O).
+            // New tab: Home, with Open file… and the recent books (Ctrl+O
+            // still goes straight to the Open dialog).
             .child(
                 icon_button("new-tab", "plus", false, st)
                     .flex_none()
-                    .tip("Open a file  Ctrl+O")
-                    .on_click(cx.listener(|ws, _, window, cx| ws.open_dialog(window, cx))),
+                    .tip("New tab: Home and Open file…")
+                    .on_click(cx.listener(|ws, _, window, cx| ws.show_home(window, cx))),
             )
             .when(overflowing, |b| {
                 b.child(
@@ -895,7 +977,7 @@ impl Workspace {
                     st.c(|c| c.muted)
                 })
                 .when(on, |d| d.bg(st.c(|c| c.raised)).shadow(st.elev()))
-                .hover(|d| d.bg(st.c(|c| c.hover)).text_color(st.c(|c| c.text)))
+                .hover(|d| d.bg(st.hover_bg()).text_color(st.c(|c| c.text)))
                 .on_click(move |_, _, cx| {
                     if let Some(p) = target {
                         reader.update(cx, |r, cx| r.jump_to(p, cx));
@@ -965,7 +1047,7 @@ impl Workspace {
                 .rounded(st.px(|m| m.control_radius))
                 .text_size(px(11.5))
                 .text_color(st.c(|c| c.muted))
-                .hover(|d| d.bg(st.c(|c| c.hover)).text_color(st.c(|c| c.text)))
+                .hover(|d| d.bg(st.hover_bg()).text_color(st.c(|c| c.text)))
                 .child(label)
                 .on_click(cx.listener(move |ws, _, _, cx| ws.export_marks(&reader, csv, cx)))
         };
@@ -1096,7 +1178,7 @@ impl Workspace {
                     .px(px(8.0))
                     .py(px(6.0))
                     .rounded(st.px(|m| m.control_radius))
-                    .hover(|d| d.bg(st.c(|c| c.hover)))
+                    .hover(|d| d.bg(st.hover_bg()))
                     .on_click(move |_, _, cx| jump.update(cx, |r, cx| r.jump_to(page, cx)))
                     .child(
                         div()
@@ -1199,7 +1281,7 @@ impl Workspace {
                         st.c(|c| c.muted)
                     })
                     .when(on, |d| d.bg(st.c(|c| c.raised)).shadow(st.elev()))
-                    .hover(|d| d.bg(st.c(|c| c.hover)).text_color(st.c(|c| c.text)))
+                    .hover(|d| d.bg(st.hover_bg()).text_color(st.c(|c| c.text)))
                     .on_click(move |_, _, cx| jump.update(cx, |r, cx| r.jump_to(page, cx)))
                     .child(
                         svg()
@@ -1457,7 +1539,7 @@ impl Workspace {
                     })
                     .when(on, |d| d.bg(st.c(|c| c.raised)).shadow(st.elev()))
                     .when(side, |d| d.bg(st.c(|c| c.hover)))
-                    .hover(|d| d.bg(st.c(|c| c.hover)).text_color(st.c(|c| c.text)))
+                    .hover(|d| d.bg(st.hover_bg()).text_color(st.c(|c| c.text)))
                     .on_click(cx.listener(move |ws, _, window, cx| ws.activate(ix, window, cx)))
                     .on_mouse_up(
                         MouseButton::Middle,
@@ -1535,6 +1617,37 @@ impl Workspace {
     /// Tabs in the sidebar: a transparent strip over the top of the page area
     /// to drag the window, with the window buttons (and, when the sidebar is
     /// closed, the sidebar and Home buttons).
+    /// Focus mode's way back, in the bottom-right corner: the sidebar
+    /// (contents and bookmarks) and Exit focus mode. Faint until pointed at,
+    /// so it doesn't pull the eye while reading.
+    fn focus_corner(&self, st: &Style, cx: &mut Context<Self>) -> AnyElement {
+        div()
+            .id("focus-corner")
+            .absolute()
+            .bottom(px(12.0))
+            .right(px(12.0))
+            .flex()
+            .items_center()
+            .gap(px(2.0))
+            .p(px(3.0))
+            .rounded(px(10.0))
+            .bg(st.c(|c| c.raised))
+            .shadow(st.float())
+            .opacity(0.55)
+            .hover(|d| d.opacity(1.0))
+            .child(
+                icon_button("focus-sidebar", "sidebar", self.focus_sidebar, st)
+                    .tip("Contents and bookmarks  Ctrl+B")
+                    .on_click(cx.listener(|ws, _, _, cx| ws.toggle_sidebar(cx))),
+            )
+            .child(
+                icon_button("focus-exit", "focus", false, st)
+                    .tip("Exit focus mode  F11")
+                    .on_click(cx.listener(|ws, _, _, cx| ws.toggle_minimal(cx))),
+            )
+            .into_any_element()
+    }
+
     fn top_strip(&mut self, st: &Style, cx: &mut Context<Self>) -> AnyElement {
         let bare = !self.sidebar && !Style::get(cx).minimal;
         div()
@@ -1596,7 +1709,7 @@ impl Workspace {
                                 .rounded(px(7.0))
                                 .text_size(px(12.0))
                                 .text_color(st.c(|c| c.muted))
-                                .hover(|d| d.bg(st.c(|c| c.hover)).text_color(st.c(|c| c.text)))
+                                .hover(|d| d.bg(st.hover_bg()).text_color(st.c(|c| c.text)))
                                 .tip("Show everything again  F11")
                                 .on_click(cx.listener(|ws, _, _, cx| ws.toggle_minimal(cx)))
                                 .child(
@@ -1605,7 +1718,7 @@ impl Workspace {
                                         .size(px(14.0))
                                         .text_color(st.c(|c| c.muted)),
                                 )
-                                .child("Exit minimal mode"),
+                                .child("Exit focus mode"),
                         )
                     })
                     .rounded_bl(px(10.0))
@@ -1638,28 +1751,31 @@ impl Workspace {
     }
 
     fn home(&mut self, st: &Style, cx: &mut Context<Self>) -> AnyElement {
-        let open_button = div()
-            .id("open")
-            .flex()
-            .items_center()
-            .gap(px(8.0))
-            .h(st.px(|m| m.control_height))
-            .px(px(14.0))
-            .rounded(st.px(|m| m.control_radius))
-            .bg(st.c(|c| c.raised))
-            .shadow(st.elev())
-            .text_size(st.px(|m| m.ui_text))
-            .text_color(st.c(|c| c.text))
-            .hover(|d| d.bg(st.c(|c| c.hover)))
-            .on_click(cx.listener(|ws, _, window, cx| ws.open_dialog(window, cx)))
-            .child(
-                svg()
-                    .path(icon("folder-open"))
-                    .size(px(15.0))
-                    .text_color(st.c(|c| c.muted)),
-            )
-            .child("Open file…");
-        let settings_button = icon_button("home-settings", "settings", false, st)
+        // Home's two buttons, alike: an icon and a word each.
+        let button = |id: &'static str, name: &str, label: &'static str| {
+            crate::kbd::stop_solid(div().id(id), st)
+                .flex()
+                .items_center()
+                .gap(px(8.0))
+                .h(st.px(|m| m.control_height))
+                .px(px(14.0))
+                .rounded(st.px(|m| m.control_radius))
+                .bg(st.c(|c| c.raised))
+                .shadow(st.elev())
+                .text_size(st.px(|m| m.ui_text))
+                .text_color(st.c(|c| c.text))
+                .hover(|d| d.bg(st.hover_bg()))
+                .child(
+                    svg()
+                        .path(icon(name))
+                        .size(px(15.0))
+                        .text_color(st.c(|c| c.muted)),
+                )
+                .child(label)
+        };
+        let open_button = button("open", "folder-open", "Open file…")
+            .on_click(cx.listener(|ws, _, window, cx| ws.open_dialog(window, cx)));
+        let settings_button = button("home-settings", "settings", "Settings")
             .tip("Settings  Ctrl+,")
             .on_click(cx.listener(|ws, _, window, cx| ws.open_settings(window, cx)));
 
@@ -1691,9 +1807,10 @@ impl Workspace {
                         .text_color(st.c(|c| c.muted))
                         .child("Drop a PDF here, or press Ctrl+O. Kitab remembers where you stop."),
                 )
+                .child(div().mt(px(14.0)).child(self.welcome_card(st, cx)))
                 .child(
                     div()
-                        .mt(px(8.0))
+                        .mt(px(14.0))
                         .flex()
                         .items_center()
                         .gap(px(8.0))
@@ -1796,7 +1913,7 @@ impl Workspace {
             .rounded(px(12.0))
             .bg(st.c(|c| c.raised))
             .shadow(st.elev())
-            .hover(|d| d.bg(st.c(|c| c.hover)))
+            .hover(|d| d.bg(st.hover_bg()))
             .on_click(cx.listener(move |ws, _, window, cx| ws.open_tab(path.clone(), window, cx)))
             .child(cover(&item.title, 56.0, st))
             .child(
@@ -1837,6 +1954,82 @@ impl Workspace {
             .into_any_element()
     }
 
+    /// The guide on a new Home: a short PDF about Kitab, to try it on.
+    fn welcome_card(&self, st: &Style, cx: &mut Context<Self>) -> AnyElement {
+        crate::kbd::stop_solid(div().id("welcome-card"), st)
+            .w(px(420.0))
+            .flex()
+            .items_center()
+            .gap(px(16.0))
+            .p(px(12.0))
+            .rounded(px(14.0))
+            .bg(st.c(|c| c.raised))
+            .shadow(st.elev())
+            .cursor_pointer()
+            .hover(|d| d.bg(st.hover_bg()))
+            .on_click(cx.listener(|ws, _, window, cx| ws.open_welcome(window, cx)))
+            .child(div().flex_none().child(cover("Welcome to Kitab", 64.0, st)))
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .flex()
+                    .flex_col()
+                    .gap(px(4.0))
+                    .child(
+                        div()
+                            .text_size(px(14.0))
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .text_color(st.c(|c| c.text))
+                            .child("Welcome to Kitab"),
+                    )
+                    .child(
+                        div()
+                            .text_size(px(12.5))
+                            .text_color(st.c(|c| c.muted))
+                            .child("A four-page guide to try Kitab on: finding your way, marking up, themes and focus mode."),
+                    )
+                    .child(
+                        div()
+                            .pt(px(2.0))
+                            .text_size(px(12.0))
+                            .text_color(st.c(|c| c.accent))
+                            .child("Open the guide"),
+                    ),
+            )
+            .into_any_element()
+    }
+
+    pub(crate) fn open_welcome_later(&mut self, cx: &mut Context<Self>) {
+        self.welcome_pending = true;
+        cx.notify();
+    }
+
+    /// Write the guide into Kitab's folder (again if this version's differs)
+    /// and open it.
+    pub(crate) fn open_welcome(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        const GUIDE: &[u8] = include_bytes!("../../../assets/sample/welcome.pdf");
+        let Some(dir) = kitab_os::data_dir() else {
+            self.toast(
+                "Kitab has no folder of its own to keep the guide in.",
+                true,
+                None,
+                cx,
+            );
+            return;
+        };
+        let path = dir.join("Welcome to Kitab.pdf");
+        let current = std::fs::metadata(&path).is_ok_and(|m| m.len() == GUIDE.len() as u64);
+        if !current {
+            if let Err(e) = std::fs::create_dir_all(&dir).and_then(|_| std::fs::write(&path, GUIDE))
+            {
+                self.toast(format!("Couldn't write the guide: {e}"), true, None, cx);
+                return;
+            }
+        }
+        self.open_tab(path, window, cx);
+    }
+
     fn recent_card(
         &mut self,
         i: usize,
@@ -1866,20 +2059,36 @@ impl Workspace {
                 )
             })
             .child(
-                div().relative().child(cover(&item.title, 132.0, st)).child(
-                    div()
-                        .absolute()
-                        .top(px(8.0))
-                        .right(px(8.0))
-                        .px(px(6.0))
-                        .py(px(1.0))
-                        .rounded(px(5.0))
-                        .bg(st.ca(|c| c.bg, 0.85))
-                        .text_size(px(10.5))
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .text_color(st.c(|c| c.muted))
-                        .child(format!("{:?}", item.format).to_uppercase()),
-                ),
+                div()
+                    .relative()
+                    .child(cover(&item.title, 132.0, st))
+                    // A favourite wears a ribbon over the cover's top edge.
+                    .when(item.favourite, |d| {
+                        d.child(
+                            svg()
+                                .absolute()
+                                .top(px(-1.0))
+                                .left(px(16.0))
+                                .w(px(16.0))
+                                .h(px(22.0))
+                                .path(icon("ribbon"))
+                                .text_color(RIBBON),
+                        )
+                    })
+                    .child(
+                        div()
+                            .absolute()
+                            .top(px(8.0))
+                            .right(px(8.0))
+                            .px(px(6.0))
+                            .py(px(1.0))
+                            .rounded(px(5.0))
+                            .bg(st.ca(|c| c.bg, 0.85))
+                            .text_size(px(10.5))
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .text_color(st.c(|c| c.muted))
+                            .child(format!("{:?}", item.format).to_uppercase()),
+                    ),
             )
             .child(
                 div()
@@ -1910,6 +2119,14 @@ impl Workspace {
             .into_any_element()
     }
 }
+
+/// The favourite ribbon's red, the same on every theme and cover.
+const RIBBON: gpui::Hsla = gpui::Hsla {
+    h: 355.0 / 360.0,
+    s: 0.72,
+    l: 0.52,
+    a: 1.0,
+};
 
 fn section_title(text: &str, st: &Style) -> AnyElement {
     div()
@@ -2032,7 +2249,8 @@ impl Render for Workspace {
         }
         let side_tabs = st.tabs == TabsAt::Sidebar;
         let title_bar = (!side_tabs && st.shows_tabs()).then(|| self.title_bar(&st, window, cx));
-        let show_sidebar = self.sidebar && st.shows_sidebar();
+        let show_sidebar =
+            (self.sidebar && st.shows_sidebar()) || (st.minimal && self.focus_sidebar);
         let body = match self.active_reader().cloned() {
             Some(reader) => {
                 // Split view: the other document beside this one; a click there
@@ -2099,12 +2317,14 @@ impl Render for Workspace {
             // minimal mode they show only while the pointer is at the top edge.
             let peeking = !st.minimal || self.peek;
             let strip = self.top_strip(&st, cx);
+            let corner = st.minimal.then(|| self.focus_corner(&st, cx));
             div()
                 .flex()
                 .flex_1()
                 .min_h_0()
                 .relative()
                 .child(body)
+                .children(corner)
                 .when(peeking, |d| {
                     d.child(
                         div()
@@ -2151,6 +2371,15 @@ impl Render for Workspace {
         };
         if self.tools.split.is_some() && self.tools.split.as_ref() == self.active_reader() {
             self.tools.split = None;
+        }
+        if std::mem::take(&mut self.welcome_pending) {
+            let ws = cx.entity();
+            window.defer(cx, move |window, cx| {
+                ws.update(cx, |ws, cx| {
+                    ws.close_settings(window, cx);
+                    ws.open_welcome(window, cx);
+                });
+            });
         }
         let overlays = self.overlays(&st, window, cx);
         self.booted = true;
@@ -2375,10 +2604,19 @@ impl Workspace {
         let style = cx.global_mut::<Style>();
         style.minimal = !style.minimal;
         self.peek = false;
+        self.focus_sidebar = false;
         cx.refresh_windows();
     }
 
     fn toggle_sidebar(&mut self, cx: &mut Context<Self>) {
+        // Focus mode hides the sidebar: Ctrl+B brings it back for now,
+        // without leaving focus mode or changing the saved setting.
+        let st = Style::get(cx);
+        if st.minimal && st.minimal_hides.sidebar {
+            self.focus_sidebar = !self.focus_sidebar;
+            cx.notify();
+            return;
+        }
         // Remembered across launches (settings.json `sidebar_open`).
         let open = !(self.sidebar && !self.sidebar_closing);
         self.change_style(&move |st: &mut Style| st.sidebar_open = open, cx);
@@ -3288,7 +3526,9 @@ impl Workspace {
     ) -> Vec<AnyElement> {
         let mut out = Vec::new();
         let ws = cx.weak_entity();
-        out.extend(self.toast_view(st, cx));
+        // Toasts go last (see the end): above Settings and every dialog,
+        // since what they report often happened there.
+        let toast = self.toast_view(st, cx);
         out.extend(self.extract_view(st, window, cx));
         out.extend(self.save_page_view(st, window, cx));
         out.extend(self.update_dialog(st, cx));
@@ -3448,6 +3688,7 @@ impl Workspace {
             }
             out.push(layer.child(positioned).into_any_element());
         }
+        out.extend(toast);
         out
     }
 }

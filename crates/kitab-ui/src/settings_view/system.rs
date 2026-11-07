@@ -32,6 +32,8 @@ pub struct SystemInfo {
     pub update_serial: u64,
     /// Clear reading history is waiting for its confirmation.
     pub confirm_clear: bool,
+    /// Restore default settings is waiting for its confirmation.
+    pub confirm_reset: bool,
 }
 
 /// Where the update check stands.
@@ -74,7 +76,7 @@ fn button(id: &'static str, label: &str, danger: bool, st: &Style, on_click: Cli
             st.c(|c| c.text)
         })
         .cursor_pointer()
-        .hover(|b| b.bg(st.c(|c| c.hover)))
+        .hover(|b| b.bg(st.hover_bg()))
         .on_click(move |_, window, cx| on_click(window, cx))
         .child(label.to_string())
         .into_any_element()
@@ -459,6 +461,34 @@ pub(super) fn advanced(ws: &WeakEntity<Workspace>, info: &SystemInfo, st: &Style
             act(ws, |ws, cx| ws.ask_clear_history(true, cx)),
         )
     };
+    let reset_control = if info.confirm_reset {
+        div()
+            .flex()
+            .gap(px(8.0))
+            .child(button(
+                "reset-cancel",
+                "Cancel",
+                false,
+                st,
+                act(ws, |ws, cx| ws.ask_restore_defaults(false, cx)),
+            ))
+            .child(button(
+                "reset-confirm",
+                "Restore defaults",
+                true,
+                st,
+                act(ws, |ws, cx| ws.restore_defaults(cx)),
+            ))
+            .into_any_element()
+    } else {
+        button(
+            "reset-ask",
+            "Restore…",
+            false,
+            st,
+            act(ws, |ws, cx| ws.ask_restore_defaults(true, cx)),
+        )
+    };
     let folder = kitab_os::data_dir()
         .map(|d| d.display().to_string())
         .unwrap_or_else(|| "Not available".into());
@@ -474,6 +504,40 @@ pub(super) fn advanced(ws: &WeakEntity<Workspace>, info: &SystemInfo, st: &Style
                 "Clear cached pages",
                 "Frees the memory held by rendered pages, fonts and images. Pages render again as you read.",
                 button("cache-clear", "Clear", false, st, act(ws, |ws, cx| ws.clear_caches(cx))),
+                st,
+            ),
+            st,
+        ))
+        .child(group(
+            "Welcome guide",
+            None,
+            icon_row(
+                Some("book"),
+                "Welcome to Kitab",
+                "The four-page guide a new Home offers. Opens it in a tab.",
+                button(
+                    "welcome-open",
+                    "Open",
+                    false,
+                    st,
+                    act(ws, |ws, cx| ws.open_welcome_later(cx)),
+                ),
+                st,
+            ),
+            st,
+        ))
+        .child(group(
+            "Settings",
+            None,
+            icon_row(
+                Some("refresh"),
+                "Restore default settings",
+                if info.confirm_reset {
+                    "Put every setting back the way Kitab comes? Your library, marks, bookmarks and open tabs stay."
+                } else {
+                    "Theme, layout, reading and every other setting go back to how Kitab comes. Your library, marks and bookmarks stay."
+                },
+                reset_control,
                 st,
             ),
             st,
@@ -570,14 +634,26 @@ pub(super) fn about(ws: &WeakEntity<Workspace>, info: &SystemInfo, st: &Style) -
                 title: &'static str,
                 body: &'static str,
                 url: String| {
-        let open: Click = Box::new(move |_, cx| cx.open_url(&url));
-        icon_row(
-            Some(glyph),
-            title,
-            body,
-            button(id, "Open", false, st, open),
-            st,
-        )
+        // The whole row is the link; the arrow says it opens in the browser.
+        crate::kbd::stop_solid(div().id(id), st)
+            .rounded(px(12.0))
+            .cursor_pointer()
+            .hover(|d| d.opacity(0.8))
+            .tip(url.clone())
+            .on_click(move |_, _, cx| cx.open_url(&url))
+            .child(icon_row(
+                Some(glyph),
+                title,
+                body,
+                gpui::svg()
+                    .path(crate::icons::icon("external"))
+                    .flex_none()
+                    .size(px(16.0))
+                    .text_color(st.c(|c| c.muted))
+                    .into_any_element(),
+                st,
+            ))
+            .into_any_element()
     };
     div()
         .flex()

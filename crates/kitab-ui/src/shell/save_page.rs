@@ -252,7 +252,7 @@ impl Workspace {
                     .when(disabled, |c| c.opacity(0.45))
                     .when(!on && !disabled, |c| {
                         c.cursor_pointer()
-                            .hover(|c| c.bg(st.c(|c| c.hover)))
+                            .hover(|c| c.bg(st.hover_bg()))
                             .on_click(cx.listener(move |ws, _, _, cx| ws.set_save_kind(k, cx)))
                     })
                     .child(svg().path(icon(glyph)).size(px(18.0)).text_color(if on {

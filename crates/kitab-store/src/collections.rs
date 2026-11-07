@@ -141,7 +141,7 @@ impl Store {
         };
         let sql = format!(
             "SELECT d.id, d.path, d.title, d.author, d.format, rs.progress,
-                    coalesce(d.last_opened_at, 0), d.missing
+                    coalesce(d.last_opened_at, 0), d.missing, d.favourite
              FROM documents d
              LEFT JOIN reading_state rs ON rs.document_id = d.id
              WHERE {filter} AND (?2 = ?2)
@@ -160,11 +160,12 @@ impl Store {
                 r.get::<_, Option<f64>>(5)?,
                 r.get::<_, i64>(6)?,
                 r.get::<_, bool>(7)?,
+                r.get::<_, bool>(8)?,
             ))
         })?;
         let mut out = Vec::new();
         for row in rows {
-            let (id, path, title, author, format, progress, last, missing) = row?;
+            let (id, path, title, author, format, progress, last, missing, favourite) = row?;
             out.push(RecentEntry {
                 id: DocumentId(id),
                 path: PathBuf::from(path),
@@ -173,6 +174,7 @@ impl Store {
                 format: format_from_str(&format)?,
                 progress: progress.map(|p| (p as f32).clamp(0.0, 1.0)),
                 last_opened_at: last,
+                favourite,
                 missing,
             });
         }

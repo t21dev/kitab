@@ -127,6 +127,35 @@ where
     .into_any_element()
 }
 
+/// Slide `el` in from the left by `dx` without fading (tabs): it is all
+/// there from the start, only moving into place. `el` should be `relative()`.
+pub fn slide_in<E>(
+    el: E,
+    id: impl Into<ElementId>,
+    on: bool,
+    dx: f32,
+    duration: Duration,
+) -> AnyElement
+where
+    E: IntoElement + Styled + 'static,
+{
+    if !on {
+        return el.into_any_element();
+    }
+    let id: ElementId = id.into();
+    let duration = if started_offscreen(&id) {
+        Duration::from_millis(1)
+    } else {
+        duration
+    };
+    el.with_animation(
+        id,
+        Animation::new(duration).with_easing(ease_out_quint()),
+        move |el, v| el.left(px(-dx * (1.0 - v))),
+    )
+    .into_any_element()
+}
+
 /// The reverse of [`enter`]: fade and slide out, ending invisible. The owner
 /// removes the element when `duration` has passed.
 pub fn exit<E>(el: E, id: impl Into<ElementId>, from: From, duration: Duration) -> AnyElement

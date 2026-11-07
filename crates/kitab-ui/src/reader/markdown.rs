@@ -606,7 +606,7 @@ fn code_el(
                         .py(d.px(2.0))
                         .rounded(px(5.0))
                         .cursor_pointer()
-                        .hover(|b| b.bg(st.c(|c| c.hover)).text_color(st.c(|c| c.text)))
+                        .hover(|b| b.bg(st.hover_bg()).text_color(st.c(|c| c.text)))
                         .tip("Copy code")
                         .on_click(move |_, _, cx| {
                             cx.write_to_clipboard(gpui::ClipboardItem::new_string(
@@ -840,7 +840,7 @@ fn details_el(
                 .px(d.px(12.0))
                 .py(d.px(8.0))
                 .cursor_pointer()
-                .hover(|h| h.bg(st.c(|c| c.hover)))
+                .hover(|h| h.bg(st.hover_bg()))
                 .on_click(move |_, _, cx| {
                     let _ = reader.update(cx, |r, cx| {
                         if let Some(md) = r.md.as_mut() {
@@ -1176,7 +1176,7 @@ impl Reader {
                         .text_size(px(12.5))
                         .text_color(st.c(|c| c.text))
                         .cursor_pointer()
-                        .hover(|b| b.bg(st.c(|c| c.hover)))
+                        .hover(|b| b.bg(st.hover_bg()))
                         .tip("Edit this Markdown  Ctrl+E")
                         .on_click(cx.listener(|r, _, window, cx| r.toggle_edit(window, cx)))
                         .child(

@@ -50,6 +50,8 @@ pub struct Style {
     pub update_check: bool,
     /// The release put off with Later.
     pub skipped_update: String,
+    /// The scroll bar on the right of the pages.
+    pub scroll_bar: bool,
 }
 
 impl Global for Style {}
@@ -89,9 +91,18 @@ impl Style {
             title_items: s.title_items,
             update_check: s.update_check,
             skipped_update: s.skipped_update.clone(),
+            scroll_bar: s.scroll_bar,
         };
         style.resolve_accent();
         style
+    }
+
+    /// What a control shows under the pointer: a veil of the text colour,
+    /// visible on any surface (the `hover` token is a fill, too close to
+    /// the background in dark themes to read as feedback).
+    pub fn hover_bg(&self) -> Hsla {
+        let light = self.theme.appearance == kitab_theme::Appearance::Light;
+        self.ca(|c| c.text, if light { 0.06 } else { 0.08 })
     }
 
     pub fn set_theme(&mut self, theme: Theme) {
@@ -143,6 +154,7 @@ impl Style {
             title_items: self.title_items,
             update_check: self.update_check,
             skipped_update: self.skipped_update.clone(),
+            scroll_bar: self.scroll_bar,
         }
     }
 

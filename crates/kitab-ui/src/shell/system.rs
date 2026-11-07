@@ -271,22 +271,16 @@ impl Workspace {
     }
 
     /// The window went to the background: if it's still there in a little
-    /// while, tabs that aren't showing give back their rendered pages and
-    /// MuPDF trims its cache, so a Kitab left open costs little. The tab on
-    /// screen keeps its pages, so coming back never flashes.
+    /// while, MuPDF trims its cache (decoded fonts and images), which costs
+    /// nothing you can see. Rendered pages stay, so no tab redraws later.
     pub(crate) fn release_when_idle(&mut self, cx: &mut Context<Self>) {
         const AFTER: std::time::Duration = std::time::Duration::from_secs(20);
         self.after(AFTER, cx, |ws, cx| {
             if ws.window_active {
                 return;
             }
-            let showing = ws.active_reader().cloned();
-            let side = ws.tools.split.clone();
-            for tab in ws.tabs.clone() {
-                if Some(&tab) != showing.as_ref() && Some(&tab) != side.as_ref() {
-                    tab.update(cx, |r, cx| r.release_pages_in_background(cx));
-                }
-            }
+            // Only MuPDF's own store: tabs keep their rendered pages, so
+            // coming back to one never redraws it (that showed as flicker).
             let engine = ws.engine.clone();
             cx.background_spawn(async move { engine.shrink_caches() })
                 .detach();
@@ -324,6 +318,32 @@ impl Workspace {
             });
         })
         .detach();
+        cx.notify();
+    }
+
+    pub(crate) fn ask_restore_defaults(&mut self, ask: bool, cx: &mut Context<Self>) {
+        self.system.confirm_reset = ask;
+        cx.notify();
+    }
+
+    /// Advanced › Restore default settings: every setting as Kitab comes,
+    /// saved at once. The library, marks and tabs aren't settings and stay.
+    pub(crate) fn restore_defaults(&mut self, cx: &mut Context<Self>) {
+        if self.themes.is_empty() {
+            self.themes = kitab_theme::builtin_all().unwrap_or_default();
+        }
+        let defaults = crate::settings::Settings::default();
+        let theme = self.themes.iter().find(|t| t.id == defaults.theme).cloned();
+        self.change_style(
+            &move |st: &mut Style| {
+                let theme = theme.clone().unwrap_or_else(|| st.base_theme().clone());
+                *st = Style::from_settings(theme, &defaults);
+            },
+            cx,
+        );
+        self.system.confirm_reset = false;
+        self.focus_sidebar = false;
+        self.toast("Settings are back to their defaults.", false, None, cx);
         cx.notify();
     }
 
@@ -557,7 +577,7 @@ impl Workspace {
                 .font_weight(FontWeight::MEDIUM)
                 .text_color(st.c(|c| c.accent))
                 .cursor_pointer()
-                .hover(|d| d.bg(st.c(|c| c.hover)))
+                .hover(|d| d.bg(st.hover_bg()))
                 .tip(format!("Kitab {} is available", r.version))
                 .on_click(cx.listener(|ws, _, _, cx| ws.open_update(cx)))
                 .child(

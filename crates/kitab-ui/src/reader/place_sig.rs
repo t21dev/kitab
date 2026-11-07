@@ -97,7 +97,7 @@ impl Reader {
                                 .font_weight(FontWeight::MEDIUM)
                                 .text_color(st.c(|c| c.muted))
                                 .cursor_pointer()
-                                .hover(|d| d.bg(st.c(|c| c.hover)))
+                                .hover(|d| d.bg(st.hover_bg()))
                                 .child("Cancel")
                                 .on_click(cx.listener(|r, _, _, cx| r.stop_placing(cx))),
                         ),

@@ -562,7 +562,7 @@ fn dock_handle(at: DockAt, top_inset: f32, bar: f32, st: &Style) -> AnyElement {
         .border_color(st.c(|c| c.line))
         // Floats like the dock, so it reads over a white page.
         .shadow(st.float())
-        .hover(|d| d.bg(st.c(|c| c.hover)))
+        .hover(|d| d.bg(st.hover_bg()))
         .tip("Show the dock  Ctrl+.")
         .on_click(|_, window, cx| window.dispatch_action(Box::new(crate::actions::ToggleDock), cx))
         .child(

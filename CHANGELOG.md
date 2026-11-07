@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- A scroll bar along the right of the pages: drag it, or click beside the thumb to jump. Settings › Reading › Scroll bar turns it off.
+- Cover, a markup tool for a solid box over something you want hidden on the page. It's saved into a PDF as a filled square annotation, so other readers show it too. Only a cover: the text underneath stays in the file, and the tool's tooltip says so.
+- A welcome guide: a new Home offers "Welcome to Kitab", a four-page PDF about finding your way, marking up, themes and focus mode. Settings › Advanced opens it again.
+- Favourites wear a red ribbon on their cover on Home.
+- Settings › Advanced › Restore default settings (asks first; your library, marks and tabs stay).
+- Focus mode keeps two quiet buttons in the bottom-right corner: the sidebar (contents and bookmarks; Ctrl+B works too) and Exit focus mode.
+- Tabs slide in when they open, and a closed tab's place narrows away instead of the others jumping.
+- Icons beside the reading stats on Home.
+
+### Changed
+- The + in the title bar opens Home (Open file… and your recent books) instead of going straight to the Open dialog; Ctrl+O still does.
+- Home's Settings button matches Open file…, with an icon and a word.
+- About › Links: each row is the link, with an arrow, instead of an Open button.
+- Hovering a tab, button or row shows a clear highlight in every theme (it was nearly invisible in the dark ones).
+
+### Fixed
+- The window can be dragged by its title bar again, and minimise, maximise and close work: a click there was being swallowed before Windows saw it.
+- The page slider moves smoothly with the pointer, also in short documents (with two pages it used to stay put until halfway).
+- Pages no longer flicker while scrolling in a large window or on a high-DPI screen: the rendered-page cache grows to hold what's on screen, the next page is ready before it scrolls in, and tabs in the background keep their pages.
+- File types shows Kitab as the default app when it is: newer Windows 11 keeps the choice somewhere Kitab didn't look. The page also checks again when you come back to Kitab.
+- The pointer over the markup bar is an ordinary arrow, not the drawing cross.
+- Toasts show above Settings and dialogs instead of under their shade.
+
 ## [0.1.0] - 2026-11-08
 
 ### Added

@@ -399,6 +399,8 @@ pub struct Settings {
     pub update_check: bool,
     /// A release the user put off with Later; its pill stays hidden.
     pub skipped_update: String,
+    /// The scroll bar along the right of the pages (Settings › Reading).
+    pub scroll_bar: bool,
 }
 
 impl Settings {
@@ -475,6 +477,7 @@ impl Default for Settings {
             title_items: TitleItems::default(),
             update_check: true,
             skipped_update: String::new(),
+            scroll_bar: true,
         }
     }
 }
@@ -517,6 +520,7 @@ struct File {
     title_items: TitleItems,
     check_for_updates: bool,
     skipped_update: String,
+    scroll_bar: bool,
 }
 
 fn face_name(f: kitab_core::BookFace) -> &'static str {
@@ -600,6 +604,7 @@ impl From<Settings> for File {
             title_items: s.title_items,
             check_for_updates: s.update_check,
             skipped_update: s.skipped_update,
+            scroll_bar: s.scroll_bar,
         }
     }
 }
@@ -643,6 +648,7 @@ impl Settings {
             title_items: f.title_items,
             update_check: f.check_for_updates,
             skipped_update: f.skipped_update.chars().take(32).collect(),
+            scroll_bar: f.scroll_bar,
         })
     }
 
@@ -705,6 +711,7 @@ mod tests {
             },
             update_check: false,
             skipped_update: "0.2.0".into(),
+            scroll_bar: false,
         };
         assert_eq!(Settings::from_json(&s.to_json()), Ok(s));
     }

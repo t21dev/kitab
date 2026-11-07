@@ -26,6 +26,7 @@ mod mermaid;
 mod pages;
 mod place_sig;
 mod present;
+mod scrollbar;
 mod select;
 mod signatures;
 pub(crate) use signatures::check_words;
@@ -65,8 +66,9 @@ const ZOOM_STEPS: &[f32] = &[
     0.1, 0.25, 0.33, 0.5, 0.67, 0.75, 0.9, 1.0, 1.1, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0, 4.0, 5.0, 6.4,
 ];
 /// Rendered pages kept per tab (bytes). Phase 2 makes this a setting shared across tabs.
-/// About six full pages at a typical screen's fit width.
-const CACHE_BUDGET: usize = 64 * 1024 * 1024;
+/// The least kept; it grows to hold what's on screen and the pages
+/// around it on any window and screen (see `render`).
+const CACHE_BUDGET: usize = 96 * 1024 * 1024;
 /// A page with nothing to show yet first gets a quick render at this share of
 /// its sharp scale, so fast scrolling shows the page (soft) instead of paper.
 const PREVIEW_SCALE: f32 = 0.25;
@@ -166,6 +168,11 @@ pub struct Reader {
     /// The scrubber track's bounds from the last frame, for clicks and drags.
     track: Rc<Cell<Option<Bounds<Pixels>>>>,
     dragging: bool,
+    /// The scroll bar's bounds from the last frame.
+    bar: Rc<Cell<Option<Bounds<Pixels>>>>,
+    /// Dragging the scroll bar: where the pointer holds the thumb (pixels
+    /// from its top).
+    bar_grab: Option<f32>,
     back: Vec<usize>,
     forward: Vec<usize>,
     _subs: Vec<Subscription>,
@@ -279,6 +286,8 @@ impl Reader {
             page_edit: None,
             track: Rc::new(Cell::new(None)),
             dragging: false,
+            bar: Rc::new(Cell::new(None)),
+            bar_grab: None,
             back: Vec::new(),
             forward: Vec::new(),
             _subs: vec![blur],
@@ -898,8 +907,7 @@ impl Reader {
         let Some(b) = self.track.get() else { return };
         let w = f32::from(b.size.width).max(1.0);
         let f = (f32::from(x - b.origin.x) / w).clamp(0.0, 1.0);
-        let last = self.page_count().saturating_sub(1);
-        self.go_to_page((f * last as f32).round() as usize, cx);
+        self.scroll_to_fraction(f, cx);
     }
 
     /// The password that opened the document, for tools that reopen the file.
@@ -1255,7 +1263,9 @@ impl Reader {
         } else {
             ix.wrapping_sub(1)
         };
-        if self.scrolled && ahead < self.page_count() {
+        // The next page is always ready before it scrolls in: rendering it
+        // only once scrolling began showed it soft, then sharp (flicker).
+        if ahead < self.page_count() {
             let s = self.px_per_pt(ahead) * window.scale_factor();
             let k = PageKey {
                 page: ahead as u32,
@@ -1588,6 +1598,16 @@ impl Render for Reader {
             let hi = (lo + on_screen).min(self.page_count().saturating_sub(1) as u64);
             self.visible
                 .store((hi << 32) | lo, std::sync::atomic::Ordering::Relaxed);
+            // The cache must hold the pages on screen and the next ones,
+            // whatever the window and screen: at fit width on a large
+            // high-DPI screen one page is ~30 MB, and a fixed 64 MB evicted
+            // pages still on screen while scrolling (they flickered as they
+            // were drawn again).
+            let s = self.page_size(lo as usize);
+            let dev = ppt * window.scale_factor();
+            let page_bytes = (s.w * dev) * (s.h * dev) * 4.0;
+            let need = (page_bytes as usize).saturating_mul(on_screen as usize + 3);
+            self.cache.set_budget(CACHE_BUDGET.max(need));
         }
         let page = self.current_page();
         if page != self.last_page {
@@ -1712,11 +1732,22 @@ impl Render for Reader {
                         r.dragging = false;
                     }
                 }
+                if r.bar_grab.is_some() {
+                    if e.pressed_button == Some(MouseButton::Left) {
+                        r.bar_drag_to(e.position.y, cx);
+                    } else {
+                        r.bar_grab = None;
+                        cx.notify();
+                    }
+                }
             }))
             .on_mouse_up(
                 MouseButton::Left,
                 cx.listener(|r, _, _, cx| {
                     r.dragging = false;
+                    if r.bar_grab.take().is_some() {
+                        cx.notify();
+                    }
                     r.select_up();
                     r.markup_up(cx);
                 }),
@@ -1765,6 +1796,7 @@ impl Render for Reader {
                     .w_full()
                     .relative()
                     .child(body)
+                    .children(self.scroll_bar(&st, cx))
                     .children(status.map(|s| div().absolute().inset_0().child(s)))
             })
             .children(self.status_bar(&st, cx))
@@ -1804,15 +1836,6 @@ impl Reader {
     pub fn drop_cached_pages(&mut self, cx: &mut Context<Self>) {
         self.cache.clear();
         cx.notify();
-    }
-
-    /// The app has been in the background a while: let a tab that isn't
-    /// showing give back its rendered pages (they render again when it does).
-    pub fn release_pages_in_background(&mut self, cx: &mut Context<Self>) {
-        if !self.cache.is_empty() {
-            self.cache.clear();
-            cx.notify();
-        }
     }
 }
 
@@ -1957,7 +1980,7 @@ impl Reader {
                 st.ca(|c| c.line, 0.0)
             })
             .when(editing, |d| d.bg(st.c(|c| c.hover)).shadow(st.well()))
-            .when(!editing, |d| d.hover(|d| d.bg(st.c(|c| c.hover))))
+            .when(!editing, |d| d.hover(|d| d.bg(st.hover_bg())))
             .tip("Go to page  Ctrl+G")
             .child(if editing {
                 div()
@@ -1985,13 +2008,7 @@ impl Reader {
     /// The scrubber track: a well with the reading position. Click to jump,
     /// drag to scrub.
     fn track_element(&self, st: &Style, cx: &mut Context<Self>) -> AnyElement {
-        let count = self.page_count().max(1);
-        let page = self.current_page();
-        let fraction = if count > 1 {
-            page as f32 / (count - 1) as f32
-        } else {
-            0.0
-        };
+        let fraction = self.scroll_fraction().0;
         // Shorter in a narrow reading area, so the dock fits without scrolling.
         let vw = self.viewport.0;
         let track_w = if vw > 0.0 && vw < 820.0 {
@@ -2066,7 +2083,7 @@ fn nav_button(id: &'static str, name: &str, st: &Style) -> gpui::Stateful<gpui::
         .items_center()
         .justify_center()
         .rounded_full()
-        .hover(|d| d.bg(st.c(|c| c.hover)))
+        .hover(|d| d.bg(st.hover_bg()))
         .child(
             svg()
                 .path(icon(name))

@@ -297,7 +297,7 @@ impl Workspace {
             .py(px(10.0))
             .rounded(px(10.0))
             .cursor_pointer()
-            .hover(|d| d.bg(st.c(|c| c.hover)))
+            .hover(|d| d.bg(st.hover_bg()))
             .on_click(cx.listener(move |ws, _, window, cx| ws.open_hit(hit.clone(), window, cx)))
             .child(
                 div()
@@ -331,15 +331,24 @@ impl Workspace {
         if s.recent_days.iter().all(|d| *d == 0) && s.longest_streak == 0 {
             return None;
         }
-        let tile = |label: &'static str, value: String| {
+        let tile = |name: &'static str, label: &'static str, value: String| {
             div()
                 .flex()
                 .flex_col()
                 .gap(px(2.0))
                 .child(
                     div()
+                        .flex()
+                        .items_center()
+                        .gap(px(5.0))
                         .text_size(px(11.5))
                         .text_color(st.c(|c| c.faint))
+                        .child(
+                            gpui::svg()
+                                .path(crate::icons::icon(name))
+                                .size(px(13.0))
+                                .text_color(st.c(|c| c.accent)),
+                        )
                         .child(label),
                 )
                 .child(
@@ -388,10 +397,14 @@ impl Workspace {
                 .rounded(px(12.0))
                 .bg(st.c(|c| c.raised))
                 .shadow(st.elev())
-                .child(tile("Today", duration_words(s.today_seconds)))
-                .child(tile("This week", duration_words(s.week_seconds)))
-                .child(tile("Streak", days(s.streak_days)))
-                .child(tile("Longest", days(s.longest_streak)))
+                .child(tile("clock", "Today", duration_words(s.today_seconds)))
+                .child(tile(
+                    "calendar",
+                    "This week",
+                    duration_words(s.week_seconds),
+                ))
+                .child(tile("flame", "Streak", days(s.streak_days)))
+                .child(tile("trophy", "Longest", days(s.longest_streak)))
                 .child(div().flex_1())
                 .child(
                     div().flex().flex_col().gap(px(6.0)).child(bars).child(

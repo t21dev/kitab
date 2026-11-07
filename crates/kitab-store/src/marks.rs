@@ -33,7 +33,9 @@ pub(crate) fn encode_mark(m: &Mark) -> String {
             "strokes": strokes.iter().map(|s| s.iter().map(point).collect::<Vec<_>>()).collect::<Vec<_>>()
         }),
         MarkShape::Line { from, to, .. } => json!({ "from": point(from), "to": point(to) }),
-        MarkShape::Rect { rect: r } | MarkShape::Ellipse { rect: r } => json!({ "rect": rect(r) }),
+        MarkShape::Rect { rect: r }
+        | MarkShape::Ellipse { rect: r }
+        | MarkShape::Cover { rect: r } => json!({ "rect": rect(r) }),
         MarkShape::Highlight { rects }
         | MarkShape::Underline { rects }
         | MarkShape::Strike { rects } => {
@@ -114,6 +116,9 @@ pub(crate) fn decode_mark(page: u32, kind: &str, data: &str) -> Option<Mark> {
             rect: get_rect(v.get("rect")?)?,
         },
         "ellipse" => MarkShape::Ellipse {
+            rect: get_rect(v.get("rect")?)?,
+        },
+        "cover" => MarkShape::Cover {
             rect: get_rect(v.get("rect")?)?,
         },
         "highlight" => MarkShape::Highlight {

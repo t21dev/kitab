@@ -612,7 +612,7 @@ impl Reader {
                 .when(!primary, |b| {
                     b.bg(st.c(|c| c.raised))
                         .text_color(st.c(|c| c.text))
-                        .hover(|b| b.bg(st.c(|c| c.hover)))
+                        .hover(|b| b.bg(st.hover_bg()))
                 })
                 .child(label)
         };

@@ -1,0 +1,170 @@
+<!doctype html>
+<!-- Source of "Welcome to Kitab.pdf", the guide on a new Home.
+     Rebuild: python tools/make_sample.py (prints this with Microsoft Edge). -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Welcome to Kitab</title>
+<meta name="author" content="t21">
+<meta name="description" content="A short guide to Kitab Reader">
+<style>
+  @page { size: A4; margin: 22mm 20mm 20mm 20mm; }
+  :root { --ink: #1d1c1a; --muted: #6b665e; --line: #e4ded3; --accent: #c8862a; --soft: #faf6ef; }
+  * { box-sizing: border-box; }
+  body { margin: 0; color: var(--ink); font: 11pt/1.6 Georgia, "Times New Roman", serif; }
+  h1, h2, h3, .ui { font-family: "Segoe UI", system-ui, sans-serif; }
+  h1 { font-size: 30pt; line-height: 1.1; margin: 0 0 6pt; letter-spacing: -0.5pt; }
+  h2 { font-size: 17pt; margin: 0 0 8pt; padding-top: 2pt; }
+  h3 { font-size: 11.5pt; margin: 14pt 0 4pt; }
+  p { margin: 0 0 9pt; }
+  .page { page-break-after: always; }
+  .page:last-child { page-break-after: auto; }
+  .lede { font-size: 13pt; color: var(--muted); margin-bottom: 18pt; }
+  .kicker { font: 600 9pt "Segoe UI", sans-serif; letter-spacing: 1.6pt; text-transform: uppercase; color: var(--accent); margin-bottom: 10pt; }
+  .card { background: var(--soft); border: 1px solid var(--line); border-radius: 10pt; padding: 12pt 14pt; margin: 12pt 0; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10pt 18pt; }
+  .tip { display: flex; gap: 10pt; align-items: flex-start; }
+  .tip .e { font-size: 17pt; line-height: 1; font-family: "Segoe UI Emoji", sans-serif; }
+  .tip b { font-family: "Segoe UI", sans-serif; }
+  kbd { font: 600 8.5pt "Segoe UI", sans-serif; background: #fff; border: 1px solid #d6cfc2; border-bottom-width: 2px; border-radius: 4pt; padding: 0 4pt; white-space: nowrap; }
+  table { width: 100%; border-collapse: collapse; font: 10pt/1.45 "Segoe UI", sans-serif; }
+  td { padding: 4.5pt 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+  td:last-child { text-align: right; }
+  figure { margin: 14pt 0; }
+  figcaption { font: 9pt "Segoe UI", sans-serif; color: var(--muted); margin-top: 5pt; }
+  .scripts td:first-child { width: 22%; color: var(--muted); }
+  .scripts td:last-child { text-align: left; font-size: 12pt; }
+  .rtl { direction: rtl; text-align: right !important; }
+  .foot { font: 9pt "Segoe UI", sans-serif; color: var(--muted); border-top: 1px solid var(--line); padding-top: 8pt; margin-top: 18pt; }
+</style>
+</head>
+<body>
+
+<section class="page">
+  <div class="kicker">Kitab Reader · a short guide</div>
+  <h1>Welcome to Kitab 📚</h1>
+  <p class="lede">A reader for your PDFs and books that opens fast, stays out of the way, and keeps your files on your computer.</p>
+
+  <figure>
+    <svg viewBox="0 0 520 250" width="100%" xmlns="http://www.w3.org/2000/svg" font-family="Segoe UI, sans-serif">
+      <rect x="1" y="1" width="518" height="248" rx="12" fill="#1b1b1d" stroke="#2b2b2e"/>
+      <rect x="1" y="1" width="518" height="30" rx="12" fill="#151517"/>
+      <rect x="12" y="8" width="16" height="16" rx="4" fill="#2a2a2e"/>
+      <rect x="40" y="7" width="120" height="18" rx="5" fill="#26262a"/>
+      <text x="52" y="20" font-size="9" fill="#e8e3da">📄 Welcome to Kitab</text>
+      <text x="170" y="20" font-size="11" fill="#8b867d">+</text>
+      <circle cx="430" cy="16" r="2" fill="#8b867d"/><circle cx="452" cy="16" r="2" fill="#8b867d"/>
+      <rect x="1" y="31" width="118" height="218" fill="#141416"/>
+      <text x="12" y="50" font-size="9" fill="#8b867d">Contents</text>
+      <rect x="8" y="58" width="104" height="16" rx="4" fill="#26262a"/>
+      <circle cx="17" cy="66" r="3" fill="#c8862a"/>
+      <text x="25" y="69" font-size="8" fill="#e8e3da">Welcome</text>
+      <text x="25" y="89" font-size="8" fill="#8b867d">Find your way</text>
+      <text x="25" y="107" font-size="8" fill="#8b867d">Mark it up</text>
+      <text x="25" y="125" font-size="8" fill="#8b867d">Read your way</text>
+      <rect x="170" y="44" width="250" height="190" rx="4" fill="#fdfbf7"/>
+      <rect x="192" y="64" width="120" height="10" rx="2" fill="#1d1c1a"/>
+      <g fill="#c9c2b6"><rect x="192" y="86" width="206" height="4" rx="2"/><rect x="192" y="96" width="196" height="4" rx="2"/><rect x="192" y="106" width="206" height="4" rx="2"/><rect x="192" y="116" width="150" height="4" rx="2"/><rect x="192" y="134" width="206" height="4" rx="2"/><rect x="192" y="144" width="186" height="4" rx="2"/></g>
+      <rect x="190" y="94" width="120" height="8" rx="2" fill="#f2c94c" opacity=".55"/>
+      <rect x="215" y="206" width="170" height="24" rx="12" fill="#232326"/>
+      <text x="232" y="222" font-size="9" fill="#e8e3da">1</text>
+      <rect x="244" y="217" width="80" height="3" rx="1.5" fill="#3a3a3e"/><rect x="244" y="217" width="18" height="3" rx="1.5" fill="#c8862a"/>
+      <text x="334" y="222" font-size="9" fill="#e8e3da">− 100 % +</text>
+      <rect x="490" y="44" width="5" height="60" rx="2.5" fill="#4a4a4e"/>
+      <g font-size="8.5" fill="#c8862a">
+        <text x="125" y="160">sidebar</text>
+        <text x="232" y="246">dock</text>
+        <text x="430" y="120">scroll bar</text>
+        <text x="180" y="20">tabs</text>
+      </g>
+    </svg>
+    <figcaption>The window: tabs along the top, contents and bookmarks on the left, the page in the middle, and the dock at the bottom for paging and zoom.</figcaption>
+  </figure>
+
+  <h2>Open something</h2>
+  <p>Drop a file onto the window, press <kbd>Ctrl</kbd>+<kbd>O</kbd>, or use <b>Open file…</b> on Home. Each document gets its own tab, and Kitab remembers the page you were on, so closing a book never loses your place. Home lists what you read lately, with how far through each one you are.</p>
+
+  <div class="card grid">
+    <div class="tip"><span class="e">📄</span><div><b>PDF and XPS</b><br>Forms, passwords, signatures and annotations work.</div></div>
+    <div class="tip"><span class="e">📖</span><div><b>EPUB, MOBI, FB2, TXT</b><br>Laid out as pages in your theme's colours.</div></div>
+    <div class="tip"><span class="e">🖼️</span><div><b>Comics (CBZ)</b><br>One page at a time, full width.</div></div>
+    <div class="tip"><span class="e">📝</span><div><b>Markdown</b><br>With code colours, math and diagrams, and an editor beside it.</div></div>
+  </div>
+</section>
+
+<section class="page">
+  <div class="kicker">Getting around</div>
+  <h2>Find your way 🧭</h2>
+  <p>The sidebar holds the book's contents, your bookmarks, the pages and the marks you've made. Click any entry to jump there; <kbd>Alt</kbd>+<kbd>←</kbd> takes you back to where you were. The dock at the bottom shows the page number: drag its slider to move through the book, or click the number and type a page.</p>
+
+  <h3>Search</h3>
+  <p><kbd>Ctrl</kbd>+<kbd>F</kbd> finds words in the open document, and <kbd>F3</kbd> steps through the matches. The search box on Home looks through every document you have opened, and a result opens at the page it found.</p>
+
+  <h3>Keys worth knowing</h3>
+  <table>
+    <tr><td>Next and previous page</td><td><kbd>→</kbd> <kbd>←</kbd> or <kbd>N</kbd> <kbd>P</kbd></td></tr>
+    <tr><td>Go to a page</td><td><kbd>Ctrl</kbd>+<kbd>G</kbd></td></tr>
+    <tr><td>Contents and bookmarks</td><td><kbd>Ctrl</kbd>+<kbd>B</kbd></td></tr>
+    <tr><td>Bookmark this page</td><td><kbd>Ctrl</kbd>+<kbd>D</kbd></td></tr>
+    <tr><td>Zoom in and out</td><td><kbd>Ctrl</kbd>+<kbd>=</kbd> <kbd>Ctrl</kbd>+<kbd>-</kbd></td></tr>
+    <tr><td>Fit the page or the width</td><td><kbd>Ctrl</kbd>+<kbd>0</kbd> <kbd>Ctrl</kbd>+<kbd>2</kbd></td></tr>
+    <tr><td>Reopen the tab you closed</td><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>T</kbd></td></tr>
+    <tr><td>Every command, by name</td><td><kbd>Ctrl</kbd>+<kbd>K</kbd></td></tr>
+    <tr><td>All shortcuts</td><td><kbd>Ctrl</kbd>+<kbd>/</kbd></td></tr>
+  </table>
+  <p style="margin-top:10pt"><kbd>Tab</kbd> moves through the buttons with the keyboard, and <kbd>Enter</kbd> presses the one that's ringed.</p>
+</section>
+
+<section class="page">
+  <div class="kicker">Making notes</div>
+  <h2>Mark it up ✍️</h2>
+  <p>Press <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>D</kbd> for the markup tools: a pen, a highlighter, lines, arrows, boxes, text and sticky notes. Select some text and press <kbd>H</kbd> to highlight it. In a PDF, <kbd>Ctrl</kbd>+<kbd>S</kbd> saves your marks into the file as ordinary annotations, so any other reader shows them too.</p>
+
+  <figure>
+    <svg viewBox="0 0 520 150" width="100%" xmlns="http://www.w3.org/2000/svg" font-family="Georgia, serif">
+      <rect x="1" y="1" width="518" height="148" rx="8" fill="#fdfbf7" stroke="#e4ded3"/>
+      <rect x="28" y="30" width="250" height="16" rx="3" fill="#f2c94c" opacity=".5"/>
+      <text x="30" y="43" font-size="13" fill="#1d1c1a">A highlight says: come back here.</text>
+      <text x="30" y="78" font-size="13" fill="#1d1c1a">An arrow points at what matters.</text>
+      <path d="M300 74 L380 74" stroke="#d64545" stroke-width="2.5" fill="none"/>
+      <path d="M370 67 L382 74 L370 81" stroke="#d64545" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+      <rect x="388" y="58" width="104" height="30" rx="2" fill="none" stroke="#2f6fdb" stroke-width="2"/>
+      <text x="398" y="78" font-size="12" fill="#2f6fdb">this part</text>
+      <text x="30" y="118" font-size="13" fill="#1d1c1a">Account number:</text>
+      <rect x="148" y="104" width="130" height="18" fill="#1d1c1a"/>
+      <text x="292" y="118" font-size="10.5" fill="#6b665e" font-family="Segoe UI, sans-serif">← Cover hides it on the page</text>
+    </svg>
+    <figcaption>Highlights, arrows, boxes and a cover, as they look on a page.</figcaption>
+  </figure>
+
+  <div class="card">
+    <div class="tip"><span class="e">🔒</span><div><b>About covers.</b> The Cover tool draws a solid box over something, on screen and in print. The words underneath are still in the file, so don't send a covered PDF to hide a secret.</div></div>
+  </div>
+
+  <h3>Passwords, signatures and pages</h3>
+  <p>The lock in the title bar puts a password on a copy of a PDF, or takes one off. <b>Sign…</b> in the ⋯ menu signs a PDF with your certificate, and Kitab checks the signatures already in a file when it opens. <b>Page tools…</b> deletes, moves and turns pages, compresses a file, and adds page numbers or a watermark. Each of these saves a new file and leaves the original alone.</p>
+</section>
+
+<section class="page">
+  <div class="kicker">Make it yours</div>
+  <h2>Read your way 🌙</h2>
+  <p>Kitab comes with several themes, from Paper to Ink; <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>L</kbd> moves to the next one, and Settings (<kbd>Ctrl</kbd>+<kbd>,</kbd>) holds the rest: the accent colour, how dense the interface is, where the tabs and dock sit, and the typeface and margins for books.</p>
+  <p><kbd>F11</kbd> is focus mode: the tabs, sidebar and dock step aside and the page has the screen. The small buttons in the bottom-right corner bring back the contents or end focus mode. <kbd>F5</kbd> presents a document full screen, one page at a time.</p>
+
+  <h3>Every script, the right way round</h3>
+  <table class="scripts">
+    <tr><td>Bangla</td><td>বই পড়া আনন্দের।</td></tr>
+    <tr><td>Hindi</td><td>किताब पढ़ना अच्छा है।</td></tr>
+    <tr><td>Arabic</td><td class="rtl">الكِتابُ خَيْرُ جَلِيسٍ</td></tr>
+    <tr><td>Japanese</td><td>本を読むのは楽しい。</td></tr>
+    <tr><td>Emoji</td><td>📚 ✍️ 🔖 🌙 ☕</td></tr>
+  </table>
+
+  <h3>Yours, and only yours</h3>
+  <p>Kitab sends nothing about you or your files anywhere. The only time it goes online is a quick check for a new version, which you can turn off in Settings › About. Your library, reading positions and marks stay in a small database on this computer.</p>
+
+  <div class="foot">Kitab Reader is free software under the GNU AGPL 3.0, made by t21. Source, issues and new versions: github.com/t21dev/kitab. You can delete this guide from Home whenever you like; Settings › Advanced has it back.</div>
+</section>
+
+</body>
+</html>

@@ -142,7 +142,7 @@ pub fn panel(
                 })
                 .when(on, |d| d.bg(st.c(|c| c.raised)).shadow(st.elev()))
                 .when(!on, |d| {
-                    d.hover(|d| d.bg(st.c(|c| c.hover)).text_color(st.c(|c| c.text)))
+                    d.hover(|d| d.bg(st.hover_bg()).text_color(st.c(|c| c.text)))
                 })
                 .on_click(move |_, _, cx| {
                     let _ = ws.update(cx, |ws, cx| ws.set_settings_section(s, cx));
@@ -200,7 +200,7 @@ pub fn panel(
                         .items_center()
                         .justify_center()
                         .rounded(st.px(|m| m.control_radius))
-                        .hover(|d| d.bg(st.c(|c| c.hover)))
+                        .hover(|d| d.bg(st.hover_bg()))
                         .tip("Close  Esc")
                         .on_click(move |_, window, cx| {
                             let _ = close_ws.update(cx, |ws, cx| ws.close_settings(window, cx));
@@ -486,6 +486,22 @@ fn reading(ws: &WeakEntity<Workspace>, st: &Style) -> AnyElement {
         ))
         .child(group("Page corners", None, corner_cards, st))
         .child(group(
+            "Scroll bar",
+            Some("Along the right edge of the pages: drag it, or click beside the thumb to jump there."),
+            well_row(
+                "Show the scroll bar",
+                "",
+                switch(
+                    "scroll-bar",
+                    st.scroll_bar,
+                    st,
+                    change(ws, |s: &mut Style| s.scroll_bar = !s.scroll_bar),
+                ),
+                st,
+            ),
+            st,
+        ))
+        .child(group(
             "Code colours",
             Some("Syntax colours in Markdown code blocks."),
             code_cards,
@@ -745,7 +761,7 @@ fn choice_card(
         })
         .when(!selected, |d| {
             d.border_color(st.c(|c| c.line))
-                .hover(|d| d.bg(st.c(|c| c.hover)))
+                .hover(|d| d.bg(st.hover_bg()))
         })
         .on_click(move |_, window, cx| on_click(window, cx))
         .child(
