@@ -5,7 +5,7 @@
 //! with the real tokens, and applies the moment it is picked.
 
 use crate::icons::icon;
-use crate::settings::{PageCorners, PageNav};
+use crate::settings::{DockAt, PageCorners, PageNav, TabsAt};
 use crate::shell::Workspace;
 use crate::shortcuts;
 use crate::style::{Style, hsla};
@@ -250,6 +250,33 @@ fn appearance(
         ));
     }
     let on = st.animations;
+    let mut tab_cards = div().flex().flex_wrap().gap(px(12.0));
+    for (ix, t) in TabsAt::ALL.into_iter().enumerate() {
+        tab_cards = tab_cards.child(choice_card(
+            ("tabs-at", ix).into(),
+            st.tabs == t,
+            t.label().into(),
+            Some(t.hint()),
+            layout_preview(t, st.dock, st),
+            196.0,
+            st,
+            change(ws, move |s| s.tabs = t),
+        ));
+    }
+    let mut dock_cards = div().flex().flex_wrap().gap(px(12.0));
+    for (ix, d) in DockAt::ALL.into_iter().enumerate() {
+        dock_cards = dock_cards.child(choice_card(
+            ("dock-at", ix).into(),
+            st.dock == d,
+            d.label().into(),
+            Some(d.hint()),
+            layout_preview(st.tabs, d, st),
+            150.0,
+            st,
+            change(ws, move |s| s.dock = d),
+        ));
+    }
+    let fade = st.dock_fade;
     div()
         .flex()
         .flex_col()
@@ -262,6 +289,28 @@ fn appearance(
             st,
         ))
         .child(group("Density", None, density_cards, st))
+        .child(group("Tabs", None, tab_cards, st))
+        .child(group(
+            "Quick dock",
+            Some("Zoom, fit, find, rotate and more, floating over the page. At the bottom it also holds the page navigator."),
+            div()
+                .flex()
+                .flex_col()
+                .gap(px(12.0))
+                .child(dock_cards)
+                .child(well_row(
+                    "Fade the dock while reading",
+                    "It comes back when you move the pointer or press a key.",
+                    switch(
+                        "dock-fade",
+                        fade,
+                        st,
+                        change(ws, move |s| s.dock_fade = !fade),
+                    ),
+                    st,
+                )),
+            st,
+        ))
         .child(group(
             "Motion",
             None,
@@ -319,6 +368,39 @@ fn reading(ws: &WeakEntity<Workspace>, st: &Style) -> AnyElement {
             st,
         ))
         .child(group("Page corners", None, corner_cards, st))
+        .child(group(
+            "Minimal mode",
+            Some("F11 hides these for distraction-free reading. Point at the top edge for the window buttons and a way back."),
+            minimal_rows(ws, st),
+            st,
+        ))
+        .into_any_element()
+}
+
+fn minimal_rows(ws: &WeakEntity<Workspace>, st: &Style) -> AnyElement {
+    let h = st.minimal_hides;
+    let row = |id: &'static str, label: &'static str, on: bool, f: fn(&mut Style)| {
+        well_row(label, "", switch(id, on, st, change(ws, f)), st)
+    };
+    div()
+        .flex()
+        .flex_col()
+        .gap(px(8.0))
+        .child(row("min-tabs", "Hide the tabs", h.tabs, |s| {
+            s.minimal_hides.tabs = !s.minimal_hides.tabs
+        }))
+        .child(row("min-sidebar", "Hide the sidebar", h.sidebar, |s| {
+            s.minimal_hides.sidebar = !s.minimal_hides.sidebar
+        }))
+        .child(row("min-dock", "Hide the quick dock", h.dock, |s| {
+            s.minimal_hides.dock = !s.minimal_hides.dock
+        }))
+        .child(row(
+            "min-nav",
+            "Hide the page navigator",
+            h.page_navigator,
+            |s| s.minimal_hides.page_navigator = !s.minimal_hides.page_navigator,
+        ))
         .into_any_element()
 }
 
@@ -770,6 +852,125 @@ fn corners_preview(c: PageCorners, st: &Style) -> AnyElement {
         .bg(st.c(|c| c.desk))
         .child(sheet(54.0, 72.0))
         .child(sheet(54.0, 72.0))
+        .into_any_element()
+}
+
+/// A tiny window: tabs on top or in a sidebar, and the dock where it sits.
+fn layout_preview(tabs: TabsAt, dock: DockAt, st: &Style) -> AnyElement {
+    let bar = |w: f32, h: f32| {
+        div()
+            .w(px(w))
+            .h(px(h))
+            .rounded(px(2.0))
+            .bg(st.c(|c| c.ring))
+    };
+    let dock_el = {
+        let upright = dock.upright();
+        let mut d = div()
+            .flex()
+            .when(upright, |d| d.flex_col())
+            .gap(px(2.0))
+            .p(px(3.0))
+            .rounded(px(5.0))
+            .bg(st.c(|c| c.raised))
+            .shadow(st.float())
+            .border_1()
+            .border_color(st.c(|c| c.line));
+        for i in 0..4 {
+            d = d.child(div().size(px(5.0)).rounded(px(1.5)).bg(if i == 0 {
+                st.c(|c| c.accent)
+            } else {
+                st.c(|c| c.muted)
+            }));
+        }
+        d
+    };
+    let placed = match dock {
+        DockAt::Top => div()
+            .absolute()
+            .top(px(5.0))
+            .left_0()
+            .right_0()
+            .flex()
+            .justify_center(),
+        DockAt::Bottom => div()
+            .absolute()
+            .bottom(px(5.0))
+            .left_0()
+            .right_0()
+            .flex()
+            .justify_center(),
+        DockAt::Left => div()
+            .absolute()
+            .left(px(5.0))
+            .top_0()
+            .bottom_0()
+            .flex()
+            .items_center(),
+        DockAt::Right => div()
+            .absolute()
+            .right(px(5.0))
+            .top_0()
+            .bottom_0()
+            .flex()
+            .items_center(),
+    }
+    .child(dock_el);
+    let desk = div()
+        .relative()
+        .flex_1()
+        .h_full()
+        .bg(st.c(|c| c.desk))
+        .flex()
+        .justify_center()
+        .pt(px(8.0))
+        .child(mini_page(40.0, 56.0, 1.0).shadow(st.sheet()))
+        .child(placed);
+    let side = div()
+        .w(px(34.0))
+        .h_full()
+        .flex_none()
+        .flex()
+        .flex_col()
+        .gap(px(3.0))
+        .p(px(4.0))
+        .bg(st.c(|c| c.panel))
+        .border_r_1()
+        .border_color(st.c(|c| c.line));
+    let body = match tabs {
+        TabsAt::Top => div().flex().flex_1().child(desk),
+        TabsAt::Sidebar => div()
+            .flex()
+            .flex_1()
+            .child(
+                side.child(bar(24.0, 4.0).bg(st.c(|c| c.accent)))
+                    .child(bar(20.0, 4.0))
+                    .child(bar(22.0, 4.0)),
+            )
+            .child(desk),
+    };
+    div()
+        .size_full()
+        .flex()
+        .flex_col()
+        .bg(st.c(|c| c.bg))
+        .when(tabs == TabsAt::Top, |d| {
+            d.child(
+                div()
+                    .h(px(10.0))
+                    .flex_none()
+                    .flex()
+                    .items_center()
+                    .gap(px(3.0))
+                    .px(px(4.0))
+                    .border_b_1()
+                    .border_color(st.c(|c| c.line))
+                    .child(bar(18.0, 4.0).bg(st.c(|c| c.accent)))
+                    .child(bar(14.0, 4.0))
+                    .child(bar(16.0, 4.0)),
+            )
+        })
+        .child(body)
         .into_any_element()
 }
 

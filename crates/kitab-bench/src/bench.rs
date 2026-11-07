@@ -514,6 +514,7 @@ fn run_steps(hwnd: isize, steps: &str) -> Result<(), String> {
                     "enter" => 0x0D,
                     "escape" => 0x1B,
                     "f3" => 0x72,
+                    "f11" => 0x7A,
                     "down" => 0x28,
                     "up" => 0x26,
                     "backspace" => 0x08,

@@ -48,6 +48,95 @@ impl PageNav {
     }
 }
 
+/// Where the quick dock (zoom, fit, find, rotate, ⋯) floats over the page.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum DockAt {
+    Top,
+    /// With the page navigator, as one bar.
+    #[default]
+    Bottom,
+    Left,
+    Right,
+}
+
+impl DockAt {
+    pub const ALL: [DockAt; 4] = [Self::Top, Self::Bottom, Self::Left, Self::Right];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Top => "Top",
+            Self::Bottom => "Bottom",
+            Self::Left => "Left",
+            Self::Right => "Right",
+        }
+    }
+
+    pub fn hint(self) -> &'static str {
+        match self {
+            Self::Top => "Under the tabs",
+            Self::Bottom => "With the page navigator",
+            Self::Left => "Upright, on the left",
+            Self::Right => "Upright, on the right",
+        }
+    }
+
+    pub fn upright(self) -> bool {
+        matches!(self, Self::Left | Self::Right)
+    }
+}
+
+/// Where open documents are listed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum TabsAt {
+    /// Along the top, like a browser.
+    #[default]
+    Top,
+    /// A list at the top of the sidebar; no title bar.
+    Sidebar,
+}
+
+impl TabsAt {
+    pub const ALL: [TabsAt; 2] = [Self::Top, Self::Sidebar];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Top => "Along the top",
+            Self::Sidebar => "In the sidebar",
+        }
+    }
+
+    pub fn hint(self) -> &'static str {
+        match self {
+            Self::Top => "Like a browser",
+            Self::Sidebar => "Full titles, more page height",
+        }
+    }
+}
+
+/// What minimal mode (F11) hides. The window buttons and a way back stay
+/// reachable at the top edge whatever is chosen.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct MinimalHides {
+    pub tabs: bool,
+    pub sidebar: bool,
+    pub dock: bool,
+    pub page_navigator: bool,
+}
+
+impl Default for MinimalHides {
+    fn default() -> Self {
+        Self {
+            tabs: true,
+            sidebar: true,
+            dock: true,
+            page_navigator: true,
+        }
+    }
+}
+
 /// The corner radius of page sheets.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -120,6 +209,11 @@ pub struct Settings {
     pub page_corners: PageCorners,
     /// Opening and closing motion for menus, dialogs, panels and lists.
     pub animations: bool,
+    pub dock: DockAt,
+    /// The dock fades out while reading and comes back on pointer movement.
+    pub dock_fade: bool,
+    pub tabs: TabsAt,
+    pub minimal: MinimalHides,
 }
 
 impl Default for Settings {
@@ -131,6 +225,10 @@ impl Default for Settings {
             page_nav: PageNav::default(),
             page_corners: PageCorners::default(),
             animations: true,
+            dock: DockAt::default(),
+            dock_fade: false,
+            tabs: TabsAt::default(),
+            minimal: MinimalHides::default(),
         }
     }
 }
@@ -147,6 +245,10 @@ struct File {
     page_navigator: PageNav,
     page_corners: PageCorners,
     animations: bool,
+    dock: DockAt,
+    dock_fade: bool,
+    tabs: TabsAt,
+    minimal: MinimalHides,
 }
 
 impl Default for File {
@@ -165,6 +267,10 @@ impl From<Settings> for File {
             page_navigator: s.page_nav,
             page_corners: s.page_corners,
             animations: s.animations,
+            dock: s.dock,
+            dock_fade: s.dock_fade,
+            tabs: s.tabs,
+            minimal: s.minimal,
         }
     }
 }
@@ -188,6 +294,10 @@ impl Settings {
             page_nav: f.page_navigator,
             page_corners: f.page_corners,
             animations: f.animations,
+            dock: f.dock,
+            dock_fade: f.dock_fade,
+            tabs: f.tabs,
+            minimal: f.minimal,
         })
     }
 
@@ -209,6 +319,15 @@ mod tests {
             page_nav: PageNav::Stepper,
             page_corners: PageCorners::Round,
             animations: false,
+            dock: DockAt::Right,
+            dock_fade: true,
+            tabs: TabsAt::Sidebar,
+            minimal: MinimalHides {
+                tabs: true,
+                sidebar: false,
+                dock: true,
+                page_navigator: false,
+            },
         };
         assert_eq!(Settings::from_json(&s.to_json()), Ok(s));
     }
@@ -221,6 +340,9 @@ mod tests {
         assert_eq!(s.page_corners, PageCorners::Square);
         assert_eq!(s.theme, "dark");
         assert_eq!(s.accent, Accent::default());
+        assert_eq!(s.dock, DockAt::Bottom);
+        assert!(!s.dock_fade);
+        assert_eq!(s.tabs, TabsAt::Top);
     }
 
     #[test]

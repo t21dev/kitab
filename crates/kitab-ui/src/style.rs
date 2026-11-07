@@ -3,7 +3,7 @@
 //! Theme tokens as GPUI values. Views take every colour, shadow and size from
 //! here (AGENTS.md rule 16, DESIGN.md).
 
-use crate::settings::{PageCorners, PageNav, Settings};
+use crate::settings::{DockAt, MinimalHides, PageCorners, PageNav, Settings, TabsAt};
 use gpui::{App, BoxShadow, Global, Hsla, Pixels, point, px};
 use kitab_theme::{Accent, Density, DensityMetrics, Shadow, Theme};
 
@@ -22,6 +22,12 @@ pub struct Style {
     pub page_nav: PageNav,
     pub page_corners: PageCorners,
     pub animations: bool,
+    pub dock: DockAt,
+    pub dock_fade: bool,
+    pub tabs: TabsAt,
+    pub minimal_hides: MinimalHides,
+    /// Minimal mode is on (F11). For this session only; not saved.
+    pub minimal: bool,
 }
 
 impl Global for Style {}
@@ -42,6 +48,11 @@ impl Style {
             page_nav: s.page_nav,
             page_corners: s.page_corners,
             animations: s.animations,
+            dock: s.dock,
+            dock_fade: s.dock_fade,
+            tabs: s.tabs,
+            minimal_hides: s.minimal,
+            minimal: false,
         };
         style.resolve_accent();
         style
@@ -77,6 +88,32 @@ impl Style {
             page_nav: self.page_nav,
             page_corners: self.page_corners,
             animations: self.animations,
+            dock: self.dock,
+            dock_fade: self.dock_fade,
+            tabs: self.tabs,
+            minimal: self.minimal_hides,
+        }
+    }
+
+    /// Whether the tabs, sidebar, dock or page navigator show right now.
+    pub fn shows_tabs(&self) -> bool {
+        !(self.minimal && self.minimal_hides.tabs)
+    }
+    pub fn shows_sidebar(&self) -> bool {
+        !(self.minimal && self.minimal_hides.sidebar)
+    }
+    pub fn shows_dock(&self) -> bool {
+        !(self.minimal && self.minimal_hides.dock)
+    }
+    pub fn shows_page_nav(&self) -> bool {
+        !(self.minimal && self.minimal_hides.page_navigator)
+    }
+    /// Room above the first page for the floating window buttons.
+    pub fn top_inset(&self) -> f32 {
+        if self.tabs == TabsAt::Sidebar && !self.minimal {
+            crate::reader::TOP_INSET
+        } else {
+            0.0
         }
     }
 

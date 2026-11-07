@@ -57,6 +57,7 @@ actions!(
         // Read
         ToggleSidebar,
         CycleTheme,
+        ToggleMinimal,
         // App
         OpenSettings,
         ShowShortcuts,
@@ -114,6 +115,7 @@ pub fn bind_default_keys(cx: &mut App) {
         KeyBinding::new("ctrl-\\", ToggleSplit, w),
         KeyBinding::new("escape", CloseOverlay, Some(OVERLAY)),
         KeyBinding::new("ctrl-shift-l", CycleTheme, w),
+        KeyBinding::new("f11", ToggleMinimal, w),
         // Navigate (SumatraPDF-compatible where Sumatra has a binding)
         KeyBinding::new("right", NextPage, r),
         KeyBinding::new("left", PrevPage, r),

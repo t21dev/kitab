@@ -10,6 +10,7 @@ use crate::library::{Library, RecentItem, SessionTab};
 use crate::menu::{self, MenuItem, OpenMenu, Tool};
 use crate::motion;
 use crate::reader::{Reader, ReaderEvent, open_reader};
+use crate::settings::TabsAt;
 use crate::settings_view::{self, HexState, Section};
 use crate::style::Style;
 use crate::tooltip::Tip;
@@ -75,6 +76,8 @@ pub struct Workspace {
     tab_scroll: gpui::ScrollHandle,
     /// Scroll the active tab into view on the next frame (it may not be laid out yet).
     reveal_tab: bool,
+    /// Minimal mode: the pointer is at the top edge, so the window buttons show.
+    peek: bool,
 }
 
 impl Workspace {
@@ -116,6 +119,7 @@ impl Workspace {
             tools: ToolsState::new(cx),
             tab_scroll: gpui::ScrollHandle::new(),
             reveal_tab: false,
+            peek: false,
         };
         // Leaving the hex field ends the edit.
         let hex_blur = cx.on_blur(&this.hex.focus, window, |ws, _, cx| {
@@ -218,6 +222,7 @@ impl Workspace {
                     }
                     ReaderEvent::PageChanged => cx.notify(),
                     ReaderEvent::ContextMenu(at) => this.page_menu(reader.clone(), *at, window, cx),
+                    ReaderEvent::MoreMenu(at) => this.more_menu(Some(*at), window, cx),
                 }
             },
         ));
@@ -602,130 +607,28 @@ impl Workspace {
         .into_any_element()
     }
 
-    fn header_row(
-        &mut self,
-        reader: &Entity<Reader>,
-        st: &Style,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
-        let r = reader.read(cx);
-        let title = r.title();
-        let author = r.author();
-        let percent = r.zoom_percent();
-        let mode = r.zoom_mode();
-        let open = r.status == crate::reader::Status::Open;
-        let crumb = match author {
-            Some(a) => format!("{title} · {a}"),
-            None => title.to_string(),
-        };
-        div()
-            .flex()
-            .flex_none()
-            .items_center()
-            .gap(px(6.0))
-            .h(st.px(|m| m.header_row))
-            .px(px(12.0))
-            .bg(st.c(|c| c.bg))
-            .border_b_1()
-            .border_color(st.c(|c| c.line))
-            .child(
-                icon_button("sidebar", "sidebar", self.sidebar, st)
-                    .tip("Contents  Ctrl+B")
-                    .on_click(cx.listener(|ws, _, _, cx| ws.toggle_sidebar(cx))),
-            )
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap(px(6.0))
-                    .ml(px(4.0))
-                    .text_size(st.px(|m| m.ui_text))
-                    .overflow_hidden()
-                    .child(div().text_color(st.c(|c| c.faint)).child("Library"))
-                    .child(div().text_color(st.c(|c| c.faint)).child("›"))
-                    .child(
-                        div()
-                            .text_color(st.c(|c| c.muted))
-                            .whitespace_nowrap()
-                            .text_ellipsis()
-                            .child(crumb),
-                    ),
-            )
-            .child(div().flex_1())
-            .when(open, |d| {
-                d.child(
-                    // Zoom group: a well holding − 100 % + (DESIGN.md § Icon group).
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap(px(2.0))
-                        .p(px(2.0))
-                        .rounded(st.px(|m| m.control_radius))
-                        .bg(st.c(|c| c.hover))
-                        .shadow(st.well())
-                        .child(
-                            icon_button("zoom-out", "minus", false, st)
-                                .tip("Zoom out  Ctrl+−")
-                                .on_click(|_, w, cx| w.dispatch_action(Box::new(ZoomOut), cx)),
-                        )
-                        .child(
-                            div()
-                                .w(px(52.0))
-                                .text_center()
-                                .text_size(px(12.0))
-                                .text_color(st.c(|c| c.text))
-                                .child(format!("{percent} %")),
-                        )
-                        .child(
-                            icon_button("zoom-in", "plus", false, st)
-                                .tip("Zoom in  Ctrl+=")
-                                .on_click(|_, w, cx| w.dispatch_action(Box::new(ZoomIn), cx)),
-                        ),
-                )
-                .child(
-                    icon_button("fit-width", "fit-width", mode == ZoomMode::FitWidth, st)
-                        .tip("Fit width  Ctrl+2")
-                        .on_click(|_, w, cx| w.dispatch_action(Box::new(FitWidth), cx)),
-                )
-                .child(
-                    icon_button("fit-page", "fit-page", mode == ZoomMode::FitPage, st)
-                        .tip("Fit page  Ctrl+0")
-                        .on_click(|_, w, cx| w.dispatch_action(Box::new(FitPage), cx)),
-                )
-                .child(
-                    icon_button("rotate", "rotate", false, st)
-                        .tip("Rotate  Ctrl+Shift+=")
-                        .on_click(|_, w, cx| w.dispatch_action(Box::new(RotateRight), cx)),
-                )
-            })
-            .child(
-                icon_button(
-                    "more",
-                    "more-vertical",
-                    self.menu.as_ref().is_some_and(|m| m.align_right),
-                    st,
-                )
-                .tip("More")
-                .on_click(cx.listener(|ws, _, window, cx| ws.more_menu(window, cx))),
-            )
-            .into_any_element()
-    }
-
     fn sidebar_view(
         &mut self,
-        reader: &Entity<Reader>,
+        reader: Option<&Entity<Reader>>,
         st: &Style,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let r = reader.read(cx);
         let mut rows = Vec::new();
-        flatten(r.outline(), 0, &mut rows);
-        let current = r.current_page() as u32;
+        let mut current = 0;
+        if let Some(r) = reader.map(|r| r.read(cx)) {
+            flatten(r.outline(), 0, &mut rows);
+            current = r.current_page() as u32;
+        }
+        let tabs_here = st.tabs == TabsAt::Sidebar && st.shows_tabs();
+        let tabs_panel = tabs_here.then(|| self.vertical_tabs(st, cx));
         // The current entry: the last one whose page is at or before the current page.
         let active_ix = rows
             .iter()
             .rposition(|(_, it)| it.page.is_some_and(|p| p <= current));
-        let reader = reader.clone();
+        let Some(reader) = reader.cloned() else {
+            // Home with tabs in the sidebar: only the open documents.
+            return self.sidebar_frame(tabs_panel, None, st, cx);
+        };
         let mut col = div().flex().flex_col().gap(px(1.0)).p(px(8.0));
         if rows.is_empty() {
             col = col.child(
@@ -817,6 +720,30 @@ impl Workspace {
                 motion::stagger(ix),
             ));
         }
+        self.sidebar_frame(tabs_panel, Some(col.into_any_element()), st, cx)
+    }
+
+    /// The sidebar: with tabs in the sidebar, a header (sidebar, Home, open)
+    /// and the open documents; then Contents when a document is showing.
+    fn sidebar_frame(
+        &mut self,
+        tabs_panel: Option<AnyElement>,
+        contents: Option<AnyElement>,
+        st: &Style,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let heading = |text: &'static str| {
+            div()
+                .flex()
+                .items_center()
+                .h(px(32.0))
+                .px(px(16.0))
+                .text_size(px(12.0))
+                .font_weight(FontWeight::MEDIUM)
+                .text_color(st.c(|c| c.muted))
+                .child(text)
+        };
+        let has_tabs = tabs_panel.is_some();
         div()
             .id("sidebar")
             .w(px(crate::layout::SIDEBAR_W))
@@ -827,23 +754,265 @@ impl Workspace {
             .bg(st.c(|c| c.panel))
             .border_r_1()
             .border_color(st.c(|c| c.line))
+            .when(has_tabs, |d| {
+                d.child(
+                    div()
+                        .id("sidebar-head")
+                        .flex()
+                        .flex_none()
+                        .items_center()
+                        .gap(px(4.0))
+                        .h(px(crate::reader::TOP_INSET))
+                        .px(px(8.0))
+                        .child(
+                            icon_button("side-sidebar", "sidebar", true, st)
+                                .tip("Sidebar  Ctrl+B")
+                                .on_click(cx.listener(|ws, _, _, cx| ws.toggle_sidebar(cx))),
+                        )
+                        .child(
+                            icon_button("side-home", "home", self.active.is_none(), st)
+                                .tip("Home  Ctrl+Shift+H")
+                                .on_click(
+                                    cx.listener(|ws, _, window, cx| ws.show_home(window, cx)),
+                                ),
+                        )
+                        .child(
+                            div()
+                                .id("side-drag")
+                                .flex_1()
+                                .h_full()
+                                .window_control_area(WindowControlArea::Drag),
+                        )
+                        .child(
+                            icon_button("side-open", "plus", false, st)
+                                .tip("Open a file  Ctrl+O")
+                                .on_click(
+                                    cx.listener(|ws, _, window, cx| ws.open_dialog(window, cx)),
+                                ),
+                        ),
+                )
+                .child(heading("Open"))
+            })
+            .children(tabs_panel)
+            .when_some(contents, |d, col| {
+                d.child(heading("Contents")).child(
+                    div()
+                        .id("toc-scroll")
+                        .flex_1()
+                        .overflow_y_scroll()
+                        .child(col),
+                )
+            })
+            .into_any_element()
+    }
+
+    /// Open documents as a list (tabs in the sidebar): title, the page you are
+    /// on, a close button on hover. Middle-click closes, right-click is the tab menu.
+    fn vertical_tabs(&mut self, st: &Style, cx: &mut Context<Self>) -> AnyElement {
+        let mut list = div().flex().flex_col().gap(px(2.0)).px(px(8.0)).pb(px(8.0));
+        for (ix, tab) in self.tabs.iter().enumerate() {
+            let on = self.active == Some(ix);
+            let side = !on && self.tools.split.as_ref() == Some(tab);
+            let r = tab.read(cx);
+            let title = r.title();
+            let where_ = (r.status == crate::reader::Status::Open)
+                .then(|| format!("{}/{}", r.current_page() + 1, r.page_count()));
+            list = list.child(
+                div()
+                    .id(("vtab", ix))
+                    .group("vtab")
+                    .relative()
+                    .flex()
+                    .items_center()
+                    .gap(px(8.0))
+                    .h(st.px(|m| m.list_row))
+                    .pl(px(10.0))
+                    .pr(px(6.0))
+                    .rounded(st.px(|m| m.control_radius))
+                    .text_size(st.px(|m| m.ui_text))
+                    .text_color(if on {
+                        st.c(|c| c.text)
+                    } else {
+                        st.c(|c| c.muted)
+                    })
+                    .when(on, |d| d.bg(st.c(|c| c.raised)).shadow(st.elev()))
+                    .when(side, |d| d.bg(st.c(|c| c.hover)))
+                    .hover(|d| d.bg(st.c(|c| c.hover)).text_color(st.c(|c| c.text)))
+                    .on_click(cx.listener(move |ws, _, window, cx| ws.activate(ix, window, cx)))
+                    .on_mouse_up(
+                        MouseButton::Middle,
+                        cx.listener(move |ws, _, window, cx| ws.close_tab(ix, window, cx)),
+                    )
+                    .on_mouse_down(
+                        MouseButton::Right,
+                        cx.listener(move |ws, e: &MouseDownEvent, window, cx| {
+                            ws.tab_menu(ix, e.position, window, cx)
+                        }),
+                    )
+                    .child(svg().path(icon("file")).size(px(14.0)).text_color(if on {
+                        st.c(|c| c.accent)
+                    } else {
+                        st.c(|c| c.faint)
+                    }))
+                    .child(div().flex_1().min_w_0().truncate().child(title))
+                    .children(where_.map(|w| {
+                        div()
+                            .flex_none()
+                            .text_size(px(11.0))
+                            .text_color(st.c(|c| c.faint))
+                            .group_hover("vtab", |d| d.invisible())
+                            .child(w)
+                    }))
+                    .child(
+                        div()
+                            .id(("vclose", ix))
+                            .absolute()
+                            .right(px(6.0))
+                            .size(px(18.0))
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .rounded(px(5.0))
+                            .invisible()
+                            .group_hover("vtab", |d| d.visible())
+                            .hover(|d| d.bg(st.c(|c| c.raised)))
+                            .tip("Close tab  Ctrl+W")
+                            .on_click(cx.listener(move |ws, _, window, cx| {
+                                cx.stop_propagation();
+                                ws.close_tab(ix, window, cx)
+                            }))
+                            .child(
+                                svg()
+                                    .path(icon("close"))
+                                    .size(px(11.0))
+                                    .text_color(st.c(|c| c.faint)),
+                            ),
+                    ),
+            );
+        }
+        if self.tabs.is_empty() {
+            list = list.child(
+                div()
+                    .px(px(8.0))
+                    .py(px(4.0))
+                    .text_size(st.px(|m| m.ui_text))
+                    .text_color(st.c(|c| c.faint))
+                    .child("No documents open"),
+            );
+        }
+        div()
+            .id("vtabs")
+            .flex_none()
+            .max_h(px(300.0))
+            .overflow_y_scroll()
+            .border_b_1()
+            .border_color(st.c(|c| c.line))
+            .mb(px(4.0))
+            .child(list)
+            .into_any_element()
+    }
+
+    /// Tabs in the sidebar: a transparent strip over the top of the page area
+    /// to drag the window, with the window buttons (and, when the sidebar is
+    /// closed, the sidebar and Home buttons).
+    fn top_strip(&mut self, st: &Style, cx: &mut Context<Self>) -> AnyElement {
+        let bare = !self.sidebar && !Style::get(cx).minimal;
+        div()
+            .absolute()
+            .top_0()
+            .left_0()
+            .right_0()
+            .h(px(crate::reader::TOP_INSET))
+            .flex()
+            .items_center()
+            .gap(px(4.0))
+            .when(bare, |d| {
+                d.child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap(px(4.0))
+                        .h_full()
+                        .px(px(6.0))
+                        .rounded_br(px(10.0))
+                        .bg(st.c(|c| c.bg))
+                        .shadow(st.elev())
+                        .child(
+                            icon_button("strip-sidebar", "sidebar", false, st)
+                                .tip("Sidebar  Ctrl+B")
+                                .on_click(cx.listener(|ws, _, _, cx| ws.toggle_sidebar(cx))),
+                        )
+                        .child(
+                            icon_button("strip-home", "home", self.active.is_none(), st)
+                                .tip("Home  Ctrl+Shift+H")
+                                .on_click(
+                                    cx.listener(|ws, _, window, cx| ws.show_home(window, cx)),
+                                ),
+                        ),
+                )
+            })
+            .child(
+                div()
+                    .id("strip-drag")
+                    .flex_1()
+                    .h_full()
+                    .window_control_area(WindowControlArea::Drag),
+            )
+            // On a solid corner tab, so they read over any page.
             .child(
                 div()
                     .flex()
                     .items_center()
-                    .h(px(36.0))
-                    .px(px(16.0))
-                    .text_size(px(12.0))
-                    .font_weight(FontWeight::MEDIUM)
-                    .text_color(st.c(|c| c.muted))
-                    .child("Contents"),
-            )
-            .child(
-                div()
-                    .id("toc-scroll")
-                    .flex_1()
-                    .overflow_y_scroll()
-                    .child(col),
+                    .h_full()
+                    .when(Style::get(cx).minimal, |d| {
+                        d.pl(px(6.0)).child(
+                            div()
+                                .id("exit-minimal")
+                                .flex()
+                                .items_center()
+                                .gap(px(6.0))
+                                .h(px(26.0))
+                                .px(px(10.0))
+                                .rounded(px(7.0))
+                                .text_size(px(12.0))
+                                .text_color(st.c(|c| c.muted))
+                                .hover(|d| d.bg(st.c(|c| c.hover)).text_color(st.c(|c| c.text)))
+                                .tip("Show everything again  F11")
+                                .on_click(cx.listener(|ws, _, _, cx| ws.toggle_minimal(cx)))
+                                .child(
+                                    svg()
+                                        .path(icon("focus"))
+                                        .size(px(14.0))
+                                        .text_color(st.c(|c| c.muted)),
+                                )
+                                .child("Exit minimal mode"),
+                        )
+                    })
+                    .rounded_bl(px(10.0))
+                    .overflow_hidden()
+                    .bg(st.c(|c| c.bg))
+                    .shadow(st.elev())
+                    .child(window_button(
+                        "win-min",
+                        "win-min",
+                        WindowControlArea::Min,
+                        st,
+                        false,
+                    ))
+                    .child(window_button(
+                        "win-max",
+                        "win-max",
+                        WindowControlArea::Max,
+                        st,
+                        false,
+                    ))
+                    .child(window_button(
+                        "win-close",
+                        "close",
+                        WindowControlArea::Close,
+                        st,
+                        true,
+                    )),
             )
             .into_any_element()
     }
@@ -1198,10 +1367,11 @@ fn cover(title: &str, width: f32, st: &Style) -> AnyElement {
 impl Render for Workspace {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let st = Style::get(cx).clone();
-        let title_bar = self.title_bar(&st, window, cx);
+        let side_tabs = st.tabs == TabsAt::Sidebar;
+        let title_bar = (!side_tabs && st.shows_tabs()).then(|| self.title_bar(&st, window, cx));
+        let show_sidebar = self.sidebar && st.shows_sidebar();
         let body = match self.active_reader().cloned() {
             Some(reader) => {
-                let header = self.header_row(&reader, &st, cx);
                 // Split view: the other document beside this one; a click there
                 // makes it the active pane.
                 let side_pane = self.tools.split.clone().map(|side| {
@@ -1218,30 +1388,103 @@ impl Render for Workspace {
                         )
                         .child(side)
                 });
-                let side = if self.sidebar {
-                    let inner = self.sidebar_view(&reader, &st, cx);
+                let side = if show_sidebar {
+                    let inner = self.sidebar_view(Some(&reader), &st, cx);
                     Some(self.sidebar_slide(inner, &st))
                 } else {
                     None
                 };
                 div()
                     .flex()
-                    .flex_col()
                     .flex_1()
                     .min_h_0()
-                    .child(header)
+                    .children(side)
+                    .child(div().flex_1().min_w_0().h_full().child(reader))
+                    .children(side_pane)
+                    .into_any_element()
+            }
+            None => {
+                let home = self.home(&st, cx);
+                // Tabs in the sidebar: the open documents stay listed on Home.
+                let side = (side_tabs && show_sidebar).then(|| {
+                    let inner = self.sidebar_view(None, &st, cx);
+                    self.sidebar_slide(inner, &st)
+                });
+                div()
+                    .flex()
+                    .flex_1()
+                    .min_h_0()
+                    .children(side)
                     .child(
                         div()
-                            .flex()
                             .flex_1()
-                            .min_h_0()
-                            .children(side)
-                            .child(div().flex_1().min_w_0().h_full().child(reader))
-                            .children(side_pane),
+                            .min_w_0()
+                            .h_full()
+                            .pt(px(if side_tabs && !st.minimal {
+                                crate::reader::TOP_INSET
+                            } else {
+                                0.0
+                            }))
+                            .child(home),
                     )
                     .into_any_element()
             }
-            None => self.home(&st, cx),
+        };
+        let floating_strip = side_tabs && !st.minimal;
+        let body = if floating_strip || st.minimal {
+            // The drag strip and window buttons float over the page area. In
+            // minimal mode they show only while the pointer is at the top edge.
+            let peeking = !st.minimal || self.peek;
+            let strip = self.top_strip(&st, cx);
+            div()
+                .flex()
+                .flex_1()
+                .min_h_0()
+                .relative()
+                .child(body)
+                .when(peeking, |d| {
+                    d.child(
+                        div()
+                            .id("top-strip")
+                            .absolute()
+                            .top_0()
+                            .right_0()
+                            .left(px(if show_sidebar && side_tabs {
+                                crate::layout::SIDEBAR_W
+                            } else {
+                                0.0
+                            }))
+                            .h(px(crate::reader::TOP_INSET))
+                            .on_hover(cx.listener(|ws, over: &bool, _, cx| {
+                                if !over && ws.peek {
+                                    ws.peek = false;
+                                    cx.notify();
+                                }
+                            }))
+                            .child(strip),
+                    )
+                })
+                // Minimal mode: a thin edge at the top brings the strip back.
+                .when(st.minimal && !self.peek, |d| {
+                    d.child(
+                        div()
+                            .id("peek-edge")
+                            .absolute()
+                            .top_0()
+                            .left_0()
+                            .right_0()
+                            .h(px(6.0))
+                            .on_hover(cx.listener(|ws, over: &bool, _, cx| {
+                                if *over {
+                                    ws.peek = true;
+                                    cx.notify();
+                                }
+                            })),
+                    )
+                })
+                .into_any_element()
+        } else {
+            body
         };
         if self.tools.split.is_some() && self.tools.split.as_ref() == self.active_reader() {
             self.tools.split = None;
@@ -1308,12 +1551,13 @@ impl Render for Workspace {
                 ws.select_tab(last, window, cx)
             }))
             .on_action(cx.listener(|ws, _: &CycleTheme, _, cx| ws.cycle_theme(cx)))
+            .on_action(cx.listener(|ws, _: &ToggleMinimal, _, cx| ws.toggle_minimal(cx)))
             .on_drop(cx.listener(|ws, paths: &ExternalPaths, window, cx| {
                 for p in paths.paths() {
                     ws.open_tab(p.clone(), window, cx);
                 }
             }))
-            .child(title_bar)
+            .children(title_bar)
             .child(body)
             .children(overlays)
     }
@@ -1357,6 +1601,14 @@ impl Workspace {
             Some(r) => window.focus(&r.focus_handle(cx)),
             None => window.focus(&self.focus),
         }
+    }
+
+    /// F11: hide what Settings › Reading › Minimal mode lists, or show it again.
+    pub(crate) fn toggle_minimal(&mut self, cx: &mut Context<Self>) {
+        let style = cx.global_mut::<Style>();
+        style.minimal = !style.minimal;
+        self.peek = false;
+        cx.refresh_windows();
     }
 
     fn toggle_sidebar(&mut self, cx: &mut Context<Self>) {
@@ -1574,16 +1826,21 @@ impl Workspace {
     }
 
     /// The ⋯ menu: theme and density rows, the contents panel, Settings.
-    fn more_menu(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    /// The ⋯ menu, opened from the dock's button at `at` (or the top-right corner).
+    fn more_menu(
+        &mut self,
+        at: Option<Point<Pixels>>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         if self.themes.is_empty() {
             self.themes = kitab_theme::builtin_all().unwrap_or_default();
         }
         let vp = window.viewport_size();
         let st = Style::get(cx).clone();
-        let at = point(
-            vp.width - px(12.0),
-            px(st.m().title_bar + st.m().header_row - 4.0),
-        );
+        let at = at.unwrap_or(point(vp.width - px(12.0), px(st.m().title_bar + 8.0)));
+        // Open towards the middle of the window from wherever the button is.
+        let align_right = at.x > vp.width / 2.0;
         let ws = cx.weak_entity();
         let themes = self.themes.clone();
         let theme_row = {
@@ -1760,6 +2017,13 @@ impl Workspace {
             .disabled(self.active.is_none()),
             MenuItem::Separator,
             MenuItem::new(
+                "Minimal mode",
+                self.on_ws(cx, |ws, _, cx| ws.toggle_minimal(cx)),
+            )
+            .icon("focus")
+            .key("F11")
+            .checked(Style::get(cx).minimal),
+            MenuItem::new(
                 "Keyboard shortcuts",
                 self.on_ws(cx, |ws, window, cx| ws.show_shortcuts(window, cx)),
             )
@@ -1772,7 +2036,7 @@ impl Workspace {
             .icon("settings")
             .key("Ctrl+,"),
         ];
-        self.open_menu(at, true, 280.0, items, window, cx);
+        self.open_menu(at, align_right, 280.0, items, window, cx);
     }
 
     /// Right click on a page.

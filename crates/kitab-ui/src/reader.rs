@@ -4,7 +4,9 @@
 //! pages render), zoom modes, rotation, keyboard navigation, the password prompt
 //! and the error placeholders (PLAN.md Phase 1, DESIGN.md § Page sheets).
 
+mod dock;
 mod find;
+pub use dock::TOP_INSET;
 mod geom;
 mod layer;
 mod select;
@@ -15,7 +17,7 @@ use crate::engine::{DocEngine, DocHandle};
 use crate::icons::icon;
 use crate::library::Library;
 use crate::motion;
-use crate::settings::PageNav;
+use crate::settings::{DockAt, PageNav};
 use crate::style::Style;
 use crate::tooltip::Tip;
 use gpui::{
@@ -60,6 +62,8 @@ pub enum ReaderEvent {
     PageChanged,
     /// Right click on the page area, at this window position.
     ContextMenu(Point<Pixels>),
+    /// The dock's ⋯ button, at this window position.
+    MoreMenu(Point<Pixels>),
 }
 
 /// What "Save page as…" writes.
@@ -124,6 +128,9 @@ pub struct Reader {
     find: find::FindState,
     layers: layer::Layers,
     select: select::SelectState,
+    dock: dock::DockState,
+    /// Room kept free above the first page (sidebar tabs: the window buttons).
+    top_inset: f32,
 }
 
 impl Reader {
@@ -172,6 +179,8 @@ impl Reader {
             find: find::FindState::new(cx.focus_handle()),
             layers: layer::Layers::default(),
             select: select::SelectState::default(),
+            dock: dock::DockState::default(),
+            top_inset: 0.0,
         };
         this.open(None, cx);
         this
@@ -356,7 +365,11 @@ impl Reader {
 
     /// Space above page `ix`'s sheet inside its list item.
     fn sheet_top_pad(&self, ix: usize) -> f32 {
-        if ix == 0 { GAP } else { GAP / 2.0 }
+        if ix == 0 {
+            GAP + self.top_inset
+        } else {
+            GAP / 2.0
+        }
     }
 
     /// Where page `ix`'s sheet was drawn last frame, in window pixels.
@@ -977,6 +990,13 @@ impl Render for Reader {
                 self.last_page = page;
             }
         }
+        let inset = st.top_inset();
+        if (inset - self.top_inset).abs() > 0.5 {
+            self.top_inset = inset;
+            if self.status == Status::Open {
+                self.relayout(cx);
+            }
+        }
         let page = self.current_page();
         if page != self.last_page {
             self.last_page = page;
@@ -1030,7 +1050,9 @@ impl Render for Reader {
                 MouseButton::Navigate(gpui::NavigationDirection::Forward),
                 cx.listener(|r, _, _, cx| r.history(false, cx)),
             )
+            .on_key_down(cx.listener(|r, _: &gpui::KeyDownEvent, _, cx| r.wake_dock(cx)))
             .on_mouse_move(cx.listener(|r, e: &MouseMoveEvent, _, cx| {
+                r.wake_dock(cx);
                 if r.select.dragging {
                     if e.pressed_button == Some(MouseButton::Left) {
                         r.select_move(e.position, cx);
@@ -1101,6 +1123,7 @@ impl Render for Reader {
             )
             .children(status)
             .children(self.page_nav(&st, window, cx))
+            .children(self.dock_view(&st, inset, window, cx))
             .children(self.find_bar(&st, window, cx))
     }
 }
@@ -1108,67 +1131,69 @@ impl Render for Reader {
 impl Reader {
     /// The page navigator chosen in Settings (DESIGN.md § Scrubber). With
     /// "Hidden", only the Ctrl+G field shows, while it is open.
-    fn page_nav(&self, st: &Style, window: &Window, cx: &mut Context<Self>) -> Option<AnyElement> {
-        if self.status != Status::Open {
-            return None;
-        }
+    /// The navigator's pieces for the chosen style: the page field with a
+    /// track, steppers or a total. `None` when nothing shows (Hidden, not editing).
+    pub(super) fn nav_parts(
+        &self,
+        st: &Style,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) -> Option<Vec<AnyElement>> {
         let count = self.page_count().max(1);
         let field = self.page_field(st, window, cx);
-        let pill = |h: f32| {
-            div()
-                .flex()
-                .items_center()
-                .gap(px(10.0))
-                .h(px(h))
-                .px(px(6.0))
-                .rounded_full()
-                .bg(st.c(|c| c.raised))
-                .shadow(st.float())
-                .text_size(px(12.0))
-                .text_color(st.c(|c| c.muted))
-        };
-        let (body, corner) = match st.page_nav {
-            PageNav::Scrubber => (
-                pill(36.0)
-                    .child(field)
-                    .child(self.track_element(st, cx))
-                    .child(div().pr(px(10.0)).child(format!("{count}"))),
-                false,
-            ),
-            PageNav::Stepper => (
-                pill(36.0)
-                    .child(
-                        nav_button("prev-page", "chevron-left", st)
-                            .tip("Previous page  Left")
-                            .on_click(cx.listener(|r, _, _, cx| r.prev_page(cx))),
-                    )
-                    .child(field)
-                    .child(format!("of {count}"))
-                    .child(
-                        nav_button("next-page", "chevron-right", st)
-                            .tip("Next page  Right")
-                            .on_click(cx.listener(|r, _, _, cx| r.next_page(cx))),
-                    ),
-                false,
-            ),
-            PageNav::Counter => (
-                pill(30.0)
-                    .gap(px(4.0))
-                    .child(field)
-                    .child(div().pr(px(8.0)).child(format!("/ {count}"))),
-                true,
-            ),
+        Some(match st.page_nav {
+            PageNav::Scrubber => vec![
+                field,
+                self.track_element(st, cx),
+                div().child(format!("{count}")).into_any_element(),
+            ],
+            PageNav::Stepper => vec![
+                nav_button("prev-page", "chevron-left", st)
+                    .tip("Previous page  Left")
+                    .on_click(cx.listener(|r, _, _, cx| r.prev_page(cx)))
+                    .into_any_element(),
+                field,
+                div().child(format!("of {count}")).into_any_element(),
+                nav_button("next-page", "chevron-right", st)
+                    .tip("Next page  Right")
+                    .on_click(cx.listener(|r, _, _, cx| r.next_page(cx)))
+                    .into_any_element(),
+            ],
+            PageNav::Counter => vec![field, div().child(format!("/ {count}")).into_any_element()],
             PageNav::Hidden => {
                 self.page_edit.as_ref()?;
-                (
-                    pill(36.0)
-                        .child(div().pl(px(10.0)).child("Go to page"))
-                        .child(field)
-                        .child(div().pr(px(10.0)).child(format!("of {count}"))),
-                    false,
-                )
+                vec![
+                    div().child("Go to page").into_any_element(),
+                    field,
+                    div().child(format!("of {count}")).into_any_element(),
+                ]
             }
-        };
+        })
+    }
+
+    /// The page navigator chosen in Settings (DESIGN.md § Scrubber), as its own
+    /// floating pill. With the dock at the bottom it lives in the dock instead.
+    fn page_nav(&self, st: &Style, window: &Window, cx: &mut Context<Self>) -> Option<AnyElement> {
+        // At the bottom the navigator is part of the dock, unless minimal mode
+        // hides the dock but keeps the navigator.
+        let in_dock = st.dock == DockAt::Bottom && st.shows_dock();
+        if self.status != Status::Open || in_dock || !st.shows_page_nav() {
+            return None;
+        }
+        let parts = self.nav_parts(st, window, cx)?;
+        let corner = st.page_nav == PageNav::Counter;
+        let body = div()
+            .flex()
+            .items_center()
+            .gap(px(if corner { 4.0 } else { 10.0 }))
+            .h(px(if corner { 30.0 } else { 36.0 }))
+            .px(px(if corner { 6.0 } else { 12.0 }))
+            .rounded_full()
+            .bg(st.c(|c| c.raised))
+            .shadow(st.float())
+            .text_size(px(12.0))
+            .text_color(st.c(|c| c.muted))
+            .children(parts);
         let body = motion::enter(
             body.relative(),
             ("page-nav", st.page_nav as usize),

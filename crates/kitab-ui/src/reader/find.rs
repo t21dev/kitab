@@ -584,7 +584,7 @@ impl Reader {
         Some(
             div()
                 .absolute()
-                .top(px(10.0))
+                .top(px(10.0 + self.top_inset))
                 .right(px(18.0))
                 .child(bar)
                 .into_any_element(),
