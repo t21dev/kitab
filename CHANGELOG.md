@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- A Pages pane in the sidebar: thumbnails at each page's true shape, the current page ringed, bookmarked pages marked; only the visible ones render, and a click goes to the page.
 - The file info chip folds to a small i (its chevron, or Ctrl+I) and a click on the i unfolds it, remembered across launches.
 - Bookmarks: Ctrl+D (or the page's right-click menu) bookmarks the page, named after its chapter, and again removes it. Bookmarked pages carry a ribbon, and the sidebar's Bookmarks pane lists them. Re-flowing books don't take bookmarks yet.
 - A Marks pane in the sidebar (the highlighter icon beside Contents): every mark and every annotation already in the PDF, in page order, with the words a highlight covers and a note's text; a click goes to the page, and Kitab's own marks can be deleted there. Export them to Markdown or CSV.
