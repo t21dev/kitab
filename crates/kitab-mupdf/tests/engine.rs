@@ -574,3 +574,43 @@ fn parallel_renders_of_one_document_match_serial_ones() {
         );
     }
 }
+
+/// The annotations already in 09 are listed with their kinds and notes, in
+/// order (expected.json `annot_kinds_page1`, `annot_notes_page1`); a PDF
+/// without any lists none.
+#[test]
+fn existing_annotations_are_listed() {
+    let exp = expected_pdf("09-annotations.pdf");
+    let (id, _) = open("09-annotations.pdf");
+    let annots = engine().annotations(id).unwrap();
+    let kinds: Vec<&str> = annots
+        .iter()
+        .filter(|a| a.page == 0)
+        .map(|a| a.kind.as_str())
+        .collect();
+    let want: Vec<&str> = exp["annot_kinds_page1"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v.as_str().unwrap())
+        .collect();
+    assert_eq!(kinds, want);
+    let notes: Vec<String> = annots
+        .iter()
+        .filter(|a| a.page == 0)
+        .map(|a| a.text.clone().unwrap_or_default())
+        .collect();
+    let want_notes: Vec<String> = exp["annot_notes_page1"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v.as_str().unwrap().trim().to_string())
+        .collect();
+    assert_eq!(notes, want_notes);
+    assert!(annots.iter().all(|a| a.rect.w >= 0.0 && a.rect.h >= 0.0));
+    engine().close(id);
+
+    let (plain, _) = open("01-text-outline.pdf");
+    assert!(engine().annotations(plain).unwrap().is_empty());
+    engine().close(plain);
+}

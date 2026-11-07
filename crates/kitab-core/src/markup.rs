@@ -77,6 +77,18 @@ pub struct Mark {
     pub opacity: f32,
 }
 
+/// An annotation already in a PDF (listed in the Marks panel).
+#[derive(Debug, Clone, PartialEq)]
+pub struct FileAnnot {
+    pub page: u32,
+    /// The PDF subtype: "Highlight", "Ink", "Text", "FreeText", …
+    pub kind: String,
+    /// Its text (a note's or a text box's contents), if any.
+    pub text: Option<String>,
+    pub rect: RectPt,
+    pub color: Option<Rgb8>,
+}
+
 /// Limits a mark must fit: anything bigger is a bug or a hostile store row.
 pub const MAX_STROKES: usize = 1_000;
 pub const MAX_POINTS: usize = 20_000;

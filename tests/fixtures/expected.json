@@ -73,6 +73,8 @@
       "permissions_copy": true,
       "text_chars_page1": 1849,
       "annots_page1": 0,
+      "annot_kinds_page1": [],
+      "annot_notes_page1": [],
       "images_page2": 0,
       "widgets": 0,
       "links_page1": 2,
@@ -125,6 +127,8 @@
       "permissions_copy": true,
       "text_chars_page1": 40,
       "annots_page1": 0,
+      "annot_kinds_page1": [],
+      "annot_notes_page1": [],
       "images_page2": 0,
       "widgets": 0,
       "links_page1": 0
@@ -147,6 +151,8 @@
       "permissions_copy": true,
       "text_chars_page1": 142,
       "annots_page1": 0,
+      "annot_kinds_page1": [],
+      "annot_notes_page1": [],
       "images_page2": 0,
       "widgets": 7,
       "links_page1": 0
@@ -190,6 +196,8 @@
       "permissions_copy": true,
       "text_chars_page1": 1849,
       "annots_page1": 0,
+      "annot_kinds_page1": [],
+      "annot_notes_page1": [],
       "images_page2": 0,
       "widgets": 0,
       "links_page1": 2
@@ -232,6 +240,8 @@
       "permissions_copy": false,
       "text_chars_page1": 1849,
       "annots_page1": 0,
+      "annot_kinds_page1": [],
+      "annot_notes_page1": [],
       "images_page2": 0,
       "widgets": 0,
       "links_page1": 2
@@ -309,6 +319,8 @@
       "permissions_copy": true,
       "text_chars_page1": 1849,
       "annots_page1": 0,
+      "annot_kinds_page1": [],
+      "annot_notes_page1": [],
       "images_page2": 0,
       "widgets": 0,
       "links_page1": 2
@@ -386,6 +398,8 @@
       "permissions_copy": true,
       "text_chars_page1": 1849,
       "annots_page1": 0,
+      "annot_kinds_page1": [],
+      "annot_notes_page1": [],
       "images_page2": 0,
       "widgets": 0,
       "links_page1": 2
@@ -467,6 +481,8 @@
       "permissions_copy": true,
       "text_chars_page1": 36,
       "annots_page1": 0,
+      "annot_kinds_page1": [],
+      "annot_notes_page1": [],
       "images_page2": 1,
       "widgets": 0,
       "links_page1": 0
@@ -489,6 +505,8 @@
       "permissions_copy": true,
       "text_chars_page1": 200,
       "annots_page1": 0,
+      "annot_kinds_page1": [],
+      "annot_notes_page1": [],
       "images_page2": 0,
       "widgets": 0,
       "links_page1": 0
@@ -516,6 +534,8 @@
       "permissions_copy": true,
       "text_chars_page1": 312,
       "annots_page1": 0,
+      "annot_kinds_page1": [],
+      "annot_notes_page1": [],
       "images_page2": 0,
       "widgets": 0,
       "links_page1": 0
@@ -543,6 +563,8 @@
       "permissions_copy": true,
       "text_chars_page1": 399,
       "annots_page1": 0,
+      "annot_kinds_page1": [],
+      "annot_notes_page1": [],
       "images_page2": 0,
       "widgets": 2,
       "links_page1": 0,
@@ -581,6 +603,8 @@
       "permissions_copy": true,
       "text_chars_page1": 475,
       "annots_page1": 0,
+      "annot_kinds_page1": [],
+      "annot_notes_page1": [],
       "images_page2": 0,
       "widgets": 2,
       "links_page1": 0,
@@ -628,6 +652,12 @@
       "permissions_copy": true,
       "text_chars_page1": 399,
       "annots_page1": 1,
+      "annot_kinds_page1": [
+        "Text"
+      ],
+      "annot_notes_page1": [
+        "Added after signing"
+      ],
       "images_page2": 0,
       "widgets": 2,
       "links_page1": 0,
@@ -666,6 +696,8 @@
       "permissions_copy": true,
       "text_chars_page1": 399,
       "annots_page1": 0,
+      "annot_kinds_page1": [],
+      "annot_notes_page1": [],
       "images_page2": 0,
       "widgets": 2,
       "links_page1": 0,
@@ -709,6 +741,24 @@
       "permissions_copy": true,
       "text_chars_page1": 1863,
       "annots_page1": 7,
+      "annot_kinds_page1": [
+        "Highlight",
+        "Underline",
+        "StrikeOut",
+        "Text",
+        "FreeText",
+        "Ink",
+        "Square"
+      ],
+      "annot_notes_page1": [
+        "",
+        "",
+        "",
+        "A sticky note from the fixture.",
+        "Free text box",
+        "",
+        ""
+      ],
       "images_page2": 0,
       "widgets": 0,
       "links_page1": 1
@@ -736,6 +786,8 @@
       "permissions_copy": true,
       "text_chars_page1": 0,
       "annots_page1": 0,
+      "annot_kinds_page1": [],
+      "annot_notes_page1": [],
       "images_page2": 3,
       "widgets": 0,
       "links_page1": 0

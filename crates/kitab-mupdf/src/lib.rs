@@ -439,6 +439,11 @@ impl Engine {
         Ok(info)
     }
 
+    /// The annotations already in a PDF (for the Marks panel); empty for other formats.
+    pub fn annotations(&self, doc: DocId) -> Result<Vec<kitab_core::FileAnnot>, String> {
+        self.with_doc(doc, doc::annotations)
+    }
+
     /// The links on a page (0-based), with rectangles in page points.
     pub fn links(&self, doc: DocId, page: u32) -> Result<Vec<Link>, String> {
         self.with_doc(doc, move |d| doc::links(d, page))

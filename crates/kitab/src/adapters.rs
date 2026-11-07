@@ -63,6 +63,12 @@ impl DocEngine for MupdfEngine {
         self.engine.render_when(id, req, move || wanted())
     }
 
+    fn annotations(&self, doc: DocHandle) -> Vec<kitab_core::FileAnnot> {
+        self.id(doc)
+            .and_then(|id| self.engine.annotations(id).ok())
+            .unwrap_or_default()
+    }
+
     fn write_marks(
         &self,
         src: &Path,

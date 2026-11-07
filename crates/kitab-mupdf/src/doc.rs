@@ -517,6 +517,62 @@ fn dest_y(kind: DestinationKind) -> Option<f32> {
     .filter(|y| y.is_finite())
 }
 
+/// Kinds that aren't markup: links, form fields and the popups notes open.
+const NOT_MARKUP: [&str; 3] = ["Link", "Widget", "Popup"];
+/// The most annotations listed for one document.
+const MAX_ANNOTS: usize = 10_000;
+
+/// The annotations in a PDF, page by page (none for other formats). Runs on a worker.
+pub(crate) fn annotations(doc: &OpenDoc) -> Result<Vec<kitab_core::FileAnnot>, String> {
+    let Handle::Pdf(pdf) = &doc.pdf else {
+        return Ok(Vec::new());
+    };
+    let mut out = Vec::new();
+    for index in 0..doc.page_count {
+        let i = i32::try_from(index).map_err(|e| e.to_string())?;
+        // A damaged page doesn't hide the others' annotations.
+        let Ok(page) = pdf.load_pdf_page(i) else {
+            continue;
+        };
+        for a in page.annotations() {
+            let Ok(kind) = a.r#type() else { continue };
+            let kind = format!("{kind:?}");
+            if NOT_MARKUP.contains(&kind.as_str()) {
+                continue;
+            }
+            let rect = a.bounds().map(rect_of).unwrap_or_default();
+            let text = a
+                .contents()
+                .ok()
+                .flatten()
+                .map(|t| t.trim().to_string())
+                .filter(|t| !t.is_empty());
+            let color = match a.color() {
+                Ok(Some(mupdf::color::AnnotationColor::Rgb { red, green, blue })) => {
+                    let q = |v: f32| (v.clamp(0.0, 1.0) * 255.0).round() as u8;
+                    Some(kitab_core::Rgb8 {
+                        r: q(red),
+                        g: q(green),
+                        b: q(blue),
+                    })
+                }
+                _ => None,
+            };
+            out.push(kitab_core::FileAnnot {
+                page: index,
+                kind,
+                text,
+                rect,
+                color,
+            });
+            if out.len() >= MAX_ANNOTS {
+                return Ok(out);
+            }
+        }
+    }
+    Ok(out)
+}
+
 /// The page's links, in page points. Runs on a worker.
 pub(crate) fn links(doc: &OpenDoc, page: u32) -> Result<Vec<Link>, String> {
     let page = doc

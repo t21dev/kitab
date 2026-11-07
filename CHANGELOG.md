@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- A Marks pane in the sidebar (the highlighter icon beside Contents): every mark and every annotation already in the PDF, in page order, with the words a highlight covers and a note's text; a click goes to the page, and Kitab's own marks can be deleted there. Export them to Markdown or CSV.
 - Hide the quick dock to its edge (the chevron at its end, or Ctrl+.): it becomes a small handle, and a click on the handle or Ctrl+. brings it back. Remembered across launches.
 - Highlight, underline or strike through selected text (H, or the right-click menu), and add notes and text boxes with the new Text and Note tools: notes are pins whose text shows when you point at them, and a click edits them. Typing works with input methods (Bangla, Arabic, CJK). In a PDF they save as Highlight, Underline, StrikeOut, Text and FreeText annotations.
 - A file info chip at the bottom left: format, file size, pages and paper size (a book shows its text size, Markdown its lines and words); point at it for the file's location. Settings › Reading › File info hides it.

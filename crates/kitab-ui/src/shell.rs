@@ -78,6 +78,25 @@ pub struct Workspace {
     reveal_tab: bool,
     /// Minimal mode: the pointer is at the top edge, so the window buttons show.
     peek: bool,
+    /// What the sidebar shows for the document: contents or marks.
+    side_pane: SidePane,
+}
+
+/// The sidebar's panes for a document.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SidePane {
+    #[default]
+    Contents,
+    Marks,
+}
+
+impl SidePane {
+    fn label(self) -> &'static str {
+        match self {
+            SidePane::Contents => "Contents",
+            SidePane::Marks => "Marks",
+        }
+    }
 }
 
 impl Workspace {
@@ -110,6 +129,7 @@ impl Workspace {
             closed: Vec::new(),
             sidebar_closing: false,
             sidebar_serial: 0,
+            side_pane: SidePane::Contents,
             home_serial: 0,
             booted: false,
             hex: HexState {
@@ -675,6 +695,10 @@ impl Workspace {
             // Home with tabs in the sidebar: only the open documents.
             return self.sidebar_frame(tabs_panel, None, st, cx);
         };
+        if self.side_pane == SidePane::Marks {
+            let pane = self.marks_pane(&reader, st, cx);
+            return self.sidebar_frame(tabs_panel, Some(pane), st, cx);
+        }
         let mut col = div().flex().flex_col().gap(px(1.0)).p(px(8.0));
         if rows.is_empty() {
             col = col.child(
@@ -770,6 +794,204 @@ impl Workspace {
         self.sidebar_frame(tabs_panel, Some(col.into_any_element()), st, cx)
     }
 
+    /// The Marks pane: export, then one row per mark or annotation.
+    fn marks_pane(
+        &mut self,
+        reader: &Entity<Reader>,
+        st: &Style,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let rows = reader.update(cx, |r, cx| {
+            r.load_file_annots(cx);
+            r.mark_rows(cx)
+        });
+        let pdf = reader.read(cx).is_pdf();
+        let mut col = div().flex().flex_col().gap(px(1.0)).p(px(8.0));
+        let export = |id: &'static str, label: &'static str, csv: bool| {
+            let reader = reader.clone();
+            div()
+                .id(id)
+                .px(px(8.0))
+                .h(px(24.0))
+                .flex()
+                .items_center()
+                .rounded(st.px(|m| m.control_radius))
+                .text_size(px(11.5))
+                .text_color(st.c(|c| c.muted))
+                .hover(|d| d.bg(st.c(|c| c.hover)).text_color(st.c(|c| c.text)))
+                .child(label)
+                .on_click(cx.listener(move |ws, _, _, cx| ws.export_marks(&reader, csv, cx)))
+        };
+        col = col.child(
+            div()
+                .flex()
+                .items_center()
+                .gap(px(4.0))
+                .px(px(4.0))
+                .pb(px(6.0))
+                .text_size(px(11.5))
+                .text_color(st.c(|c| c.faint))
+                .child("Export")
+                .child(export("marks-md", "Markdown", false))
+                .child(export("marks-csv", "CSV", true)),
+        );
+        if rows.is_empty() {
+            col = col.child(
+                div()
+                    .px(px(8.0))
+                    .py(px(6.0))
+                    .text_size(st.px(|m| m.ui_text))
+                    .text_color(st.c(|c| c.faint))
+                    .child("No marks yet. Select text and press H, or draw with Ctrl+Shift+D."),
+            );
+        }
+        for (ix, row) in rows.into_iter().enumerate() {
+            let page = row.page;
+            let jump = reader.clone();
+            let dot = match row.colour {
+                Some((r, g, b)) => gpui::Rgba {
+                    r: f32::from(r) / 255.0,
+                    g: f32::from(g) / 255.0,
+                    b: f32::from(b) / 255.0,
+                    a: 1.0,
+                }
+                .into(),
+                None => st.c(|c| c.ring),
+            };
+            let pending = match row.source {
+                crate::reader::MarkSource::Kitab(_) if pdf => Some("Not saved into the file yet"),
+                crate::reader::MarkSource::Kitab(_) => Some("Kept in Kitab"),
+                crate::reader::MarkSource::File => None,
+            };
+            let delete = match row.source {
+                crate::reader::MarkSource::Kitab(local) => {
+                    let r = reader.clone();
+                    Some(
+                        div()
+                            .id(("mark-del", ix))
+                            .size(px(22.0))
+                            .flex_none()
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .rounded(px(6.0))
+                            // Shows when the row is pointed at.
+                            .opacity(0.0)
+                            .group_hover("mark-row", |s| s.opacity(1.0))
+                            .hover(|d| d.bg(st.c(|c| c.raised)))
+                            .tip("Delete  Ctrl+Z brings it back")
+                            .child(
+                                svg()
+                                    .path(icon("close"))
+                                    .size(px(12.0))
+                                    .text_color(st.c(|c| c.muted)),
+                            )
+                            .on_click(move |_, _, cx| {
+                                cx.stop_propagation();
+                                r.update(cx, |r, cx| r.delete_mark(local, cx));
+                            }),
+                    )
+                }
+                crate::reader::MarkSource::File => None,
+            };
+            col = col.child(
+                div()
+                    .id(("mark-row", ix))
+                    .group("mark-row")
+                    .flex()
+                    .items_start()
+                    .gap(px(8.0))
+                    .px(px(8.0))
+                    .py(px(6.0))
+                    .rounded(st.px(|m| m.control_radius))
+                    .hover(|d| d.bg(st.c(|c| c.hover)))
+                    .on_click(move |_, _, cx| jump.update(cx, |r, cx| r.jump_to(page, cx)))
+                    .child(
+                        div()
+                            .mt(px(4.0))
+                            .size(px(10.0))
+                            .flex_none()
+                            .rounded_full()
+                            .bg(dot),
+                    )
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .flex()
+                            .flex_col()
+                            .gap(px(2.0))
+                            .child(
+                                div()
+                                    .flex()
+                                    .justify_between()
+                                    .text_size(st.px(|m| m.ui_text))
+                                    .text_color(st.c(|c| c.text))
+                                    .child(row.kind.clone())
+                                    .child(
+                                        div()
+                                            .text_size(px(11.5))
+                                            .text_color(st.c(|c| c.faint))
+                                            .child(format!("{}", page + 1)),
+                                    ),
+                            )
+                            .children(row.text.map(|t| {
+                                div()
+                                    .text_size(px(12.0))
+                                    .text_color(st.c(|c| c.muted))
+                                    .line_clamp(3)
+                                    .child(t)
+                            }))
+                            .children(pending.map(|p| {
+                                div()
+                                    .text_size(px(11.0))
+                                    .text_color(st.c(|c| c.faint))
+                                    .child(p)
+                            })),
+                    )
+                    .children(delete),
+            );
+        }
+        col.into_any_element()
+    }
+
+    /// Save the marks as Markdown or CSV next to the document.
+    fn export_marks(&mut self, reader: &Entity<Reader>, csv: bool, cx: &mut Context<Self>) {
+        let (content, name, dir) = reader.update(cx, |r, cx| {
+            let content = if csv {
+                r.marks_csv(cx)
+            } else {
+                r.marks_markdown(cx)
+            };
+            let stem = r
+                .path
+                .file_stem()
+                .map(|s| s.to_string_lossy().to_string())
+                .unwrap_or_else(|| "marks".into());
+            let ext = if csv { "csv" } else { "md" };
+            let dir = r.path.parent().map(|p| p.to_path_buf()).unwrap_or_default();
+            (content, format!("{stem} - marks.{ext}"), dir)
+        });
+        let rx = cx.prompt_for_new_path(&dir, Some(&name));
+        cx.spawn(async move |this, cx| {
+            let Ok(Ok(Some(out))) = rx.await else {
+                return;
+            };
+            let written = cx
+                .background_spawn({
+                    let out = out.clone();
+                    async move {
+                        std::fs::write(&out, content)
+                            .map(|_| out)
+                            .map_err(|e| e.to_string())
+                    }
+                })
+                .await;
+            let _ = this.update(cx, |ws, cx| ws.report(written, "Exported", cx));
+        })
+        .detach();
+    }
+
     /// The sidebar: with tabs in the sidebar, a header (sidebar, Home, open)
     /// and the open documents; then Contents when a document is showing.
     fn sidebar_frame(
@@ -844,17 +1066,37 @@ impl Workspace {
             .when_some(contents, |d, col| {
                 // With tabs on top, the Contents header carries the hide
                 // button (with tabs in the sidebar it's in the sidebar's head).
-                let contents_head =
-                    heading("Contents")
-                        .justify_between()
-                        .pr(px(8.0))
-                        .when(!has_tabs, |h| {
-                            h.child(
-                                icon_button("side-hide", "sidebar", false, st)
-                                    .tip("Hide sidebar  Ctrl+B")
-                                    .on_click(cx.listener(|ws, _, _, cx| ws.toggle_sidebar(cx))),
-                            )
-                        });
+                let pane = self.side_pane;
+                let pane_tab = |p: SidePane, icon_name: &'static str, tip: &'static str| {
+                    icon_button(icon_name, icon_name, pane == p, st)
+                        .tip(tip)
+                        .on_click(cx.listener(move |ws, _, _, cx| {
+                            ws.side_pane = p;
+                            cx.notify();
+                        }))
+                };
+                let contents_head = heading(pane.label())
+                    .justify_between()
+                    .pr(px(8.0))
+                    .child(
+                        div()
+                            .flex()
+                            .gap(px(2.0))
+                            .ml_auto()
+                            .child(pane_tab(SidePane::Contents, "outline", "Contents"))
+                            .child(pane_tab(
+                                SidePane::Marks,
+                                "highlight",
+                                "Marks and annotations",
+                            )),
+                    )
+                    .when(!has_tabs, |h| {
+                        h.child(
+                            icon_button("side-hide", "sidebar", false, st)
+                                .tip("Hide sidebar  Ctrl+B")
+                                .on_click(cx.listener(|ws, _, _, cx| ws.toggle_sidebar(cx))),
+                        )
+                    });
                 d.child(contents_head).child(
                     div()
                         .id("toc-scroll")

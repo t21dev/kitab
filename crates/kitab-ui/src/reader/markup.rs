@@ -318,6 +318,17 @@ impl Reader {
         Some(placed.mark)
     }
 
+    /// Take a mark away (the Marks panel's delete).
+    pub(super) fn unplace_mark(&mut self, local: u64, cx: &mut Context<Self>) -> Option<Mark> {
+        self.unplace(local, cx)
+    }
+
+    /// Remember a removal for undo.
+    pub(super) fn push_removed(&mut self, mark: Mark) {
+        self.markup.undo.push(Edit::Removed(mark));
+        self.markup.redo.clear();
+    }
+
     /// The newest placed mark equal to `mark`.
     fn find_placed(&self, mark: &Mark) -> Option<u64> {
         self.markup
@@ -889,8 +900,9 @@ impl Reader {
         self.markup.saving = false;
         match result {
             Ok(n) => {
-                // The file draws them now.
+                // The file draws them now, and lists them.
                 self.markup.marks.clear();
+                self.file_annots = None;
                 self.markup.undo.clear();
                 self.markup.redo.clear();
                 let what = if n == 1 { "mark" } else { "marks" };

@@ -9,10 +9,12 @@ mod dock;
 mod editor;
 mod find;
 pub use dock::TOP_INSET;
+pub use marks_list::{MarkRow, MarkSource};
 mod geom;
 mod info;
 mod layer;
 mod markdown;
+mod marks_list;
 mod markup;
 mod select;
 
@@ -169,6 +171,8 @@ pub struct Reader {
     markup: markup::MarkupState,
     /// The file's size in bytes, for the info chip (read off the UI thread).
     file_size: Option<u64>,
+    /// The annotations already in the file, once the Marks panel asked.
+    file_annots: Option<Vec<kitab_core::FileAnnot>>,
 }
 
 impl Reader {
@@ -231,6 +235,7 @@ impl Reader {
             book: None,
             markup: markup::MarkupState::default(),
             file_size: None,
+            file_annots: None,
         };
         this.load_file_size(cx);
         this.open(None, cx);

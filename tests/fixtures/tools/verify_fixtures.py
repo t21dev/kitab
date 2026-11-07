@@ -81,6 +81,9 @@ def pdf_info(path: Path) -> dict:
     info["permissions_copy"] = bool(doc.permissions & fitz.PDF_PERM_COPY)
     info["text_chars_page1"] = len(doc[0].get_text().strip()) if doc.page_count else 0
     info["annots_page1"] = len(list(doc[0].annots())) if doc.page_count else 0
+    # Kinds and notes, in order, for the engine's annotation list (Marks panel).
+    info["annot_kinds_page1"] = [a.type[1] for a in doc[0].annots()] if doc.page_count else []
+    info["annot_notes_page1"] = [a.info.get("content") or "" for a in doc[0].annots()] if doc.page_count else []
     info["images_page2"] = len(doc[1].get_images()) if doc.page_count > 1 else 0
     info["widgets"] = sum(len(list(p.widgets())) for p in doc)
     info["links_page1"] = len(doc[0].get_links()) if doc.page_count else 0

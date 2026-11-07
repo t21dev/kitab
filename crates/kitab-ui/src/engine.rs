@@ -79,6 +79,11 @@ pub trait DocEngine: Send + Sync + 'static {
         let _ = (src, password, marks, out);
         Err("this engine can't save marks".into())
     }
+    /// The annotations already in the file (PDF only).
+    fn annotations(&self, doc: DocHandle) -> Vec<kitab_core::FileAnnot> {
+        let _ = doc;
+        Vec::new()
+    }
     /// Lay a reflowable book out again (new page size or text size) and
     /// describe it anew: page count, sizes and contents change.
     fn relayout(&self, doc: DocHandle, layout: BookLayout) -> Result<DocInfo, String> {
