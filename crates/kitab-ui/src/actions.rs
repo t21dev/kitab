@@ -292,6 +292,13 @@ pub fn bind_default_keys(cx: &mut App) {
     // A text field (notes, text boxes) takes every key it types with.
     let field = Some(crate::text_field::TEXT_FIELD);
     cx.bind_keys(keys.iter().map(|k| KeyBinding::new(k, NoAction, field)));
+    // The password prompt too: plain letters are reader shortcuts (j, k, n,
+    // p, h), which ate them. Enter and Escape keep their prompt actions.
+    cx.bind_keys(
+        keys.iter()
+            .filter(|k| !matches!(k.as_str(), "enter" | "escape"))
+            .map(|k| KeyBinding::new(k, NoAction, Some(PROMPT))),
+    );
     cx.bind_keys(
         [
             "up",

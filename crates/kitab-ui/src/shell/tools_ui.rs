@@ -124,7 +124,10 @@ impl Workspace {
             open,
             serial,
         });
-        self.after(TOAST_FOR, cx, move |ws, cx| ws.dismiss_toast(serial, cx));
+        // Errors stay until closed (DESIGN.md › Toasts); the rest go by.
+        if !bad {
+            self.after(TOAST_FOR, cx, move |ws, cx| ws.dismiss_toast(serial, cx));
+        }
         cx.notify();
     }
 
@@ -215,7 +218,7 @@ impl Workspace {
             .min_h(px(40.0))
             .pl(px(14.0))
             .pr(px(6.0))
-            .rounded_full()
+            .rounded(px(20.0))
             .bg(st.c(|c| c.raised))
             .shadow(st.float())
             .text_size(st.px(|m| m.ui_text))
@@ -233,13 +236,37 @@ impl Workspace {
             .child(
                 div()
                     .max_w(px(520.0))
-                    .overflow_hidden()
-                    .text_ellipsis()
-                    .whitespace_nowrap()
+                    .py(px(9.0))
+                    // Errors wrap, so the whole reason shows; others stay on
+                    // one line.
+                    .when(!t.bad, |d| {
+                        d.overflow_hidden().text_ellipsis().whitespace_nowrap()
+                    })
                     .child(t.text.clone()),
             )
             .children(action)
-            .when(t.open.is_none(), |d| d.pr(px(14.0)));
+            .when(t.bad, |d| {
+                d.child(
+                    div()
+                        .id("toast-close")
+                        .size(px(26.0))
+                        .flex_none()
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .rounded_full()
+                        .cursor_pointer()
+                        .hover(|d| d.bg(st.c(|c| c.hover)))
+                        .on_click(cx.listener(move |ws, _, _, cx| ws.dismiss_toast(serial, cx)))
+                        .child(
+                            svg()
+                                .path(icon("close"))
+                                .size(px(12.0))
+                                .text_color(st.c(|c| c.muted)),
+                        ),
+                )
+            })
+            .when(t.open.is_none() && !t.bad, |d| d.pr(px(14.0)));
         let pill = if closing {
             motion::exit(
                 pill,
@@ -528,9 +555,19 @@ impl Workspace {
             .justify_center()
             .key_context(OVERLAY)
             .on_action(cx.listener(move |ws, _: &CloseOverlay, window, cx| close(ws, window, cx)))
+            // A click beside a dialog the user types into doesn't throw the
+            // typing away; Esc and Cancel close those.
             .on_mouse_down(
                 MouseButton::Left,
-                cx.listener(move |ws, _, window, cx| close(ws, window, cx)),
+                cx.listener(move |ws, _, window, cx| {
+                    let typed = matches!(
+                        id,
+                        "password" | "sign" | "page-tools" | "name" | "print" | "extract"
+                    );
+                    if !typed {
+                        close(ws, window, cx)
+                    }
+                }),
             )
             .child(scrim)
             .child(panel)

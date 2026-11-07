@@ -19,27 +19,27 @@ All colours are tokens. Components never contain a literal colour. Tokens are de
 
 ### Surface and text tokens
 
-| Token | Dark | Light | Paper | Nord | Noctua | Vampire | Ink | Use |
-|---|---|---|---|---|---|---|---|---|
-| `bg` | `#141415` | `#FFFFFF` | `#F4EEE3` | `#2E3440` | `#0E1626` | `#17121A` | `#000000` | Window, chrome **and** reflowed reading surface |
-| `panel` | `#111112` | `#FAFAFB` | `#EFE8DB` | `#2A303B` | `#0B1220` | `#130F16` | `#050506` | Sidebar, settings rail, wells |
-| `desk` | `#0F0F10` | `#F2F2F4` | `#EBE3D5` | `#292E39` | `#0A101C` | `#120E14` | `#000000` | Behind fixed-layout page sheets |
-| `raised` | `#1E1E21` | `#FFFFFF` | `#FAF6EE` | `#3B4252` | `#17223A` | `#231B28` | `#131316` | Raised controls, active tab, menus, cards |
-| `hover` | `#18181A` | `#F3F3F5` | `#EDE5D7` | `#343A47` | `#121C30` | `#1D1621` | `#0C0C0E` | Hover fill, well fill |
-| `line` | `#27272B` | `#E8E8EC` | `#DCD1BF` | `#434C5E` | `#1F2B45` | `#2F2534` | `#1E1E23` | Every hairline |
-| `text` | `#ECECEE` | `#18181B` | `#2B241D` | `#ECEFF4` | `#E6ECF7` | `#F2EAF0` | `#F4F4F6` | Primary text |
-| `read` | `#D9D9DD` | `#232326` | `#2B241D` | `#E5E9F0` | `#DCE3F0` | `#EADFE6` | `#E2E2E7` | Reading body text (slightly softer) |
-| `muted` | `#A1A1A7` | `#55555D` | `#5F5346` | `#C3CAD6` | `#A9B5CE` | `#C2B2BF` | `#A7A7B0` | Secondary text, idle icons |
-| `faint` | `#8C8C92` | `#6B6B73` | `#6E6253` | `#A3ACBC` | `#8A97B3` | `#A2909F` | `#8E8E98` | Meta, counts, helper text. Never the only copy of something important |
-| `ring` | `#5C5C63` | `#B5B5BC` | `#B5A893` | `#4C566A` | `#33405E` | `#4A3B50` | `#4A4A53` | Unread ring, disabled glyphs, ticks |
-| `accent` | `#E6B450` | `#B7791F` | `#A65424` | `#88C0D0` | `#F2A65A` | `#E0466A` | `#8EA8FF` | The accent (overridable, see below) |
-| `highlight` | `rgba(230,180,80,.30)` | `#FBE2A6` | `#EFD08F` | `rgba(235,203,139,.30)` | `rgba(242,166,90,.28)` | `rgba(224,70,106,.28)` | `rgba(142,168,255,.28)` | Default highlight colour behind text |
-| `ok` | `#4CC38A` | `#1F9D63` | `#4E8A57` | `#A3BE8C` | `#5FD3A3` | `#6CCB97` | `#4CC38A` | Finished, signature valid |
-| `warn` | `#E6B450` | `#B7791F` | `#B87A1E` | `#EBCB8B` | `#F2C14E` | `#E8B04A` | `#E6B450` | Signer unknown, changed after signing |
-| `bad` | `#F06A6A` | `#D33B3B` | `#B5402F` | `#BF616A` | `#F07A7A` | `#FF5C7A` | `#F06A6A` | Errors, broken signature, destructive |
-| `scrim` | `rgba(0,0,0,.55)` | `rgba(20,20,30,.28)` | `rgba(60,40,20,.25)` | `rgba(0,0,0,.45)` | `rgba(0,0,0,.55)` | `rgba(0,0,0,.55)` | `rgba(0,0,0,.7)` | Behind dialogs |
+| Token | Dark | Gray | Light | Paper | Nord | Noctua | Vampire | Ink | Use |
+|---|---|---|---|---|---|---|---|---|---|
+| `bg` | `#141415` | `#191919` | `#FFFFFF` | `#F4EEE3` | `#2E3440` | `#0E1626` | `#17121A` | `#000000` | Window, chrome **and** reflowed reading surface |
+| `panel` | `#111112` | `#161616` | `#FAFAFB` | `#EFE8DB` | `#2A303B` | `#0B1220` | `#130F16` | `#050506` | Sidebar, settings rail, wells |
+| `desk` | `#0F0F10` | `#131313` | `#F2F2F4` | `#EBE3D5` | `#292E39` | `#0A101C` | `#120E14` | `#000000` | Behind fixed-layout page sheets |
+| `raised` | `#1E1E21` | `#232323` | `#FFFFFF` | `#FAF6EE` | `#3B4252` | `#17223A` | `#231B28` | `#131316` | Raised controls, active tab, menus, cards |
+| `hover` | `#18181A` | `#1E1E1E` | `#F3F3F5` | `#EDE5D7` | `#343A47` | `#121C30` | `#1D1621` | `#0C0C0E` | Hover fill, well fill |
+| `line` | `#27272B` | `#2D2D2D` | `#E8E8EC` | `#DCD1BF` | `#434C5E` | `#1F2B45` | `#2F2534` | `#1E1E23` | Every hairline |
+| `text` | `#ECECEE` | `#EDEDED` | `#18181B` | `#2B241D` | `#ECEFF4` | `#E6ECF7` | `#F2EAF0` | `#F4F4F6` | Primary text |
+| `read` | `#D9D9DD` | `#DADADA` | `#232326` | `#2B241D` | `#E5E9F0` | `#DCE3F0` | `#EADFE6` | `#E2E2E7` | Reading body text (slightly softer) |
+| `muted` | `#A1A1A7` | `#A6A6A6` | `#55555D` | `#5F5346` | `#C3CAD6` | `#A9B5CE` | `#C2B2BF` | `#A7A7B0` | Secondary text, idle icons |
+| `faint` | `#8C8C92` | `#919191` | `#6B6B73` | `#6E6253` | `#A3ACBC` | `#8A97B3` | `#A2909F` | `#8E8E98` | Meta, counts, helper text. Never the only copy of something important |
+| `ring` | `#5C5C63` | `#606060` | `#B5B5BC` | `#B5A893` | `#4C566A` | `#33405E` | `#4A3B50` | `#4A4A53` | Unread ring, disabled glyphs, ticks |
+| `accent` | `#E6B450` | `#E6B450` | `#B7791F` | `#A65424` | `#88C0D0` | `#F2A65A` | `#E0466A` | `#8EA8FF` | The accent (overridable, see below) |
+| `highlight` | `rgba(230,180,80,.30)` | `rgba(230,180,80,.30)` | `#FBE2A6` | `#EFD08F` | `rgba(235,203,139,.30)` | `rgba(242,166,90,.28)` | `rgba(224,70,106,.28)` | `rgba(142,168,255,.28)` | Default highlight colour behind text |
+| `ok` | `#4CC38A` | `#4CC38A` | `#1F9D63` | `#4E8A57` | `#A3BE8C` | `#5FD3A3` | `#6CCB97` | `#4CC38A` | Finished, signature valid |
+| `warn` | `#E6B450` | `#E6B450` | `#B7791F` | `#B87A1E` | `#EBCB8B` | `#F2C14E` | `#E8B04A` | `#E6B450` | Signer unknown, changed after signing |
+| `bad` | `#F06A6A` | `#F06A6A` | `#D33B3B` | `#B5402F` | `#BF616A` | `#F07A7A` | `#FF5C7A` | `#F06A6A` | Errors, broken signature, destructive |
+| `scrim` | `rgba(0,0,0,.55)` | `rgba(0,0,0,.55)` | `rgba(20,20,30,.28)` | `rgba(60,40,20,.25)` | `rgba(0,0,0,.45)` | `rgba(0,0,0,.55)` | `rgba(0,0,0,.55)` | `rgba(0,0,0,.7)` | Behind dialogs |
 
-Nord uses the published Nord palette (MIT; credit in About and NOTICE). Noctua, Vampire and Ink are Kitab's own. Ink is true black for OLED screens, with a blue-black ink accent. A new theme must define every token above and pass the contrast check: `text`/`read` ≥ 7:1 on `bg`, `muted` ≥ 4.5:1, `faint` ≥ 4.5:1 on `bg` and `panel`, `accent` ≥ 3:1 as a mark and ≥ 4.5:1 when used as text.
+Nord uses the published Nord palette (MIT; credit in About and NOTICE). Gray, Noctua, Vampire and Ink are Kitab's own. Gray is Dark without its slight warmth: plain neutral greys on `#191919`. Ink is true black for OLED screens, with a blue-black ink accent. A new theme must define every token above and pass the contrast check: `text`/`read` ≥ 7:1 on `bg`, `muted` ≥ 4.5:1, `faint` ≥ 4.5:1 on `bg` and `panel`, `accent` ≥ 3:1 as a mark and ≥ 4.5:1 when used as text.
 
 ### Accent
 

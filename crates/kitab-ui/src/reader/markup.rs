@@ -1052,6 +1052,11 @@ impl Reader {
                     .text_size(px(12.0))
                     .text_color(st.c(|c| c.muted))
                     .id("markup-bar-inner")
+                    // Never wider than the reading area: it scrolls instead.
+                    .when(self.viewport.0 > 0.0, |d| {
+                        d.max_w(px((self.viewport.0 - 24.0).max(120.0)))
+                            .overflow_x_scroll()
+                    })
                     .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                     .children(Tool::ALL.into_iter().map(|t| {
                         dock::dock_button(t.icon(), t.icon(), m.tool == Some(t), st)

@@ -414,11 +414,14 @@ impl Reader {
         let mut out = Vec::new();
         for (h, quads) in hits.iter().enumerate() {
             let current = self.find.current == Some((ix as u32, h));
-            let color = if current {
-                st.c(|c| c.accent).opacity(0.45)
+            // Drawn over the page image, so always see-through: a theme's
+            // highlight can be opaque (Light, Paper), which hid the words.
+            let mut color = if current {
+                st.c(|c| c.accent)
             } else {
                 st.c(|c| c.highlight)
             };
+            color.a = if current { 0.45 } else { 0.4 };
             for q in quads {
                 let r = rect_to_view(*q, size, self.rotation, ppt);
                 // A little air around the glyphs, as a marker would leave.
@@ -635,10 +638,12 @@ impl Reader {
                 Duration::ZERO,
             )
         };
+        // Below the markup bar when both are open, never under it.
+        let below = if self.markup_on() { 54.0 } else { 0.0 };
         Some(
             div()
                 .absolute()
-                .top(px(10.0 + self.top_inset))
+                .top(px(10.0 + self.top_inset + below))
                 .right(px(18.0))
                 .child(bar)
                 .into_any_element(),

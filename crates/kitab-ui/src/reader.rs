@@ -157,6 +157,9 @@ pub struct Reader {
     restore: Option<ReadingState>,
     /// The page field (Ctrl+G or a click on the page number).
     page_focus: FocusHandle,
+    /// The password prompt's field; focused when the prompt appears.
+    password_focus: FocusHandle,
+    focus_password: bool,
     /// The field's text while it is being edited.
     page_edit: Option<String>,
     /// The scrubber track's bounds from the last frame, for clicks and drags.
@@ -262,6 +265,8 @@ impl Reader {
             save_scheduled: false,
             restore: None,
             page_focus,
+            password_focus: cx.focus_handle(),
+            focus_password: false,
             page_edit: None,
             track: Rc::new(Cell::new(None)),
             dragging: false,
@@ -478,8 +483,14 @@ impl Reader {
                 self.index_text_later(cx);
                 cx.emit(ReaderEvent::Opened);
             }
-            Err(OpenError::NeedsPassword) => self.status = Status::NeedsPassword { wrong: false },
-            Err(OpenError::WrongPassword) => self.status = Status::NeedsPassword { wrong: true },
+            Err(OpenError::NeedsPassword) => {
+                self.status = Status::NeedsPassword { wrong: false };
+                self.focus_password = true;
+            }
+            Err(OpenError::WrongPassword) => {
+                self.status = Status::NeedsPassword { wrong: true };
+                self.focus_password = true;
+            }
             Err(e) => self.status = Status::Failed(e),
         }
         cx.notify();
@@ -1362,7 +1373,13 @@ impl Reader {
             Status::NeedsPassword { wrong } => {
                 let wrong = *wrong;
                 let dots: String = "•".repeat(self.password.chars().count());
-                let focused = self.focus.is_focused(window);
+                // Typing goes straight into the field when the prompt shows.
+                if self.focus_password {
+                    self.focus_password = false;
+                    window.focus(&self.password_focus);
+                }
+                let focused = self.password_focus.is_focused(window);
+                let can_open = !self.password.is_empty();
                 Some(
                     placeholder(
                         "lock",
@@ -1373,6 +1390,15 @@ impl Reader {
                         div()
                             .id("password")
                             .key_context(PROMPT)
+                            .track_focus(&self.password_focus)
+                            .cursor_text()
+                            .on_mouse_down(
+                                MouseButton::Left,
+                                cx.listener(|r, _, window, cx| {
+                                    window.focus(&r.password_focus);
+                                    cx.notify();
+                                }),
+                            )
                             .on_action(cx.listener(Self::submit_password))
                             .on_key_down(cx.listener(Self::on_key_password))
                             .mt(px(6.0))
@@ -1399,6 +1425,26 @@ impl Reader {
                             } else {
                                 div().child(dots)
                             }),
+                    )
+                    .child(
+                        div()
+                            .id("password-open")
+                            .mt(px(4.0))
+                            .h(st.px(|m| m.control_height))
+                            .px(px(18.0))
+                            .flex()
+                            .items_center()
+                            .rounded(st.px(|m| m.control_radius))
+                            .text_size(st.px(|m| m.ui_text))
+                            .font_weight(FontWeight::MEDIUM)
+                            .bg(st.c(|c| c.accent))
+                            .text_color(st.c(|c| c.bg))
+                            .when(!can_open, |d| d.opacity(0.45))
+                            .when(can_open, |d| d.cursor_pointer())
+                            .on_click(cx.listener(|r, _, window, cx| {
+                                r.submit_password(&SubmitPassword, window, cx)
+                            }))
+                            .child("Open"),
                     )
                     .child(
                         div()
@@ -1895,7 +1941,17 @@ impl Reader {
         } else {
             0.0
         };
-        let track_w = 220.0;
+        // Shorter in a narrow reading area, so the dock fits without scrolling.
+        let vw = self.viewport.0;
+        let track_w = if vw > 0.0 && vw < 820.0 {
+            if vw < 520.0 {
+                (vw - 330.0).clamp(60.0, 100.0)
+            } else {
+                (vw - 470.0).clamp(100.0, 220.0)
+            }
+        } else {
+            220.0
+        };
         let cell = self.track.clone();
         div()
             .id("track")

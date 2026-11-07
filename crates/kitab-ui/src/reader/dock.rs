@@ -156,10 +156,17 @@ impl Reader {
         items.minimal &= !t.minimal;
         items.print &= !t.print;
         items.password &= !t.password;
-        let show_sidebar = items.sidebar && !compact;
-        let show_history = items.history && !compact;
-        let show_fit = items.fit && !compact;
-        let show_rotate = items.rotate && !compact;
+        // A narrow reading area: the least-used groups step aside first
+        // (their keys and the palette still work), so the dock never has to
+        // scroll at ordinary window sizes.
+        let vw = self.viewport.0;
+        let tight = !upright && vw > 0.0 && vw < 820.0;
+        let tighter = !upright && vw > 0.0 && vw < 640.0;
+        let tightest = !upright && vw > 0.0 && vw < 520.0;
+        let show_sidebar = items.sidebar && !compact && !tightest;
+        let show_history = items.history && !compact && !tight;
+        let show_fit = items.fit && !compact && !tighter;
+        let show_rotate = items.rotate && !compact && !tight;
         let mut dock = div()
             .id("dock")
             .flex()

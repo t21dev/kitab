@@ -103,6 +103,9 @@ pub fn open_main_window(
         }),
         window_background: WindowBackgroundAppearance::Opaque,
         app_id: Some("dev.t21.kitab".into()),
+        // Small enough for half a laptop screen; below it the title bar,
+        // Home's header and Settings can't fit their controls.
+        window_min_size: Some(gpui::size(px(640.0), px(460.0))),
         ..Default::default()
     };
     match cx.open_window(options, |window, cx| {
