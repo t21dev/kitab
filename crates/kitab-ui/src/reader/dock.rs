@@ -89,6 +89,9 @@ impl Reader {
             return None;
         }
         let at = st.dock;
+        if st.dock_hidden {
+            return Some(dock_handle(at, top_inset, st));
+        }
         let upright = at.upright();
         let mode = self.zoom;
         let group = || {
@@ -285,6 +288,14 @@ impl Reader {
                             .on_click(cx.listener(|_, e: &gpui::ClickEvent, _, cx| {
                                 cx.emit(ReaderEvent::MoreMenu(e.position()))
                             })),
+                    )
+                    // Tuck the dock into a handle at its edge.
+                    .child(
+                        dock_button("dock-hide", toward_edge(at), false, st)
+                            .tip("Hide the dock  Ctrl+.")
+                            .on_click(|_, window, cx| {
+                                window.dispatch_action(Box::new(crate::actions::ToggleDock), cx)
+                            }),
                     ),
             );
 
@@ -360,4 +371,74 @@ pub(super) fn dock_button(
         .when(on, |d| d.bg(st.c(|c| c.raised)).shadow(st.elev()))
         .hover(|d| d.bg(st.c(|c| c.raised)))
         .child(svg().path(icon(name)).size(px(16.0)).text_color(fg))
+}
+
+/// The chevron that points at the dock's edge (hide) or away from it (show).
+fn toward_edge(at: DockAt) -> &'static str {
+    match at {
+        DockAt::Bottom => "chevron-down",
+        DockAt::Top => "chevron-up",
+        DockAt::Left => "chevron-left",
+        DockAt::Right => "chevron-right",
+    }
+}
+
+fn away_from_edge(at: DockAt) -> &'static str {
+    match at {
+        DockAt::Bottom => "chevron-up",
+        DockAt::Top => "chevron-down",
+        DockAt::Left => "chevron-right",
+        DockAt::Right => "chevron-left",
+    }
+}
+
+/// The hidden dock: a small handle at its edge. A click (or Ctrl+.) shows it.
+fn dock_handle(at: DockAt, top_inset: f32, st: &Style) -> AnyElement {
+    let upright = at.upright();
+    let handle = div()
+        .id("dock-handle")
+        .when(upright, |d| d.w(px(20.0)).h(px(64.0)))
+        .when(!upright, |d| d.w(px(64.0)).h(px(20.0)))
+        .flex()
+        .items_center()
+        .justify_center()
+        .rounded(px(9.0))
+        .bg(st.c(|c| c.raised))
+        .border_1()
+        .border_color(st.c(|c| c.line))
+        // Floats like the dock, so it reads over a white page.
+        .shadow(st.float())
+        .hover(|d| d.bg(st.c(|c| c.hover)))
+        .tip("Show the dock  Ctrl+.")
+        .on_click(|_, window, cx| window.dispatch_action(Box::new(crate::actions::ToggleDock), cx))
+        .child(
+            svg()
+                .path(icon(away_from_edge(at)))
+                .size(px(14.0))
+                .text_color(st.c(|c| c.muted)),
+        );
+    let place = div().absolute();
+    match at {
+        DockAt::Bottom => place
+            .bottom(px(6.0))
+            .left_0()
+            .right_0()
+            .flex()
+            .justify_center(),
+        DockAt::Top => place
+            .top(px(6.0 + top_inset))
+            .left_0()
+            .right_0()
+            .flex()
+            .justify_center(),
+        DockAt::Left => place.left(px(6.0)).top_0().bottom_0().flex().items_center(),
+        DockAt::Right => place
+            .right(px(6.0))
+            .top_0()
+            .bottom_0()
+            .flex()
+            .items_center(),
+    }
+    .child(handle)
+    .into_any_element()
 }

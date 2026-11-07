@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Hide the quick dock to its edge (the chevron at its end, or Ctrl+.): it becomes a small handle, and a click on the handle or Ctrl+. brings it back. Remembered across launches.
 - Highlight, underline or strike through selected text (H, or the right-click menu), and add notes and text boxes with the new Text and Note tools: notes are pins whose text shows when you point at them, and a click edits them. Typing works with input methods (Bangla, Arabic, CJK). In a PDF they save as Highlight, Underline, StrikeOut, Text and FreeText annotations.
 - A file info chip at the bottom left: format, file size, pages and paper size (a book shows its text size, Markdown its lines and words); point at it for the file's location. Settings › Reading › File info hides it.
 - Draw and mark up pages (Ctrl+Shift+D, or the pen in the dock): pen, highlighter, line, arrow, rectangle, ellipse and eraser, with six colours plus a picker of 84 more and any hex code (#RRGGBB or #RGB), three widths, undo and redo, and Shift for 45° lines, squares and circles. Marks are kept as you draw; in a PDF, Save in the dock (Ctrl+S) writes them into the file as standard annotations without touching the original bytes, so signatures stay valid. Comics, XPS and fixed-layout books keep their marks in Kitab. Settings › Reading › Drawing and markup turns the tools off.

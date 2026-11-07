@@ -37,6 +37,8 @@ pub struct Style {
     pub markup: bool,
     /// The file info chip shows.
     pub file_info: bool,
+    /// The dock is tucked into its handle.
+    pub dock_hidden: bool,
 }
 
 impl Global for Style {}
@@ -68,6 +70,7 @@ impl Style {
             book_text: s.book_text,
             markup: s.markup,
             file_info: s.file_info,
+            dock_hidden: s.dock_hidden,
         };
         style.resolve_accent();
         style
@@ -114,6 +117,7 @@ impl Style {
             book_text: self.book_text,
             markup: self.markup,
             file_info: self.file_info,
+            dock_hidden: self.dock_hidden,
         }
     }
 

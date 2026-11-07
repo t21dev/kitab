@@ -33,6 +33,7 @@ actions!(
         // Markup
         ToggleMarkup,
         HighlightSelection,
+        ToggleDock,
         MarkupUndo,
         MarkupRedo,
         SaveMarks,
@@ -109,6 +110,7 @@ pub fn bind_default_keys(cx: &mut App) {
         KeyBinding::new("ctrl-shift-tab", PrevTab, w),
         KeyBinding::new("ctrl-shift-h", ShowHome, w),
         KeyBinding::new("ctrl-b", ToggleSidebar, w),
+        KeyBinding::new("ctrl-.", ToggleDock, w),
         KeyBinding::new("f12", ToggleSidebar, w),
         KeyBinding::new("ctrl-shift-t", ReopenClosedTab, w),
         KeyBinding::new("ctrl-f4", CloseTab, w),

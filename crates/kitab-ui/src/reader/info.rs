@@ -116,7 +116,7 @@ impl Reader {
             return None;
         }
         let line = self.info_line()?;
-        let above_dock = st.shows_dock() && st.dock == DockAt::Bottom;
+        let above_dock = st.shows_dock() && !st.dock_hidden && st.dock == DockAt::Bottom;
         let bottom = if above_dock { 16.0 + 44.0 + 8.0 } else { 14.0 };
         let path: SharedString = self.path.to_string_lossy().to_string().into();
         Some(

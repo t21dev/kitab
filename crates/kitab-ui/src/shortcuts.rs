@@ -63,6 +63,7 @@ pub const GROUPS: &[Group] = &[
         title: "Draw and mark up",
         rows: &[
             ("Show the markup tools", "Ctrl+Shift+D"),
+            ("Hide or show the quick dock", "Ctrl+."),
             ("Straight lines at 45°, squares, circles", "Hold Shift"),
             ("Undo / redo a mark", "Ctrl+Z / Ctrl+Y"),
             ("Redo a mark", "Ctrl+Shift+Z"),

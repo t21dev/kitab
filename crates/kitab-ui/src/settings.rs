@@ -258,6 +258,8 @@ pub struct Settings {
     pub markup: bool,
     /// The file info chip at the bottom left (format, size, pages, paper).
     pub file_info: bool,
+    /// The dock is tucked into a handle at its edge (Ctrl+.).
+    pub dock_hidden: bool,
 }
 
 impl Settings {
@@ -326,6 +328,7 @@ impl Default for Settings {
             book_text: BOOK_TEXT_DEFAULT,
             markup: true,
             file_info: true,
+            dock_hidden: false,
         }
     }
 }
@@ -355,6 +358,7 @@ struct File {
     book_text_size: f32,
     markup_tools: bool,
     file_info_chip: bool,
+    dock_hidden: bool,
 }
 
 /// Books open at this text size (12 pt reads as 16 px at 100 %).
@@ -397,6 +401,7 @@ impl From<Settings> for File {
             book_text_size: s.book_text,
             markup_tools: s.markup,
             file_info_chip: s.file_info,
+            dock_hidden: s.dock_hidden,
         }
     }
 }
@@ -432,6 +437,7 @@ impl Settings {
             book_text: clamp_book_text(f.book_text_size),
             markup: f.markup_tools,
             file_info: f.file_info_chip,
+            dock_hidden: f.dock_hidden,
         })
     }
 
@@ -469,6 +475,7 @@ mod tests {
             book_text: 15.0,
             markup: false,
             file_info: false,
+            dock_hidden: true,
         };
         assert_eq!(Settings::from_json(&s.to_json()), Ok(s));
     }
