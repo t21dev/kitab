@@ -366,7 +366,22 @@ fn appearance(
             st,
         ))
         .child(group("Density", None, density_cards, st))
-        .child(group("Tabs", None, tab_cards, st))
+        .child(group(
+            "Tabs",
+            None,
+            div().flex().flex_col().gap(px(12.0)).child(tab_cards).child(well_row(
+                "Show how many tabs are open",
+                "A small number beside the tabs in the title bar.",
+                switch(
+                    "tab-count",
+                    st.tab_count,
+                    st,
+                    change(ws, |s: &mut Style| s.tab_count = !s.tab_count),
+                ),
+                st,
+            )),
+            st,
+        ))
         .child(group(
             "Quick dock",
             Some("Zoom, fit, find, rotate and more, floating over the page. At the bottom it also holds the page navigator."),
@@ -402,7 +417,12 @@ fn appearance(
         .child(group(
             "Toolbar",
             Some("Put each button in the title bar, beside the window buttons, or in the dock over the page, or turn it off. Title bar buttons act on the open tab. The compact dock trims the dock further."),
-            toolbar_rows(ws, st),
+            div()
+                .flex()
+                .flex_col()
+                .gap(px(12.0))
+                .child(toolbar_preview(st))
+                .child(toolbar_rows(ws, st)),
             st,
         ))
         .child(group(
@@ -555,6 +575,134 @@ type Slot = (
 
 /// One row per toolbar button: title bar, dock or off. More can't be off;
 /// the dock's hide chevron always stays.
+/// A small window that follows the Quick dock and Toolbar settings: the
+/// buttons in the title bar, the ones in the dock (where it sits, compact or
+/// not, faded or not), and More (⋯).
+fn toolbar_preview(st: &Style) -> AnyElement {
+    let (d, t) = (st.dock_items, st.title_items);
+    let compact = st.dock_compact;
+    // (icons, in the title bar, in the dock); compact keeps zoom and find.
+    let buttons: [(&[&str], bool, bool, bool); 11] = [
+        (&["sidebar"], t.sidebar, d.sidebar, false),
+        (&["arrow-left", "arrow-right"], t.history, d.history, false),
+        (&["minus", "plus"], t.zoom, d.zoom, true),
+        (&["fit-width", "fit-page"], t.fit, d.fit, false),
+        (&["search"], t.find, d.find, true),
+        (&["bookmark"], t.bookmark, d.bookmark, false),
+        (&["pen"], t.markup, d.markup, false),
+        (&["rotate"], t.rotate, d.rotate, false),
+        (&["focus"], t.minimal, d.minimal, false),
+        (&["print"], t.print, d.print, false),
+        (&["lock"], t.password, d.password, false),
+    ];
+    let glyph = |name: &str| {
+        svg()
+            .path(icon(name))
+            .size(px(11.0))
+            .text_color(st.c(|c| c.muted))
+    };
+    let mut up = div().flex().items_center().gap(px(6.0));
+    let mut dock = div().flex().items_center().gap(px(6.0));
+    let mut in_dock = 0;
+    for (names, title, docked, keep) in buttons {
+        if title {
+            for n in names {
+                up = up.child(glyph(n));
+            }
+        } else if docked && (!compact || keep) {
+            for n in names {
+                dock = dock.child(glyph(n));
+            }
+            in_dock += 1;
+        }
+    }
+    if t.more {
+        up = up.child(glyph("more-vertical"));
+    } else {
+        dock = dock.child(glyph("more-vertical"));
+        in_dock += 1;
+    }
+    let side = matches!(
+        st.dock,
+        crate::settings::DockAt::Left | crate::settings::DockAt::Right
+    );
+    let dock = (in_dock > 0).then(|| {
+        let bar = if side { dock.flex_col() } else { dock };
+        bar.p(px(6.0))
+            .rounded(px(8.0))
+            .bg(st.c(|c| c.raised))
+            .shadow(st.float())
+            .when(st.dock_fade, |d| d.opacity(0.5))
+    });
+    let page = div()
+        .w(px(150.0))
+        .h(px(150.0))
+        .rounded(px(3.0))
+        .bg(gpui::white())
+        .shadow(st.elev());
+    let mut area = div()
+        .relative()
+        .flex_1()
+        .flex()
+        .justify_center()
+        .pt(px(12.0))
+        .overflow_hidden()
+        .child(page);
+    if let Some(dock) = dock {
+        let placed = div().absolute().flex().child(dock);
+        area = area.child(match st.dock {
+            crate::settings::DockAt::Top => placed.top(px(8.0)).left_0().right_0().justify_center(),
+            crate::settings::DockAt::Bottom => {
+                placed.bottom(px(8.0)).left_0().right_0().justify_center()
+            }
+            crate::settings::DockAt::Left => placed.left(px(8.0)).top_0().bottom_0().items_center(),
+            crate::settings::DockAt::Right => {
+                placed.right(px(8.0)).top_0().bottom_0().items_center()
+            }
+        });
+    }
+    div()
+        .w(px(440.0))
+        .h(px(190.0))
+        .flex()
+        .flex_col()
+        .rounded(px(10.0))
+        .overflow_hidden()
+        .bg(st.c(|c| c.bg))
+        .border_1()
+        .border_color(st.c(|c| c.line))
+        .child(
+            div()
+                .h(px(28.0))
+                .flex()
+                .items_center()
+                .gap(px(8.0))
+                .px(px(10.0))
+                .border_b_1()
+                .border_color(st.c(|c| c.line))
+                .child(
+                    div()
+                        .w(px(84.0))
+                        .h(px(16.0))
+                        .rounded(px(4.0))
+                        .bg(st.c(|c| c.raised)),
+                )
+                .child(div().flex_1())
+                .child(up)
+                .child(
+                    div()
+                        .flex()
+                        .gap(px(10.0))
+                        .pl(px(8.0))
+                        .child(glyph("win-min"))
+                        .child(glyph("win-max"))
+                        .child(glyph("close")),
+                ),
+        )
+        .child(area)
+        .into_any_element()
+}
+
 fn toolbar_rows(ws: &WeakEntity<Workspace>, st: &Style) -> AnyElement {
     let rows: [(&'static str, Slot); 11] = [
         ("Sidebar", (|d| &mut d.sidebar, |t| &mut t.sidebar)),

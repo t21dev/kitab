@@ -401,6 +401,8 @@ pub struct Settings {
     pub skipped_update: String,
     /// The scroll bar along the right of the pages (Settings › Reading).
     pub scroll_bar: bool,
+    /// How many tabs are open, as a small number in the title bar.
+    pub tab_count: bool,
 }
 
 impl Settings {
@@ -478,6 +480,7 @@ impl Default for Settings {
             update_check: true,
             skipped_update: String::new(),
             scroll_bar: true,
+            tab_count: false,
         }
     }
 }
@@ -521,6 +524,7 @@ struct File {
     check_for_updates: bool,
     skipped_update: String,
     scroll_bar: bool,
+    tab_count: bool,
 }
 
 fn face_name(f: kitab_core::BookFace) -> &'static str {
@@ -605,6 +609,7 @@ impl From<Settings> for File {
             check_for_updates: s.update_check,
             skipped_update: s.skipped_update,
             scroll_bar: s.scroll_bar,
+            tab_count: s.tab_count,
         }
     }
 }
@@ -649,6 +654,7 @@ impl Settings {
             update_check: f.check_for_updates,
             skipped_update: f.skipped_update.chars().take(32).collect(),
             scroll_bar: f.scroll_bar,
+            tab_count: f.tab_count,
         })
     }
 
@@ -712,6 +718,7 @@ mod tests {
             update_check: false,
             skipped_update: "0.2.0".into(),
             scroll_bar: false,
+            tab_count: true,
         };
         assert_eq!(Settings::from_json(&s.to_json()), Ok(s));
     }

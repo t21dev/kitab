@@ -843,8 +843,31 @@ impl Workspace {
 
         // "All tabs" appears once the strip overflows: a menu of every tab.
         let overflowing = self.tab_scroll.max_offset().width > px(0.5);
+        let count = (st.tab_count && !self.tabs.is_empty()).then(|| {
+            div()
+                .id("tab-count")
+                .flex_none()
+                .h(px(18.0))
+                .min_w(px(18.0))
+                .px(px(6.0))
+                .flex()
+                .items_center()
+                .justify_center()
+                .rounded_full()
+                .bg(st.c(|c| c.raised))
+                .text_size(px(11.0))
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(st.c(|c| c.muted))
+                .tip(if self.tabs.len() == 1 {
+                    "1 tab open".to_string()
+                } else {
+                    format!("{} tabs open", self.tabs.len())
+                })
+                .child(self.tabs.len().to_string())
+        });
         bar = bar
             .child(strip)
+            .children(count)
             // New tab: Home, with Open file… and the recent books (Ctrl+O
             // still goes straight to the Open dialog).
             .child(

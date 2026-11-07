@@ -52,6 +52,8 @@ pub struct Style {
     pub skipped_update: String,
     /// The scroll bar on the right of the pages.
     pub scroll_bar: bool,
+    /// The open-tab count in the title bar.
+    pub tab_count: bool,
 }
 
 impl Global for Style {}
@@ -92,6 +94,7 @@ impl Style {
             update_check: s.update_check,
             skipped_update: s.skipped_update.clone(),
             scroll_bar: s.scroll_bar,
+            tab_count: s.tab_count,
         };
         style.resolve_accent();
         style
@@ -155,6 +158,7 @@ impl Style {
             update_check: self.update_check,
             skipped_update: self.skipped_update.clone(),
             scroll_bar: self.scroll_bar,
+            tab_count: self.tab_count,
         }
     }
 

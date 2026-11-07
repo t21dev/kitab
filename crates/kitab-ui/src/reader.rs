@@ -173,6 +173,9 @@ pub struct Reader {
     /// Dragging the scroll bar: where the pointer holds the thumb (pixels
     /// from its top).
     bar_grab: Option<f32>,
+    /// Middle-click scrolling, and which run of it is current.
+    autoscroll: Option<crate::autoscroll::AutoScroll>,
+    autoscroll_serial: u64,
     back: Vec<usize>,
     forward: Vec<usize>,
     _subs: Vec<Subscription>,
@@ -288,6 +291,8 @@ impl Reader {
             dragging: false,
             bar: Rc::new(Cell::new(None)),
             bar_grab: None,
+            autoscroll: None,
+            autoscroll_serial: 0,
             back: Vec::new(),
             forward: Vec::new(),
             _subs: vec![blur],
@@ -908,6 +913,47 @@ impl Reader {
         let w = f32::from(b.size.width).max(1.0);
         let f = (f32::from(x - b.origin.x) / w).clamp(0.0, 1.0);
         self.scroll_to_fraction(f, cx);
+    }
+
+    /// Start middle-click scrolling at `at`, or end it.
+    fn toggle_autoscroll(&mut self, at: Point<Pixels>, cx: &mut Context<Self>) {
+        if self.autoscroll.take().is_some() {
+            cx.notify();
+            return;
+        }
+        self.autoscroll = Some(crate::autoscroll::AutoScroll::new(at));
+        self.autoscroll_serial += 1;
+        let serial = self.autoscroll_serial;
+        cx.notify();
+        cx.spawn(async move |this, cx| {
+            loop {
+                cx.background_executor()
+                    .timer(crate::autoscroll::TICK)
+                    .await;
+                let going = this
+                    .update(cx, |r, cx| {
+                        let Some(a) = r
+                            .autoscroll
+                            .as_ref()
+                            .filter(|_| r.autoscroll_serial == serial)
+                        else {
+                            return false;
+                        };
+                        let step = a.step();
+                        if step != 0.0 {
+                            r.list.scroll_by(px(step));
+                            r.scrolled = true;
+                            cx.notify();
+                        }
+                        true
+                    })
+                    .unwrap_or(false);
+                if !going {
+                    break;
+                }
+            }
+        })
+        .detach();
     }
 
     /// The password that opened the document, for tools that reopen the file.
@@ -1709,7 +1755,43 @@ impl Render for Reader {
                 }
                 r.wake_dock(cx)
             }))
+            // Middle-click scrolling: the wheel starts (or ends) it, any
+            // other click ends it without doing anything else.
+            .capture_any_mouse_down(cx.listener(|r, e: &MouseDownEvent, _, cx| {
+                if r.autoscroll.is_some() && e.button != MouseButton::Middle {
+                    r.autoscroll = None;
+                    cx.stop_propagation();
+                    cx.notify();
+                }
+            }))
+            .on_mouse_down(
+                MouseButton::Middle,
+                cx.listener(|r, e: &MouseDownEvent, _, cx| {
+                    cx.stop_propagation();
+                    r.toggle_autoscroll(e.position, cx);
+                }),
+            )
+            .on_mouse_up(
+                MouseButton::Middle,
+                cx.listener(|r, _, _, cx| {
+                    if r.autoscroll.as_ref().is_some_and(|a| a.dragged) {
+                        r.autoscroll = None;
+                        cx.notify();
+                    }
+                }),
+            )
+            .when(self.autoscroll.is_some(), |d| {
+                d.cursor(gpui::CursorStyle::ResizeUpDown)
+            })
+            .children(
+                self.autoscroll
+                    .as_ref()
+                    .map(|a| crate::autoscroll::mark(a.anchor, &st)),
+            )
             .on_mouse_move(cx.listener(|r, e: &MouseMoveEvent, _, cx| {
+                if let Some(a) = r.autoscroll.as_mut() {
+                    a.moved(e.position, e.pressed_button == Some(MouseButton::Middle));
+                }
                 r.wake_dock(cx);
                 if r.markup.drawing.is_some() {
                     if e.pressed_button == Some(MouseButton::Left) {

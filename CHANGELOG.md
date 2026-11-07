@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Middle-click scrolling in documents and on Home, as in a browser: click the wheel and move the pointer above or below the mark to scroll (faster further away); any click ends it. Holding the wheel while dragging scrolls only while it's held.
+- An open-tab count beside the tabs (Settings › Appearance › Tabs; off by default).
+- Settings › Appearance › Toolbar shows a small window that follows the choices: which buttons sit in the title bar, which in the dock, where the dock is, and whether it's compact or fades.
 - A scroll bar along the right of the pages: drag it, or click beside the thumb to jump. Settings › Reading › Scroll bar turns it off.
 - Cover, a markup tool for a solid box over something you want hidden on the page. It's saved into a PDF as a filled square annotation, so other readers show it too. Only a cover: the text underneath stays in the file, and the tool's tooltip says so.
 - A welcome guide: a new Home offers "Welcome to Kitab", a four-page PDF about finding your way, marking up, themes and focus mode. Settings › Advanced opens it again.

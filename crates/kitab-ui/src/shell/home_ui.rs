@@ -64,6 +64,9 @@ pub(super) struct HomeView {
     /// The pixels a cover's longer side has on this screen: covers are
     /// drawn at that, no bigger.
     cover_px: u32,
+    /// Middle-click scrolling, and which run of it is current.
+    auto: Option<crate::autoscroll::AutoScroll>,
+    auto_serial: u64,
     /// When the cards last came in (their entrance plays only then).
     shown_at: Instant,
 }
@@ -84,6 +87,8 @@ impl HomeView {
             left: None,
             width: 1000.0,
             cover_px: 198,
+            auto: None,
+            auto_serial: 0,
             shown_at: Instant::now(),
         }
     }
@@ -187,7 +192,42 @@ impl Workspace {
             .relative()
             .flex_1()
             .min_h_0()
+            .capture_any_mouse_down(cx.listener(|ws, e: &MouseDownEvent, _, cx| {
+                if ws.home.auto.is_some() && e.button != MouseButton::Middle {
+                    ws.home.auto = None;
+                    cx.stop_propagation();
+                    cx.notify();
+                }
+            }))
+            .on_mouse_down(
+                MouseButton::Middle,
+                cx.listener(|ws, e: &MouseDownEvent, _, cx| {
+                    cx.stop_propagation();
+                    ws.toggle_home_autoscroll(e.position, cx);
+                }),
+            )
+            .on_mouse_up(
+                MouseButton::Middle,
+                cx.listener(|ws, _, _, cx| {
+                    if ws.home.auto.as_ref().is_some_and(|a| a.dragged) {
+                        ws.home.auto = None;
+                        cx.notify();
+                    }
+                }),
+            )
+            .when(self.home.auto.is_some(), |d| {
+                d.cursor(gpui::CursorStyle::ResizeUpDown)
+            })
+            .children(
+                self.home
+                    .auto
+                    .as_ref()
+                    .map(|a| crate::autoscroll::mark(a.anchor, st)),
+            )
             .on_mouse_move(cx.listener(|ws, e: &gpui::MouseMoveEvent, _, cx| {
+                if let Some(a) = ws.home.auto.as_mut() {
+                    a.moved(e.position, e.pressed_button == Some(MouseButton::Middle));
+                }
                 if ws.home.bar_grab.is_some() {
                     if e.pressed_button == Some(MouseButton::Left) {
                         ws.home_bar_drag(e.position.y, cx);
@@ -267,6 +307,46 @@ impl Workspace {
                     }),
             )
             .into_any_element()
+    }
+
+    fn toggle_home_autoscroll(&mut self, at: gpui::Point<Pixels>, cx: &mut Context<Self>) {
+        if self.home.auto.take().is_some() {
+            cx.notify();
+            return;
+        }
+        self.home.auto = Some(crate::autoscroll::AutoScroll::new(at));
+        self.home.auto_serial += 1;
+        let serial = self.home.auto_serial;
+        cx.notify();
+        cx.spawn(async move |this, cx| {
+            loop {
+                cx.background_executor()
+                    .timer(crate::autoscroll::TICK)
+                    .await;
+                let going = this
+                    .update(cx, |ws, cx| {
+                        let Some(a) = ws
+                            .home
+                            .auto
+                            .as_ref()
+                            .filter(|_| ws.home.auto_serial == serial)
+                        else {
+                            return false;
+                        };
+                        let step = a.step();
+                        if step != 0.0 {
+                            ws.home.list.scroll_by(px(step));
+                            cx.notify();
+                        }
+                        true
+                    })
+                    .unwrap_or(false);
+                if !going {
+                    break;
+                }
+            }
+        })
+        .detach();
     }
 
     fn home_bar_drag(&mut self, y: Pixels, cx: &mut Context<Self>) {

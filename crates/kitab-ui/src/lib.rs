@@ -5,6 +5,7 @@
 //! on the UI thread (AGENTS.md rule 2).
 
 pub mod actions;
+pub mod autoscroll;
 pub mod cache;
 pub mod edit_buffer;
 pub mod engine;
