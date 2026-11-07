@@ -56,6 +56,12 @@ impl Workspace {
         }
         self.menu = None;
         self.menu_closing = None;
+        // Windows: its own print dialog straight away, with everything in
+        // it (printer, copies, which pages); Kitab's sheet is for CUPS.
+        if kitab_print::SYSTEM_DIALOG {
+            self.print_with_system_dialog(reader, window, cx);
+            return;
+        }
         let page = reader.read(cx).current_page() + 1;
         let range = new_field(&format!("{page}"), false, "1-3, 7, 10-", window, cx);
         let sub = cx.subscribe_in(
@@ -266,6 +272,97 @@ impl Workspace {
         })
         .detach();
         cx.notify();
+    }
+
+    /// The system print dialog picks the printer, copies and pages; then
+    /// the pages go out in the background, shrunk to fit the paper where
+    /// they're bigger and turned to match it.
+    fn print_with_system_dialog(
+        &mut self,
+        reader: Entity<Reader>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let r = reader.read(cx);
+        let title = r.title().to_string();
+        let (count, current) = (r.page_count() as u32, r.current_page() as u32);
+        let Ok((doc, sizes)) = r.print_source() else {
+            return;
+        };
+        let owner = owner_of(window);
+        let engine: Arc<dyn DocEngine> = self.engine.clone();
+        cx.spawn(async move |this, cx| {
+            let (tx, rx) = smol::channel::unbounded::<(usize, usize)>();
+            let job = cx.background_spawn(async move {
+                let (mut printer, chosen) = match Printer::choose_pages(owner, count, current + 1) {
+                    Ok(Some(p)) => p,
+                    Ok(None) => return Ok(None),
+                    Err(e) => return Err(e),
+                };
+                let pages = chosen.pages(count, current);
+                if pages.is_empty() {
+                    return Err("those pages aren't in this document".to_string());
+                }
+                let total = pages.len();
+                let list: Vec<(u32, PageSize)> = pages
+                    .iter()
+                    .map(|&p| {
+                        let s = sizes
+                            .get(p as usize)
+                            .copied()
+                            .unwrap_or(kitab_core::SizePt { w: 612.0, h: 792.0 });
+                        (p, PageSize { w: s.w, h: s.h })
+                    })
+                    .collect();
+                let job = Job {
+                    title: &title,
+                    to_file: None,
+                    pages: &list,
+                    scale: Scale::Shrink,
+                    auto_rotate: true,
+                };
+                print_pages(
+                    &mut printer,
+                    &job,
+                    |page, scale, rotation| {
+                        let req = RenderRequest {
+                            page,
+                            scale,
+                            rotation,
+                            tile: None,
+                            generation: 0,
+                        };
+                        match engine.render(doc, req)? {
+                            Some(b) => Ok((b.bgra, b.width, b.height)),
+                            None => Err("it didn't draw".to_string()),
+                        }
+                    },
+                    |done| {
+                        let _ = tx.send_blocking((done, total));
+                    },
+                )
+                .map(Some)
+            });
+            let watcher = this.clone();
+            cx.spawn(async move |cx| {
+                while let Ok((done, total)) = rx.recv().await {
+                    let _ = watcher.update(cx, |ws, cx| {
+                        ws.toast(format!("Printing page {done} of {total}…"), false, None, cx)
+                    });
+                }
+            })
+            .detach();
+            let result = job.await;
+            let _ = this.update(cx, |ws, cx| match result {
+                Ok(Some(n)) => {
+                    let what = if n == 1 { "page" } else { "pages" };
+                    ws.toast(format!("Sent {n} {what} to the printer."), false, None, cx)
+                }
+                Ok(None) => {}
+                Err(e) => ws.toast(format!("Couldn't print: {e}"), true, None, cx),
+            });
+        })
+        .detach();
     }
 
     pub(super) fn print_view(&mut self, st: &Style, cx: &mut Context<Self>) -> Option<AnyElement> {

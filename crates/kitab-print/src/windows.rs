@@ -5,7 +5,7 @@
 //! (`StartDoc`/`StartPage`/`StretchDIBits`). Runs on a worker thread, never
 //! the UI thread: the dialog is modal to Kitab's window from there.
 
-use crate::{Paper, Placement};
+use crate::{Chosen, Paper, Placement};
 use std::path::Path;
 use windows::Win32::Foundation::{HGLOBAL, HWND};
 use windows::Win32::Graphics::Gdi::{
@@ -16,8 +16,8 @@ use windows::Win32::Graphics::Gdi::{
 use windows::Win32::Storage::Xps::{AbortDoc, DOCINFOW, EndDoc, EndPage, StartDocW, StartPage};
 use windows::Win32::System::Com::{COINIT_APARTMENTTHREADED, CoInitializeEx};
 use windows::Win32::UI::Controls::Dialogs::{
-    PD_NOCURRENTPAGE, PD_NOPAGENUMS, PD_NOSELECTION, PD_RESULT_PRINT, PD_RETURNDC,
-    PD_USEDEVMODECOPIESANDCOLLATE, PRINTDLGEXW, PrintDlgExW,
+    PD_CURRENTPAGE, PD_NOCURRENTPAGE, PD_NOPAGENUMS, PD_NOSELECTION, PD_PAGENUMS, PD_RESULT_PRINT,
+    PD_RETURNDC, PD_USEDEVMODECOPIESANDCOLLATE, PRINTDLGEXW, PRINTPAGERANGE, PrintDlgExW,
 };
 use windows::core::{HSTRING, PCWSTR};
 
@@ -34,7 +34,79 @@ pub struct Printer {
 // job's worker); `Printer` is moved to it, never shared.
 unsafe impl Send for Printer {}
 
+/// The most ranges the dialog takes ("1-3, 7, 10-12" is three).
+const MAX_RANGES: usize = 64;
+
 impl Printer {
+    /// Windows' own print dialog, everything in it: the printer and its
+    /// preferences, copies, and All / Current page / Pages for a document
+    /// of `page_count` pages showing `current` (1-based). `None` when the
+    /// reader cancels.
+    pub fn choose_pages(
+        owner: isize,
+        page_count: u32,
+        current: u32,
+    ) -> Result<Option<(Printer, Chosen)>, String> {
+        // SAFETY: COM for the dialog on this thread; a second call on the
+        // same thread is harmless (it reports S_FALSE).
+        let _ = unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED) };
+        let last = page_count.max(1);
+        let mut ranges = vec![PRINTPAGERANGE::default(); MAX_RANGES];
+        ranges[0] = PRINTPAGERANGE {
+            nFromPage: current.clamp(1, last),
+            nToPage: current.clamp(1, last),
+        };
+        let mut pd = PRINTDLGEXW {
+            lStructSize: std::mem::size_of::<PRINTDLGEXW>() as u32,
+            hwndOwner: HWND(owner as *mut core::ffi::c_void),
+            Flags: PD_RETURNDC | PD_NOSELECTION | PD_USEDEVMODECOPIESANDCOLLATE,
+            nPageRanges: 0,
+            nMaxPageRanges: MAX_RANGES as u32,
+            lpPageRanges: ranges.as_mut_ptr(),
+            nMinPage: 1,
+            nMaxPage: last,
+            nCopies: 1,
+            nStartPage: START_PAGE_GENERAL,
+            ..Default::default()
+        };
+        // SAFETY: `pd` is a fully initialised PRINTDLGEXW of the size it
+        // states, and `ranges` outlives the call with room for
+        // `nMaxPageRanges` entries; the dialog fills in handles freed below.
+        unsafe { PrintDlgExW(&mut pd) }.map_err(|e| format!("the print dialog failed: {e}"))?;
+        free(pd.hDevMode);
+        free(pd.hDevNames);
+        if pd.dwResultAction != PD_RESULT_PRINT {
+            if !pd.hDC.is_invalid() {
+                // SAFETY: a DC the dialog created and nobody else holds.
+                let _ = unsafe { DeleteDC(pd.hDC) };
+            }
+            return Ok(None);
+        }
+        if pd.hDC.is_invalid() {
+            return Err("the printer gave no device to draw on".into());
+        }
+        let chosen = if pd.Flags.contains(PD_PAGENUMS) {
+            let n = (pd.nPageRanges as usize).min(MAX_RANGES);
+            Chosen::Ranges(
+                ranges[..n]
+                    .iter()
+                    .map(|r| (r.nFromPage.min(r.nToPage), r.nFromPage.max(r.nToPage)))
+                    .collect(),
+            )
+        } else if pd.Flags.contains(PD_CURRENTPAGE) {
+            Chosen::Current
+        } else {
+            Chosen::All
+        };
+        Ok(Some((
+            Printer {
+                dc: pd.hDC,
+                started: false,
+            },
+            chosen,
+        )))
+    }
+
     /// Show the print dialog over `owner` (a window handle, or 0). `None`
     /// when the reader cancels.
     pub fn choose(owner: isize, copies: u32) -> Result<Option<Printer>, String> {

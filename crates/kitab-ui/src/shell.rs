@@ -2480,6 +2480,12 @@ impl Render for Workspace {
             }))
             .on_action(cx.listener(|ws, _: &CycleTheme, _, cx| ws.cycle_theme(cx)))
             .on_action(cx.listener(|ws, _: &OpenKeymap, _, cx| ws.edit_keymap(cx)))
+            // Their keys (Ctrl+P and the keymap's) need the window to listen
+            // too, not only Presenting: the menus call them directly.
+            .on_action(cx.listener(|ws, _: &Print, window, cx| ws.open_print(window, cx)))
+            .on_action(cx.listener(|ws, _: &PdfPassword, window, cx| ws.open_password(window, cx)))
+            .on_action(cx.listener(|ws, _: &SignPdf, window, cx| ws.open_sign(window, cx)))
+            .on_action(cx.listener(|ws, _: &PageTools, window, cx| ws.open_page_tools(window, cx)))
             .on_action(cx.listener(|ws, _: &Present, window, cx| ws.toggle_present(window, cx)))
             .on_action(
                 cx.listener(|ws, _: &CommandPalette, window, cx| ws.open_palette(window, cx)),

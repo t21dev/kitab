@@ -60,6 +60,32 @@ pub fn print_pdf(
     }
 }
 
+/// Which pages the print dialog asked for.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Chosen {
+    All,
+    /// The page on screen.
+    Current,
+    /// Inclusive ranges of 1-based page numbers, as typed in the dialog.
+    Ranges(Vec<(u32, u32)>),
+}
+
+impl Chosen {
+    /// The 0-based pages to print, in order, for a document of `count`
+    /// pages showing `current` (0-based). Pages past the end are dropped.
+    pub fn pages(&self, count: u32, current: u32) -> Vec<u32> {
+        match self {
+            Chosen::All => (0..count).collect(),
+            Chosen::Current => vec![current.min(count.saturating_sub(1))],
+            Chosen::Ranges(r) => r
+                .iter()
+                .flat_map(|&(a, b)| a.max(1)..=b.min(count))
+                .map(|p| p - 1)
+                .collect(),
+        }
+    }
+}
+
 #[cfg(windows)]
 mod windows;
 #[cfg(windows)]
@@ -135,6 +161,13 @@ mod other {
     pub struct Printer;
 
     impl Printer {
+        pub fn choose_pages(
+            _owner: isize,
+            _page_count: u32,
+            _current: u32,
+        ) -> Result<Option<(Printer, super::Chosen)>, String> {
+            Err("Printing on this system comes in a later version of Kitab.".into())
+        }
         pub fn choose(_owner: isize, _copies: u32) -> Result<Option<Printer>, String> {
             Err("Printing on this system comes in a later version of Kitab.".into())
         }
@@ -176,3 +209,19 @@ mod other {
 }
 #[cfg(not(windows))]
 pub use other::Printer;
+
+#[cfg(test)]
+mod chosen_tests {
+    use super::Chosen;
+
+    #[test]
+    fn dialog_choices_become_pages() {
+        assert_eq!(Chosen::All.pages(3, 1), vec![0, 1, 2]);
+        assert_eq!(Chosen::Current.pages(3, 1), vec![1]);
+        assert_eq!(Chosen::Current.pages(3, 9), vec![2]);
+        // "1-2, 5, 9-12" in a 10-page document: past the end is dropped.
+        let r = Chosen::Ranges(vec![(1, 2), (5, 5), (9, 12)]);
+        assert_eq!(r.pages(10, 0), vec![0, 1, 4, 8, 9]);
+        assert!(Chosen::Ranges(vec![(11, 12)]).pages(10, 0).is_empty());
+    }
+}

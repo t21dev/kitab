@@ -24,6 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Hovering a tab, button or row shows a clear highlight in every theme (it was nearly invisible in the dark ones).
 
 ### Fixed
+- Ctrl+P prints again (and the keys for Password, Sign and Page tools work outside presentation mode). On Windows, Print opens Windows' own print dialog straight away, with the printer, copies and which pages (all, the current page, or ranges like 1-3, 7); the pages print shrunk to fit the paper and turned to match it.
+- A code block's Copy button says Copied, with a tick, for a moment after it copies.
 - The window can be dragged by its title bar again, and minimise, maximise and close work: a click there was being swallowed before Windows saw it.
 - The page slider moves smoothly with the pointer, also in short documents (with two pages it used to stay put until halfway).
 - Pages no longer flicker while scrolling in a large window or on a high-DPI screen: the rendered-page cache grows to hold what's on screen, the next page is ready before it scrolls in, and tabs in the background keep their pages.

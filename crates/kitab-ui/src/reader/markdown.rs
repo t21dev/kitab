@@ -599,22 +599,47 @@ fn code_el(
                 } else {
                     lang.to_string()
                 })
-                .child(
+                .child({
+                    let key = copy_key(&copy_text);
+                    let done = copied_recently(key);
                     div()
                         .id(d.id("md-copy"))
+                        .flex()
+                        .items_center()
+                        .gap(d.px(4.0))
                         .px(d.px(6.0))
                         .py(d.px(2.0))
                         .rounded(px(5.0))
                         .cursor_pointer()
+                        .when(done, |b| b.text_color(st.c(|c| c.accent)))
                         .hover(|b| b.bg(st.hover_bg()).text_color(st.c(|c| c.text)))
                         .tip("Copy code")
                         .on_click(move |_, _, cx| {
                             cx.write_to_clipboard(gpui::ClipboardItem::new_string(
                                 copy_text.clone(),
-                            ))
+                            ));
+                            // "Copied" for a moment, then back to "Copy".
+                            if let Ok(mut c) = COPIED.lock() {
+                                *c = Some((key, std::time::Instant::now()));
+                            }
+                            cx.refresh_windows();
+                            let timer = cx.background_executor().timer(COPIED_FOR);
+                            cx.spawn(async move |cx| {
+                                timer.await;
+                                let _ = cx.update(|cx| cx.refresh_windows());
+                            })
+                            .detach();
                         })
-                        .child("Copy"),
-                ),
+                        .when(done, |b| {
+                            b.child(
+                                gpui::svg()
+                                    .path(crate::icons::icon("check"))
+                                    .size(d.px(12.0))
+                                    .text_color(st.c(|c| c.accent)),
+                            )
+                        })
+                        .child(if done { "Copied" } else { "Copy" })
+                }),
         )
         .child(
             div()
@@ -1240,4 +1265,24 @@ fn starts_right_to_left(text: &str) -> bool {
         }
     }
     false
+}
+
+/// How long a code block's Copy says "Copied".
+const COPIED_FOR: std::time::Duration = std::time::Duration::from_millis(1500);
+/// The code block copied last (by its text's hash) and when.
+static COPIED: std::sync::Mutex<Option<(u64, std::time::Instant)>> = std::sync::Mutex::new(None);
+
+fn copy_key(text: &str) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    text.hash(&mut h);
+    h.finish()
+}
+
+fn copied_recently(key: u64) -> bool {
+    COPIED
+        .lock()
+        .ok()
+        .and_then(|c| *c)
+        .is_some_and(|(k, at)| k == key && at.elapsed() < COPIED_FOR)
 }
