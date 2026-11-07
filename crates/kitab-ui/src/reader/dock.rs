@@ -494,8 +494,7 @@ pub(super) fn dock_button(
     } else {
         st.c(|c| c.muted)
     };
-    div()
-        .id(id)
+    crate::kbd::stop(div().id(id), st)
         .size(px(28.0))
         .flex_none()
         .flex()

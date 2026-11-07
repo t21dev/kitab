@@ -119,33 +119,40 @@ pub fn panel(
             let on = s == section;
             let ws = ws.clone();
             rail = rail.child(
-                div()
-                    .id(("settings-section", s as usize))
-                    .flex()
-                    .items_center()
-                    .gap(px(10.0))
-                    .h(st.px(|m| m.list_row))
-                    .px(px(10.0))
-                    .rounded(st.px(|m| m.control_radius))
-                    .text_size(st.px(|m| m.ui_text))
-                    .text_color(if on {
-                        st.c(|c| c.text)
+                crate::kbd::stop_fill(
+                    div().id(("settings-section", s as usize)),
+                    st,
+                    if on {
+                        st.c(|c| c.raised)
                     } else {
-                        st.c(|c| c.muted)
-                    })
-                    .when(on, |d| d.bg(st.c(|c| c.raised)).shadow(st.elev()))
-                    .when(!on, |d| {
-                        d.hover(|d| d.bg(st.c(|c| c.hover)).text_color(st.c(|c| c.text)))
-                    })
-                    .on_click(move |_, _, cx| {
-                        let _ = ws.update(cx, |ws, cx| ws.set_settings_section(s, cx));
-                    })
-                    .child(svg().path(icon(s.icon())).size(px(16.0)).text_color(if on {
-                        st.c(|c| c.accent)
-                    } else {
-                        st.c(|c| c.muted)
-                    }))
-                    .child(s.label()),
+                        st.c(|c| c.panel)
+                    },
+                )
+                .flex()
+                .items_center()
+                .gap(px(10.0))
+                .h(st.px(|m| m.list_row))
+                .px(px(10.0))
+                .rounded(st.px(|m| m.control_radius))
+                .text_size(st.px(|m| m.ui_text))
+                .text_color(if on {
+                    st.c(|c| c.text)
+                } else {
+                    st.c(|c| c.muted)
+                })
+                .when(on, |d| d.bg(st.c(|c| c.raised)).shadow(st.elev()))
+                .when(!on, |d| {
+                    d.hover(|d| d.bg(st.c(|c| c.hover)).text_color(st.c(|c| c.text)))
+                })
+                .on_click(move |_, _, cx| {
+                    let _ = ws.update(cx, |ws, cx| ws.set_settings_section(s, cx));
+                })
+                .child(svg().path(icon(s.icon())).size(px(16.0)).text_color(if on {
+                    st.c(|c| c.accent)
+                } else {
+                    st.c(|c| c.muted)
+                }))
+                .child(s.label()),
             );
         }
         rail
@@ -317,13 +324,16 @@ fn appearance(
     let fade = st.dock_fade;
     let current = st.settings().layout();
     let mut layout_cards = div().flex().flex_wrap().gap(px(12.0));
+    // Custom isn't a choice but where changes land: it shows only while
+    // the settings are custom. Previews keep the tabs where they are (the
+    // presets don't move them).
     for (ix, l) in [Layout::Full, Layout::Minimal, Layout::Custom]
         .into_iter()
         .enumerate()
+        .filter(|(_, l)| *l != Layout::Custom || current == Layout::Custom)
     {
         let preview = match l {
-            Layout::Full => layout_preview(TabsAt::Sidebar, DockAt::Bottom, st),
-            Layout::Minimal => layout_preview(TabsAt::Top, DockAt::Bottom, st),
+            Layout::Full | Layout::Minimal => layout_preview(st.tabs, DockAt::Bottom, st),
             Layout::Custom => layout_preview(st.tabs, st.dock, st),
         };
         layout_cards = layout_cards.child(choice_card(
@@ -719,8 +729,7 @@ fn choice_card(
     };
     let mut shadow = st.elev();
     shadow.push(ring);
-    div()
-        .id(id)
+    crate::kbd::stop_solid(div().id(id), st)
         .w(px(width))
         .flex()
         .flex_col()
@@ -843,26 +852,33 @@ pub(crate) fn segmented(choices: Vec<(SharedString, bool, Click)>, st: &Style) -
         .shadow(st.well());
     for (i, (label, on, click)) in choices.into_iter().enumerate() {
         row = row.child(
-            div()
-                .id(ElementId::NamedInteger(label.clone(), i as u64))
-                .h(px(26.0))
-                .px(px(10.0))
-                .flex()
-                .items_center()
-                .rounded(px(6.0))
-                .text_size(px(12.5))
-                .cursor_pointer()
-                .when(on, |d| {
-                    d.bg(st.c(|c| c.raised))
-                        .shadow(st.elev())
-                        .text_color(st.c(|c| c.text))
-                })
-                .when(!on, |d| {
-                    d.text_color(st.c(|c| c.muted))
-                        .hover(|d| d.text_color(st.c(|c| c.text)))
-                })
-                .on_click(move |_, window, cx| click(window, cx))
-                .child(label),
+            crate::kbd::stop_fill(
+                div().id(ElementId::NamedInteger(label.clone(), i as u64)),
+                st,
+                if on {
+                    st.c(|c| c.raised)
+                } else {
+                    st.c(|c| c.hover)
+                },
+            )
+            .h(px(26.0))
+            .px(px(10.0))
+            .flex()
+            .items_center()
+            .rounded(px(6.0))
+            .text_size(px(12.5))
+            .cursor_pointer()
+            .when(on, |d| {
+                d.bg(st.c(|c| c.raised))
+                    .shadow(st.elev())
+                    .text_color(st.c(|c| c.text))
+            })
+            .when(!on, |d| {
+                d.text_color(st.c(|c| c.muted))
+                    .hover(|d| d.text_color(st.c(|c| c.text)))
+            })
+            .on_click(move |_, window, cx| click(window, cx))
+            .child(label),
         );
     }
     row.into_any_element()
@@ -997,8 +1013,7 @@ fn book_rows(ws: &WeakEntity<Workspace>, st: &Style) -> AnyElement {
 }
 
 fn switch(id: &'static str, on: bool, st: &Style, on_click: Click) -> AnyElement {
-    div()
-        .id(id)
+    crate::kbd::stop_solid(div().id(id), st)
         .w(px(36.0))
         .h(px(20.0))
         .p(px(2.0))
@@ -1473,8 +1488,7 @@ fn swatch(
     st: &Style,
     on_click: Click,
 ) -> AnyElement {
-    div()
-        .id(id)
+    crate::kbd::stop(div().id(id), st)
         .w(px(52.0))
         .flex()
         .flex_col()

@@ -82,8 +82,7 @@ pub(super) fn dialog_button(
     label: &'static str,
     primary: bool,
 ) -> gpui::Stateful<gpui::Div> {
-    div()
-        .id(id)
+    crate::kbd::stop_solid(div().id(id), st)
         .h(st.px(|m| m.control_height))
         .px(px(16.0))
         .flex()

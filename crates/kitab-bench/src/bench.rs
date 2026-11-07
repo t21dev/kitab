@@ -549,6 +549,7 @@ fn run_steps(hwnd: isize, steps: &str) -> Result<(), String> {
                     "down" => 0x28,
                     "up" => 0x26,
                     "backspace" => 0x08,
+                    "tab" => 0x09,
                     other => return Err(format!("unknown key {other}")),
                 };
                 key(hwnd, vk)

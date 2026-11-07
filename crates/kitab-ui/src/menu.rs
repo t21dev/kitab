@@ -195,6 +195,50 @@ pub struct OpenMenu {
     pub items: Vec<MenuItem>,
     pub serial: u64,
     pub width: f32,
+    /// The row picked with the arrow keys.
+    pub hi: Option<usize>,
+}
+
+impl OpenMenu {
+    /// The row after (or before) the picked one that can be chosen,
+    /// wrapping round; the first (or last) when none is picked.
+    pub fn step(&self, down: bool) -> Option<usize> {
+        let rows: Vec<usize> = (0..self.items.len())
+            .filter(|&i| {
+                matches!(
+                    self.items[i],
+                    MenuItem::Row {
+                        disabled: false,
+                        ..
+                    }
+                )
+            })
+            .collect();
+        let n = rows.len();
+        if n == 0 {
+            return None;
+        }
+        let at = self.hi.and_then(|h| rows.iter().position(|&r| r == h));
+        let next = match (at, down) {
+            (None, true) => 0,
+            (None, false) => n - 1,
+            (Some(p), true) => (p + 1) % n,
+            (Some(p), false) => (p + n - 1) % n,
+        };
+        Some(rows[next])
+    }
+
+    /// What the picked row runs.
+    pub fn picked(&self) -> Option<Handler> {
+        match self.items.get(self.hi?)? {
+            MenuItem::Row {
+                run,
+                disabled: false,
+                ..
+            } => Some(run.clone()),
+            _ => None,
+        }
+    }
 }
 
 /// The menu panel. `close` runs after a row's action. A menu taller than
@@ -255,6 +299,7 @@ pub fn panel(
                         .rounded(st.px(|m| m.control_radius))
                         .text_size(st.px(|m| m.ui_text))
                         .text_color(fg)
+                        .when(menu.hi == Some(i), |d| d.bg(st.c(|c| c.hover)))
                         .when(!disabled, |d| {
                             d.hover(|d| d.bg(st.c(|c| c.hover)))
                                 .on_click(move |_, window, cx| {

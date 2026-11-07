@@ -172,6 +172,7 @@ Every component lists its states. Interactive components implement **default, ho
 
 - Every control is an AccessKit node with a role, name, state and the keyboard shortcut in its description.
 - Full keyboard paths for every action (PLAN.md §3.10). Visible focus everywhere. Escape closes every overlay. Focus returns to where it was.
+- Focus ring (`kbd.rs`): 2 px `accent` just outside the control, shown only after Tab (like `:focus-visible`); a click ends it and gives the keys back to the page. Controls with no fill of their own take `raised` while focused (an unpicked choice keeps its container's colour, so focus never looks like a pick). Every clickable control is a tab stop through `kbd::stop`, `stop_solid` or `stop_fill`. Menus: Up/Down pick a row (the `hover` fill), Enter or Space runs it.
 - Contrast rules in § Colour are checked by a unit test over every theme JSON.
 - Text scales with the interface size setting (80–200 %) without clipping. Layouts reflow; nothing is fixed to pixels that hold text.
 - Colour is never the only signal: signature states add a shape (check, x, !); highlights have a name in the Annotations panel.

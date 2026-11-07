@@ -93,6 +93,9 @@ actions!(
         ExtractPages,
         ToggleSplit,
         CloseOverlay,
+        // Keyboard focus: the next or previous button or control
+        FocusNext,
+        FocusPrev,
         // Page field
         ConfirmPage,
         CancelPage,
@@ -150,6 +153,8 @@ pub fn bind_default_keys(cx: &mut App) {
         KeyBinding::new("ctrl-shift-e", ExtractPages, w),
         KeyBinding::new("ctrl-\\", ToggleSplit, w),
         KeyBinding::new("escape", CloseOverlay, Some(OVERLAY)),
+        KeyBinding::new("tab", FocusNext, w),
+        KeyBinding::new("shift-tab", FocusPrev, w),
         KeyBinding::new("ctrl-shift-l", CycleTheme, w),
         KeyBinding::new("f11", ToggleMinimal, w),
         KeyBinding::new("f5", Present, w),
@@ -259,6 +264,8 @@ pub fn bind_default_keys(cx: &mut App) {
             "ctrl-shift-z",
             "ctrl-s",
             "ctrl-shift-d",
+            "tab",
+            "shift-tab",
         ]
         .map(|key| KeyBinding::new(key, NoAction, editor)),
     );

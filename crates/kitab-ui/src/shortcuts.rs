@@ -114,6 +114,11 @@ pub const GROUPS: &[Group] = &[
             ("Settings", "Ctrl+,"),
             ("Keyboard shortcuts", "Ctrl+/"),
             ("Close a menu or dialog", "Esc"),
+            ("Move between buttons and controls", "Tab / Shift+Tab"),
+            (
+                "Press the focused button; choose in a menu",
+                "Enter / Space / Up / Down",
+            ),
         ],
     },
     Group {

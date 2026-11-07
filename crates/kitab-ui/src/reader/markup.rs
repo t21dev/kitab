@@ -1176,10 +1176,13 @@ impl Reader {
                 .rounded_full()
                 .when(selected, |d| d.border_2().border_color(st.c(|c| c.accent)))
                 .child(match fill {
+                    // A hairline, so black ink shows on a dark bar (and white on a light one).
                     Some(c) => div()
                         .size(px(14.0))
                         .rounded_full()
                         .bg(rgba(c))
+                        .border_1()
+                        .border_color(st.c(|c| c.ring))
                         .into_any_element(),
                     None => svg()
                         .path(icon("plus"))

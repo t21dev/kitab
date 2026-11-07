@@ -75,6 +75,8 @@ pub struct Workspace {
     settings_section: Section,
     settings_serial: u64,
     overlay_focus: FocusHandle,
+    /// After a click ends keyboard navigation: check where focus went.
+    focus_check: bool,
     /// Built-in themes, parsed when Settings first opens.
     themes: Vec<Theme>,
     closed: Vec<PathBuf>,
@@ -183,6 +185,7 @@ impl Workspace {
             settings_section: Section::default(),
             settings_serial: 0,
             overlay_focus: cx.focus_handle(),
+            focus_check: false,
             themes: Vec::new(),
             closed: Vec::new(),
             sidebar_closing: false,
@@ -517,8 +520,7 @@ fn icon_button(
     st: &Style,
 ) -> gpui::Stateful<gpui::Div> {
     let size = st.px(|m| m.icon_button);
-    div()
-        .id(id.into())
+    crate::kbd::stop(div().id(id.into()), st)
         .size(size)
         .flex()
         .items_center()
@@ -667,8 +669,7 @@ impl Workspace {
             let tab_icon = tab_icon_for(&r.path);
             let animate = self.booted && st.animations;
             let tab_id = tab.entity_id().as_u64();
-            let tab_el = div()
-                .id(("tab", ix))
+            let tab_el = crate::kbd::stop(div().id(("tab", ix)), st)
                 .group("tab")
                 .relative()
                 .on_mouse_up(
@@ -968,19 +969,22 @@ impl Workspace {
                 .child(label)
                 .on_click(cx.listener(move |ws, _, _, cx| ws.export_marks(&reader, csv, cx)))
         };
-        col = col.child(
-            div()
-                .flex()
-                .items_center()
-                .gap(px(4.0))
-                .px(px(4.0))
-                .pb(px(6.0))
-                .text_size(px(11.5))
-                .text_color(st.c(|c| c.faint))
-                .child("Export")
-                .child(export("marks-md", "Markdown", false))
-                .child(export("marks-csv", "CSV", true)),
-        );
+        // Export only when there's something to export.
+        if !rows.is_empty() {
+            col = col.child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(px(4.0))
+                    .px(px(4.0))
+                    .pb(px(6.0))
+                    .text_size(px(11.5))
+                    .text_color(st.c(|c| c.faint))
+                    .child("Export")
+                    .child(export("marks-md", "Markdown", false))
+                    .child(export("marks-csv", "CSV", true)),
+            );
+        }
         if rows.is_empty() {
             col = col.child(
                 div()
@@ -1843,8 +1847,7 @@ impl Workspace {
         let path = item.path.clone();
         let menu_path = item.path.clone();
         let missing = item.missing;
-        div()
-            .id(("recent", i))
+        crate::kbd::stop(div().id(("recent", i)), st)
             .cursor_pointer()
             .on_mouse_down(
                 MouseButton::Right,
@@ -2151,12 +2154,36 @@ impl Render for Workspace {
         }
         let overlays = self.overlays(&st, window, cx);
         self.booted = true;
+        if std::mem::take(&mut self.focus_check) {
+            // The click may have focused a button that is no tab stop any
+            // more; then the keys go back to the page.
+            let ws = cx.weak_entity();
+            window.on_next_frame(move |window, cx| {
+                let _ = ws.update(cx, |ws, cx| {
+                    if !ws.focus.contains_focused(window, cx) {
+                        ws.refocus(window, cx);
+                    }
+                });
+            });
+        }
         div()
             .id("workspace")
             .key_context(WORKSPACE)
             .track_focus(&self.focus)
             // Any input means someone is reading (reading time, library_ui.rs).
             .capture_key_down(cx.listener(|ws, _: &gpui::KeyDownEvent, _, _| ws.note_input()))
+            .on_action(cx.listener(|ws, _: &FocusNext, window, cx| ws.move_focus(true, window, cx)))
+            .on_action(
+                cx.listener(|ws, _: &FocusPrev, window, cx| ws.move_focus(false, window, cx)),
+            )
+            // A click ends keyboard navigation: no ring, no tab stops.
+            .capture_any_mouse_down(cx.listener(|ws, _: &MouseDownEvent, _, cx| {
+                if crate::kbd::on() {
+                    crate::kbd::set(false);
+                    ws.focus_check = true;
+                    cx.notify();
+                }
+            }))
             .on_mouse_move(cx.listener(|ws, _: &gpui::MouseMoveEvent, _, _| ws.note_input()))
             .relative()
             .size_full()
@@ -2538,9 +2565,63 @@ impl Workspace {
             items,
             serial: self.menu_serial,
             width,
+            hi: None,
         });
         window.focus(&self.overlay_focus);
         cx.notify();
+    }
+
+    /// Up and Down pick a row of the open menu, Enter or Space runs it.
+    fn menu_key(&mut self, key: &str, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(m) = self.menu.as_mut() else {
+            return;
+        };
+        match key {
+            "down" | "up" => {
+                m.hi = m.step(key == "down");
+                cx.stop_propagation();
+                cx.notify();
+            }
+            "enter" | "space" => {
+                if let Some(run) = m.picked() {
+                    cx.stop_propagation();
+                    self.close_menu(window, cx);
+                    // Outside this update: the row's action may update us.
+                    window.defer(cx, move |window, cx| run(window, cx));
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// Tab and Shift+Tab: the first press shows the focus ring and makes
+    /// buttons tab stops (`kbd`), so it moves focus on the next frame.
+    fn move_focus(&mut self, next: bool, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(m) = self.menu.as_mut() {
+            m.hi = m.step(next);
+            cx.notify();
+            return;
+        }
+        let step = move |window: &mut Window| {
+            if next {
+                window.focus_next()
+            } else {
+                window.focus_prev()
+            }
+        };
+        if crate::kbd::on() {
+            step(window);
+        } else {
+            crate::kbd::set(true);
+            cx.notify();
+            // Frame callbacks run before that frame draws: wait for the one
+            // drawn with the tab stops.
+            window.on_next_frame(move |window, _| {
+                window.on_next_frame(move |window, _| step(window));
+                window.refresh();
+            });
+        }
+        window.refresh();
     }
 
     pub(crate) fn close_menu(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -3345,6 +3426,16 @@ impl Workspace {
                         .track_focus(&self.overlay_focus)
                         .on_action(cx.listener(|ws, _: &CloseOverlay, window, cx| {
                             ws.close_overlay(window, cx)
+                        }))
+                        .on_key_down(cx.listener(|ws, e: &gpui::KeyDownEvent, window, cx| {
+                            ws.menu_key(&e.keystroke.key, window, cx)
+                        }))
+                        // The pointer takes over from the arrow keys.
+                        .on_mouse_move(cx.listener(|ws, _: &gpui::MouseMoveEvent, _, cx| {
+                            if let Some(m) = ws.menu.as_mut().filter(|m| m.hi.is_some()) {
+                                m.hi = None;
+                                cx.notify();
+                            }
                         }))
                         .on_mouse_down(
                             MouseButton::Left,

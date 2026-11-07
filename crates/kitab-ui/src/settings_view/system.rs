@@ -58,8 +58,7 @@ const TYPE_IDS: [&str; 8] = [
 
 /// A secondary button for a well row ("Make default…", "Clear").
 fn button(id: &'static str, label: &str, danger: bool, st: &Style, on_click: Click) -> AnyElement {
-    div()
-        .id(id)
+    crate::kbd::stop_solid(div().id(id), st)
         .flex_none()
         .h(px(28.0))
         .px(px(12.0))
