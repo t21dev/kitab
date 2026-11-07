@@ -31,3 +31,6 @@ tests/fixtures/local/*.json
 
 # Patched third-party copies made by tools/ scripts (never committed)
 /vendor/
+
+# Release packages (tools/package.py)
+/dist/

@@ -33,11 +33,38 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 DEST = ROOT / "vendor" / "gpui-0.2.2"
 
 
+# SHA-256 of gpui-0.2.2.crate from crates.io (the file the workspace has
+# always been built from). Cargo.lock has none: gpui is patched to a path.
+GPUI_SHA256 = "979b45cfa6ec723b6f42330915a1b3769b930d02b2d505f9697f8ca602bee707"
+
+
+def download_copy() -> pathlib.Path:
+    """gpui-0.2.2 straight from crates.io, checked against GPUI_SHA256: a fresh
+    clone (CI) can't `cargo fetch` while [patch] points at a missing folder."""
+    import hashlib
+    import tarfile
+    import tempfile
+    import urllib.request
+
+    url = "https://static.crates.io/crates/gpui/gpui-0.2.2.crate"
+    data = urllib.request.urlopen(url, timeout=120).read()
+    digest = hashlib.sha256(data).hexdigest()
+    if digest != GPUI_SHA256:
+        sys.exit(f"gpui-0.2.2.crate has SHA-256 {digest}, expected {GPUI_SHA256}")
+    out = pathlib.Path(tempfile.mkdtemp(prefix="kitab-gpui-"))
+    crate = out / "gpui-0.2.2.crate"
+    crate.write_bytes(data)
+    with tarfile.open(crate, "r:gz") as tar:
+        tar.extractall(out, filter="data")
+    return out / "gpui-0.2.2"
+
+
 def registry_copy() -> pathlib.Path:
     home = pathlib.Path(os.environ.get("CARGO_HOME", pathlib.Path.home() / ".cargo"))
     hits = glob.glob(str(home / "registry" / "src" / "*" / "gpui-0.2.2"))
     if not hits:
-        sys.exit("gpui-0.2.2 is not in the cargo registry; run `cargo fetch` in this folder first")
+        print("gpui-0.2.2 isn't in the cargo registry; downloading it from crates.io")
+        return download_copy()
     return pathlib.Path(hits[0])
 
 

@@ -134,12 +134,19 @@ impl Reader {
             return Vec::new();
         };
         let size = self.raw_page_size(ix);
+        // The page's characters (loaded once the pointer is over it) tell a
+        // footnote mark from a link to another page.
+        let chars = self.layers.chars.get(&(ix as u32)).cloned();
         links
             .iter()
             .enumerate()
             .map(|(i, link)| {
                 let r = rect_to_view(link.rect, size, self.rotation, ppt);
+                let note = chars.as_ref().is_some_and(|c| {
+                    kitab_core::notes::is_note_mark(&kitab_core::notes::text_in(c, link.rect))
+                });
                 let tip: SharedString = match &link.target {
+                    LinkTarget::Page { .. } if note => "Show the note".into(),
                     LinkTarget::Page { page, .. } => format!("Go to page {}", page + 1).into(),
                     LinkTarget::Uri(u) if safe_uri(u) => u.clone().into(),
                     LinkTarget::Uri(_) => "Kitab doesn't open this kind of link".into(),

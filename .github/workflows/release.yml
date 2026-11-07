@@ -1,0 +1,164 @@
+name: Release
+
+# A v* tag builds every download and publishes the release (modelled on the
+# Porter app's). Run it by hand with dry_run to build the downloads as
+# workflow artifacts only, without touching releases.
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Build the downloads as workflow artifacts; don't publish
+        type: boolean
+        default: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # One draft release, made before any build starts, so the parallel builds
+  # upload into the same release.
+  create-release:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      release_id: ${{ steps.create.outputs.id }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create the draft release
+        id: create
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          VERSION=${TAG#v}
+          NOTES=$(sed -n "/## \[$VERSION\]/,/## \[/p" CHANGELOG.md | sed '$d' | tail -n +2)
+          if [ -z "$NOTES" ]; then
+            NOTES="See CHANGELOG.md for details."
+          fi
+          cat > body.md <<EOF
+          $NOTES
+
+          ## Downloads
+          - **Windows**: \`Kitab_${VERSION}_x64_setup.exe\` installs for your account (no administrator prompt). \`Kitab_${VERSION}_x64_portable.zip\` runs without installing and keeps its data next to the app. Nothing else is needed: the C runtime is built in.
+          - **macOS** (Apple silicon): \`Kitab_${VERSION}_aarch64.dmg\`. Not yet notarised: the first time, right-click Kitab in Applications and choose Open.
+          - **Linux** (x86_64): \`Kitab_${VERSION}_x86_64.tar.gz\`. Unpack it and run \`./install.sh\`.
+          EOF
+          ID=$(gh api -X POST "repos/${{ github.repository }}/releases" \
+            -f tag_name="$TAG" -f name="Kitab Reader $VERSION" \
+            -F draft=true -F prerelease=false -F body=@body.md --jq .id)
+          echo "id=$ID" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: create-release
+    if: always() && (needs.create-release.result == 'success' || needs.create-release.result == 'skipped')
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-22.04]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Linux packages
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang libclang-dev pkg-config \
+            libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev libvulkan-dev \
+            libx11-xcb-dev libxcb1-dev libxcb-xkb-dev libfontconfig1-dev libfreetype-dev \
+            libasound2-dev libzstd-dev
+      - name: Patched gpui
+        run: python tools/patch_gpui.py
+      - uses: swatinem/rust-cache@v2
+        with:
+          key: release
+      - name: Version
+        id: v
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)-dev" >> "$GITHUB_OUTPUT"
+          fi
+      # Windows: C runtime linked in (no VC++ Redistributable needed).
+      - name: Build
+        run: python tools/build_release.py
+      - name: No Visual C++ runtime needed (Windows)
+        if: runner.os == 'Windows'
+        run: python tools/check_imports.py target/release/kitab.exe target/release/kitab_shell.dll
+      - name: Package
+        run: python tools/package.py ${{ steps.v.outputs.version }}
+      - name: Installer (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress; $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" }
+          & $iscc "/DAppVersion=${{ steps.v.outputs.version }}" "/DSourceDir=..\..\dist\Kitab" packaging\windows\kitab.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Collect downloads
+        shell: bash
+        run: |
+          mkdir -p out
+          cp dist/*.zip dist/*.exe dist/*.dmg dist/*.tar.gz out/ 2>/dev/null || true
+          ls -la out
+      - name: Artifacts (dry run)
+        if: github.event_name != 'push'
+        uses: actions/upload-artifact@v4
+        with:
+          name: kitab-${{ runner.os }}
+          path: out/*
+      - name: Upload to the release
+        if: github.event_name == 'push'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          for f in out/*; do
+            name=$(basename "$f")
+            gh api -X POST "https://uploads.github.com/repos/${{ github.repository }}/releases/${{ needs.create-release.outputs.release_id }}/assets?name=$name" \
+              -H "Content-Type: application/octet-stream" --input "$f" --jq .name
+          done
+
+  # Every build uploaded: SHA-256 sums beside the downloads, then publish.
+  publish:
+    needs: [create-release, build]
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checksums and publish
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          ID: ${{ needs.create-release.outputs.release_id }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          mkdir dl
+          gh api "repos/$REPO/releases/$ID/assets" --paginate --jq '.[] | "\(.id)\t\(.name)"' |
+            while IFS=$'\t' read -r asset name; do
+              [ "$name" = "SHA256SUMS.txt" ] && continue
+              gh api -H "Accept: application/octet-stream" "repos/$REPO/releases/assets/$asset" > "dl/$name"
+            done
+          (cd dl && sha256sum -- * | sort -k2) > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+          gh api -X POST "https://uploads.github.com/repos/$REPO/releases/$ID/assets?name=SHA256SUMS.txt" \
+            -H "Content-Type: text/plain" --input SHA256SUMS.txt --jq .name
+          gh api "repos/$REPO/releases/$ID" --jq .body > body.md
+          printf '\n## SHA-256 checksums\nThe checksum of every file is in SHA256SUMS.txt, attached below.\n' >> body.md
+          gh api -X PATCH "repos/$REPO/releases/$ID" -f tag_name="$TAG" -F body=@body.md \
+            -F draft=false -f make_latest=true --jq .html_url

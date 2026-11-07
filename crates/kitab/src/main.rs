@@ -15,6 +15,15 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 fn main() {
+    // Uninstalling: take Kitab's file types and thumbnails off this account
+    // (the Windows uninstaller runs this), then stop.
+    if std::env::args_os()
+        .nth(1)
+        .is_some_and(|a| a == "--unregister")
+    {
+        kitab_os::assoc::unregister();
+        return;
+    }
     // Print without a window (Explorer's Print verb, PLAN.md §3.8).
     if std::env::args_os().nth(1).is_some_and(|a| a == "--print") {
         let args: Option<Vec<String>> = std::env::args_os()
