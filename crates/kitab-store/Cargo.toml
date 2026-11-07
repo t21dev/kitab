@@ -22,6 +22,8 @@ file-id = "0.2.3"
 xxhash-rust = { version = "0.8.19", default-features = false, features = ["xxh3"] }
 # Typed error enum. MIT OR Apache-2.0.
 thiserror = "2.0.21"
+# Marks as JSON in the `marks` table. Already in kitab.exe through GPUI.
+serde_json = { workspace = true }
 
 [dev-dependencies]
 tempfile = "3.27.0"

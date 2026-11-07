@@ -6,8 +6,10 @@
 //! and the UI (`kitab-ui`): formats, page sizes, outline, permissions, render
 //! requests, locators and reading state.
 
+mod markup;
 mod model;
 mod ranges;
+pub use markup::*;
 pub use model::*;
 pub use ranges::parse_page_ranges;
 

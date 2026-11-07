@@ -529,3 +529,39 @@ fn startup_queries_on_10k_documents() {
     assert_eq!(recent[0].id, ids[9_999]);
     assert!(t_session + t_recent < std::time::Duration::from_millis(50));
 }
+
+#[test]
+fn marks_are_kept_listed_deleted_and_cleared() {
+    use kitab_core::{Mark, MarkShape, PointPt, Rgb8};
+    let mut store = Store::open_in_memory().unwrap();
+    let doc = store
+        .upsert_document(&fake_ident(9), Path::new("/m.pdf"), &pdf_meta("M"))
+        .unwrap();
+    let line = |x: f32| Mark {
+        page: 1,
+        shape: MarkShape::Line {
+            from: PointPt { x, y: 0.0 },
+            to: PointPt { x: 50.0, y: 50.0 },
+            arrow: true,
+        },
+        color: Rgb8 {
+            r: 200,
+            g: 40,
+            b: 40,
+        },
+        width: 2.0,
+        opacity: 1.0,
+    };
+    let a = store.add_mark(doc, &line(1.0)).unwrap();
+    store.add_mark(doc, &line(2.0)).unwrap();
+    let mut bad = line(3.0);
+    bad.width = f32::NAN;
+    assert!(store.add_mark(doc, &bad).is_err());
+    assert_eq!(store.marks(doc).unwrap().len(), 2);
+    store.delete_mark(a).unwrap();
+    let left = store.marks(doc).unwrap();
+    assert_eq!(left.len(), 1);
+    assert_eq!(left[0].1, line(2.0));
+    assert_eq!(store.clear_marks(doc).unwrap(), 1);
+    assert!(store.marks(doc).unwrap().is_empty());
+}

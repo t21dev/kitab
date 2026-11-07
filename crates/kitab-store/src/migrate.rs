@@ -13,7 +13,10 @@ use crate::{Error, Result};
 
 /// Migration `i` takes the schema from version `i` to `i + 1`. Append only:
 /// a released entry is frozen (tests/migrations.rs checks this).
-const MIGRATIONS: &[&str] = &[include_str!("migrations/0001_initial.sql")];
+const MIGRATIONS: &[&str] = &[
+    include_str!("migrations/0001_initial.sql"),
+    include_str!("migrations/0002_marks.sql"),
+];
 
 /// The schema version this build writes.
 pub const SCHEMA_VERSION: u32 = MIGRATIONS.len() as u32;

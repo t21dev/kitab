@@ -3137,6 +3137,7 @@ dependencies = [
  "file-id",
  "kitab-core",
  "rusqlite",
+ "serde_json",
  "tempfile",
  "thiserror 2.0.21",
  "xxhash-rust",

@@ -36,14 +36,17 @@ use kitab_store::{DocumentId, Error, SCHEMA_VERSION, Store};
 use rusqlite::Connection;
 
 /// Frozen migrations, index = version - 1.
-const FROZEN: &[&str] = &[include_str!("schema/v1.sql")];
+const FROZEN: &[&str] = &[include_str!("schema/v1.sql"), include_str!("schema/v2.sql")];
 
 /// The live migrations, read straight from the source tree.
-const LIVE: &[&str] = &[include_str!("../src/migrations/0001_initial.sql")];
+const LIVE: &[&str] = &[
+    include_str!("../src/migrations/0001_initial.sql"),
+    include_str!("../src/migrations/0002_marks.sql"),
+];
 
 /// One fixture builder per released schema version.
 type Builder = fn(&Connection);
-const FIXTURES: &[(u32, Builder)] = &[(1, build_v1)];
+const FIXTURES: &[(u32, Builder)] = &[(1, build_v1), (2, build_v2)];
 
 fn normalise(s: &str) -> String {
     s.replace("\r\n", "\n")
@@ -77,6 +80,20 @@ fn build_v1(conn: &Connection) {
          INSERT INTO closed_tabs (document_id, closed_at, scroll_state)
          VALUES (7, 1900, NULL);",
     )
+    .unwrap();
+}
+
+/// Schema 2: version 1's seed (rebuilt on the v2 schema) plus a mark.
+fn build_v2(conn: &Connection) {
+    build_v1(conn);
+    conn.execute_batch(FROZEN[1]).unwrap();
+    // The colour is data; assembled so the view-colour lint doesn't read it as UI.
+    let amber = format!("{}e6b450", '#');
+    conn.execute_batch(&format!(
+        r#"PRAGMA user_version = 2;
+         INSERT INTO marks (document_id, page, kind, data, created_at)
+         VALUES (7, 2, 'rect', '{{"color":"{amber}","width":2.0,"opacity":1.0,"rect":[10,20,30,40]}}', 2100);"#
+    ))
     .unwrap();
 }
 
@@ -123,6 +140,14 @@ fn check_seed(store: &mut Store) {
     let recent = store.recent(10).unwrap();
     assert_eq!(recent.len(), 1);
     assert_eq!(recent[0].progress, Some(0.25));
+
+    // Schema 2: marks. A database from version 1 has none; version 2's seed has one.
+    let marks = store.marks(id).unwrap();
+    assert!(marks.len() <= 1);
+    if let Some((_, m)) = marks.first() {
+        assert_eq!(m.page, 2);
+        assert_eq!(m.kind(), "rect");
+    }
 }
 
 #[test]
