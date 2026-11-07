@@ -5,7 +5,7 @@
 //! with the real tokens, and applies the moment it is picked.
 
 use crate::icons::icon;
-use crate::settings::{DockAt, PageCorners, PageNav, TabsAt};
+use crate::settings::{DockAt, Layout, PageCorners, PageNav, TabsAt};
 use crate::shell::Workspace;
 use crate::shortcuts;
 use crate::style::{Style, hsla};
@@ -277,10 +277,39 @@ fn appearance(
         ));
     }
     let fade = st.dock_fade;
+    let current = st.settings().layout();
+    let mut layout_cards = div().flex().flex_wrap().gap(px(12.0));
+    for (ix, l) in [Layout::Full, Layout::Minimal, Layout::Custom]
+        .into_iter()
+        .enumerate()
+    {
+        let preview = match l {
+            Layout::Full => layout_preview(TabsAt::Sidebar, DockAt::Bottom, st),
+            Layout::Minimal => layout_preview(TabsAt::Top, DockAt::Bottom, st),
+            Layout::Custom => layout_preview(st.tabs, st.dock, st),
+        };
+        layout_cards = layout_cards.child(choice_card(
+            ("layout", ix).into(),
+            current == l,
+            l.label().into(),
+            Some(l.hint()),
+            preview,
+            180.0,
+            st,
+            change(ws, move |s| s.apply_layout(l)),
+        ));
+    }
+    let (flat, compact) = (st.ultra, st.dock_compact);
     div()
         .flex()
         .flex_col()
         .gap(px(28.0))
+        .child(group(
+            "Layout",
+            Some("A preset sets motion, depth, the dock and the page navigator. Change any of them and the layout becomes Custom."),
+            layout_cards,
+            st,
+        ))
         .child(group("Theme", None, theme_cards, st))
         .child(group(
             "Accent",
@@ -299,6 +328,17 @@ fn appearance(
                 .gap(px(12.0))
                 .child(dock_cards)
                 .child(well_row(
+                    "Compact dock",
+                    "Only zoom, find and the ⋯ menu.",
+                    switch(
+                        "dock-compact",
+                        compact,
+                        st,
+                        change(ws, move |s| s.dock_compact = !compact),
+                    ),
+                    st,
+                ))
+                .child(well_row(
                     "Fade the dock while reading",
                     "It comes back when you move the pointer or press a key.",
                     switch(
@@ -314,17 +354,27 @@ fn appearance(
         .child(group(
             "Motion",
             None,
-            well_row(
-                "Animations",
-                "Menus, dialogs, panels and lists fade and slide in and out.",
-                switch(
-                    "animations",
-                    on,
+            div()
+                .flex()
+                .flex_col()
+                .gap(px(12.0))
+                .child(well_row(
+                    "Animations",
+                    "Menus, dialogs, panels and lists fade and slide in and out.",
+                    switch(
+                        "animations",
+                        on,
+                        st,
+                        change(ws, move |s| s.animations = !on),
+                    ),
                     st,
-                    change(ws, move |s| s.animations = !on),
-                ),
-                st,
-            ),
+                ))
+                .child(well_row(
+                    "Flat surfaces",
+                    "Shadows become hairlines: less to draw, a quieter look.",
+                    switch("flat", flat, st, change(ws, move |s| s.ultra = !flat)),
+                    st,
+                )),
             st,
         ))
         .into_any_element()

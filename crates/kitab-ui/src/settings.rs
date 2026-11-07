@@ -137,6 +137,35 @@ impl Default for MinimalHides {
     }
 }
 
+/// A whole-look preset (Settings › Appearance › Layout). Not stored: the
+/// current settings either match a preset or are "Custom".
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Layout {
+    /// Everything on: motion, depth, the full dock and the scrubber.
+    Full,
+    /// Lean and fast: no motion, flat surfaces, a small dock, the page counter.
+    Minimal,
+    Custom,
+}
+
+impl Layout {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Full => "Full",
+            Self::Minimal => "Minimal",
+            Self::Custom => "Custom",
+        }
+    }
+
+    pub fn hint(self) -> &'static str {
+        match self {
+            Self::Full => "Everything, with motion and depth",
+            Self::Minimal => "Fewer controls, no motion, faster",
+            Self::Custom => "Your own mix",
+        }
+    }
+}
+
 /// The corner radius of page sheets.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -216,6 +245,56 @@ pub struct Settings {
     pub minimal: MinimalHides,
     /// The sidebar (contents, and tabs when they live there) was open last time.
     pub sidebar: bool,
+    /// Flat surfaces: shadows reduced to hairline rings (less to draw).
+    pub flat: bool,
+    /// The dock keeps only zoom, find and ⋯.
+    pub dock_compact: bool,
+}
+
+impl Settings {
+    /// Which preset these settings match, if any.
+    pub fn layout(&self) -> Layout {
+        let full = self.animations
+            && !self.flat
+            && !self.dock_compact
+            && self.page_nav == PageNav::Scrubber
+            && !self.dock_fade;
+        let minimal = !self.animations
+            && self.flat
+            && self.dock_compact
+            && self.page_nav == PageNav::Counter
+            && !self.dock_fade;
+        if full {
+            Layout::Full
+        } else if minimal {
+            Layout::Minimal
+        } else {
+            Layout::Custom
+        }
+    }
+
+    /// Apply a preset; theme, accent, density, tabs and the dock position stay.
+    pub fn apply_layout(&mut self, layout: Layout) {
+        match layout {
+            Layout::Full => {
+                self.animations = true;
+                self.flat = false;
+                self.dock_compact = false;
+                self.page_nav = PageNav::Scrubber;
+                self.dock_fade = false;
+                self.sidebar = true;
+            }
+            Layout::Minimal => {
+                self.animations = false;
+                self.flat = true;
+                self.dock_compact = true;
+                self.page_nav = PageNav::Counter;
+                self.dock_fade = false;
+                self.sidebar = false;
+            }
+            Layout::Custom => {}
+        }
+    }
 }
 
 impl Default for Settings {
@@ -232,6 +311,8 @@ impl Default for Settings {
             tabs: TabsAt::default(),
             minimal: MinimalHides::default(),
             sidebar: true,
+            flat: false,
+            dock_compact: false,
         }
     }
 }
@@ -253,6 +334,8 @@ struct File {
     tabs: TabsAt,
     minimal: MinimalHides,
     sidebar_open: bool,
+    flat: bool,
+    dock_compact: bool,
 }
 
 impl Default for File {
@@ -276,6 +359,8 @@ impl From<Settings> for File {
             tabs: s.tabs,
             minimal: s.minimal,
             sidebar_open: s.sidebar,
+            flat: s.flat,
+            dock_compact: s.dock_compact,
         }
     }
 }
@@ -304,6 +389,8 @@ impl Settings {
             tabs: f.tabs,
             minimal: f.minimal,
             sidebar: f.sidebar_open,
+            flat: f.flat,
+            dock_compact: f.dock_compact,
         })
     }
 
@@ -335,8 +422,23 @@ mod tests {
                 page_navigator: false,
             },
             sidebar: false,
+            flat: true,
+            dock_compact: true,
         };
         assert_eq!(Settings::from_json(&s.to_json()), Ok(s));
+    }
+
+    #[test]
+    fn layout_presets_round_trip() {
+        let mut s = Settings::default();
+        assert_eq!(s.layout(), Layout::Full);
+        s.apply_layout(Layout::Minimal);
+        assert_eq!(s.layout(), Layout::Minimal);
+        assert!(!s.animations && s.flat && s.dock_compact);
+        s.page_nav = PageNav::Stepper;
+        assert_eq!(s.layout(), Layout::Custom);
+        s.apply_layout(Layout::Full);
+        assert_eq!(s.layout(), Layout::Full);
     }
 
     #[test]

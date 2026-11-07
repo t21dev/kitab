@@ -29,6 +29,7 @@ pub struct Style {
     /// Minimal mode is on (F11). For this session only; not saved.
     pub minimal: bool,
     pub sidebar_open: bool,
+    pub dock_compact: bool,
 }
 
 impl Global for Style {}
@@ -45,7 +46,7 @@ impl Style {
             base_theme: theme,
             accent: s.accent,
             density: s.density,
-            ultra: false,
+            ultra: s.flat,
             page_nav: s.page_nav,
             page_corners: s.page_corners,
             animations: s.animations,
@@ -55,6 +56,7 @@ impl Style {
             minimal_hides: s.minimal,
             minimal: false,
             sidebar_open: s.sidebar,
+            dock_compact: s.dock_compact,
         };
         style.resolve_accent();
         style
@@ -95,6 +97,8 @@ impl Style {
             tabs: self.tabs,
             minimal: self.minimal_hides,
             sidebar: self.sidebar_open,
+            flat: self.ultra,
+            dock_compact: self.dock_compact,
         }
     }
 
@@ -118,6 +122,18 @@ impl Style {
         } else {
             0.0
         }
+    }
+
+    /// Apply a layout preset to everything it covers.
+    pub fn apply_layout(&mut self, layout: crate::settings::Layout) {
+        let mut s = self.settings();
+        s.apply_layout(layout);
+        self.animations = s.animations;
+        self.ultra = s.flat;
+        self.dock_compact = s.dock_compact;
+        self.page_nav = s.page_nav;
+        self.dock_fade = s.dock_fade;
+        self.sidebar_open = s.sidebar;
     }
 
     pub fn get(cx: &App) -> &Style {

@@ -112,6 +112,7 @@ impl Reader {
             })
         };
         let percent = self.zoom_percent();
+        let compact = st.dock_compact;
         let mut dock = div()
             .id("dock")
             .flex()
@@ -128,30 +129,32 @@ impl Reader {
             .text_color(st.c(|c| c.muted))
             .on_hover(cx.listener(|r, over: &bool, _, _| r.dock.hover = *over))
             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-            .child(
-                group().child(
-                    dock_button("dock-sidebar", "sidebar", false, st)
-                        .tip("Sidebar  Ctrl+B")
-                        .on_click(|_, window, cx| {
-                            window.dispatch_action(Box::new(ToggleSidebar), cx)
-                        }),
-                ),
-            )
-            .child(
-                group()
-                    .child(
-                        dock_button("dock-back", "arrow-left", false, st)
-                            .when(!self.can_go_back(), |b| b.opacity(0.4))
-                            .tip("Back  Alt+Left")
-                            .on_click(cx.listener(|r, _, _, cx| r.history(true, cx))),
-                    )
-                    .child(
-                        dock_button("dock-forward", "arrow-right", false, st)
-                            .when(!self.can_go_forward(), |b| b.opacity(0.4))
-                            .tip("Forward  Alt+Right")
-                            .on_click(cx.listener(|r, _, _, cx| r.history(false, cx))),
+            .when(!compact, |d| {
+                d.child(
+                    group().child(
+                        dock_button("dock-sidebar", "sidebar", false, st)
+                            .tip("Sidebar  Ctrl+B")
+                            .on_click(|_, window, cx| {
+                                window.dispatch_action(Box::new(ToggleSidebar), cx)
+                            }),
                     ),
-            );
+                )
+                .child(
+                    group()
+                        .child(
+                            dock_button("dock-back", "arrow-left", false, st)
+                                .when(!self.can_go_back(), |b| b.opacity(0.4))
+                                .tip("Back  Alt+Left")
+                                .on_click(cx.listener(|r, _, _, cx| r.history(true, cx))),
+                        )
+                        .child(
+                            dock_button("dock-forward", "arrow-right", false, st)
+                                .when(!self.can_go_forward(), |b| b.opacity(0.4))
+                                .tip("Forward  Alt+Right")
+                                .on_click(cx.listener(|r, _, _, cx| r.history(false, cx))),
+                        ),
+                )
+            });
         // At the bottom the dock is also the page navigator.
         if at == DockAt::Bottom && st.shows_page_nav() {
             if let Some(parts) = self.nav_parts(st, window, cx) {
@@ -195,6 +198,7 @@ impl Reader {
                             mode == ZoomMode::FitWidth,
                             st,
                         )
+                        .when(compact, |b| b.hidden())
                         .tip("Fit width  Ctrl+2")
                         .on_click(
                             cx.listener(|r, _, _, cx| r.set_zoom_mode(ZoomMode::FitWidth, cx)),
@@ -202,6 +206,7 @@ impl Reader {
                     )
                     .child(
                         dock_button("dock-fit-page", "fit-page", mode == ZoomMode::FitPage, st)
+                            .when(compact, |b| b.hidden())
                             .tip("Fit page  Ctrl+0")
                             .on_click(
                                 cx.listener(|r, _, _, cx| r.set_zoom_mode(ZoomMode::FitPage, cx)),
@@ -223,6 +228,7 @@ impl Reader {
                     )
                     .child(
                         dock_button("dock-rotate", "rotate", false, st)
+                            .when(compact, |b| b.hidden())
                             .tip("Rotate  Ctrl+Shift+=")
                             .on_click(cx.listener(|r, _, _, cx| r.rotate(true, cx))),
                     )
