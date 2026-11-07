@@ -7,6 +7,8 @@ Third-party components and assets (updated as they are added):
 - MuPDF, Copyright (C) Artifex Software, Inc. AGPL-3.0. https://mupdf.com/
 - pulldown-cmark, Copyright (c) Google and contributors. MIT. https://github.com/pulldown-cmark/pulldown-cmark
 - syntect and its bundled Sublime Text grammars, Copyright (c) Tristan Hume and contributors. MIT. https://github.com/trishume/syntect
+- mermaid-svg (Mermaid diagram layout to SVG), Copyright (c) 2026 Martin Mikšaník. MIT. https://github.com/xmiksay/mermaid
+- resvg, usvg and tiny-skia (SVG drawing; already part of GPUI), Copyright (c) the resvg project authors. Apache-2.0 OR MIT. https://github.com/linebender/resvg
 - Nord colour palette, Copyright (c) Arctic Ice Studio and Sven Greb. MIT. https://www.nordtheme.com/
   (Used for the "Nord" theme. "Noctua" and "Vampire" are Kitab's own palettes.)
 

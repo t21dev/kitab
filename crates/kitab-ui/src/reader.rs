@@ -21,6 +21,7 @@ mod markdown;
 mod marks_list;
 mod markup;
 mod math_view;
+mod mermaid;
 mod pages;
 mod present;
 mod select;
@@ -404,6 +405,7 @@ impl Reader {
                         source: source.into(),
                         edit: None,
                         mtime,
+                        diagrams: Default::default(),
                     });
                     this.start_watch(cx);
                     if let Some(state) = this.restore {

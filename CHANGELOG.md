@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Mermaid diagrams in Markdown are drawn: flowcharts, sequence, class, state, entity-relationship, Gantt, pie, mindmap, timeline and git graphs, in the theme's colours, sharp at any zoom. A diagram that can't be read shows its source and why. Drawn off the UI thread in pure Rust (no browser or JavaScript).
 - Math in Markdown: `$$…$$` and ```math blocks are typeset (fractions, roots, sub- and superscripts, sums and integrals with limits, matrices and cases, Greek and symbols); inline `$…$` reads as one line of Unicode (πr², x₁ ≤ α). TeX that can't be read shows its source with a mark.
 - Markdown live reload: when the Markdown file you're reading changes on disk (saved from another editor), Kitab shows the new version in place within a second, keeping your position. Only the tab on screen is checked; not while you edit in Kitab.
 - Presentation mode (F5, or the palette): the document full screen on black, one page at a time fitted to the screen. Right, Down, Space, PgDn, a click or the wheel go forward; Left, Up, PgUp or a right click go back; Home and End jump; Esc or F5 ends it on the page you were showing. The next page is drawn ahead.

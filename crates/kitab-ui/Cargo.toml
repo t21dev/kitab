@@ -22,6 +22,10 @@ anyhow = "1"
 log = "0.4"
 # Round caps and joins for pen strokes. The same lyon copy GPUI draws paths with.
 lyon_tessellation = "1"
+# Mermaid diagrams: layout to SVG in pure Rust (MIT, depends on thiserror
+# only), drawn by the resvg GPUI already carries (same version, no new code).
+mermaid-svg = "0.7.0"
+resvg = { version = "0.45.1", default-features = false, features = ["text", "system-fonts", "memmap-fonts"] }
 
 [lints]
 workspace = true

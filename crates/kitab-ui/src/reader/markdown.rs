@@ -54,6 +54,8 @@ pub(super) struct MdState {
     pub open_details: HashSet<u64>,
     /// The file's modified time when last read (live reload, `live.rs`).
     pub mtime: Option<std::time::SystemTime>,
+    /// Drawn Mermaid diagrams (`mermaid.rs`).
+    pub diagrams: super::mermaid::Diagrams,
 }
 
 /// What a block needs while it draws.
@@ -67,6 +69,7 @@ struct Draw<'a> {
     block: usize,
     seq: Cell<u64>,
     open: &'a HashSet<u64>,
+    diagrams: &'a super::mermaid::Diagrams,
 }
 
 impl Draw<'_> {
@@ -230,6 +233,17 @@ impl Reader {
                 .child("This Markdown file is empty.")
                 .into_any_element();
         };
+        // Diagrams in this block are asked for before it draws.
+        if let Block::Mermaid(src) = block {
+            let src = src.clone();
+            self.diagram(&src, &st, cx);
+        }
+        let Some(md) = self.md.as_ref() else {
+            return div().into_any_element();
+        };
+        let Some(block) = md.doc.blocks.get(ix) else {
+            return div().into_any_element();
+        };
         let query = (self.find.open && !self.find.closing && !self.find.query.trim().is_empty())
             .then(|| self.find.query.trim().to_lowercase());
         let d = Draw {
@@ -241,6 +255,7 @@ impl Reader {
             block: ix,
             seq: Cell::new(0),
             open: &md.open_details,
+            diagrams: &md.diagrams,
         };
         let el = block_el(&d, block, 0, cx);
         let last = ix + 1 == md.doc.blocks.len();
@@ -311,12 +326,7 @@ fn block_el(d: &Draw, block: &Block, depth: usize, cx: &mut Context<Reader>) -> 
             .children(blocks_el(d, blocks, depth + 1, cx))
             .into_any_element(),
         Block::Code { lang, text, tokens } => code_el(d, lang, text, tokens, cx),
-        Block::Mermaid(src) => source_box(
-            d,
-            "Mermaid diagram",
-            "Diagrams are drawn in a coming update; this is its source.",
-            src,
-        ),
+        Block::Mermaid(src) => mermaid_el(d, src),
         Block::Math(src) => match kitab_md::math::parse(src) {
             Ok(node) => super::math_view::display(d.st, &node, BODY * d.scale * 1.15),
             Err(e) => source_box(d, "Math", &format!("Can't read this TeX: {e}"), src),
@@ -635,6 +645,42 @@ fn code_el(
         .into_any_element()
 }
 
+/// A Mermaid diagram: the drawing when ready, a quiet frame meanwhile, the
+/// source and the reason when it can't be drawn.
+fn mermaid_el(d: &Draw, src: &str) -> AnyElement {
+    let k = super::mermaid::key(src, d.st, d.scale);
+    match d.diagrams.map.get(&k) {
+        Some(super::mermaid::Diagram::Ready { image, w, h }) => {
+            // Shown at its size, or shrunk to the text column keeping its shape.
+            let column = COLUMN * d.scale.max(0.5);
+            let (full_w, full_h) = (w * d.scale, h * d.scale);
+            let w = full_w.min(column);
+            let h = full_h * w / full_w.max(1.0);
+            div()
+                .mb(d.px(16.0))
+                .w_full()
+                .flex()
+                .justify_center()
+                .child(
+                    img(gpui::ImageSource::Render(image.clone()))
+                        .w(px(w))
+                        .h(px(h)),
+                )
+                .into_any_element()
+        }
+        Some(super::mermaid::Diagram::Failed(e)) => {
+            source_box(d, "Mermaid diagram", &format!("Can't draw this: {e}"), src)
+        }
+        _ => div()
+            .mb(d.px(16.0))
+            .h(d.px(120.0))
+            .rounded(px(10.0))
+            .border_1()
+            .border_color(d.st.c(|c| c.line))
+            .into_any_element(),
+    }
+}
+
 fn source_box(d: &Draw, title: &'static str, note: &str, src: &str) -> AnyElement {
     let st = d.st;
     div()
@@ -651,8 +697,19 @@ fn source_box(d: &Draw, title: &'static str, note: &str, src: &str) -> AnyElemen
                 .flex()
                 .gap(d.px(8.0))
                 .text_size(d.px(12.0))
-                .child(div().text_color(st.c(|c| c.accent)).child(title))
-                .child(div().text_color(st.c(|c| c.faint)).child(note.to_string())),
+                .child(
+                    div()
+                        .flex_none()
+                        .text_color(st.c(|c| c.accent))
+                        .child(title),
+                )
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .text_color(st.c(|c| c.faint))
+                        .child(note.to_string()),
+                ),
         )
         .child(
             div()
