@@ -55,6 +55,10 @@ impl Reader {
             let rows = cx
                 .background_spawn(async move { library.bookmarks(&path) })
                 .await;
+            // Nothing saved: nothing to redraw.
+            if rows.is_empty() {
+                return;
+            }
             let _ = this.update(cx, |r, cx| {
                 let pages = r.page_count() as u32;
                 r.bookmark_rows = rows

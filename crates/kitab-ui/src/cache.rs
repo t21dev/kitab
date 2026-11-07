@@ -91,6 +91,10 @@ impl PageCache {
     }
 
     /// Drop every rendering (zoom or rotation changed far enough, or the tab is hidden).
+    pub fn is_empty(&self) -> bool {
+        self.map.is_empty()
+    }
+
     pub fn clear(&mut self) {
         self.order.clear();
         self.bytes = 0;

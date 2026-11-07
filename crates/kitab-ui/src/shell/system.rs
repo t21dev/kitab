@@ -270,6 +270,29 @@ impl Workspace {
         }
     }
 
+    /// The window went to the background: if it's still there in a little
+    /// while, tabs that aren't showing give back their rendered pages and
+    /// MuPDF trims its cache, so a Kitab left open costs little. The tab on
+    /// screen keeps its pages, so coming back never flashes.
+    pub(crate) fn release_when_idle(&mut self, cx: &mut Context<Self>) {
+        const AFTER: std::time::Duration = std::time::Duration::from_secs(20);
+        self.after(AFTER, cx, |ws, cx| {
+            if ws.window_active {
+                return;
+            }
+            let showing = ws.active_reader().cloned();
+            let side = ws.tools.split.clone();
+            for tab in ws.tabs.clone() {
+                if Some(&tab) != showing.as_ref() && Some(&tab) != side.as_ref() {
+                    tab.update(cx, |r, cx| r.release_pages_in_background(cx));
+                }
+            }
+            let engine = ws.engine.clone();
+            cx.background_spawn(async move { engine.shrink_caches() })
+                .detach();
+        });
+    }
+
     /// Advanced › Clear cached pages: every tab's rendered pages, and the
     /// engine's decoded fonts and images. Visible pages render again.
     pub(crate) fn clear_caches(&mut self, cx: &mut Context<Self>) {

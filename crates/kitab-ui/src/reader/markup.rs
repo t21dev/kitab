@@ -262,6 +262,9 @@ impl Reader {
             let marks = cx
                 .background_spawn(async move { library.marks(&path) })
                 .await;
+            if marks.is_empty() {
+                return;
+            }
             let _ = this.update(cx, |r, cx| {
                 let pages = r.page_count() as u32;
                 for (id, mark) in marks.into_iter().filter(|(_, m)| m.page < pages) {

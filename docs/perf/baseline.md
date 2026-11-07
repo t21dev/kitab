@@ -114,3 +114,16 @@ Same machine. `kitab-bench s2 --runs 15 --warmup 2`, medians. Kitab: release bui
 - Steady idle (after the first seconds) is 0 % with occasional single timer ticks; the "2 s after" column is start-up work settling (outline, bookmarks, the reader's neighbouring pages).
 - Start-up trace (`KITAB_TRACE_START=1`, `kitab_os::trace`): GPUI's `Application::new` takes about 110 ms of wall and CPU time before any window exists (Direct3D device and DirectWrite set-up); MuPDF opens the file in about 2 ms and renders page 1 in about 20 ms.
 - Fixed in this round: each visible page was rendered two or three times on open (a relayout at start-up cancelled renders in flight, and a soft preview ran before any page had been timed). Before: about 300 ms CPU at first paint, 129 MB working set, 186 MB private. After: about 205–235 ms CPU at first paint (trace), 107 MB, 155 MB.
+
+### After the memory and CPU round (8 November 2026)
+
+| File | App | Window on screen | Page stable | CPU to page | Working set | Private | CPU in the 2 s after |
+|---|---|---|---|---|---|---|---|
+| 01-text-outline.pdf | Kitab | 199 ms (with the page) | 199–225 ms | 203 ms | 96.8 MB | 144.9 MB | 4.7 % |
+| | SumatraPDF 3.6.1 | 90 ms (blank) | 90–312 ms | 203 ms | 42.6 MB | 14.9 MB | 0.0 % |
+| 06-large-20mb.pdf | Kitab | 196 ms (with the page) | 196–228 ms | 203 ms | 96.1 MB | 144.5 MB | 5.5 % |
+| | SumatraPDF 3.6.1 | 88 ms (blank) | 88–438 ms | 218 ms | 87.0 MB | 37.4 MB | 0.0 % |
+
+- The 150 ms between the window showing and the page being stable was Kitab's own tab and dock entrances resuming after the reveal (GPUI times an animation from its first frame with whatever duration it's given later), not Windows' open animation. Entrances begun off screen now stay finished (`motion.rs`): 2 frames after the reveal instead of about 30.
+- 120 ms of the CPU before any window is Direct3D device creation (the GPU driver starting) inside GPUI's `Application::new`, measured with temporary marks in gpui's platform set-up. SumatraPDF draws with GDI and doesn't pay it.
+- Memory: the page ahead renders only after the first scroll (about 11 MB at open), the page cache budget is 64 MB, and inactive tabs release pages after 20 s in the background.

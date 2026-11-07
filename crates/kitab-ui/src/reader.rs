@@ -65,7 +65,8 @@ const ZOOM_STEPS: &[f32] = &[
     0.1, 0.25, 0.33, 0.5, 0.67, 0.75, 0.9, 1.0, 1.1, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0, 4.0, 5.0, 6.4,
 ];
 /// Rendered pages kept per tab (bytes). Phase 2 makes this a setting shared across tabs.
-const CACHE_BUDGET: usize = 96 * 1024 * 1024;
+/// About six full pages at a typical screen's fit width.
+const CACHE_BUDGET: usize = 64 * 1024 * 1024;
 /// A page with nothing to show yet first gets a quick render at this share of
 /// its sharp scale, so fast scrolling shows the page (soft) instead of paper.
 const PREVIEW_SCALE: f32 = 0.25;
@@ -182,6 +183,9 @@ pub struct Reader {
     /// +1 scrolling down, -1 up: which neighbour to render ahead.
     scroll_dir: i8,
     last_top: usize,
+    /// The reader has scrolled since opening: from then on the next page is
+    /// rendered ahead. Opening renders only what shows (memory, CPU).
+    scrolled: bool,
     last_frame: Option<std::time::Instant>,
     /// The password that opened this document, if it needed one (memory only).
     unlock: Option<String>,
@@ -283,6 +287,7 @@ impl Reader {
             sharp_ms: None,
             scroll_dir: 1,
             last_top: 0,
+            scrolled: false,
             last_frame: None,
             unlock: None,
             find: find::FindState::new(cx.focus_handle()),
@@ -1245,7 +1250,7 @@ impl Reader {
         } else {
             ix.wrapping_sub(1)
         };
-        if ahead < self.page_count() {
+        if self.scrolled && ahead < self.page_count() {
             let s = self.px_per_pt(ahead) * window.scale_factor();
             let k = PageKey {
                 page: ahead as u32,
@@ -1563,6 +1568,7 @@ impl Render for Reader {
             if top != self.last_top {
                 self.scroll_dir = if top > self.last_top { 1 } else { -1 };
                 self.last_top = top;
+                self.scrolled = true;
             }
             let lo = top as u64;
             let ppt = self.px_per_pt(lo as usize);
@@ -1759,6 +1765,7 @@ impl Render for Reader {
                     .absolute()
                     .inset_0()
                     .on_scroll_wheel(cx.listener(|r, e: &ScrollWheelEvent, _, cx| {
+                        r.scrolled = true;
                         if e.modifiers.control || e.modifiers.platform {
                             let dy = f32::from(e.delta.pixel_delta(px(20.0)).y);
                             if dy.abs() > 0.5 {
@@ -1786,6 +1793,15 @@ impl Reader {
     pub fn drop_cached_pages(&mut self, cx: &mut Context<Self>) {
         self.cache.clear();
         cx.notify();
+    }
+
+    /// The app has been in the background a while: let a tab that isn't
+    /// showing give back its rendered pages (they render again when it does).
+    pub fn release_pages_in_background(&mut self, cx: &mut Context<Self>) {
+        if !self.cache.is_empty() {
+            self.cache.clear();
+            cx.notify();
+        }
     }
 }
 

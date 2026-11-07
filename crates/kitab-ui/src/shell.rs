@@ -113,6 +113,8 @@ pub struct Workspace {
     /// The previous session's tabs are still loading: Home isn't the first
     /// thing to show, so it doesn't reveal the window.
     restoring: bool,
+    /// The window has the user's focus (for background trimming).
+    window_active: bool,
     /// The window is too narrow for the title-bar buttons: only More shows.
     title_squeezed: bool,
     /// The print sheet (Ctrl+P), when open.
@@ -203,6 +205,7 @@ impl Workspace {
             sidebar_w: crate::layout::SIDEBAR_W,
             born: std::time::Instant::now(),
             restoring: false,
+            window_active: true,
             title_squeezed: false,
             print: None,
             print_serial: 0,
@@ -243,8 +246,11 @@ impl Workspace {
         // back to the front (the user may have just edited it).
         this.after(Duration::from_millis(400), cx, |ws, cx| ws.load_keymap(cx));
         let activation = cx.observe_window_activation(window, |ws, window, cx| {
-            if window.is_window_active() {
+            ws.window_active = window.is_window_active();
+            if ws.window_active {
                 ws.load_keymap(cx);
+            } else {
+                ws.release_when_idle(cx);
             }
         });
         this.subs.push(activation);
@@ -1987,6 +1993,7 @@ fn cover(title: &str, width: f32, st: &Style) -> AnyElement {
 impl Render for Workspace {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let st = Style::get(cx).clone();
+        kitab_os::trace::mark("frame");
         // Home has nothing to wait for; and no tab keeps the splash up for
         // more than a few seconds.
         if (self.active.is_none() && !self.restoring)

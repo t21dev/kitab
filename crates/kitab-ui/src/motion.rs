@@ -22,6 +22,23 @@ pub(crate) fn set_on_screen() {
     ON_SCREEN.store(true, Ordering::Relaxed);
 }
 
+/// The entrances drawn before the window showed (a handful: the tab, the
+/// dock, the navigator), so they stay finished afterwards.
+static OFFSCREEN: std::sync::Mutex<Vec<ElementId>> = std::sync::Mutex::new(Vec::new());
+
+fn started_offscreen(id: &ElementId) -> bool {
+    let Ok(mut ids) = OFFSCREEN.lock() else {
+        return false;
+    };
+    if !ON_SCREEN.load(Ordering::Relaxed) {
+        if !ids.contains(id) && ids.len() < 256 {
+            ids.push(id.clone());
+        }
+        return true;
+    }
+    ids.contains(id)
+}
+
 /// Menus, tooltips, popovers.
 pub const FAST: Duration = Duration::from_millis(140);
 /// Dialogs, panels.
@@ -74,10 +91,14 @@ where
     }
     // Drawn before the window shows: done by the time it does. (The
     // animation still exists, so it doesn't start later instead.)
-    let (duration, delay) = if ON_SCREEN.load(Ordering::Relaxed) {
-        (duration, delay)
-    } else {
+    let id: ElementId = id.into();
+    // An entrance that began before the window showed is over at once, for
+    // good: GPUI times an animation from its first frame with whatever
+    // duration it's given now, so a longer one later would resume it.
+    let (duration, delay) = if started_offscreen(&id) {
         (Duration::from_millis(1), Duration::ZERO)
+    } else {
+        (duration, delay)
     };
     let ease = ease_out_quint();
     if delay.is_zero() {

@@ -37,12 +37,18 @@ impl Reader {
                 .background_spawn(async move { engine.signatures(&path, unlock.as_deref()) })
                 .await;
             let _ = this.update(cx, |r, cx| {
-                r.signatures = Some(found.unwrap_or_else(|e| {
+                let found = found.unwrap_or_else(|e| {
                     log::warn!("signatures: {e}");
                     Vec::new()
-                }));
-                cx.emit(ReaderEvent::Signatures);
-                cx.notify();
+                });
+                // Unsigned (most PDFs) and unchanged: no redraw.
+                let changed =
+                    r.signatures.as_ref().is_some_and(|s| !s.is_empty()) || !found.is_empty();
+                r.signatures = Some(found);
+                if changed {
+                    cx.emit(ReaderEvent::Signatures);
+                    cx.notify();
+                }
             });
         })
         .detach();

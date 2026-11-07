@@ -16,6 +16,11 @@ use std::path::Path;
 
 /// Every signed signature field in the PDF at `path`, in field order.
 pub fn signed_fields(path: &Path, password: Option<&str>) -> Result<Vec<SignedField>, String> {
+    // Most PDFs have no signature: look for one with MuPDF reading the file
+    // as it needs to, and only read it all into memory when there is one.
+    if !has_signature(path, password) {
+        return Ok(Vec::new());
+    }
     let bytes = std::fs::read(path).map_err(|e| format!("could not read the file: {e}"))?;
     let doc = open(&bytes, password)?;
     let mut found = Vec::new();
@@ -39,6 +44,32 @@ pub fn signed_fields(path: &Path, password: Option<&str>) -> Result<Vec<SignedFi
         ));
     }
     Ok(out)
+}
+
+/// Whether the PDF has at least one signed signature field (a cheap look:
+/// the file is opened in place, not read whole).
+fn has_signature(path: &Path, password: Option<&str>) -> bool {
+    let Some(name) = path.to_str() else {
+        return true; // can't tell cheaply: take the full path
+    };
+    let Ok(mut doc) = PdfDocument::open(name) else {
+        return false;
+    };
+    if doc.needs_password().unwrap_or(false)
+        && !password.is_some_and(|p| doc.authenticate(p).unwrap_or(false))
+    {
+        return false;
+    }
+    let fields = doc
+        .catalog()
+        .ok()
+        .and_then(|c| c.get_dict("AcroForm").ok().flatten())
+        .and_then(|f| f.get_dict("Fields").ok().flatten());
+    let mut found = Vec::new();
+    if let Some(fields) = fields {
+        walk(&fields, "", &mut found, 0);
+    }
+    !found.is_empty()
 }
 
 fn open(bytes: &[u8], password: Option<&str>) -> Result<PdfDocument, String> {
