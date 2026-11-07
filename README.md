@@ -4,7 +4,9 @@
 
 # Kitab Reader
 
-**Read beautifully. Work efficiently.**
+**Your library has a fast lane now.**
+
+Rust underneath, a calm page on top. Kitab never makes you wait.
 
 <sub>A desktop reader for PDF, books and Markdown, written in Rust and drawn on the GPU with GPUI. MuPDF renders the pages. There is no browser engine inside.</sub>
 

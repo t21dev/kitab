@@ -1,6 +1,7 @@
 # Kitab Reader: plan
 
-> **Read beautifully. Work efficiently.**
+> **Your library has a fast lane now.**
+> Rust underneath, a calm page on top. Kitab never makes you wait.
 > A native, GPU-drawn reader for PDF, EPUB, Markdown and comics. As fast to open as SumatraPDF, with a calm modern interface.
 
 This is the working plan. It records decisions, the architecture, the performance budgets, the test strategy and the phased roadmap. [AGENTS.md](../AGENTS.md) holds the rules for working on the code, and [DESIGN.md](../DESIGN.md) holds the visual system. If the code and this file disagree, change one of them on purpose, in the same commit.

@@ -451,7 +451,7 @@ pub(super) fn about(ws: &WeakEntity<Workspace>, info: &SystemInfo, st: &Style) -
                         .pt(px(4.0))
                         .text_size(px(12.5))
                         .text_color(st.c(|c| c.muted))
-                        .child("A fast, native reader for PDF, books and Markdown. Free software by t21."),
+                        .child("Your library has a fast lane now. Rust underneath, a calm page on top. Free software by t21."),
                 ),
         )
         .child(group(
