@@ -527,3 +527,50 @@ fn unicode_password_in_any_normalisation() {
         Some(OpenError::WrongPassword)
     );
 }
+
+/// Renders of one document from several threads go to helper workers that
+/// open their own handle; the pixels must match one-at-a-time renders, for a
+/// plain and a password-protected file, and closing must still work.
+#[test]
+fn parallel_renders_of_one_document_match_serial_ones() {
+    for name in ["01-text-outline.pdf", "04a-encrypted-password-kitab.pdf"] {
+        let engine = std::sync::Arc::new(Engine::new(4));
+        let password = manifest_password(name);
+        let (doc, info) = engine.open(&pdf(name), password.as_deref()).expect("opens");
+        let pages: Vec<u32> = (0..info.page_count.min(8)).collect();
+        let serial: Vec<_> = pages
+            .iter()
+            .map(|p| {
+                engine
+                    .render(doc, request(*p, 0.5))
+                    .expect("renders")
+                    .expect("fresh")
+            })
+            .collect();
+        let handles: Vec<_> = pages
+            .iter()
+            .map(|p| {
+                let (engine, p) = (engine.clone(), *p);
+                std::thread::spawn(move || {
+                    engine
+                        .render(doc, request(p, 0.5))
+                        .expect("renders")
+                        .expect("fresh")
+                })
+            })
+            .collect();
+        for (h, want) in handles.into_iter().zip(serial) {
+            assert_eq!(
+                h.join().expect("thread"),
+                want,
+                "{name}: parallel render differs"
+            );
+        }
+        assert!(engine.started_threads() > 1, "{name}: helpers were used");
+        engine.close(doc);
+        assert!(
+            engine.render(doc, request(0, 0.5)).is_err(),
+            "{name}: closed"
+        );
+    }
+}

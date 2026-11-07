@@ -135,6 +135,14 @@ pub struct Reader {
     /// `KITAB_TRACE_RENDER=1`: log render times and blank pages to stderr.
     trace: bool,
     blank_since: std::collections::HashMap<u32, std::time::Instant>,
+    /// Average render time (ms) of quick previews and of sharp pages. On
+    /// scanned books decoding the page image dominates and a preview is no
+    /// faster, so previews stop once that shows.
+    quick_ms: Option<f32>,
+    sharp_ms: Option<f32>,
+    /// +1 scrolling down, -1 up: which neighbour to render ahead.
+    scroll_dir: i8,
+    last_top: usize,
     last_frame: Option<std::time::Instant>,
     /// The password that opened this document, if it needed one (memory only).
     unlock: Option<String>,
@@ -191,6 +199,10 @@ impl Reader {
             visible: Arc::new(std::sync::atomic::AtomicU64::new(0)),
             trace: std::env::var_os("KITAB_TRACE_RENDER").is_some(),
             blank_since: std::collections::HashMap::new(),
+            quick_ms: None,
+            sharp_ms: None,
+            scroll_dir: 1,
+            last_top: 0,
             last_frame: None,
             unlock: None,
             find: find::FindState::new(cx.focus_handle()),
@@ -720,6 +732,18 @@ impl Reader {
     // ── rendering ─────────────────────────────────────────────────────────
 
     fn request(&mut self, ix: usize, key: PageKey, scale: f32, cx: &mut Context<Self>) {
+        self.request_as(ix, key, scale, false, cx)
+    }
+
+    /// `quick`: a soft preview (its time feeds the preview average).
+    fn request_as(
+        &mut self,
+        ix: usize,
+        key: PageKey,
+        scale: f32,
+        quick: bool,
+        cx: &mut Context<Self>,
+    ) {
         let Some(doc) = self.doc else { return };
         if !self.pending.insert(key) {
             return;
@@ -745,6 +769,7 @@ impl Reader {
                 .background_spawn(async move {
                     let started = std::time::Instant::now();
                     let r = engine.render_when(doc, req, wanted);
+                    let took = started.elapsed().as_secs_f32() * 1000.0;
                     if trace {
                         let what = match &r {
                             Ok(Some(b)) => format!("{}x{}", b.width, b.height),
@@ -757,11 +782,20 @@ impl Reader {
                             started.elapsed().as_millis()
                         );
                     }
-                    r
+                    (r, took)
                 })
                 .await;
+            let (result, took) = result;
             let _ = this.update(cx, |this, cx| {
                 this.pending.remove(&key);
+                if matches!(result, Ok(Some(_))) {
+                    let avg = if quick {
+                        &mut this.quick_ms
+                    } else {
+                        &mut this.sharp_ms
+                    };
+                    *avg = Some(avg.map_or(took, |a| a * 0.7 + took * 0.3));
+                }
                 match result {
                     Ok(Some(bmp)) => {
                         if let Some(since) = this.blank_since.remove(&page) {
@@ -822,19 +856,24 @@ impl Reader {
             }
             None => {
                 let any = self.cache.any_for_page(ix as u32, self.rotation);
-                if any.is_none() {
+                // A preview only pays when it is clearly faster than the page.
+                let preview_pays = match (self.quick_ms, self.sharp_ms) {
+                    (Some(q), Some(s)) => q * 2.0 < s,
+                    _ => true,
+                };
+                if any.is_none() && preview_pays {
                     // Nothing yet: a quick soft render first, then the sharp one.
                     let quick = (device_scale * PREVIEW_SCALE).max(0.05);
                     let quick_key = PageKey {
                         scale_key: scale_key(quick),
                         ..key
                     };
-                    self.request(ix, quick_key, quick, cx);
-                    if self.trace {
-                        self.blank_since
-                            .entry(ix as u32)
-                            .or_insert_with(std::time::Instant::now);
-                    }
+                    self.request_as(ix, quick_key, quick, true, cx);
+                }
+                if any.is_none() && self.trace {
+                    self.blank_since
+                        .entry(ix as u32)
+                        .or_insert_with(std::time::Instant::now);
                 }
                 self.request(ix, key, device_scale, cx);
                 any
@@ -842,7 +881,12 @@ impl Reader {
         };
         // Render the neighbours ahead of time, so the next page is ready when
         // it scrolls in (they queue behind the visible ones).
-        for n in [ix + 1, ix.wrapping_sub(1)] {
+        let ahead = if self.scroll_dir >= 0 {
+            ix + 1
+        } else {
+            ix.wrapping_sub(1)
+        };
+        for n in [ahead] {
             if n < self.page_count() {
                 let s = self.px_per_pt(n) * window.scale_factor();
                 let k = PageKey {
@@ -1085,7 +1129,12 @@ impl Render for Reader {
             }
         }
         {
-            let lo = self.list.logical_scroll_top().item_ix as u64;
+            let top = self.list.logical_scroll_top().item_ix;
+            if top != self.last_top {
+                self.scroll_dir = if top > self.last_top { 1 } else { -1 };
+                self.last_top = top;
+            }
+            let lo = top as u64;
             let ppt = self.px_per_pt(lo as usize);
             let page_h = (self.page_size(lo as usize).h * ppt + GAP).max(1.0);
             let on_screen = (self.viewport.1 / page_h).ceil() as u64 + 1;

@@ -12,10 +12,12 @@
 //! [`Engine`] costs nothing on the start-up path (AGENTS.md rule 1).
 //!
 //! The `mupdf` crate's `Document` is neither `Send` nor `Sync`, so **each
-//! document is pinned to the worker that opened it**: every job for that
-//! document runs there, in order. Documents are spread over workers (the one
-//! with the fewest open documents wins), so several documents render in
-//! parallel, while the pages of one document render one after another.
+//! document belongs to the worker that opened it**: text, links, find and
+//! everything but rendering run there, in order. Documents are spread over
+//! workers (the one with the fewest open documents wins). Rendering also uses
+//! up to three helper workers, each opening its own handle on the same file
+//! the first time it renders a page, and each render goes to the least busy
+//! of them, so the pages of one long scanned book decode side by side.
 //!
 //! The public methods block until their worker answers. Call them from a
 //! background task (`cx.background_spawn`), never from the UI thread.
@@ -60,6 +62,9 @@ const WORKER_STACK_BYTES: usize = 8 << 20;
 /// A job that panics this many times closes its document.
 const CRASHES_BEFORE_QUARANTINE: u32 = 2;
 
+/// Workers besides its own that may render a document's pages.
+const RENDER_HELPERS: usize = 3;
+
 /// An open document. Ids are never reused within one [`Engine`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct DocId(u64);
@@ -85,6 +90,14 @@ struct Job {
 /// What the engine knows about an open document on the caller's side.
 struct DocEntry {
     worker: usize,
+    /// Extra workers that may render pages of this document, each opening its
+    /// own handle on the file the first time (renders of one long scanned
+    /// book run side by side instead of queueing on one thread).
+    helpers: Vec<usize>,
+    /// To open the file again on a helper. The password stays in memory only
+    /// and is dropped with the document (AGENTS.md rule 13).
+    path: PathBuf,
+    password: Option<String>,
     page_count: u32,
     /// The newest generation the caller set; older render requests are dropped.
     generation: Arc<AtomicU64>,
@@ -94,6 +107,9 @@ struct DocEntry {
 /// start on first use. `Send + Sync`, so share it behind an `Arc`.
 pub struct Engine {
     workers: Mutex<Vec<Option<Sender<Job>>>>,
+    /// Render jobs queued or running per worker, to send the next one to the
+    /// least busy worker of a document.
+    inflight: Vec<AtomicU64>,
     docs: Mutex<HashMap<DocId, DocEntry>>,
     next_id: AtomicU64,
 }
@@ -127,6 +143,7 @@ impl Engine {
         let threads = threads.max(1);
         Engine {
             workers: Mutex::new(vec![None; threads]),
+            inflight: (0..threads).map(|_| AtomicU64::new(0)).collect(),
             docs: Mutex::new(HashMap::new()),
             next_id: AtomicU64::new(1),
         }
@@ -240,6 +257,7 @@ impl Engine {
         let worker = self.pick_worker();
         let path: PathBuf = path.to_path_buf();
         let password = password.map(str::to_string);
+        let (keep_path, keep_password) = (path.clone(), password.clone());
         let opened = self
             .call(worker, None, move |state| {
                 let (doc, info) = doc::open(&path, password.as_deref())?;
@@ -252,11 +270,44 @@ impl Engine {
             id,
             DocEntry {
                 worker,
+                helpers: self.helpers_for(worker),
+                path: keep_path,
+                password: keep_password,
                 page_count: info.page_count,
                 generation: Arc::new(AtomicU64::new(0)),
             },
         );
         Ok((id, info))
+    }
+
+    /// Up to [`RENDER_HELPERS`] other workers, starting after `worker`.
+    fn helpers_for(&self, worker: usize) -> Vec<usize> {
+        let threads = self.threads();
+        (1..threads)
+            .map(|i| (worker + i) % threads)
+            .take(RENDER_HELPERS)
+            .collect()
+    }
+
+    /// The least busy of `doc`'s workers for a render, with what a helper
+    /// needs to open the file.
+    fn render_worker(&self, doc: DocId) -> Result<(usize, bool, PathBuf, Option<String>), String> {
+        let docs = lock(&self.docs);
+        let e = docs
+            .get(&doc)
+            .ok_or_else(|| "the document is not open".to_string())?;
+        let load = |w: usize| {
+            self.inflight
+                .get(w)
+                .map_or(u64::MAX, |n| n.load(Ordering::Relaxed))
+        };
+        let mut best = e.worker;
+        for &h in &e.helpers {
+            if load(h) < load(best) {
+                best = h;
+            }
+        }
+        Ok((best, best != e.worker, e.path.clone(), e.password.clone()))
     }
 
     /// Mark every render request for `doc` older than `generation` as stale.
@@ -285,7 +336,7 @@ impl Engine {
         req: RenderRequest,
         wanted: impl Fn() -> bool + Send + Clone + 'static,
     ) -> Result<Option<Bitmap>, String> {
-        let (worker, _, generation) = self.entry(doc)?;
+        let (_, _, generation) = self.entry(doc)?;
         let stale = {
             let generation = generation.clone();
             move || req.generation < generation.load(Ordering::Relaxed) || !wanted()
@@ -293,10 +344,24 @@ impl Engine {
         if stale() {
             return Ok(None);
         }
+        let (worker, helper, path, password) = self.render_worker(doc)?;
         let stale_on_worker = stale.clone();
-        let bitmap = self.call(worker, Some(doc), move |state| {
+        let counter = &self.inflight[worker];
+        counter.fetch_add(1, Ordering::Relaxed);
+        let result = self.call(worker, Some(doc), move |state| {
             if stale_on_worker() {
                 return Ok::<_, String>(None);
+            }
+            if helper && !state.docs.contains_key(&doc) {
+                let (opened, _) = doc::open(&path, password.as_deref())
+                    .map_err(|e| format!("a render helper could not open the file: {e:?}"))?;
+                state.docs.insert(
+                    doc,
+                    DocSlot {
+                        doc: opened,
+                        crashes: 0,
+                    },
+                );
             }
             let slot = state
                 .docs
@@ -304,7 +369,9 @@ impl Engine {
                 .ok_or_else(|| "the document was closed".to_string())?;
             let bitmap = doc::render(&slot.doc, &req)?;
             Ok((!stale_on_worker()).then_some(bitmap))
-        })??;
+        });
+        counter.fetch_sub(1, Ordering::Relaxed);
+        let bitmap = result??;
         Ok(bitmap.filter(|_| !stale()))
     }
 
@@ -403,13 +470,19 @@ impl Engine {
         let Some(entry) = lock(&self.docs).remove(&doc) else {
             return;
         };
-        if let Ok(tx) = self.worker(entry.worker) {
-            let _ = tx.send(Job {
-                doc: None,
-                run: Box::new(move |state| {
-                    state.docs.remove(&doc);
-                }),
-            });
+        let started: Vec<bool> = lock(&self.workers).iter().map(Option::is_some).collect();
+        for w in std::iter::once(entry.worker).chain(entry.helpers.iter().copied()) {
+            if w != entry.worker && !started.get(w).copied().unwrap_or(false) {
+                continue; // a helper that never started has nothing open
+            }
+            if let Ok(tx) = self.worker(w) {
+                let _ = tx.send(Job {
+                    doc: None,
+                    run: Box::new(move |state| {
+                        state.docs.remove(&doc);
+                    }),
+                });
+            }
         }
     }
 

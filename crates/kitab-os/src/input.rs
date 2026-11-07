@@ -95,3 +95,18 @@ pub fn vk_for(c: char) -> Option<u16> {
         _ => None,
     }
 }
+
+/// Press the left button at (`x0`, `y0`), move to (`x1`, `y1`) in `steps`
+/// moves with the button held, and release (a text selection drag).
+pub fn drag(hwnd: isize, (x0, y0): (i32, i32), (x1, y1): (i32, i32), steps: i32) -> bool {
+    let hwnd = HWND(hwnd as *mut core::ffi::c_void);
+    let mut ok = post(hwnd, WM_MOUSEMOVE, 0, x0, y0) && post(hwnd, WM_LBUTTONDOWN, 0x0001, x0, y0);
+    let steps = steps.max(1);
+    for i in 1..=steps {
+        let x = x0 + (x1 - x0) * i / steps;
+        let y = y0 + (y1 - y0) * i / steps;
+        ok = ok && post(hwnd, WM_MOUSEMOVE, 0x0001, x, y);
+        std::thread::sleep(std::time::Duration::from_millis(12));
+    }
+    ok && post(hwnd, WM_LBUTTONUP, 0, x1, y1)
+}

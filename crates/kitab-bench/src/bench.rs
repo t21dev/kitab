@@ -481,7 +481,7 @@ fn write_report(dir: &Path, report: &Report) -> std::io::Result<()> {
 }
 
 fn run_steps(hwnd: isize, steps: &str) -> Result<(), String> {
-    use kitab_os::input::{Button, click, hover, key, resize, vk_for, wheel};
+    use kitab_os::input::{Button, click, drag, hover, key, resize, vk_for, wheel};
     for step in steps.split(';').map(str::trim).filter(|s| !s.is_empty()) {
         let (verb, arg) = step.split_once(':').ok_or(format!("bad step {step}"))?;
         let xy = || -> Result<(i32, i32), String> {
@@ -524,6 +524,17 @@ fn run_steps(hwnd: isize, steps: &str) -> Result<(), String> {
                 };
                 key(hwnd, vk)
             }
+            // drag:X0,Y0,X1,Y1 presses, moves and releases the left button.
+            "drag" => {
+                let v: Vec<i32> = arg
+                    .split(',')
+                    .filter_map(|v| v.trim().parse().ok())
+                    .collect();
+                match v.as_slice() {
+                    [x0, y0, x1, y1] => drag(hwnd, (*x0, *y0), (*x1, *y1), 16),
+                    _ => return Err(format!("bad drag step {step}")),
+                }
+            }
             // size:W,H resizes the window (short-screen checks).
             "size" => xy().map(|(w, h)| resize(hwnd, w, h))?,
             // wheel:X,Y,N turns the wheel N notches (negative scrolls down).
@@ -540,7 +551,11 @@ fn run_steps(hwnd: isize, steps: &str) -> Result<(), String> {
             return Err(format!("could not post {step}"));
         }
         // Let the app handle the message and draw before the next step.
-        std::thread::sleep(Duration::from_millis(150));
+        // Wheel and wait steps keep their own pace (scroll tests send a wheel
+        // event every frame).
+        if !matches!(verb, "wheel" | "wait") {
+            std::thread::sleep(Duration::from_millis(150));
+        }
     }
     Ok(())
 }
@@ -556,7 +571,7 @@ fn strip_verbatim(p: &Path) -> String {
 /// the screen, so other apps' content can't end up in a screenshot.
 ///
 /// `--do` runs steps on that window before the capture, separated by `;`:
-/// `click:X,Y`, `rclick:X,Y`, `mclick:X,Y`, `hover:X,Y`, `size:W,H`, `type:TEXT`, `key:NAME`, `wheel:X,Y,N` (client pixels, as in the
+/// `click:X,Y`, `rclick:X,Y`, `mclick:X,Y`, `hover:X,Y`, `drag:X0,Y0,X1,Y1`, `size:W,H`, `type:TEXT`, `key:NAME`, `wheel:X,Y,N` (client pixels, as in the
 /// capture) and `wait:MS`. Clicks are posted to the window, not the desktop.
 fn shot(args: &[String]) -> i32 {
     let mut out = None;
