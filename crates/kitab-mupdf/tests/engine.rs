@@ -250,10 +250,17 @@ fn write_pdf_keeps_the_chosen_pages_and_sizes() {
     assert_eq!(copied.page_sizes.len(), 2);
     for (n, &p) in pages.iter().enumerate() {
         let (a, b) = (info.page_sizes[p as usize], copied.page_sizes[n]);
-        assert!((a.w - b.w).abs() < 1.0 && (a.h - b.h).abs() < 1.0, "{a:?} {b:?}");
+        assert!(
+            (a.w - b.w).abs() < 1.0 && (a.h - b.h).abs() < 1.0,
+            "{a:?} {b:?}"
+        );
     }
     // A page the document doesn't have is an error, not a panic.
-    assert!(engine().write_pdf(id, vec![9_999], dir.join("bad.pdf")).is_err());
+    assert!(
+        engine()
+            .write_pdf(id, vec![9_999], dir.join("bad.pdf"))
+            .is_err()
+    );
     engine().close(copy);
     engine().close(id);
     let _ = std::fs::remove_dir_all(&dir);

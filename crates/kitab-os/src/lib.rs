@@ -8,6 +8,7 @@ pub mod instance;
 #[cfg(windows)]
 pub mod splash;
 pub mod update;
+pub mod xdg;
 
 #[cfg(all(windows, feature = "input"))]
 pub mod input;

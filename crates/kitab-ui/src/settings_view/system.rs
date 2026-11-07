@@ -215,8 +215,10 @@ pub(super) fn file_types(ws: &WeakEntity<Workspace>, info: &SystemInfo, st: &Sty
         ));
     let note = if windows {
         "Kitab opens these files when you double-click them. Set up registers a type for your account (Set up all does every one); Windows then asks you to pick Kitab in Default apps."
+    } else if cfg!(target_os = "macos") {
+        "Kitab opens these files when you double-click them. Set up makes Kitab the default app for that type in Finder; Set up all does every one but plain text."
     } else {
-        "Kitab opens these files when you double-click them. Set up makes Kitab the default app for that type; Set up all does every one."
+        "Kitab opens these files when you double-click them. Set up adds Kitab to your apps if it isn't there and makes it the default for that type; Set up all does every one but plain text."
     };
     let thumbs = info.types.as_ref().map(|v| v.iter().any(|s| s.thumbnails));
     let mut col = div().flex().flex_col().gap(px(28.0)).child(group(
@@ -228,13 +230,25 @@ pub(super) fn file_types(ws: &WeakEntity<Workspace>, info: &SystemInfo, st: &Sty
         }),
         st,
     ));
-    if windows {
+    // macOS has no Quick Look extension yet, so no thumbnails there.
+    if !cfg!(target_os = "macos") {
+        let (about, label) = if windows {
+            (
+                "Page previews of PDFs, books and Markdown in File Explorer, drawn by Kitab. Make default turns them on.",
+                "File Explorer thumbnails",
+            )
+        } else {
+            (
+                "Page previews of PDFs, books and Markdown in your file manager, drawn by Kitab. Set up turns them on.",
+                "File manager thumbnails",
+            )
+        };
         col = col.child(group(
             "Thumbnails",
-            Some("Page previews of PDFs, books and Markdown in File Explorer, drawn by Kitab. Make default turns them on."),
+            Some(about),
             icon_row(
                 Some("image"),
-                "File Explorer thumbnails",
+                label,
                 "",
                 match thumbs {
                     None => status("…", false, st),
@@ -252,7 +266,11 @@ pub(super) fn file_types(ws: &WeakEntity<Workspace>, info: &SystemInfo, st: &Sty
         icon_row(
             Some("trash"),
             "Remove Kitab's file types",
-            "Takes Kitab off the Open with lists and stops its thumbnails, for your account. Your files are not touched.",
+            if cfg!(target_os = "macos") {
+                "Hands PDFs, EPUBs and text back to Preview, Books and TextEdit. Your files are not touched."
+            } else {
+                "Takes Kitab off the Open with lists and stops its thumbnails, for your account. Your files are not touched."
+            },
             button(
                 "assoc-remove",
                 "Remove",
