@@ -87,6 +87,7 @@ pub struct Workspace {
 pub enum SidePane {
     #[default]
     Contents,
+    Pages,
     Marks,
     Bookmarks,
 }
@@ -95,6 +96,7 @@ impl SidePane {
     fn label(self) -> &'static str {
         match self {
             SidePane::Contents => "Contents",
+            SidePane::Pages => "Pages",
             SidePane::Marks => "Marks",
             SidePane::Bookmarks => "Bookmarks",
         }
@@ -701,6 +703,10 @@ impl Workspace {
             let pane = self.marks_pane(&reader, st, cx);
             return self.sidebar_frame(tabs_panel, Some(pane), st, cx);
         }
+        if self.side_pane == SidePane::Pages && !reader.read(cx).is_markdown() {
+            let pane = reader.update(cx, |r, cx| r.pages_pane(cx));
+            return self.sidebar_frame(tabs_panel, Some(pane), st, cx);
+        }
         if self.side_pane == SidePane::Bookmarks {
             let pane = self.bookmarks_pane(&reader, st, cx);
             return self.sidebar_frame(tabs_panel, Some(pane), st, cx);
@@ -1177,6 +1183,11 @@ impl Workspace {
                         .tip(tip)
                         .on_click(cx.listener(move |ws, _, _, cx| {
                             ws.side_pane = p;
+                            if p == SidePane::Pages {
+                                if let Some(r) = ws.active.and_then(|i| ws.tabs.get(i)).cloned() {
+                                    r.update(cx, |r, _| r.reveal_in_pages());
+                                }
+                            }
                             cx.notify();
                         }))
                 };
@@ -1194,6 +1205,7 @@ impl Workspace {
                                 "highlight",
                                 "Marks and annotations",
                             ))
+                            .child(pane_tab(SidePane::Pages, "pages", "Page thumbnails"))
                             .child(pane_tab(
                                 SidePane::Bookmarks,
                                 "bookmark",

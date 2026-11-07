@@ -18,6 +18,7 @@ mod layer;
 mod markdown;
 mod marks_list;
 mod markup;
+mod pages;
 mod select;
 
 use crate::actions::*;
@@ -177,6 +178,16 @@ pub struct Reader {
     file_annots: Option<Vec<kitab_core::FileAnnot>>,
     /// Bookmarked pages (Ctrl+D), in page order.
     bookmark_rows: Vec<bookmarks::BookmarkRow>,
+    /// The sidebar's Pages pane (thumbnails).
+    pages: pages::PagesState,
+}
+
+/// What a page render is for: the reading view (a quick preview or the sharp
+/// page) or a thumbnail in the Pages pane, with its own test for whether it
+/// is still wanted.
+enum RenderFor {
+    Page { quick: bool },
+    Thumbnail(crate::engine::Wanted),
 }
 
 impl Reader {
@@ -241,6 +252,7 @@ impl Reader {
             file_size: None,
             file_annots: None,
             bookmark_rows: Vec::new(),
+            pages: pages::PagesState::default(),
         };
         this.load_file_size(cx);
         this.open(None, cx);
@@ -753,6 +765,11 @@ impl Reader {
     }
 
     /// A Markdown document (blocks, not pages).
+    /// Scroll the Pages pane to the current page next time it shows.
+    pub fn reveal_in_pages(&mut self) {
+        self.pages.reveal = true;
+    }
+
     pub fn is_markdown(&self) -> bool {
         self.md.is_some()
     }
@@ -890,6 +907,17 @@ impl Reader {
         quick: bool,
         cx: &mut Context<Self>,
     ) {
+        self.request_for(ix, key, scale, RenderFor::Page { quick }, cx)
+    }
+
+    fn request_for(
+        &mut self,
+        ix: usize,
+        key: PageKey,
+        scale: f32,
+        what: RenderFor,
+        cx: &mut Context<Self>,
+    ) {
         let Some(doc) = self.doc else { return };
         if !self.pending.insert(key) {
             return;
@@ -902,13 +930,20 @@ impl Reader {
             tile: None,
             generation: self.generation,
         };
-        let visible = self.visible.clone();
         let page = ix as u32;
-        let wanted: crate::engine::Wanted = Arc::new(move || {
-            let v = visible.load(std::sync::atomic::Ordering::Relaxed);
-            let (lo, hi) = ((v & 0xFFFF_FFFF) as u32, (v >> 32) as u32);
-            page + WANTED_MARGIN >= lo && page <= hi + WANTED_MARGIN
-        });
+        // Only the reading view's renders feed the preview timing.
+        let (wanted, quick): (crate::engine::Wanted, Option<bool>) = match what {
+            RenderFor::Page { quick } => {
+                let visible = self.visible.clone();
+                let wanted: crate::engine::Wanted = Arc::new(move || {
+                    let v = visible.load(std::sync::atomic::Ordering::Relaxed);
+                    let (lo, hi) = ((v & 0xFFFF_FFFF) as u32, (v >> 32) as u32);
+                    page + WANTED_MARGIN >= lo && page <= hi + WANTED_MARGIN
+                });
+                (wanted, Some(quick))
+            }
+            RenderFor::Thumbnail(wanted) => (wanted, None),
+        };
         let trace = self.trace;
         cx.spawn(async move |this, cx| {
             let result = cx
@@ -934,7 +969,7 @@ impl Reader {
             let (result, took) = result;
             let _ = this.update(cx, |this, cx| {
                 this.pending.remove(&key);
-                if matches!(result, Ok(Some(_))) {
+                if let (Ok(Some(_)), Some(quick)) = (&result, quick) {
                     let avg = if quick {
                         &mut this.quick_ms
                     } else {
