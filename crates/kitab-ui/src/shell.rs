@@ -1935,6 +1935,13 @@ impl Render for Workspace {
             }))
             .on_action(cx.listener(|ws, _: &ShowHome, window, cx| ws.show_home(window, cx)))
             .on_action(cx.listener(|ws, _: &ToggleSidebar, _, cx| ws.toggle_sidebar(cx)))
+            .on_action(cx.listener(|ws, _: &ToggleFileInfo, _, cx| {
+                // Remembered across launches (settings.json `file_info_folded`).
+                ws.change_style(
+                    &|st: &mut Style| st.file_info_folded = !st.file_info_folded,
+                    cx,
+                );
+            }))
             .on_action(cx.listener(|ws, _: &ToggleDock, _, cx| {
                 // Remembered across launches (settings.json `dock_hidden`).
                 ws.change_style(&|st: &mut Style| st.dock_hidden = !st.dock_hidden, cx);

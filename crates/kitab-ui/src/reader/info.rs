@@ -119,27 +119,72 @@ impl Reader {
         let above_dock = st.shows_dock() && !st.dock_hidden && st.dock == DockAt::Bottom;
         let bottom = if above_dock { 16.0 + 44.0 + 8.0 } else { 14.0 };
         let path: SharedString = self.path.to_string_lossy().to_string().into();
+        let toggle = |_: &gpui::ClickEvent, window: &mut Window, cx: &mut App| {
+            window.dispatch_action(Box::new(crate::actions::ToggleFileInfo), cx)
+        };
+        let surface = |d: gpui::Stateful<gpui::Div>| {
+            d.bg(st.c(|c| c.raised))
+                .border_1()
+                .border_color(st.c(|c| c.line))
+                .shadow(st.elev())
+        };
+        let chip = if st.file_info_folded {
+            // Folded: an "i" button; a click (or Ctrl+I) unfolds it.
+            surface(div().id("file-info"))
+                .size(px(26.0))
+                .rounded_full()
+                .flex()
+                .items_center()
+                .justify_center()
+                .hover(|d| d.bg(st.c(|c| c.hover)))
+                .tip("File info  Ctrl+I")
+                .on_click(toggle)
+                .child(
+                    svg()
+                        .path(icon("info"))
+                        .size(px(14.0))
+                        .text_color(st.c(|c| c.muted)),
+                )
+                .into_any_element()
+        } else {
+            surface(div().id("file-info"))
+                .flex()
+                .items_center()
+                .gap(px(6.0))
+                .pl(px(10.0))
+                .pr(px(4.0))
+                .py(px(2.0))
+                .rounded(px(8.0))
+                .text_size(px(11.5))
+                .text_color(st.c(|c| c.muted))
+                .whitespace_nowrap()
+                .child(div().id("file-info-line").tip(path).child(line))
+                .child(
+                    div()
+                        .id("file-info-fold")
+                        .size(px(20.0))
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .rounded(px(5.0))
+                        .hover(|d| d.bg(st.c(|c| c.hover)))
+                        .tip("Fold to an i  Ctrl+I")
+                        .on_click(toggle)
+                        .child(
+                            svg()
+                                .path(icon("chevron-left"))
+                                .size(px(12.0))
+                                .text_color(st.c(|c| c.faint)),
+                        ),
+                )
+                .into_any_element()
+        };
         Some(
             div()
                 .absolute()
                 .bottom(px(bottom))
                 .left(px(16.0))
-                .child(
-                    div()
-                        .id("file-info")
-                        .px(px(10.0))
-                        .py(px(4.0))
-                        .rounded(px(8.0))
-                        .bg(st.c(|c| c.raised))
-                        .border_1()
-                        .border_color(st.c(|c| c.line))
-                        .shadow(st.elev())
-                        .text_size(px(11.5))
-                        .text_color(st.c(|c| c.muted))
-                        .whitespace_nowrap()
-                        .tip(path)
-                        .child(line),
-                )
+                .child(chip)
                 .into_any_element(),
         )
     }

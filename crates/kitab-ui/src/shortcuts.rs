@@ -64,6 +64,7 @@ pub const GROUPS: &[Group] = &[
         rows: &[
             ("Show the markup tools", "Ctrl+Shift+D"),
             ("Hide or show the quick dock", "Ctrl+."),
+            ("Fold or unfold the file info", "Ctrl+I"),
             ("Straight lines at 45°, squares, circles", "Hold Shift"),
             ("Undo / redo a mark", "Ctrl+Z / Ctrl+Y"),
             ("Redo a mark", "Ctrl+Shift+Z"),

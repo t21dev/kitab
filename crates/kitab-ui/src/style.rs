@@ -39,6 +39,8 @@ pub struct Style {
     pub file_info: bool,
     /// The dock is tucked into its handle.
     pub dock_hidden: bool,
+    /// The file info chip is folded to its "i" button.
+    pub file_info_folded: bool,
 }
 
 impl Global for Style {}
@@ -71,6 +73,7 @@ impl Style {
             markup: s.markup,
             file_info: s.file_info,
             dock_hidden: s.dock_hidden,
+            file_info_folded: s.file_info_folded,
         };
         style.resolve_accent();
         style
@@ -118,6 +121,7 @@ impl Style {
             markup: self.markup,
             file_info: self.file_info,
             dock_hidden: self.dock_hidden,
+            file_info_folded: self.file_info_folded,
         }
     }
 

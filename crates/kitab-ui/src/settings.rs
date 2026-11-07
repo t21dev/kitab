@@ -260,6 +260,8 @@ pub struct Settings {
     pub file_info: bool,
     /// The dock is tucked into a handle at its edge (Ctrl+.).
     pub dock_hidden: bool,
+    /// The file info chip is folded to an "i" button (Ctrl+I).
+    pub file_info_folded: bool,
 }
 
 impl Settings {
@@ -329,6 +331,7 @@ impl Default for Settings {
             markup: true,
             file_info: true,
             dock_hidden: false,
+            file_info_folded: false,
         }
     }
 }
@@ -359,6 +362,7 @@ struct File {
     markup_tools: bool,
     file_info_chip: bool,
     dock_hidden: bool,
+    file_info_folded: bool,
 }
 
 /// Books open at this text size (12 pt reads as 16 px at 100 %).
@@ -402,6 +406,7 @@ impl From<Settings> for File {
             markup_tools: s.markup,
             file_info_chip: s.file_info,
             dock_hidden: s.dock_hidden,
+            file_info_folded: s.file_info_folded,
         }
     }
 }
@@ -438,6 +443,7 @@ impl Settings {
             markup: f.markup_tools,
             file_info: f.file_info_chip,
             dock_hidden: f.dock_hidden,
+            file_info_folded: f.file_info_folded,
         })
     }
 
@@ -476,6 +482,7 @@ mod tests {
             markup: false,
             file_info: false,
             dock_hidden: true,
+            file_info_folded: true,
         };
         assert_eq!(Settings::from_json(&s.to_json()), Ok(s));
     }
