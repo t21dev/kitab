@@ -481,7 +481,7 @@ fn write_report(dir: &Path, report: &Report) -> std::io::Result<()> {
 }
 
 fn run_steps(hwnd: isize, steps: &str) -> Result<(), String> {
-    use kitab_os::input::{Button, click, hover, resize, wheel};
+    use kitab_os::input::{Button, click, hover, key, resize, vk_for, wheel};
     for step in steps.split(';').map(str::trim).filter(|s| !s.is_empty()) {
         let (verb, arg) = step.split_once(':').ok_or(format!("bad step {step}"))?;
         let xy = || -> Result<(i32, i32), String> {
@@ -502,6 +502,25 @@ fn run_steps(hwnd: isize, steps: &str) -> Result<(), String> {
             "rclick" => xy().map(|(x, y)| click(hwnd, x, y, Button::Right))?,
             "mclick" => xy().map(|(x, y)| click(hwnd, x, y, Button::Middle))?,
             "hover" => xy().map(|(x, y)| hover(hwnd, x, y))?,
+            // type:TEXT presses the keys for TEXT (letters, digits, space, /, -).
+            "type" => arg.chars().all(|c| {
+                let ok = vk_for(c).is_some_and(|vk| key(hwnd, vk));
+                std::thread::sleep(Duration::from_millis(30));
+                ok
+            }),
+            // key:NAME presses one named key.
+            "key" => {
+                let vk = match arg {
+                    "enter" => 0x0D,
+                    "escape" => 0x1B,
+                    "f3" => 0x72,
+                    "down" => 0x28,
+                    "up" => 0x26,
+                    "backspace" => 0x08,
+                    other => return Err(format!("unknown key {other}")),
+                };
+                key(hwnd, vk)
+            }
             // size:W,H resizes the window (short-screen checks).
             "size" => xy().map(|(w, h)| resize(hwnd, w, h))?,
             // wheel:X,Y,N turns the wheel N notches (negative scrolls down).
@@ -534,7 +553,7 @@ fn strip_verbatim(p: &Path) -> String {
 /// the screen, so other apps' content can't end up in a screenshot.
 ///
 /// `--do` runs steps on that window before the capture, separated by `;`:
-/// `click:X,Y`, `rclick:X,Y`, `mclick:X,Y`, `hover:X,Y`, `size:W,H`, `wheel:X,Y,N` (client pixels, as in the
+/// `click:X,Y`, `rclick:X,Y`, `mclick:X,Y`, `hover:X,Y`, `size:W,H`, `type:TEXT`, `key:NAME`, `wheel:X,Y,N` (client pixels, as in the
 /// capture) and `wait:MS`. Clicks are posted to the window, not the desktop.
 fn shot(args: &[String]) -> i32 {
     let mut out = None;

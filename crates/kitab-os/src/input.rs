@@ -6,9 +6,11 @@
 
 use windows::Win32::Foundation::{HWND, LPARAM, POINT, WPARAM};
 use windows::Win32::Graphics::Gdi::ClientToScreen;
+use windows::Win32::UI::Input::KeyboardAndMouse::{MAPVK_VK_TO_VSC, MapVirtualKeyW};
 use windows::Win32::UI::WindowsAndMessaging::{
-    PostMessageW, SWP_NOMOVE, SWP_NOZORDER, SetWindowPos, WM_LBUTTONDOWN, WM_LBUTTONUP,
-    WM_MBUTTONDOWN, WM_MBUTTONUP, WM_MOUSEMOVE, WM_MOUSEWHEEL, WM_RBUTTONDOWN, WM_RBUTTONUP,
+    PostMessageW, SWP_NOMOVE, SWP_NOZORDER, SetWindowPos, WM_KEYDOWN, WM_KEYUP, WM_LBUTTONDOWN,
+    WM_LBUTTONUP, WM_MBUTTONDOWN, WM_MBUTTONUP, WM_MOUSEMOVE, WM_MOUSEWHEEL, WM_RBUTTONDOWN,
+    WM_RBUTTONUP,
 };
 
 #[derive(Clone, Copy, Debug)]
@@ -64,4 +66,32 @@ pub fn resize(hwnd: isize, w: i32, h: i32) -> bool {
     // SAFETY: SetWindowPos only changes this window's size; an invalid handle
     // makes it return an error, which is reported.
     unsafe { SetWindowPos(hwnd, None, 0, 0, w, h, SWP_NOMOVE | SWP_NOZORDER).is_ok() }
+}
+
+/// Press and release the key with virtual-key code `vk` (no modifiers).
+pub fn key(hwnd: isize, vk: u16) -> bool {
+    let hwnd = HWND(hwnd as *mut core::ffi::c_void);
+    // SAFETY: MapVirtualKeyW only reads the keyboard layout.
+    let scan = unsafe { MapVirtualKeyW(u32::from(vk), MAPVK_VK_TO_VSC) } as isize;
+    let down = LPARAM(1 | (scan << 16));
+    let up = LPARAM(1 | (scan << 16) | (1 << 30) | (1 << 31));
+    // SAFETY: PostMessageW only queues messages for this window; an invalid
+    // handle makes it fail, which is reported.
+    unsafe {
+        PostMessageW(Some(hwnd), WM_KEYDOWN, WPARAM(usize::from(vk)), down).is_ok()
+            && PostMessageW(Some(hwnd), WM_KEYUP, WPARAM(usize::from(vk)), up).is_ok()
+    }
+}
+
+/// The virtual-key code that types `c` on a US layout, for letters, digits,
+/// space and `/`.
+pub fn vk_for(c: char) -> Option<u16> {
+    match c {
+        'a'..='z' => Some(c.to_ascii_uppercase() as u16),
+        'A'..='Z' | '0'..='9' => Some(c as u16),
+        ' ' => Some(0x20),
+        '/' => Some(0xBF),
+        '-' => Some(0xBD),
+        _ => None,
+    }
 }

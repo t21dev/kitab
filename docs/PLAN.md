@@ -211,6 +211,7 @@ Everything is an **action**, bound in `keymap.json` by context (`Workspace`, `Re
 | Find | Ctrl+F or / find · F3 / Enter next · Shift+F3 / Shift+Enter previous · Alt+C match case · Alt+W whole word · Esc close |
 | Zoom and view | Ctrl+= / Ctrl+− zoom · Ctrl+scroll and pinch · Ctrl+0 fit page · Ctrl+1 actual size · Ctrl+2 fit width · Ctrl+6 single page · Ctrl+7 two-page · Ctrl+8 book view · c continuous · Ctrl+Shift+− / Ctrl+Shift+= rotate left/right |
 | Read | F11 focus mode · F5 presentation · Ctrl+Shift+L theme cycle · Ctrl+B sidebar · Ctrl+Alt+= / Ctrl+Alt+− text size (reflow) |
+| Select | drag to select, double-click word, triple-click line, Shift+click extend · Ctrl+C copy · Esc clear |
 | Annotate | h highlight selection (1–5 colours) · Ctrl+Alt+N note · Ctrl+D bookmark |
 | App | Ctrl+K command palette · Ctrl+, settings · Esc closes menus and dialogs · ? shortcuts · Ctrl+Shift+F12 performance overlay |
 | Mouse | Middle-click a tab to close it · right-click a page, tab, Home card or contents entry for its menu · back/forward mouse buttons follow history · Ctrl+wheel zooms · click or drag the scrubber track · click the page number to type a page |

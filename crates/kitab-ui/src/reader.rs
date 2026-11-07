@@ -4,6 +4,11 @@
 //! pages render), zoom modes, rotation, keyboard navigation, the password prompt
 //! and the error placeholders (PLAN.md Phase 1, DESIGN.md § Page sheets).
 
+mod find;
+mod geom;
+mod layer;
+mod select;
+
 use crate::actions::*;
 use crate::cache::{PageCache, PageKey, scale_key};
 use crate::engine::{DocEngine, DocHandle};
@@ -116,6 +121,9 @@ pub struct Reader {
     _subs: Vec<Subscription>,
     /// The password that opened this document, if it needed one (memory only).
     unlock: Option<String>,
+    find: find::FindState,
+    layers: layer::Layers,
+    select: select::SelectState,
 }
 
 impl Reader {
@@ -161,6 +169,9 @@ impl Reader {
             forward: Vec::new(),
             _subs: vec![blur],
             unlock: None,
+            find: find::FindState::new(cx.focus_handle()),
+            layers: layer::Layers::default(),
+            select: select::SelectState::default(),
         };
         this.open(None, cx);
         this
@@ -332,6 +343,31 @@ impl Reader {
         } else {
             s
         }
+    }
+
+    /// Page `ix`'s size in points before the reader's rotation (the space
+    /// text, links and hits are in).
+    fn raw_page_size(&self, ix: usize) -> SizePt {
+        self.info
+            .as_ref()
+            .and_then(|i| i.page_sizes.get(ix).copied())
+            .unwrap_or(SizePt { w: 612.0, h: 792.0 })
+    }
+
+    /// Space above page `ix`'s sheet inside its list item.
+    fn sheet_top_pad(&self, ix: usize) -> f32 {
+        if ix == 0 { GAP } else { GAP / 2.0 }
+    }
+
+    /// Where page `ix`'s sheet was drawn last frame, in window pixels.
+    fn sheet_bounds(&self, ix: usize) -> Option<Bounds<Pixels>> {
+        let item = self.list.bounds_for_item(ix)?;
+        let s = self.page_size(ix);
+        let ppt = self.px_per_pt(ix);
+        let (w, h) = (s.w * ppt, s.h * ppt);
+        let x = item.origin.x + (item.size.width - px(w)) / 2.0;
+        let y = item.origin.y + px(self.sheet_top_pad(ix));
+        Some(Bounds::new(gpui::point(x, y), gpui::size(px(w), px(h))))
     }
 
     /// Page `ix`'s size in points as shown (rotation applied).
@@ -608,7 +644,9 @@ impl Reader {
 
     /// Copy one page's text to the clipboard (worked out off the UI thread).
     pub fn copy_page_text(&self, page: usize, cx: &mut Context<Self>) {
-        let Some(doc) = self.doc else { return };
+        let Some(doc) = self.doc.filter(|_| self.may_copy()) else {
+            return;
+        };
         let engine = self.engine.clone();
         cx.spawn(async move |_, cx| {
             let text = cx
@@ -709,6 +747,7 @@ impl Reader {
         let image = match self.cache.get(&key) {
             Some(i) => {
                 crate::fire_first_paint(window, cx);
+                self.ensure_links(ix as u32, cx);
                 Some(i)
             }
             None => {
@@ -720,7 +759,7 @@ impl Reader {
             .w_full()
             .flex()
             .justify_center()
-            .pt(px(if ix == 0 { GAP } else { GAP / 2.0 }))
+            .pt(px(self.sheet_top_pad(ix)))
             .pb(px(GAP / 2.0))
             .child(
                 div()
@@ -732,12 +771,27 @@ impl Reader {
                     .rounded(radius)
                     .shadow(st.sheet())
                     .overflow_hidden()
+                    .relative()
+                    .cursor(gpui::CursorStyle::IBeam)
+                    .on_mouse_down(
+                        MouseButton::Left,
+                        cx.listener(move |r, e: &MouseDownEvent, window, cx| {
+                            r.select_down(ix, e, window, cx)
+                        }),
+                    )
+                    // Characters for selection load the first time the pointer is over the page.
+                    .on_mouse_move(cx.listener(move |r, _: &MouseMoveEvent, _, cx| {
+                        r.ensure_chars(ix as u32, cx)
+                    }))
                     .children(image.map(|i| {
                         img(ImageSource::Render(i))
                             .w(px(w))
                             .h(px(h))
                             .rounded(radius)
-                    })),
+                    }))
+                    .children(self.selection_marks(ix, ppt, &st))
+                    .children(self.find_marks(ix, ppt, &st))
+                    .children(self.link_marks(ix, ppt, &st, cx)),
             )
             .into_any_element()
     }
@@ -952,6 +1006,11 @@ impl Render for Reader {
             .on_action(cx.listener(|r, _: &FirstPage, _, cx| r.jump(0, cx)))
             .on_action(cx.listener(|r, _: &LastPage, _, cx| r.jump(usize::MAX, cx)))
             .on_action(cx.listener(|r, _: &GoToPage, window, cx| r.edit_page(window, cx)))
+            .on_action(cx.listener(|r, _: &Find, window, cx| r.open_find(window, cx)))
+            .on_action(cx.listener(|r, _: &Copy, _, cx| r.copy_selection(cx)))
+            .on_action(cx.listener(|r, _: &ClearSelection, _, cx| r.clear_selection(cx)))
+            .on_action(cx.listener(|r, _: &FindNext, window, cx| r.find_step(true, window, cx)))
+            .on_action(cx.listener(|r, _: &FindPrev, window, cx| r.find_step(false, window, cx)))
             .on_action(cx.listener(|r, _: &HistoryBack, _, cx| r.history(true, cx)))
             .on_action(cx.listener(|r, _: &HistoryForward, _, cx| r.history(false, cx)))
             .on_mouse_down(
@@ -972,6 +1031,13 @@ impl Render for Reader {
                 cx.listener(|r, _, _, cx| r.history(false, cx)),
             )
             .on_mouse_move(cx.listener(|r, e: &MouseMoveEvent, _, cx| {
+                if r.select.dragging {
+                    if e.pressed_button == Some(MouseButton::Left) {
+                        r.select_move(e.position, cx);
+                    } else {
+                        r.select_up();
+                    }
+                }
                 if r.dragging {
                     if e.pressed_button == Some(MouseButton::Left) {
                         r.seek_x(e.position.x, cx);
@@ -982,7 +1048,10 @@ impl Render for Reader {
             }))
             .on_mouse_up(
                 MouseButton::Left,
-                cx.listener(|r, _, _, _| r.dragging = false),
+                cx.listener(|r, _, _, _| {
+                    r.dragging = false;
+                    r.select_up();
+                }),
             )
             .on_action(cx.listener(|r, _: &ScrollDown, _, cx| {
                 r.list.scroll_by(px(64.0));
@@ -1032,6 +1101,7 @@ impl Render for Reader {
             )
             .children(status)
             .children(self.page_nav(&st, window, cx))
+            .children(self.find_bar(&st, window, cx))
     }
 }
 

@@ -298,6 +298,8 @@ mod tests {
     #[test]
     fn session_and_state_survive_a_restart() {
         let dir = std::env::temp_dir().join(format!("kitab-adapters-{}", std::process::id()));
+        // A reused process id must not find an earlier run's database.
+        let _ = std::fs::remove_dir_all(&dir);
         let _ = std::fs::create_dir_all(&dir);
         let db = dir.join("library.sqlite3");
         let path = fixture();

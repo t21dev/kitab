@@ -41,6 +41,27 @@ pub const GROUPS: &[Group] = &[
         ],
     },
     Group {
+        title: "Find",
+        rows: &[
+            ("Find in document", "Ctrl+F / /"),
+            ("Next result", "F3 / Enter"),
+            ("Previous result", "Shift+F3 / Shift+Enter"),
+            ("Match case", "Alt+C"),
+            ("Whole word", "Alt+W"),
+            ("Close find", "Esc"),
+        ],
+    },
+    Group {
+        title: "Select and copy",
+        rows: &[
+            ("Select text", "Drag on the page"),
+            ("Select a word / line", "Double-click / triple-click"),
+            ("Extend the selection", "Shift+click"),
+            ("Copy the selection", "Ctrl+C"),
+            ("Clear the selection", "Esc"),
+        ],
+    },
+    Group {
         title: "Zoom and view",
         rows: &[
             ("Zoom in", "Ctrl+= / Ctrl+wheel"),

@@ -118,10 +118,11 @@ impl Tool {
 
 /// A row of icon buttons in groups, each group in a `well` (the page menu's
 /// navigation, zoom and rotation). The menu stays open, so zoom can be
-/// pressed again; `label` (like "125 %") sits after the first group.
+/// pressed again; `label` (like "125 %") sits after group `label_after`.
 pub fn tool_row(
     key: &'static str,
     groups: Vec<Vec<Tool>>,
+    label_after: Option<usize>,
     label: Option<SharedString>,
     st: &Style,
 ) -> AnyElement {
@@ -168,7 +169,7 @@ pub fn tool_row(
             );
         }
         row = row.child(well);
-        if g == 0 {
+        if Some(g) == label_after {
             if let Some(l) = label.clone() {
                 row = row.child(
                     div()

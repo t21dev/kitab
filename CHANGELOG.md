@@ -8,7 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- The page menu is shorter: navigation, zoom and rotation are two rows of icon buttons, and one "Save page as…" entry opens a dialog with the page, the format (PDF, image or text) and the image resolution.
+- Find in document (Ctrl+F or /): hits highlighted on the pages, "3 of 41", F3 / Enter and Shift+F3 / Shift+Enter to step, match case (Alt+C) and whole word (Alt+W).
+- Select text on the page by dragging, double-clicking a word or triple-clicking a line, and copy it with Ctrl+C or the right-click menu, which also offers Find for the selection. Copying follows the document's copy permission.
+- Links in PDFs work: page links jump (Alt+Left comes back), web and mail links open in the browser after showing the address on hover. Other kinds of links are ignored.
+- Many tabs: tabs shrink to share the bar, then the bar scrolls, the active tab stays in view, and an All tabs button lists them all.
+- The page menu is shorter: back/forward, zoom and rotate are one row of icon buttons, and one "Save page as…" entry opens a dialog with the page, the format (PDF, image or text) and the image resolution.
 - Long menus scroll instead of running off short windows.
 - Save one page as a PDF, a PNG image (150 dpi) or plain text, from the page's right-click menu.
 - Save pages as a new PDF (Ctrl+Shift+E): type pages and ranges such as 1-3, 7, 10-; works on password-protected PDFs while they are open.

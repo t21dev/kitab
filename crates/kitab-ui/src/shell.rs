@@ -71,6 +71,10 @@ pub struct Workspace {
     booted: bool,
     hex: HexState,
     tools: ToolsState,
+    /// The tab strip scrolls sideways once tabs reach their minimum width.
+    tab_scroll: gpui::ScrollHandle,
+    /// Scroll the active tab into view on the next frame (it may not be laid out yet).
+    reveal_tab: bool,
 }
 
 impl Workspace {
@@ -110,6 +114,8 @@ impl Workspace {
                 focus: cx.focus_handle(),
             },
             tools: ToolsState::new(cx),
+            tab_scroll: gpui::ScrollHandle::new(),
+            reveal_tab: false,
         };
         // Leaving the hex field ends the edit.
         let hex_blur = cx.on_blur(&this.hex.focus, window, |ws, _, cx| {
@@ -221,6 +227,7 @@ impl Workspace {
     }
 
     fn activate(&mut self, ix: usize, window: &mut Window, cx: &mut Context<Self>) {
+        self.reveal_tab = true;
         if let Some(t) = self.tabs.get(ix).cloned() {
             if self.tools.split.as_ref() == Some(&t) {
                 self.tools.split = self.active_reader().cloned();
@@ -359,6 +366,7 @@ fn window_button(
     };
     div()
         .id(id)
+        .flex_none()
         .w(px(46.0))
         .h_full()
         .flex()
@@ -393,7 +401,7 @@ fn flatten(items: &[OutlineItem], depth: usize, out: &mut Vec<(usize, OutlineIte
 }
 
 impl Workspace {
-    fn title_bar(&mut self, st: &Style, cx: &mut Context<Self>) -> AnyElement {
+    fn title_bar(&mut self, st: &Style, window: &Window, cx: &mut Context<Self>) -> AnyElement {
         let home_on = self.active.is_none();
         let mut bar = div()
             .flex()
@@ -407,6 +415,7 @@ impl Workspace {
             .border_color(st.c(|c| c.line))
             .child(
                 icon_button("home", "home", home_on, st)
+                    .flex_none()
                     .tip("Home  Ctrl+Shift+H")
                     .on_click(cx.listener(|ws, _, window, cx| ws.show_home(window, cx))),
             )
@@ -418,6 +427,39 @@ impl Workspace {
                     .bg(st.c(|c| c.line)),
             );
 
+        // Room for tabs: the bar minus Home, the divider, the "All tabs"
+        // button, a 96 px drag area and the three window buttons. Tabs share it
+        // down to 120 px each; past that the strip scrolls.
+        let n = self.tabs.len().max(1) as f32;
+        let fixed = 8.0 + st.m().icon_button + 13.0 + 40.0 + 96.0 + 3.0 * 46.0 + 12.0;
+        let room = (f32::from(window.viewport_size().width) - fixed).max(120.0);
+        let tab_w = ((room - 4.0 * n) / n).clamp(120.0, 220.0);
+        let crowded = n * 224.0 > room;
+        if self.reveal_tab {
+            if let Some(a) = self.active {
+                self.tab_scroll.scroll_to_item(a);
+                // GPUI applies it once the tab has been laid out; until then
+                // ask for one more frame (an idle window draws none).
+                if self.tab_scroll.bounds_for_item(a).is_some() {
+                    self.reveal_tab = false;
+                } else {
+                    cx.notify();
+                }
+            } else {
+                self.reveal_tab = false;
+            }
+        }
+        let mut strip = div()
+            .id("tab-strip")
+            .flex_none()
+            .max_w(px(room))
+            .flex()
+            .items_center()
+            .gap(px(4.0))
+            .min_w_0()
+            .h_full()
+            .overflow_x_scroll()
+            .track_scroll(&self.tab_scroll);
         for (ix, tab) in self.tabs.iter().enumerate() {
             let on = self.active == Some(ix);
             // The tab shown in the side pane of a split view.
@@ -455,7 +497,10 @@ impl Workspace {
                 .h(st.px(|m| m.control_height))
                 .pl(px(10.0))
                 .pr(px(6.0))
+                .flex_none()
                 .max_w(px(220.0))
+                // Crowded: every tab gets an equal share, at least 120 px.
+                .when(crowded, |d| d.w(px(tab_w)))
                 .rounded(st.px(|m| m.control_radius))
                 .text_size(st.px(|m| m.ui_text))
                 .text_color(if on {
@@ -474,14 +519,7 @@ impl Workspace {
                 } else {
                     st.c(|c| c.faint)
                 }))
-                .child(
-                    div()
-                        .flex_1()
-                        .overflow_hidden()
-                        .whitespace_nowrap()
-                        .text_ellipsis()
-                        .child(title),
-                )
+                .child(div().flex_1().min_w_0().truncate().child(title))
                 .child(
                     div()
                         .id(("close", ix))
@@ -492,6 +530,9 @@ impl Workspace {
                         .rounded(px(5.0))
                         .invisible()
                         .when(on, |d| d.visible())
+                        .when(crowded && !on, |d| {
+                            d.absolute().right(px(6.0)).bg(st.c(|c| c.bg))
+                        })
                         .group_hover("tab", |d| d.visible())
                         .hover(|d| d.bg(st.c(|c| c.hover)))
                         .tip("Close tab  Ctrl+W")
@@ -506,7 +547,7 @@ impl Workspace {
                                 .text_color(st.c(|c| c.faint)),
                         ),
                 );
-            bar = bar.child(motion::enter(
+            strip = strip.child(motion::enter(
                 tab_el,
                 ElementId::NamedInteger("tab-in".into(), tab_id),
                 animate,
@@ -516,10 +557,24 @@ impl Workspace {
             ));
         }
 
+        // "All tabs" appears once the strip overflows: a menu of every tab.
+        let overflowing = self.tab_scroll.max_offset().width > px(0.5);
+        bar = bar.child(strip).when(overflowing, |b| {
+            b.child(
+                icon_button("all-tabs", "chevron-down", false, st)
+                    .flex_none()
+                    .tip("All tabs")
+                    .on_click(cx.listener(|ws, e: &gpui::ClickEvent, window, cx| {
+                        ws.all_tabs_menu(e.position(), window, cx)
+                    })),
+            )
+        });
         bar.child(
             div()
                 .id("drag")
                 .flex_1()
+                // Always leave room to drag the window.
+                .min_w(px(96.0))
                 .h_full()
                 .window_control_area(WindowControlArea::Drag),
         )
@@ -1143,7 +1198,7 @@ fn cover(title: &str, width: f32, st: &Style) -> AnyElement {
 impl Render for Workspace {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let st = Style::get(cx).clone();
-        let title_bar = self.title_bar(&st, cx);
+        let title_bar = self.title_bar(&st, window, cx);
         let body = match self.active_reader().cloned() {
             Some(reader) => {
                 let header = self.header_row(&reader, &st, cx);
@@ -1731,21 +1786,23 @@ impl Workspace {
         let r = reader.read(cx);
         let path = r.path.clone();
         let (page, has_doc) = (r.current_page(), r.status == crate::reader::Status::Open);
-        // Navigation, zoom and rotation as two toolbar rows (DESIGN.md § Menus);
-        // they read the reader's state each frame, so they stay right while the
-        // menu is open and are pressed again without reopening it.
-        let nav_row = {
+        let (sel_preview, may_copy) = (r.selection_preview(), r.may_copy());
+        let mode = r.zoom_mode();
+        // One toolbar row (back/forward, zoom, rotate) that reads the reader's
+        // state each frame and keeps the menu open, so it can be pressed again;
+        // everything else is an ordinary row (DESIGN.md § Menus).
+        let tool_row = {
             let reader = reader.clone();
             MenuItem::Custom(Rc::new(move |st: &Style, cx: &mut App| {
                 let r = reader.read(cx);
-                let (back, forward) = (r.can_go_back(), r.can_go_forward());
-                let (page, last) = (r.current_page(), r.page_count().saturating_sub(1));
+                let (back, forward, percent) =
+                    (r.can_go_back(), r.can_go_forward(), r.zoom_percent());
                 let go = |f: fn(&mut Reader, &mut Context<Reader>)| {
                     let reader = reader.clone();
                     move |_: &mut Window, cx: &mut App| reader.update(cx, f)
                 };
                 menu::tool_row(
-                    "menu-nav",
+                    "menu-tools",
                     vec![
                         vec![
                             Tool::new(
@@ -1763,17 +1820,15 @@ impl Workspace {
                         ],
                         vec![
                             Tool::new(
-                                "chevron-left",
-                                "Previous page (Left)",
-                                go(|r, cx| r.prev_page(cx)),
-                            )
-                            .disabled(page == 0),
+                                "minus",
+                                "Zoom out (Ctrl+-)",
+                                go(|r, cx| r.zoom_step(false, cx)),
+                            ),
                             Tool::new(
-                                "chevron-right",
-                                "Next page (Right)",
-                                go(|r, cx| r.next_page(cx)),
-                            )
-                            .disabled(page >= last),
+                                "plus",
+                                "Zoom in (Ctrl+=)",
+                                go(|r, cx| r.zoom_step(true, cx)),
+                            ),
                         ],
                         vec![
                             Tool::new(
@@ -1788,64 +1843,26 @@ impl Workspace {
                             ),
                         ],
                     ],
-                    None,
-                    st,
-                )
-            }))
-        };
-        let zoom_row = {
-            let reader = reader.clone();
-            MenuItem::Custom(Rc::new(move |st: &Style, cx: &mut App| {
-                let r = reader.read(cx);
-                let (mode, percent) = (r.zoom_mode(), r.zoom_percent());
-                let go = |f: fn(&mut Reader, &mut Context<Reader>)| {
-                    let reader = reader.clone();
-                    move |_: &mut Window, cx: &mut App| reader.update(cx, f)
-                };
-                menu::tool_row(
-                    "menu-zoom",
-                    vec![
-                        vec![
-                            Tool::new(
-                                "minus",
-                                "Zoom out (Ctrl+-)",
-                                go(|r, cx| r.zoom_step(false, cx)),
-                            ),
-                            Tool::new(
-                                "plus",
-                                "Zoom in (Ctrl+=)",
-                                go(|r, cx| r.zoom_step(true, cx)),
-                            ),
-                        ],
-                        vec![
-                            Tool::new(
-                                "fit-width",
-                                "Fit width (Ctrl+2)",
-                                go(|r, cx| r.set_zoom_mode(ZoomMode::FitWidth, cx)),
-                            )
-                            .on(mode == ZoomMode::FitWidth),
-                            Tool::new(
-                                "fit-page",
-                                "Fit page (Ctrl+0)",
-                                go(|r, cx| r.set_zoom_mode(ZoomMode::FitPage, cx)),
-                            )
-                            .on(mode == ZoomMode::FitPage),
-                            Tool::new(
-                                "file",
-                                "Actual size (Ctrl+1)",
-                                go(|r, cx| r.set_zoom_mode(ZoomMode::ActualSize, cx)),
-                            )
-                            .on(mode == ZoomMode::ActualSize),
-                        ],
-                    ],
+                    Some(1),
                     Some(format!("{percent} %").into()),
                     st,
                 )
             }))
         };
+        let zoom = |label: &'static str, key: &'static str, m: ZoomMode| {
+            let reader = reader.clone();
+            MenuItem::new(label, move |_, cx: &mut App| {
+                reader.update(cx, |r, cx| r.set_zoom_mode(m, cx))
+            })
+            .key(key)
+            .checked(mode == m)
+        };
         let mut items = vec![
-            nav_row,
-            zoom_row,
+            tool_row,
+            MenuItem::Separator,
+            zoom("Fit width", "Ctrl+2", ZoomMode::FitWidth),
+            zoom("Fit page", "Ctrl+0", ZoomMode::FitPage),
+            zoom("Actual size", "Ctrl+1", ZoomMode::ActualSize),
             MenuItem::Separator,
             MenuItem::new("Go to page…", {
                 let reader = reader.clone();
@@ -1856,6 +1873,30 @@ impl Workspace {
             .icon("hash")
             .key("Ctrl+G"),
             MenuItem::Separator,
+        ];
+        if let Some(preview) = sel_preview {
+            items.push(
+                MenuItem::new("Copy", {
+                    let reader = reader.clone();
+                    move |_, cx: &mut App| reader.update(cx, |r, cx| r.copy_selection(cx))
+                })
+                .icon("copy")
+                .key("Ctrl+C")
+                .disabled(!may_copy),
+            );
+            items.push(
+                MenuItem::new(format!("Find “{preview}”"), {
+                    let reader = reader.clone();
+                    move |window: &mut Window, cx: &mut App| {
+                        reader.update(cx, |r, cx| r.find_selection(window, cx))
+                    }
+                })
+                .icon("search")
+                .key("Ctrl+F"),
+            );
+            items.push(MenuItem::Separator);
+        }
+        items.extend([
             MenuItem::new(format!("Copy text of page {}", page + 1), {
                 let reader = reader.clone();
                 move |_, cx: &mut App| reader.update(cx, |r, cx| r.copy_page_text(page, cx))
@@ -1877,12 +1918,29 @@ impl Workspace {
             })
             .icon("file")
             .disabled(!has_doc),
-        ];
+        ]);
         items.extend(self.pdf_tool_items(&reader, cx));
         items.push(MenuItem::Separator);
         items.push(file_item_copy(&path));
         items.push(file_item_reveal(&path));
         self.open_menu(at, false, 300.0, items, window, cx);
+    }
+
+    /// Every open tab, the active one checked; the menu scrolls when long.
+    fn all_tabs_menu(&mut self, at: Point<Pixels>, window: &mut Window, cx: &mut Context<Self>) {
+        let items: Vec<MenuItem> = self
+            .tabs
+            .iter()
+            .enumerate()
+            .map(|(ix, t)| {
+                MenuItem::new(
+                    t.read(cx).title(),
+                    self.on_ws(cx, move |ws, window, cx| ws.activate(ix, window, cx)),
+                )
+                .checked(self.active == Some(ix))
+            })
+            .collect();
+        self.open_menu(at, false, 320.0, items, window, cx);
     }
 
     fn tab_menu(
