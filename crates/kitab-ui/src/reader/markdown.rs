@@ -317,7 +317,10 @@ fn block_el(d: &Draw, block: &Block, depth: usize, cx: &mut Context<Reader>) -> 
             "Diagrams are drawn in a coming update; this is its source.",
             src,
         ),
-        Block::Math(src) => source_box(d, "Math", "", src),
+        Block::Math(src) => match kitab_md::math::parse(src) {
+            Ok(node) => super::math_view::display(d.st, &node, BODY * d.scale * 1.15),
+            Err(e) => source_box(d, "Math", &format!("Can't read this TeX: {e}"), src),
+        },
         Block::Table { aligns, head, rows } => table_el(d, aligns, head, rows, cx),
         Block::Rule => div()
             .my(d.px(18.0))
@@ -632,7 +635,7 @@ fn code_el(
         .into_any_element()
 }
 
-fn source_box(d: &Draw, title: &'static str, note: &'static str, src: &str) -> AnyElement {
+fn source_box(d: &Draw, title: &'static str, note: &str, src: &str) -> AnyElement {
     let st = d.st;
     div()
         .mb(d.px(16.0))
@@ -649,7 +652,7 @@ fn source_box(d: &Draw, title: &'static str, note: &'static str, src: &str) -> A
                 .gap(d.px(8.0))
                 .text_size(d.px(12.0))
                 .child(div().text_color(st.c(|c| c.accent)).child(title))
-                .child(div().text_color(st.c(|c| c.faint)).child(note)),
+                .child(div().text_color(st.c(|c| c.faint)).child(note.to_string())),
         )
         .child(
             div()
@@ -935,7 +938,18 @@ fn text_el(d: &Draw, inlines: &[Inline], base: Base, _cx: &mut Context<Reader>) 
         if piece.is_empty() {
             return;
         }
-        let piece: String = if style.sup {
+        // Inline math as one line of Unicode (x², α ≤ β); TeX that can't be
+        // read stays as its source, marked.
+        let mut bad_math = false;
+        let piece: String = if style.math {
+            match kitab_md::math::parse(piece) {
+                Ok(node) => kitab_md::math::to_line(&node),
+                Err(_) => {
+                    bad_math = true;
+                    format!("${piece}$ ⚠")
+                }
+            }
+        } else if style.sup {
             piece.chars().map(sup_char).collect()
         } else if style.sub {
             piece.chars().map(sub_char).collect()
@@ -950,7 +964,9 @@ fn text_el(d: &Draw, inlines: &[Inline], base: Base, _cx: &mut Context<Reader>) 
         } else {
             READING_FONT
         };
-        let color = if link.is_some() {
+        let color = if bad_math {
+            st.c(|c| c.bad)
+        } else if link.is_some() {
             st.c(|c| c.accent)
         } else if mono {
             st.c(|c| c.text)

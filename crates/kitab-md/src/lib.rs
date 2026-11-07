@@ -10,6 +10,7 @@
 mod front;
 mod highlight;
 mod html;
+pub mod math;
 mod model;
 mod parse;
 mod slug;

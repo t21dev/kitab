@@ -20,6 +20,7 @@ mod live;
 mod markdown;
 mod marks_list;
 mod markup;
+mod math_view;
 mod pages;
 mod present;
 mod select;
