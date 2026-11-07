@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 //! Every command is a GPUI action, bound in the default keymap (PLAN.md §3.10,
-//! AGENTS.md rule 19). keymap.json overrides arrive with Phase 2.
+//! AGENTS.md rule 19), and listed in the command palette (`palette.rs`).
+//! keymap.json overrides arrive with Phase 2.
 
 use gpui::{App, KeyBinding, NoAction, actions};
 
@@ -75,6 +76,8 @@ actions!(
         // App
         OpenSettings,
         ShowShortcuts,
+        CommandPalette,
+        CheckForUpdates,
         // PDF tools
         ExtractPages,
         ToggleSplit,
@@ -131,6 +134,8 @@ pub fn bind_default_keys(cx: &mut App) {
         KeyBinding::new("alt-9", SelectLastTab, w),
         KeyBinding::new("ctrl-,", OpenSettings, w),
         KeyBinding::new("ctrl-/", ShowShortcuts, w),
+        KeyBinding::new("ctrl-k", CommandPalette, w),
+        KeyBinding::new("ctrl-shift-p", CommandPalette, w),
         KeyBinding::new("ctrl-shift-e", ExtractPages, w),
         KeyBinding::new("ctrl-\\", ToggleSplit, w),
         KeyBinding::new("escape", CloseOverlay, Some(OVERLAY)),

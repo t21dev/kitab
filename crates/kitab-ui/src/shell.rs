@@ -28,6 +28,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::time::Duration;
 
+mod palette_ui;
 mod save_page;
 mod system;
 mod tools_ui;
@@ -84,6 +85,8 @@ pub struct Workspace {
     side_pane: SidePane,
     /// Settings › File types, Advanced and About, and the update check.
     system: SystemInfo,
+    /// The command palette (Ctrl+K), when open.
+    palette: Option<palette_ui::Palette>,
 }
 
 /// The sidebar's panes for a document.
@@ -149,6 +152,7 @@ impl Workspace {
             reveal_tab: false,
             peek: false,
             system: SystemInfo::default(),
+            palette: None,
         };
         // Leaving the hex field ends the edit.
         let hex_blur = cx.on_blur(&this.hex.focus, window, |ws, _, cx| {
@@ -1994,6 +1998,14 @@ impl Render for Workspace {
                 ws.select_tab(last, window, cx)
             }))
             .on_action(cx.listener(|ws, _: &CycleTheme, _, cx| ws.cycle_theme(cx)))
+            .on_action(
+                cx.listener(|ws, _: &CommandPalette, window, cx| ws.open_palette(window, cx)),
+            )
+            .on_action(cx.listener(|ws, _: &CheckForUpdates, window, cx| {
+                ws.set_settings_section(Section::About, cx);
+                ws.open_settings(window, cx);
+                ws.check_for_updates(true, cx);
+            }))
             .on_action(cx.listener(|ws, _: &ToggleMinimal, _, cx| ws.toggle_minimal(cx)))
             .on_drop(cx.listener(|ws, paths: &ExternalPaths, window, cx| {
                 for p in paths.paths() {
@@ -2501,6 +2513,12 @@ impl Workspace {
             .key("F11")
             .checked(Style::get(cx).minimal),
             MenuItem::new(
+                "Command palette",
+                self.on_ws(cx, |ws, window, cx| ws.open_palette(window, cx)),
+            )
+            .icon("search")
+            .key("Ctrl+K"),
+            MenuItem::new(
                 "Keyboard shortcuts",
                 self.on_ws(cx, |ws, window, cx| ws.show_shortcuts(window, cx)),
             )
@@ -2895,6 +2913,7 @@ impl Workspace {
         out.extend(self.extract_view(st, window, cx));
         out.extend(self.save_page_view(st, window, cx));
         out.extend(self.update_dialog(st, cx));
+        out.extend(self.palette_view(st, cx));
 
         if let Some(section) = self.settings.or(self.settings_closing) {
             let closing = self.settings.is_none();

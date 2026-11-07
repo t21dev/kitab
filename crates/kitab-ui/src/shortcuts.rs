@@ -108,6 +108,7 @@ pub const GROUPS: &[Group] = &[
     Group {
         title: "App",
         rows: &[
+            ("Command palette", "Ctrl+K / Ctrl+Shift+P"),
             ("Settings", "Ctrl+,"),
             ("Keyboard shortcuts", "Ctrl+/"),
             ("Close a menu or dialog", "Esc"),
@@ -128,9 +129,51 @@ pub const GROUPS: &[Group] = &[
     },
 ];
 
+/// A GPUI keystroke ("ctrl-shift-p") as shown to people ("Ctrl+Shift+P").
+pub fn pretty(binding: &str) -> String {
+    let (body, minus) = match binding.strip_suffix("--") {
+        Some(body) => (body, true),
+        None => (binding, false),
+    };
+    let mut parts: Vec<String> = body
+        .split('-')
+        .filter(|p| !p.is_empty())
+        .map(|p| match p {
+            "ctrl" => "Ctrl".into(),
+            "shift" => "Shift".into(),
+            "alt" => "Alt".into(),
+            "cmd" | "win" | "super" => "Win".into(),
+            "pagedown" => "PgDn".into(),
+            "pageup" => "PgUp".into(),
+            "escape" => "Esc".into(),
+            "space" => "Space".into(),
+            "enter" => "Enter".into(),
+            "tab" => "Tab".into(),
+            "left" => "Left".into(),
+            "right" => "Right".into(),
+            "up" => "Up".into(),
+            "down" => "Down".into(),
+            "home" => "Home".into(),
+            "end" => "End".into(),
+            "backspace" => "Backspace".into(),
+            "delete" => "Del".into(),
+            other => other.to_uppercase(),
+        })
+        .collect();
+    if minus {
+        parts.push("-".into());
+    }
+    parts.join("+")
+}
+
 /// The keys of one alternative as separate caps: "Ctrl+Shift+T" → [Ctrl, Shift, T].
 pub fn caps(keys: &str) -> Vec<&str> {
-    if keys.contains('+') && !keys.ends_with("++") && keys != "+" {
+    if let Some(body) = keys.strip_suffix("++") {
+        // "Ctrl++": the last key is the plus itself.
+        let mut v: Vec<&str> = body.split('+').collect();
+        v.push("+");
+        v
+    } else if keys.contains('+') && keys != "+" {
         keys.split('+').collect()
     } else {
         vec![keys]
@@ -142,10 +185,19 @@ mod tests {
     use super::*;
 
     #[test]
+    fn keystrokes_read_as_people_write_them() {
+        assert_eq!(pretty("ctrl-shift-p"), "Ctrl+Shift+P");
+        assert_eq!(pretty("ctrl--"), "Ctrl+-");
+        assert_eq!(pretty("shift-f3"), "Shift+F3");
+        assert_eq!(pretty("pagedown"), "PgDn");
+    }
+
+    #[test]
     fn caps_split_on_plus() {
         assert_eq!(caps("Ctrl+Shift+T"), vec!["Ctrl", "Shift", "T"]);
         assert_eq!(caps("F12"), vec!["F12"]);
         assert_eq!(caps("Ctrl+="), vec!["Ctrl", "="]);
+        assert_eq!(caps("Ctrl++"), vec!["Ctrl", "+"]);
     }
 
     /// Every default key binding appears in the list (AGENTS.md rule 19).

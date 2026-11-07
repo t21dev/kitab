@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Command palette (Ctrl+K or Ctrl+Shift+P, or ⋯ › Command palette): every command by name with its keys; type a few letters ("gtp" finds Go to page), Up and Down to choose, Enter to run. Commands that need a document hide on Home.
 - Settings › About: version, Check for updates (asks GitHub for the latest release; on start-up and every six hours, which Check on start-up turns off), and links to the source, changelog, issues, privacy policy, licence and notices. A newer release shows an Update button in the title bar with its notes, Later and Download (opens the release page).
 - Settings › File types: whether Kitab is the default for PDF, EPUB, Markdown, MOBI, FB2, CBZ, XPS and text, with Set up on each type that isn't set up (Make default where another app has it), Set up all, Open Default apps, Explorer thumbnails status, and Remove to take Kitab's file types off your account.
 - Settings › Advanced: clear cached pages, clear reading history (keeps marks, bookmarks and open tabs; asks first), optimize the library database (shows the size before and after), and show the data folder.

@@ -12,6 +12,7 @@ pub mod icons;
 pub mod library;
 pub mod menu;
 pub mod motion;
+pub mod palette;
 pub mod reader;
 pub mod settings;
 pub mod settings_view;
