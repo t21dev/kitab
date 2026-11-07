@@ -26,7 +26,7 @@ A **[t21 dev](https://github.com/t21dev)** project, by **[TriptoAfsin](https://g
 
 ## Screenshots
 
-![A PDF open with its contents in the sidebar and the quick dock at the bottom](docs/screenshots/reader-pdf.png)
+![Three tabs open, a PDF with its contents in the sidebar, the quick dock and the status bar](docs/screenshots/reader-pdf.png)
 
 | Books, set in your typeface | Math in Markdown |
 | --- | --- |
