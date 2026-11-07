@@ -17,9 +17,12 @@ kitab-theme = { path = "crates/kitab-theme" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 gpui = "0.2.2"
-# PDF only in Phase 1; EPUB/FB2/XPS/CBZ/images come with Phase 4 (features html, xps, cbz, img, svg).
+# Phase 4 formats: html (MOBI, FB2, TXT and EPUB's engine), epub, xps, cbz, and
+# svg for SVG pictures inside books. Not img: Kitab doesn't open image files.
+# Not system-fonts (font-kit took 23 s per small EPUB): kitab-mupdf's fonts.rs
+# maps scripts to system font files instead.
 # base14-fonts: PDFs may use the 14 standard fonts without embedding them (ADR 0001).
-mupdf = { version = "0.8.0", default-features = false, features = ["base14-fonts"] }
+mupdf = { version = "0.8.0", default-features = false, features = ["base14-fonts", "html", "epub", "xps", "cbz", "svg"] }
 
 [workspace.lints.rust]
 unsafe_code = "deny"

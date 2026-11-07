@@ -431,8 +431,10 @@ Each phase ends with its exit criteria green in CI and a minor release. A phase 
 
 ### Phase 4: Books and other formats → `0.4.0`
 
-- EPUB (reflow, typography settings, footnote popovers, RTL, fixed layout), MOBI/AZW3 (non-DRM), FB2, CBZ, XPS, images, TXT. Layout preserved across resizes.
+- EPUB (reflow, typography settings, footnote popovers, RTL, fixed layout), MOBI (non-DRM), FB2, CBZ, XPS, TXT. Layout preserved across resizes. **Not image files** (the owner's decision: Kitab is a document reader).
 - Exit: every EPUB fixture behaves as MANIFEST says; B7, C5, H2 (once annotations land); S4 within budget.
+- Done: every format opens, renders, searches and shows its contents (engine tests against `expected.json` › `epub` and `other`); books lay out at 400 × 600 pt, 11 pt; non-Latin text falls back to system fonts by script (`kitab-mupdf/src/fonts.rs`: font-kit took 23 s per small EPUB); per-format tab icons, file types and thumbnails.
+- Still to do: typography settings and re-layout on font size or window size (books are fixed 400 × 600 pt pages for now); footnote popovers; right-to-left page order (04); fixed-layout EPUB at its own viewport (08 is split into 400 × 600 pages today, 12 instead of 6); Kindle KF8 (.azw3, refused for now: MuPDF reads only its cover); MuPDF's Charis SIL book face (Kitab uses Times to keep the installer small).
 
 ### Phase 5: Markdown → `0.5.0`
 

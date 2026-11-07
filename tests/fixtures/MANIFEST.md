@@ -73,6 +73,19 @@ Page counts in `expected.json` are at a 400 × 600 px layout with 11 pt text. Th
 | `10-large.md` | About 1.2 MB, 400 sections, code, tables, Mermaid every 100 sections, `kitab-md-needle-NNN` | Opens without blocking the UI. Outline has 401 entries. Search finds `kitab-md-needle-400`. |
 | `assets/sample.png` | Image used by 01 and 08 | |
 
+## Other formats (`other/`)
+
+Built by `generate_fixtures.py --only-other`. Reflowable files are counted at the EPUB layout (400 × 600 pt, 11 pt, Kitab's Times face) in `expected.json` › `other`.
+
+| File | Covers | Expect |
+|---|---|---|
+| `01-plain.txt` | UTF-8 text, 60 paragraphs, `kitab-txt-needle-1…3`, Bangla, Arabic and Chinese lines | Opens as a book with the text icon; search finds the three needles. |
+| `02-book.fb2` | FictionBook 2: title, author, 3 sections with `kitab-fb2-needle-N`, a Bangla section | Title in the tab, 4 contents entries, needles found, Bangla shaped. |
+| `03-comic.cbz` | Five 800 × 1200 PNG pages | Five pages, image icon, fit to the window. |
+| `04-vector.xps` | Two fixed pages of vector paths: Letter portrait, then landscape (no fonts) | Two pages with their own sizes. |
+| `05-not-a-zip.cbz` | Not a zip | "Can't open this file". |
+| `06-broken.fb2` | Truncated XML | Opens with what MuPDF can read (one blank page); never a crash. |
+
 ## Real world (`real/`, fetched)
 
 | File | Why |
@@ -82,3 +95,4 @@ Page counts in `expected.json` are at a 400 × 600 px layout with 11 pt text. Th
 | `irs-f1040-2024.pdf` | Real government AcroForm (public domain) |
 | `commonmark-spec.md` | Large real Markdown (CC BY-SA 4.0) |
 | `mermaid-readme.md` | Real-world Mermaid blocks (MIT) |
+| `alice-gutenberg-11.mobi`, `alice-gutenberg-11.azw3` | Project Gutenberg's Kindle editions (public domain). The MOBI reads as a book; the KF8 (.azw3) is refused until KF8 is supported, since MuPDF reads only its cover. |

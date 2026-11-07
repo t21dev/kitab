@@ -29,6 +29,7 @@ ROOT = Path(__file__).resolve().parents[1]
 PDF = ROOT / "pdf"
 EPUB = ROOT / "epub"
 MD = ROOT / "md"
+OTHER = ROOT / "other"
 CERTS = PDF / "certs"
 
 FIXED_DATE = dt.datetime(2026, 11, 6, 9, 0, 0, tzinfo=dt.timezone.utc)
@@ -617,13 +618,85 @@ def md_assets_and_large() -> None:
     (MD / "10-large.md").write_text("\n".join(out), encoding="utf-8")
 
 
+# ------------------------------------------------------------------- OTHER
+
+
+def other_formats() -> None:
+    """Phase 4 formats besides EPUB: TXT, FB2, CBZ, XPS, and broken files.
+    MOBI/AZW3 can't be written without Calibre; fetch_real_world.py brings a
+    Project Gutenberg copy instead."""
+    OTHER.mkdir(parents=True, exist_ok=True)
+    rng = random.Random(5)
+
+    lines = ["Kitab plain text fixture", ""]
+    for i in range(1, 61):
+        lines += [paragraph(rng, 4), ""]
+        if i % 20 == 0:
+            lines += [f"kitab-txt-needle-{i // 20}", ""]
+    lines += ["Bangla: কিতাব একটি দ্রুত পাঠক।", "Arabic: كتاب قارئ سريع.", "Chinese: 快速的阅读器。", ""]
+    (OTHER / "01-plain.txt").write_text("\n".join(lines), encoding="utf-8")
+
+    def fb2_section(title: str, n: int, needle: str = "") -> str:
+        paras = "".join(f"<p>{paragraph(rng)}</p>" for _ in range(n))
+        return f"<section><title><p>{title}</p></title>{paras}" + (f"<p>{needle}</p>" if needle else "") + "</section>"
+    fb2 = (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<FictionBook xmlns="http://www.gribuser.ru/xml/fictionbook/2.0" xmlns:l="http://www.w3.org/1999/xlink">'
+        "<description><title-info><genre>prose</genre><author><first-name>Kitab</first-name><last-name>Fixture</last-name></author>"
+        "<book-title>Kitab fixture: FB2</book-title><lang>en</lang></title-info>"
+        "<document-info><id>kitab-fb2-02</id><version>1.0</version></document-info></description>"
+        "<body>" + "".join(fb2_section(f"Section {i}", 10, f"kitab-fb2-needle-{i}") for i in range(1, 4))
+        + "<section><title><p>বাংলা</p></title><p>কিতাব একটি দ্রুত, হালকা পাঠক। যুক্তাক্ষর: ক্ষ, জ্ঞ।</p></section>"
+        "</body></FictionBook>\n"
+    )
+    (OTHER / "02-book.fb2").write_text(fb2, encoding="utf-8")
+
+    with zipfile.ZipFile(OTHER / "03-comic.cbz", "w") as z:
+        for i in range(1, 6):
+            zi = zipfile.ZipInfo(f"page-{i:02d}.png", date_time=(2026, 11, 6, 9, 0, 0))
+            z.writestr(zi, png_bytes(800, 1200, ((i * 47) % 255, 90, 140), f"Comic page {i}"), compress_type=zipfile.ZIP_STORED)
+
+    # XPS: two fixed pages of vector shapes (Letter portrait, then landscape),
+    # at 96 units per inch. No fonts, so no font files to license.
+    def page(w: int, h: int, color: str) -> str:
+        return (f'<FixedPage xmlns="http://schemas.microsoft.com/xps/2005/06" Width="{w}" Height="{h}" xml:lang="en">'
+                f'<Path Data="M 48,48 L {w - 48},48 L {w - 48},{h - 48} L 48,{h - 48} Z" Fill="{color}"/>'
+                f'<Path Data="M 96,96 L {w // 2},96 L {w // 2},{h // 2} Z" Fill="#FFFFFFFF"/></FixedPage>')
+    ct = ('<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+          '<Default Extension="fpage" ContentType="application/vnd.ms-package.xps-fixedpage+xml"/>'
+          '<Default Extension="fdoc" ContentType="application/vnd.ms-package.xps-fixeddocument+xml"/>'
+          '<Default Extension="fdseq" ContentType="application/vnd.ms-package.xps-fixeddocumentsequence+xml"/>'
+          '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/></Types>')
+    rels = ('<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+            '<Relationship Id="R0" Type="http://schemas.microsoft.com/xps/2005/06/fixedrepresentation" Target="/FixedDocSeq.fdseq"/></Relationships>')
+    seq = ('<FixedDocumentSequence xmlns="http://schemas.microsoft.com/xps/2005/06">'
+           '<DocumentReference Source="/Documents/1/FixedDoc.fdoc"/></FixedDocumentSequence>')
+    doc = ('<FixedDocument xmlns="http://schemas.microsoft.com/xps/2005/06">'
+           '<PageContent Source="/Documents/1/Pages/1.fpage"/><PageContent Source="/Documents/1/Pages/2.fpage"/></FixedDocument>')
+    with zipfile.ZipFile(OTHER / "04-vector.xps", "w") as z:
+        for name, data in [("[Content_Types].xml", ct), ("_rels/.rels", rels), ("FixedDocSeq.fdseq", seq),
+                           ("Documents/1/FixedDoc.fdoc", doc), ("Documents/1/Pages/1.fpage", page(816, 1056, "#FF2E6FB0")),
+                           ("Documents/1/Pages/2.fpage", page(1056, 816, "#FFC8402A"))]:
+            zi = zipfile.ZipInfo(name, date_time=(2026, 11, 6, 9, 0, 0))
+            z.writestr(zi, data, compress_type=zipfile.ZIP_DEFLATED)
+
+    (OTHER / "05-not-a-zip.cbz").write_bytes(b"This is not a comic archive.\n")
+    (OTHER / "06-broken.fb2").write_text("<FictionBook><body><section><p>never closed", encoding="utf-8")
+
+
 # ------------------------------------------------------------------------- main
 
 
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--large", action="store_true", help="also build pdf/06-large-20mb.pdf (about 20 MB, not committed)")
+    ap.add_argument("--only-other", action="store_true", help="build only other/ (TXT, FB2, CBZ, XPS)")
     args = ap.parse_args()
+    if args.only_other:
+        other_formats()
+        for f in sorted(OTHER.glob("*")):
+            print(f"{f.relative_to(ROOT)}	{f.stat().st_size:>10,}")
+        return 0
     for d in (PDF, EPUB, MD):
         d.mkdir(parents=True, exist_ok=True)
     notes: list[str] = []
@@ -645,10 +718,11 @@ def main() -> int:
 
     epubs()
     md_assets_and_large()
+    other_formats()
 
     for n in notes:
         print("note:", n, file=sys.stderr)
-    for d in (PDF, EPUB, MD):
+    for d in (PDF, EPUB, MD, OTHER):
         for f in sorted(d.rglob("*")):
             if f.is_file():
                 print(f"{f.relative_to(ROOT)}\t{f.stat().st_size:>10,}")

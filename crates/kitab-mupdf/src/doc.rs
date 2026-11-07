@@ -34,9 +34,33 @@ const MAX_OUTLINE_DEPTH: usize = 64;
 /// Size used for a page whose own box cannot be read: US Letter.
 const FALLBACK_SIZE: SizePt = SizePt { w: 612.0, h: 792.0 };
 
+/// Reflowable books (EPUB, MOBI, FB2, TXT) are laid out on pages this size,
+/// in points, with this body font size. The fixture oracle counts pages at the
+/// same layout (`pages_at_400x600_11pt` in expected.json).
+pub const REFLOW_W: f32 = 400.0;
+pub const REFLOW_H: f32 = 600.0;
+pub const REFLOW_EM: f32 = 11.0;
+
+/// A PDF keeps its PDF handle (passwords, permissions, repair state); every
+/// other format is a plain MuPDF document.
+pub(crate) enum Handle {
+    Pdf(PdfDocument),
+    Other(Document),
+}
+
+impl std::ops::Deref for Handle {
+    type Target = Document;
+    fn deref(&self) -> &Document {
+        match self {
+            Handle::Pdf(p) => p,
+            Handle::Other(d) => d,
+        }
+    }
+}
+
 /// An open document, owned by one worker thread.
 pub(crate) struct OpenDoc {
-    pub pdf: PdfDocument,
+    pub pdf: Handle,
     pub page_count: u32,
 }
 
@@ -63,34 +87,72 @@ pub(crate) fn open(path: &Path, password: Option<&str>) -> Result<(OpenDoc, DocI
         Err(e) => return Err(failed(e)),
     }
     let looks_like_pdf = sniff_pdf(path);
+    let by_name = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .and_then(Format::from_extension);
+    // Kindle KF8 (.azw3): MuPDF reads only the older MOBI records, which in a
+    // KF8-only book is just the cover. Refuse rather than show one page.
+    let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
+    if ext.eq_ignore_ascii_case("azw3") {
+        return Err(OpenError::Unsupported);
+    }
+    // Kitab reads documents, not image files (Markdown has its own reader).
+    let format = match by_name {
+        _ if looks_like_pdf => Format::Pdf,
+        Some(Format::Image | Format::Markdown) | None => return Err(OpenError::Unsupported),
+        Some(f) => f,
+    };
     // MuPDF takes UTF-8 paths; on Windows it converts them back to UTF-16.
     let file = path
         .to_str()
         .ok_or_else(|| failed("path is not valid Unicode"))?;
-    let doc = match Document::open(file) {
+    let mut doc = match Document::open(file) {
         Ok(doc) => doc,
-        Err(_) if !looks_like_pdf => return Err(OpenError::Unsupported),
+        Err(_) if format != Format::Pdf => return Err(OpenError::Unsupported),
         Err(e) => return Err(failed(e)),
     };
-    // Phase 1 reads PDF only; other formats arrive with Phase 4.
-    let mut pdf = PdfDocument::try_from(doc).map_err(|_| OpenError::Unsupported)?;
 
-    if pdf.needs_password().map_err(failed)? {
-        let Some(password) = password else {
-            return Err(OpenError::NeedsPassword);
-        };
-        if !authenticate(&mut pdf, password) {
-            return Err(OpenError::WrongPassword);
+    let handle = if doc.is_pdf() {
+        let mut pdf = PdfDocument::try_from(doc).map_err(|_| OpenError::Unsupported)?;
+        if pdf.needs_password().map_err(failed)? {
+            let Some(password) = password else {
+                return Err(OpenError::NeedsPassword);
+            };
+            if !authenticate(&mut pdf, password) {
+                return Err(OpenError::WrongPassword);
+            }
         }
-    }
+        Handle::Pdf(pdf)
+    } else {
+        // Books flow onto pages; comics and XPS have their own.
+        if doc.is_reflowable().unwrap_or(false) {
+            doc.layout(REFLOW_W, REFLOW_H, REFLOW_EM).map_err(failed)?;
+        }
+        Handle::Other(doc)
+    };
 
-    let count = pdf.page_count().map_err(failed)?;
+    let count = handle.page_count().map_err(failed)?;
     let page_count = u32::try_from(count).map_err(|_| failed("negative page count"))?;
     if page_count > MAX_PAGES {
         return Err(failed(format!("{page_count} pages is over the limit")));
     }
-    let info = describe(&pdf, page_count);
-    Ok((OpenDoc { pdf, page_count }, info))
+    if page_count == 0 {
+        return Err(failed("the document has no pages"));
+    }
+    let format = if matches!(handle, Handle::Pdf(_)) {
+        Format::Pdf
+    } else {
+        format
+    };
+    let info = describe(&handle, format, page_count);
+    Ok((
+        OpenDoc {
+            pdf: handle,
+            page_count,
+        },
+        info,
+    ))
 }
 
 /// Try the password as typed, then its NFC and NFKC forms. MuPDF applies
@@ -120,21 +182,36 @@ fn non_empty(s: Result<String, mupdf::Error>) -> Option<String> {
     (!s.is_empty()).then(|| s.to_string())
 }
 
-fn describe(pdf: &PdfDocument, page_count: u32) -> DocInfo {
-    let page_sizes = (0..page_count).map(|i| page_size(pdf, i)).collect();
-    let outline = load_outline(pdf, page_count);
-    let permissions = ffi::permissions(pdf).unwrap_or_default();
-    let encryption = non_empty(pdf.metadata(MetadataName::Encryption)).filter(|e| e != "None");
+fn describe(handle: &Handle, format: Format, page_count: u32) -> DocInfo {
+    let page_sizes = (0..page_count).map(|i| page_size(handle, i)).collect();
+    let (outline, permissions, encryption, repaired) = match handle {
+        Handle::Pdf(pdf) => (
+            load_outline(pdf, page_count),
+            ffi::permissions(pdf).unwrap_or_default(),
+            non_empty(pdf.metadata(MetadataName::Encryption)).filter(|e| e != "None"),
+            ffi::was_repaired(pdf).unwrap_or(false),
+        ),
+        Handle::Other(doc) => {
+            let items = doc.outlines().unwrap_or_default();
+            let mut budget = MAX_OUTLINE_ITEMS;
+            (
+                convert_outline(items, &[], page_count, 0, &mut budget),
+                Default::default(),
+                None,
+                false,
+            )
+        }
+    };
     DocInfo {
-        format: Format::Pdf,
-        title: non_empty(pdf.metadata(MetadataName::Title)),
-        author: non_empty(pdf.metadata(MetadataName::Author)),
+        format,
+        title: non_empty(handle.metadata(MetadataName::Title)),
+        author: non_empty(handle.metadata(MetadataName::Author)),
         page_count,
         page_sizes,
         outline,
         permissions,
         encryption,
-        repaired: ffi::was_repaired(pdf).unwrap_or(false),
+        repaired,
     }
 }
 

@@ -9,10 +9,10 @@ If this script and the app disagree, the app is wrong (or the fixture changed
 on purpose and expected.json is regenerated in the same commit).
 """
 
-from __future__ import re
-import annotations
+from __future__ import annotations
 
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -134,6 +134,10 @@ def main() -> int:
         "kitab-needle-17": count(t, "kitab-needle-17"),
     }
 
+    # Kitab's MuPDF build leaves out MuPDF's Charis SIL (size), so books set
+    # in the default face use Times (URW Nimbus Roman). PyMuPDF ships Charis;
+    # count pages with Kitab's face so the numbers are Kitab's.
+    fitz.mupdf.fz_set_user_css("body { font-family: Times }")
     for p in sorted((ROOT / "epub").glob("*.epub")):
         try:
             d = fitz.open(str(p))
@@ -142,6 +146,24 @@ def main() -> int:
                                    "title": (d.metadata or {}).get("title")}
         except Exception as e:  # noqa: BLE001
             exp["epub"][p.name] = {"opens": False, "error": type(e).__name__}
+
+    # Other formats (other/): same layout and face as EPUB for reflowable ones.
+    exp.setdefault("other", {})
+    for p in sorted((ROOT / "other").glob("*")):
+        try:
+            d = fitz.open(str(p))
+            if d.is_reflowable:
+                d.layout(width=400, height=600, fontsize=11)
+            needle = {"txt": "kitab-txt-needle-", "fb2": "kitab-fb2-needle-"}.get(p.suffix[1:])
+            info = {"opens": True, "pages": d.page_count, "reflowable": bool(d.is_reflowable),
+                    "page_sizes_pt": [[round(d[i].rect.width), round(d[i].rect.height)] for i in range(min(d.page_count, 2))],
+                    "outline": len(d.get_toc()), "title": (d.metadata or {}).get("title") or None}
+            if needle:
+                info["needle"] = needle
+                info["needle_hits"] = sum(len(d[i].search_for(needle)) for i in range(d.page_count))
+            exp["other"][p.name] = info
+        except Exception as e:  # noqa: BLE001
+            exp["other"][p.name] = {"opens": False, "error": type(e).__name__}
 
     for p in sorted((ROOT / "md").glob("*.md")):
         text = p.read_text(encoding="utf-8")
@@ -168,6 +190,11 @@ def main() -> int:
         (E["01-epub3-basic.epub"]["opens"] and E["01-epub3-basic.epub"]["outline"] == 5, "epub 01 has 5 toc entries"),
         (E["06-large-300-chapters.epub"]["outline"] == 300, "epub 06 has 300 toc entries"),
         (E["07c-not-a-zip.epub"]["opens"] is False, "epub 07c is rejected"),
+        (exp["other"]["01-plain.txt"]["needle_hits"] == 3, "txt has three needles"),
+        (exp["other"]["02-book.fb2"]["needle_hits"] == 3 and exp["other"]["02-book.fb2"]["title"] == "Kitab fixture: FB2", "fb2 has three needles and a title"),
+        (exp["other"]["03-comic.cbz"]["pages"] == 5, "cbz has five pages"),
+        (exp["other"]["04-vector.xps"]["page_sizes_pt"] == [[612, 792], [792, 612]], "xps is Letter portrait then landscape"),
+        (exp["other"]["05-not-a-zip.cbz"]["opens"] is False, "a non-zip cbz is rejected"),
     ]
     sig = {k: v.get("signatures", []) for k, v in P.items() if k.startswith("08") and "signatures" in v}
     if sig and "skipped" not in json.dumps(sig):

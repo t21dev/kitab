@@ -16,10 +16,13 @@ pub struct FileType {
     pub description: &'static str,
     pub icon_id: u32,
     pub mime: &'static str,
+    /// Whether "Make default" claims the type. Not plain text: it would take
+    /// over every text file on Linux. (Windows lists it; the user picks.)
+    pub claim_default: bool,
 }
 
-/// The formats Kitab opens today. EPUB, MOBI, FB2, CBZ and XPS join with
-/// Phase 4 (their icons are already in kitab.exe: 102, 104–107).
+/// The formats Kitab opens. Not .azw3 (Kindle KF8 isn't read yet) and no
+/// image files (Kitab doesn't view them).
 pub const FILE_TYPES: &[FileType] = &[
     FileType {
         extensions: &["pdf"],
@@ -27,6 +30,15 @@ pub const FILE_TYPES: &[FileType] = &[
         description: "PDF document",
         icon_id: 101,
         mime: "application/pdf",
+        claim_default: true,
+    },
+    FileType {
+        extensions: &["epub"],
+        prog_id: "Kitab.EPUB",
+        description: "EPUB book",
+        icon_id: 102,
+        mime: "application/epub+zip",
+        claim_default: true,
     },
     FileType {
         extensions: &["md", "markdown", "mdown", "mkd"],
@@ -34,6 +46,47 @@ pub const FILE_TYPES: &[FileType] = &[
         description: "Markdown document",
         icon_id: 103,
         mime: "text/markdown",
+        claim_default: true,
+    },
+    FileType {
+        extensions: &["mobi", "azw"],
+        prog_id: "Kitab.MOBI",
+        description: "MOBI book",
+        icon_id: 104,
+        mime: "application/x-mobipocket-ebook",
+        claim_default: true,
+    },
+    FileType {
+        extensions: &["fb2"],
+        prog_id: "Kitab.FB2",
+        description: "FictionBook",
+        icon_id: 105,
+        mime: "application/x-fictionbook+xml",
+        claim_default: true,
+    },
+    FileType {
+        extensions: &["cbz"],
+        prog_id: "Kitab.CBZ",
+        description: "Comic book archive",
+        icon_id: 106,
+        mime: "application/vnd.comicbook+zip",
+        claim_default: true,
+    },
+    FileType {
+        extensions: &["xps", "oxps"],
+        prog_id: "Kitab.XPS",
+        description: "XPS document",
+        icon_id: 107,
+        mime: "application/oxps",
+        claim_default: true,
+    },
+    FileType {
+        extensions: &["txt"],
+        prog_id: "Kitab.Text",
+        description: "Text file",
+        icon_id: 108,
+        mime: "text/plain",
+        claim_default: false,
     },
 ];
 
@@ -258,7 +311,7 @@ mod imp {
     /// Linux: the package installs the .desktop file and icons; this sets
     /// Kitab as the default with `xdg-mime` for each type.
     pub fn register() -> Result<(), String> {
-        for t in FILE_TYPES {
+        for t in FILE_TYPES.iter().filter(|t| t.claim_default) {
             let ok = std::process::Command::new("xdg-mime")
                 .args(["default", "dev.t21.kitab.desktop", t.mime])
                 .status()

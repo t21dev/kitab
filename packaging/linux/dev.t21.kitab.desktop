@@ -3,12 +3,12 @@
 Type=Application
 Name=Kitab Reader
 GenericName=Document Reader
-Comment=A fast, native reader for PDF and Markdown
+Comment=A fast, native reader for PDF, ebooks, comics and Markdown
 Exec=kitab %F
 Icon=dev.t21.kitab
 Terminal=false
 Categories=Office;Viewer;Utility;
-MimeType=application/pdf;text/markdown;text/x-markdown;
-Keywords=pdf;markdown;reader;viewer;ebook;
+MimeType=application/pdf;application/epub+zip;application/x-mobipocket-ebook;application/x-fictionbook+xml;application/vnd.comicbook+zip;application/x-cbz;application/oxps;application/vnd.ms-xpsdocument;text/markdown;text/x-markdown;text/plain;
+Keywords=pdf;epub;mobi;fb2;cbz;comic;xps;markdown;reader;viewer;ebook;
 StartupWMClass=dev.t21.kitab
 SingleMainWindow=true

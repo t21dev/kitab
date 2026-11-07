@@ -509,15 +509,7 @@ impl Workspace {
             let side = !on && self.tools.split.as_ref() == Some(tab);
             let r = tab.read(cx);
             let title = r.title();
-            let tab_icon = if r
-                .path
-                .extension()
-                .is_some_and(|e| e.eq_ignore_ascii_case("md"))
-            {
-                "markdown"
-            } else {
-                "file"
-            };
+            let tab_icon = tab_icon_for(&r.path);
             let animate = self.booted && st.animations;
             let tab_id = tab.entity_id().as_u64();
             let tab_el = div()
@@ -2640,4 +2632,37 @@ fn file_item_reveal(path: &Path) -> MenuItem {
         },
     )
     .icon("folder-open")
+}
+
+/// The tab's icon for a file's format (PDF, Markdown, books, comics, text, XPS).
+fn tab_icon_for(path: &std::path::Path) -> &'static str {
+    use kitab_core::Format;
+    let format = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .and_then(Format::from_extension);
+    match format {
+        Some(Format::Markdown) => "markdown",
+        Some(Format::Epub | Format::Mobi | Format::Fb2) => "book",
+        Some(Format::Cbz) => "image",
+        Some(Format::Txt) => "text",
+        Some(Format::Xps) => "pages",
+        _ => "file",
+    }
+}
+
+#[cfg(test)]
+mod tab_icon_tests {
+    #[test]
+    fn each_format_has_its_icon() {
+        let icon = |p: &str| super::tab_icon_for(std::path::Path::new(p));
+        assert_eq!(icon("a.pdf"), "file");
+        assert_eq!(icon("a.MD"), "markdown");
+        assert_eq!(icon("a.epub"), "book");
+        assert_eq!(icon("a.fb2"), "book");
+        assert_eq!(icon("a.mobi"), "book");
+        assert_eq!(icon("a.cbz"), "image");
+        assert_eq!(icon("a.txt"), "text");
+        assert_eq!(icon("a.xps"), "pages");
+    }
 }

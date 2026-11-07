@@ -32,8 +32,51 @@
       <key>LSHandlerRank</key><string>Alternate</string>
       <key>LSItemContentTypes</key><array><string>net.daringfireball.markdown</string></array>
     </dict>
+    <dict>
+      <key>CFBundleTypeName</key><string>EPUB book</string>
+      <key>CFBundleTypeRole</key><string>Viewer</string>
+      <key>CFBundleTypeIconFile</key><string>doc-epub</string>
+      <key>LSHandlerRank</key><string>Alternate</string>
+      <key>LSItemContentTypes</key><array><string>org.idpf.epub-container</string></array>
+    </dict>
+    <dict>
+      <key>CFBundleTypeName</key><string>MOBI book</string>
+      <key>CFBundleTypeRole</key><string>Viewer</string>
+      <key>CFBundleTypeIconFile</key><string>doc-mobi</string>
+      <key>LSHandlerRank</key><string>Alternate</string>
+      <key>LSItemContentTypes</key><array><string>dev.t21.kitab.mobi</string></array>
+    </dict>
+    <dict>
+      <key>CFBundleTypeName</key><string>FictionBook</string>
+      <key>CFBundleTypeRole</key><string>Viewer</string>
+      <key>CFBundleTypeIconFile</key><string>doc-fb2</string>
+      <key>LSHandlerRank</key><string>Alternate</string>
+      <key>LSItemContentTypes</key><array><string>dev.t21.kitab.fb2</string></array>
+    </dict>
+    <dict>
+      <key>CFBundleTypeName</key><string>Comic book archive</string>
+      <key>CFBundleTypeRole</key><string>Viewer</string>
+      <key>CFBundleTypeIconFile</key><string>doc-cbz</string>
+      <key>LSHandlerRank</key><string>Alternate</string>
+      <key>LSItemContentTypes</key><array><string>dev.t21.kitab.cbz</string></array>
+    </dict>
+    <dict>
+      <key>CFBundleTypeName</key><string>XPS document</string>
+      <key>CFBundleTypeRole</key><string>Viewer</string>
+      <key>CFBundleTypeIconFile</key><string>doc-xps</string>
+      <key>LSHandlerRank</key><string>Alternate</string>
+      <key>LSItemContentTypes</key><array><string>com.microsoft.xps</string></array>
+    </dict>
+    <dict>
+      <key>CFBundleTypeName</key><string>Text file</string>
+      <key>CFBundleTypeRole</key><string>Viewer</string>
+      <key>CFBundleTypeIconFile</key><string>doc-txt</string>
+      <key>LSHandlerRank</key><string>Alternate</string>
+      <key>LSItemContentTypes</key><array><string>public.plain-text</string></array>
+    </dict>
   </array>
-  <!-- macOS has no system UTI for Markdown: declare the common one. -->
+  <!-- macOS has no system UTI for Markdown, MOBI, FB2, CBZ or XPS: declare them.
+       EPUB (org.idpf.epub-container) and plain text are system types. -->
   <key>UTImportedTypeDeclarations</key>
   <array>
     <dict>
@@ -46,6 +89,54 @@
         <key>public.filename-extension</key>
         <array><string>md</string><string>markdown</string><string>mdown</string><string>mkd</string></array>
         <key>public.mime-type</key><array><string>text/markdown</string></array>
+      </dict>
+    </dict>
+    <dict>
+      <key>UTTypeIdentifier</key><string>dev.t21.kitab.mobi</string>
+      <key>UTTypeDescription</key><string>MOBI book</string>
+      <key>UTTypeConformsTo</key><array><string>public.data</string></array>
+      <key>UTTypeIconFile</key><string>doc-mobi</string>
+      <key>UTTypeTagSpecification</key>
+      <dict>
+        <key>public.filename-extension</key>
+        <array><string>mobi</string><string>azw</string></array>
+        <key>public.mime-type</key><array><string>application/x-mobipocket-ebook</string></array>
+      </dict>
+    </dict>
+    <dict>
+      <key>UTTypeIdentifier</key><string>dev.t21.kitab.fb2</string>
+      <key>UTTypeDescription</key><string>FictionBook</string>
+      <key>UTTypeConformsTo</key><array><string>public.xml</string></array>
+      <key>UTTypeIconFile</key><string>doc-fb2</string>
+      <key>UTTypeTagSpecification</key>
+      <dict>
+        <key>public.filename-extension</key>
+        <array><string>fb2</string></array>
+        <key>public.mime-type</key><array><string>application/x-fictionbook+xml</string></array>
+      </dict>
+    </dict>
+    <dict>
+      <key>UTTypeIdentifier</key><string>dev.t21.kitab.cbz</string>
+      <key>UTTypeDescription</key><string>Comic book archive</string>
+      <key>UTTypeConformsTo</key><array><string>public.zip-archive</string></array>
+      <key>UTTypeIconFile</key><string>doc-cbz</string>
+      <key>UTTypeTagSpecification</key>
+      <dict>
+        <key>public.filename-extension</key>
+        <array><string>cbz</string></array>
+        <key>public.mime-type</key><array><string>application/vnd.comicbook+zip</string></array>
+      </dict>
+    </dict>
+    <dict>
+      <key>UTTypeIdentifier</key><string>com.microsoft.xps</string>
+      <key>UTTypeDescription</key><string>XPS document</string>
+      <key>UTTypeConformsTo</key><array><string>public.data</string></array>
+      <key>UTTypeIconFile</key><string>doc-xps</string>
+      <key>UTTypeTagSpecification</key>
+      <dict>
+        <key>public.filename-extension</key>
+        <array><string>xps</string><string>oxps</string></array>
+        <key>public.mime-type</key><array><string>application/oxps</string></array>
       </dict>
     </dict>
   </array>

@@ -12,6 +12,8 @@ publish = false
 [dependencies]
 kitab-core = { workspace = true }
 kitab-md = { path = "../kitab-md" }
+# Its fallback-font loader, so book thumbnails draw non-Latin text.
+kitab-mupdf = { path = "../kitab-mupdf" }
 kitab-theme = { workspace = true }
 mupdf = { workspace = true }
 

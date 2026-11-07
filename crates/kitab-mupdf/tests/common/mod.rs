@@ -21,6 +21,10 @@ pub fn fixtures_dir() -> PathBuf {
     }
 }
 
+pub fn epub(name: &str) -> PathBuf {
+    fixtures_dir().join("epub").join(name)
+}
+
 pub fn pdf(name: &str) -> PathBuf {
     fixtures_dir().join("pdf").join(name)
 }

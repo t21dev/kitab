@@ -92,6 +92,7 @@ pub enum Source<'a> {
 /// Render a thumbnail whose longer side is `size` px. `ext` names the format
 /// (without the dot); it decides between a page render and a text preview.
 pub fn render(source: Source<'_>, ext: &str, size: u32) -> Result<Thumb, String> {
+    kitab_mupdf::fonts::install();
     let size = size.clamp(MIN_SIZE, MAX_SIZE);
     match Format::from_extension(ext) {
         Some(Format::Markdown) => markdown::render(&text_head(&source)?, false, size),

@@ -15,4 +15,19 @@
   <mime-type type="application/pdf">
     <icon name="dev.t21.kitab-pdf"/>
   </mime-type>
+  <mime-type type="application/epub+zip">
+    <icon name="dev.t21.kitab-epub"/>
+  </mime-type>
+  <mime-type type="application/x-mobipocket-ebook">
+    <icon name="dev.t21.kitab-mobi"/>
+  </mime-type>
+  <mime-type type="application/x-fictionbook+xml">
+    <icon name="dev.t21.kitab-fb2"/>
+  </mime-type>
+  <mime-type type="application/vnd.comicbook+zip">
+    <icon name="dev.t21.kitab-cbz"/>
+  </mime-type>
+  <mime-type type="application/oxps">
+    <icon name="dev.t21.kitab-xps"/>
+  </mime-type>
 </mime-info>

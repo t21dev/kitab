@@ -3154,6 +3154,7 @@ version = "0.0.1"
 dependencies = [
  "kitab-core",
  "kitab-md",
+ "kitab-mupdf",
  "kitab-theme",
  "mupdf",
  "serde_json",

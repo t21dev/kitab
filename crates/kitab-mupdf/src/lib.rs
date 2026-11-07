@@ -40,6 +40,7 @@
 mod doc;
 mod ffi;
 mod find;
+pub mod fonts;
 pub mod tools;
 
 use std::collections::HashMap;
@@ -51,7 +52,7 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use kitab_core::{Bitmap, DocInfo, FindHit, FindOptions, Link, OpenError, RenderRequest};
 
-pub use doc::{MAX_PAGES, MAX_PIXELS, MAX_SIDE_PX, ink_ratio};
+pub use doc::{MAX_PAGES, MAX_PIXELS, MAX_SIDE_PX, REFLOW_EM, REFLOW_H, REFLOW_W, ink_ratio};
 
 /// MuPDF's resource store limit (`FZ_STORE_DEFAULT`), shared by all workers.
 pub const STORE_LIMIT_BYTES: usize = 256 << 20;
@@ -141,6 +142,8 @@ impl Engine {
     /// PLAN.md §3.1 suggests [`Engine::default_threads`].
     pub fn new(threads: usize) -> Engine {
         let threads = threads.max(1);
+        // Books in non-Latin scripts need the system's fonts (fonts.rs).
+        fonts::install();
         Engine {
             workers: Mutex::new(vec![None; threads]),
             inflight: (0..threads).map(|_| AtomicU64::new(0)).collect(),

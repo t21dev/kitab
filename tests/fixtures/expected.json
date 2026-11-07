@@ -744,13 +744,13 @@
   "epub": {
     "01-epub3-basic.epub": {
       "opens": true,
-      "pages_at_400x600_11pt": 20,
+      "pages_at_400x600_11pt": 17,
       "outline": 5,
       "title": "Kitab fixture: EPUB 3 basic"
     },
     "02-epub2-ncx.epub": {
       "opens": true,
-      "pages_at_400x600_11pt": 12,
+      "pages_at_400x600_11pt": 8,
       "outline": 4,
       "title": "Kitab fixture: EPUB 2 with NCX"
     },
@@ -865,6 +865,99 @@
       "lines": 8192,
       "mermaid_blocks": 4,
       "headings": 401
+    }
+  },
+  "other": {
+    "01-plain.txt": {
+      "opens": true,
+      "pages": 13,
+      "reflowable": true,
+      "page_sizes_pt": [
+        [
+          400,
+          600
+        ],
+        [
+          400,
+          600
+        ]
+      ],
+      "outline": 0,
+      "title": null,
+      "needle": "kitab-txt-needle-",
+      "needle_hits": 3
+    },
+    "02-book.fb2": {
+      "opens": true,
+      "pages": 6,
+      "reflowable": true,
+      "page_sizes_pt": [
+        [
+          400,
+          600
+        ],
+        [
+          400,
+          600
+        ]
+      ],
+      "outline": 4,
+      "title": "Kitab fixture: FB2",
+      "needle": "kitab-fb2-needle-",
+      "needle_hits": 3
+    },
+    "03-comic.cbz": {
+      "opens": true,
+      "pages": 5,
+      "reflowable": false,
+      "page_sizes_pt": [
+        [
+          600,
+          900
+        ],
+        [
+          600,
+          900
+        ]
+      ],
+      "outline": 0,
+      "title": null
+    },
+    "04-vector.xps": {
+      "opens": true,
+      "pages": 2,
+      "reflowable": false,
+      "page_sizes_pt": [
+        [
+          612,
+          792
+        ],
+        [
+          792,
+          612
+        ]
+      ],
+      "outline": 0,
+      "title": null
+    },
+    "05-not-a-zip.cbz": {
+      "opens": false,
+      "error": "FileDataError"
+    },
+    "06-broken.fb2": {
+      "opens": true,
+      "pages": 1,
+      "reflowable": true,
+      "page_sizes_pt": [
+        [
+          400,
+          600
+        ]
+      ],
+      "outline": 0,
+      "title": null,
+      "needle": "kitab-fb2-needle-",
+      "needle_hits": 0
     }
   }
 }
