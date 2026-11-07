@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Code blocks in Markdown have syntax colours that follow the theme (Rust, JavaScript and TypeScript, Python, Go, C and C++, C#, Java, shell, SQL, YAML, JSON, HTML, CSS and more).
+- The sidebar has its own hide button in its header.
 - Markdown files open in Kitab: GitHub-style tables, task lists, footnotes, code blocks with Copy, quotes, collapsible details, frontmatter shown as a properties card, local images, heading outline in the sidebar, links between files and to headings, find, zoom and session restore. Unsafe HTML, scripts and remote images are blocked.
 - Arabic and Hebrew text now reads right to left in the interface and in Markdown (a fix in Kitab's copy of the UI toolkit).
 - Opening a file while Kitab is running (double-clicking a PDF, say) adds a tab to the open window and brings it forward, instead of starting a second Kitab.

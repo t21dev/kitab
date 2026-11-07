@@ -8,11 +8,13 @@
 //! `<iframe>`, `<svg>` and friends lose their content too (AGENTS.md rule 11).
 
 mod front;
+mod highlight;
 mod html;
 mod model;
 mod parse;
 mod slug;
 
+pub use highlight::highlight;
 pub use model::*;
 pub use slug::slugify;
 
@@ -41,6 +43,7 @@ pub fn parse(source: &str) -> MdDoc {
                 0,
                 Block::Code {
                     lang: "yaml".into(),
+                    tokens: highlight::highlight("yaml", &raw),
                     text: raw,
                 },
             );

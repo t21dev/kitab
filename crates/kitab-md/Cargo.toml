@@ -12,6 +12,9 @@ publish = false
 [dependencies]
 # MIT. Chosen over comrak for size: no HTML renderer, few dependencies.
 pulldown-cmark = { version = "0.13", default-features = false }
+# MIT. Syntax highlighting for code blocks, with the built-in grammars and the
+# pure-Rust regex engine (no C dependency). Themes come from Kitab's tokens.
+syntect = { version = "5", default-features = false, features = ["default-syntaxes", "regex-fancy", "parsing"] }
 
 [dev-dependencies]
 serde_json = { workspace = true }

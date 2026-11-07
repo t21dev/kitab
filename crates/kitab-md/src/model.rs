@@ -35,6 +35,28 @@ pub enum Inline {
 
 pub type Inlines = Vec<Inline>;
 
+/// What a run of code is, for colouring from the theme.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TokenKind {
+    Plain,
+    Keyword,
+    String,
+    Comment,
+    Number,
+    Function,
+    Type,
+    Tag,
+    Punctuation,
+}
+
+/// A coloured run of a code block: byte range and kind.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Token {
+    pub start: usize,
+    pub end: usize,
+    pub kind: TokenKind,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Align {
     None,
@@ -67,6 +89,8 @@ pub enum Block {
     Code {
         lang: String,
         text: String,
+        /// Syntax colours, empty for an unknown language.
+        tokens: Vec<Token>,
     },
     /// A ```mermaid fence (drawn as a diagram later; its source for now).
     Mermaid(String),

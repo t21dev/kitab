@@ -808,7 +808,20 @@ impl Workspace {
             })
             .children(tabs_panel)
             .when_some(contents, |d, col| {
-                d.child(heading("Contents")).child(
+                // With tabs on top, the Contents header carries the hide
+                // button (with tabs in the sidebar it's in the sidebar's head).
+                let contents_head =
+                    heading("Contents")
+                        .justify_between()
+                        .pr(px(8.0))
+                        .when(!has_tabs, |h| {
+                            h.child(
+                                icon_button("side-hide", "sidebar", false, st)
+                                    .tip("Hide sidebar  Ctrl+B")
+                                    .on_click(cx.listener(|ws, _, _, cx| ws.toggle_sidebar(cx))),
+                            )
+                        });
+                d.child(contents_head).child(
                     div()
                         .id("toc-scroll")
                         .flex_1()

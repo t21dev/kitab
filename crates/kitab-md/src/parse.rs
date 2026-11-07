@@ -311,7 +311,11 @@ impl Builder {
                 self.emit(match lang.to_ascii_lowercase().as_str() {
                     "mermaid" => Block::Mermaid(text),
                     "math" | "latex" | "tex" => Block::Math(text),
-                    _ => Block::Code { lang, text },
+                    _ => Block::Code {
+                        tokens: crate::highlight::highlight(&lang, &text),
+                        lang,
+                        text,
+                    },
                 });
             }
             Frame::Cell(inl) => {

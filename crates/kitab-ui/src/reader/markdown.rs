@@ -19,7 +19,7 @@ use gpui::{
     StatefulInteractiveElement, StrikethroughStyle, Styled, StyledText, TextRun, UnderlineStyle,
     WeakEntity, div, img, prelude::FluentBuilder, px, relative, svg,
 };
-use kitab_md::{Align, Block, Inline, Item, MdDoc, SpanStyle, plain_text};
+use kitab_md::{Align, Block, Inline, Item, MdDoc, SpanStyle, Token, TokenKind, plain_text};
 use std::cell::Cell;
 use std::collections::HashSet;
 use std::ops::Range;
@@ -302,7 +302,7 @@ fn block_el(d: &Draw, block: &Block, depth: usize, cx: &mut Context<Reader>) -> 
             .text_color(st.c(|c| c.muted))
             .children(blocks_el(d, blocks, depth + 1, cx))
             .into_any_element(),
-        Block::Code { lang, text } => code_el(d, lang, text, cx),
+        Block::Code { lang, text, tokens } => code_el(d, lang, text, tokens, cx),
         Block::Mermaid(src) => source_box(
             d,
             "Mermaid diagram",
@@ -467,7 +467,77 @@ fn list_el(
     col.into_any_element()
 }
 
-fn code_el(d: &Draw, lang: &str, text: &str, _cx: &mut Context<Reader>) -> AnyElement {
+/// Theme colour for a kind of code token.
+fn token_color(st: &Style, kind: TokenKind) -> Hsla {
+    match kind {
+        TokenKind::Plain => st.c(|c| c.text),
+        TokenKind::Keyword => st.c(|c| c.accent),
+        TokenKind::String => st.c(|c| c.ok),
+        TokenKind::Comment => st.c(|c| c.faint),
+        TokenKind::Number => st.c(|c| c.warn),
+        TokenKind::Function => st.c(|c| c.read),
+        TokenKind::Type => st.c(|c| c.warn).opacity(0.85),
+        TokenKind::Tag => st.c(|c| c.bad).opacity(0.85),
+        TokenKind::Punctuation => st.c(|c| c.muted),
+    }
+}
+
+/// One line of code with its colours (token offsets are into the whole block).
+fn code_line(st: &Style, line: &str, at: usize, tokens: &[Token]) -> StyledText {
+    let shown = line.replace('\t', "    ");
+    if tokens.is_empty() || shown.len() != line.len() {
+        // No colours, or tabs moved the offsets: one plain run.
+        return StyledText::new(SharedString::from(shown));
+    }
+    let end = at + line.len();
+    let plain = font(MONO_FONT, false, false);
+    let run = |len: usize, kind: TokenKind| TextRun {
+        len,
+        font: match kind {
+            TokenKind::Comment => font(MONO_FONT, false, true),
+            TokenKind::Function => font(MONO_FONT, true, false),
+            _ => plain.clone(),
+        },
+        color: token_color(st, kind),
+        background_color: None,
+        underline: None,
+        strikethrough: None,
+    };
+    let mut runs = Vec::new();
+    let mut pos = at;
+    for t in tokens.iter().filter(|t| t.end > at && t.start < end) {
+        let (s, e) = (t.start.max(pos), t.end.min(end));
+        if s > pos {
+            runs.push(run(s - pos, TokenKind::Plain));
+        }
+        if e > s {
+            runs.push(run(e - s, t.kind));
+            pos = e;
+        }
+    }
+    if end > pos {
+        runs.push(run(end - pos, TokenKind::Plain));
+    }
+    // Runs must cover the line exactly and end on character boundaries.
+    let mut b = 0;
+    let ok = runs.iter().all(|r| {
+        b += r.len;
+        line.is_char_boundary(b)
+    }) && b == line.len();
+    if ok && !runs.is_empty() {
+        StyledText::new(SharedString::from(shown)).with_runs(runs)
+    } else {
+        StyledText::new(SharedString::from(shown))
+    }
+}
+
+fn code_el(
+    d: &Draw,
+    lang: &str,
+    text: &str,
+    tokens: &[Token],
+    _cx: &mut Context<Reader>,
+) -> AnyElement {
     let st = d.st;
     let copy_text = text.to_string();
     div()
@@ -521,11 +591,18 @@ fn code_el(d: &Draw, lang: &str, text: &str, _cx: &mut Context<Reader>) -> AnyEl
                         .text_size(d.px(BODY * 0.85))
                         .line_height(relative(1.5))
                         .text_color(st.c(|c| c.text))
-                        .children(text.split('\n').map(|line| {
-                            div()
-                                .min_h(d.px(BODY * 0.85 * 1.5))
-                                .child(line.replace('\t', "    "))
-                        })),
+                        .children({
+                            let mut at = 0;
+                            text.split('\n')
+                                .map(|line| {
+                                    let el = div()
+                                        .min_h(d.px(BODY * 0.85 * 1.5))
+                                        .child(code_line(st, line, at, tokens));
+                                    at += line.len() + 1;
+                                    el
+                                })
+                                .collect::<Vec<_>>()
+                        }),
                 ),
         )
         .into_any_element()
