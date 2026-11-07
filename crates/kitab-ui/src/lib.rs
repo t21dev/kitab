@@ -39,6 +39,24 @@ pub mod layout {
 
 /// Runs once, on the frame after GPUI first shows a page or a placeholder: the
 /// app uses it to close the GDI first frame (ADR 0002).
+/// The main window, so files handed over by a second launch open in it.
+struct MainWindow(gpui::WindowHandle<shell::Workspace>);
+impl gpui::Global for MainWindow {}
+
+/// Open `paths` as tabs in the main window and bring it to the front (a
+/// second Kitab handed them over). An empty list only brings it forward.
+pub fn open_paths(cx: &mut App, paths: Vec<PathBuf>) {
+    let Some(handle) = cx.try_global::<MainWindow>().map(|w| w.0) else {
+        return;
+    };
+    let _ = handle.update(cx, |ws, window, cx| {
+        for p in paths {
+            ws.open_tab(p, window, cx);
+        }
+        window.activate_window();
+    });
+}
+
 pub struct FirstPaint(pub Option<Box<dyn FnOnce()>>);
 impl gpui::Global for FirstPaint {}
 
@@ -81,8 +99,13 @@ pub fn open_main_window(
         app_id: Some("dev.t21.kitab".into()),
         ..Default::default()
     };
-    cx.open_window(options, |window, cx| {
+    match cx.open_window(options, |window, cx| {
         cx.new(|cx| shell::Workspace::new(engine, library, files, window, cx))
-    })
-    .is_ok()
+    }) {
+        Ok(handle) => {
+            cx.set_global(MainWindow(handle));
+            true
+        }
+        Err(_) => false,
+    }
 }

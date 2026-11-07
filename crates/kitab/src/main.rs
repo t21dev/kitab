@@ -28,6 +28,13 @@ fn main() {
 
     // settings.json is read before the first frame because the theme and density
     // are needed to draw it (AGENTS.md rule 1); it is a few hundred bytes.
+    // One Kitab per user: a second launch (a double-clicked file) hands its
+    // files to the running one, which opens them as tabs, and exits.
+    let listener = match kitab_os::instance::claim(&files) {
+        kitab_os::instance::Claim::Forwarded => return,
+        kitab_os::instance::Claim::Primary(listener) => listener,
+    };
+
     let settings_path = kitab_os::data_dir().map(|d| d.join("settings.json"));
     let settings = settings_path
         .as_ref()
@@ -71,6 +78,17 @@ fn main() {
             cx.set_global(FirstPaint(Some(Box::new(kitab_os::splash::close))));
             #[cfg(not(windows))]
             cx.set_global(FirstPaint(None));
+            // Files from later launches arrive on a background thread.
+            let (tx, rx) = smol::channel::unbounded::<Vec<PathBuf>>();
+            listener.run(move |paths| {
+                let _ = tx.send_blocking(paths);
+            });
+            cx.spawn(async move |cx| {
+                while let Ok(paths) = rx.recv().await {
+                    let _ = cx.update(|cx| kitab_ui::open_paths(cx, paths));
+                }
+            })
+            .detach();
             let on_quit = library.clone();
             cx.on_app_quit(move |cx| {
                 let library = on_quit.clone();
@@ -128,7 +146,8 @@ mod first_frame {
             let (doc, info) = engine.open(&file, None).ok()?;
             let m = density.metrics();
             let (w, h) = (layout::WINDOW_W, layout::WINDOW_H);
-            let top = m.title_bar + m.header_row;
+            // The tab bar only: the dock floats over the page (no header row).
+            let top = m.title_bar;
             let area_x = layout::SIDEBAR_W + 1.0;
             let area_w = w - area_x;
             let size = info.page_sizes.first().copied()?;

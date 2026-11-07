@@ -71,6 +71,10 @@ pub fn panel(
             .gap(px(2.0))
             .p(px(10.0))
             .bg(st.c(|c| c.panel))
+            // The modal clips to its box, not its rounded corners: round the
+            // rail's own left corners to match (16 px less the 1 px border).
+            .rounded_tl(px(15.0))
+            .rounded_bl(px(15.0))
             .border_r_1()
             .border_color(st.c(|c| c.line))
             .child(

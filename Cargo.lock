@@ -3050,6 +3050,7 @@ dependencies = [
  "kitab-theme",
  "kitab-ui",
  "log",
+ "smol",
 ]
 
 [[package]]

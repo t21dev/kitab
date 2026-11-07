@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Opening a file while Kitab is running (double-clicking a PDF, say) adds a tab to the open window and brings it forward, instead of starting a second Kitab.
+- A + button after the tabs opens the system Open dialog (Ctrl+O).
+- The Settings window's left corners are properly rounded.
 - Layout presets in Settings › Appearance: Full, or Minimal (no motion, flat surfaces, a compact dock with only zoom, find and ⋯, the page counter, sidebar closed) for a leaner, faster window. Change any part and it becomes Custom.
 - Kitab remembers whether the sidebar was open (Ctrl+B, F12 or the dock's sidebar button) the next time it starts.
 - Smoother scrolling through long and large PDFs: pages of one document render on several threads at once, a page shows a quick soft render while its sharp one draws (when that is faster), the next page in the scroll direction renders ahead, and pages you scroll past are no longer rendered after the fact.

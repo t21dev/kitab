@@ -436,7 +436,7 @@ impl Workspace {
         // button, a 96 px drag area and the three window buttons. Tabs share it
         // down to 120 px each; past that the strip scrolls.
         let n = self.tabs.len().max(1) as f32;
-        let fixed = 8.0 + st.m().icon_button + 13.0 + 40.0 + 96.0 + 3.0 * 46.0 + 12.0;
+        let fixed = 8.0 + 2.0 * st.m().icon_button + 17.0 + 40.0 + 96.0 + 3.0 * 46.0 + 12.0;
         let room = (f32::from(window.viewport_size().width) - fixed).max(120.0);
         let tab_w = ((room - 4.0 * n) / n).clamp(120.0, 220.0);
         let crowded = n * 224.0 > room;
@@ -564,16 +564,25 @@ impl Workspace {
 
         // "All tabs" appears once the strip overflows: a menu of every tab.
         let overflowing = self.tab_scroll.max_offset().width > px(0.5);
-        bar = bar.child(strip).when(overflowing, |b| {
-            b.child(
-                icon_button("all-tabs", "chevron-down", false, st)
+        bar = bar
+            .child(strip)
+            // New tab: the system Open dialog (Ctrl+O).
+            .child(
+                icon_button("new-tab", "plus", false, st)
                     .flex_none()
-                    .tip("All tabs")
-                    .on_click(cx.listener(|ws, e: &gpui::ClickEvent, window, cx| {
-                        ws.all_tabs_menu(e.position(), window, cx)
-                    })),
+                    .tip("Open a file  Ctrl+O")
+                    .on_click(cx.listener(|ws, _, window, cx| ws.open_dialog(window, cx))),
             )
-        });
+            .when(overflowing, |b| {
+                b.child(
+                    icon_button("all-tabs", "chevron-down", false, st)
+                        .flex_none()
+                        .tip("All tabs")
+                        .on_click(cx.listener(|ws, e: &gpui::ClickEvent, window, cx| {
+                            ws.all_tabs_menu(e.position(), window, cx)
+                        })),
+                )
+            });
         bar.child(
             div()
                 .id("drag")
