@@ -1,8 +1,8 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
+﻿// SPDX-License-Identifier: AGPL-3.0-or-later
 
 //! Phase 4 formats against the fixture corpus: every EPUB in expected.json
 //! opens (or fails) as recorded, with the recorded page count at the
-//! 400 × 600 pt, 11 pt layout, contents size and title; page 1 has ink; the
+//! 400 Ãƒâ€” 600 pt, 11 pt layout, contents size and title; page 1 has ink; the
 //! MANIFEST needles are found. Image files are refused (Kitab doesn't view
 //! them). AGENTS.md rule 21: no expectations retyped here.
 
@@ -161,7 +161,7 @@ fn needles_are_found_in_books() {
 
 #[test]
 fn the_large_book_opens_within_budget() {
-    // S4 (PLAN.md §6) budgets the whole open-to-first-page; the engine part
+    // S4 (PLAN.md Ã‚Â§6) budgets the whole open-to-first-page; the engine part
     // must stay well inside it.
     let start = Instant::now();
     let (id, info) = engine()
@@ -459,4 +459,39 @@ fn books_lay_out_again() {
     let (pdf_id, _) = engine().open(&pdf("01-text-outline.pdf"), None).unwrap();
     assert!(engine().relayout(pdf_id, BookLayout::DEFAULT).is_err());
     engine().close(pdf_id);
+}
+
+/// MANIFEST epub/03: the note marks are links whose own text is a mark, and
+/// the text at their targets is the note (shown as a popover, not a jump).
+#[test]
+fn footnote_links_lead_to_their_notes() {
+    use kitab_core::LinkTarget;
+    use kitab_core::notes::{is_note_mark, note_text, text_in};
+    let (id, _) = engine()
+        .open(&epub("03-footnotes-images.epub"), None)
+        .unwrap();
+    let mut notes = Vec::new();
+    for page in 0..3 {
+        let chars = engine().page_chars(id, page).unwrap();
+        for link in engine().links(id, page).unwrap() {
+            let mark = text_in(&chars, link.rect);
+            let LinkTarget::Page { page: to, y } = link.target else {
+                continue;
+            };
+            if !is_note_mark(&mark) {
+                continue;
+            }
+            let target = engine().page_chars(id, to).unwrap();
+            notes.push((
+                mark.trim().to_string(),
+                note_text(&target, y, Some(&mark), 600),
+            ));
+        }
+    }
+    engine().close(id);
+    assert_eq!(notes.len(), 2, "{notes:?}");
+    notes.sort();
+    assert_eq!(notes[0].0, "1");
+    assert_eq!(notes[0].1, "1. The first footnote, shown as a popover.");
+    assert_eq!(notes[1].1, "2. The second footnote.");
 }

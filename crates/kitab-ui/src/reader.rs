@@ -9,6 +9,7 @@ mod bookmarks;
 mod dock;
 mod editor;
 mod find;
+mod footnote;
 pub use bookmarks::BookmarkRow;
 pub use dock::TOP_INSET;
 pub use info::human_size;
@@ -191,6 +192,8 @@ pub struct Reader {
     present: Option<present::Present>,
     /// This is the tab showing (Markdown live reload looks at its file).
     watched: bool,
+    /// A footnote shown beside its mark.
+    note: Option<footnote::NotePop>,
     /// Bumped to end a live-reload loop.
     watch_gen: u64,
 }
@@ -268,6 +271,7 @@ impl Reader {
             pages: pages::PagesState::default(),
             present: None,
             watched: false,
+            note: None,
             watch_gen: 0,
         };
         this.load_file_size(cx);
@@ -1414,8 +1418,10 @@ impl Render for Reader {
             .on_action(cx.listener(|r, _: &ToggleEdit, window, cx| r.toggle_edit(window, cx)))
             .on_action(cx.listener(|r, _: &Copy, _, cx| r.copy_selection(cx)))
             .on_action(cx.listener(|r, _: &ClearSelection, _, cx| {
-                // Esc puts the pen down first, then clears the selection.
-                if r.markup.open {
+                // Esc closes a footnote, then puts the pen down, then clears
+                // the selection.
+                if r.close_note(cx) {
+                } else if r.markup.open {
                     r.toggle_markup(cx)
                 } else {
                     r.clear_selection(cx)
@@ -1553,6 +1559,7 @@ impl Render for Reader {
             .children(self.markup_bar(&st, window, cx))
             .children(self.info_chip(&st))
             .children(self.writer(&st, cx))
+            .children(self.note_view(&st, cx))
             .into_any_element()
     }
 }

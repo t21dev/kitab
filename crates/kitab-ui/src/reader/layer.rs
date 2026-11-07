@@ -96,7 +96,7 @@ impl Reader {
 
     /// Follow a link: a page in this document (remembered for Alt+Left), or a
     /// web or mail address in the system browser.
-    fn follow(&mut self, target: &LinkTarget, cx: &mut Context<Self>) {
+    pub(super) fn follow(&mut self, target: &LinkTarget, cx: &mut Context<Self>) {
         match target {
             LinkTarget::Page { page, y } => {
                 let page = *page as usize;
@@ -144,7 +144,7 @@ impl Reader {
                     LinkTarget::Uri(u) if safe_uri(u) => u.clone().into(),
                     LinkTarget::Uri(_) => "Kitab doesn't open this kind of link".into(),
                 };
-                let target = link.target.clone();
+                let link = link.clone();
                 div()
                     .id(("link", ix * 10_000 + i))
                     .absolute()
@@ -156,7 +156,9 @@ impl Reader {
                     .cursor(CursorStyle::PointingHand)
                     .hover(|d| d.bg(st.c(|c| c.accent).opacity(0.12)))
                     .tip(tip)
-                    .on_click(cx.listener(move |r, _, _, cx| r.follow(&target, cx)))
+                    .on_click(cx.listener(move |r, e: &gpui::ClickEvent, _, cx| {
+                        r.click_link(ix, link.clone(), e.position(), cx)
+                    }))
                     .into_any_element()
             })
             .collect()

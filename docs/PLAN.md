@@ -440,7 +440,8 @@ Each phase ends with its exit criteria green in CI and a minor release. A phase 
 - Done: every format opens, renders, searches and shows its contents (engine tests against `expected.json` › `epub` and `other`); books lay out at 400 × 600 pt, 11 pt; non-Latin text falls back to system fonts by script (`kitab-mupdf/src/fonts.rs`: font-kit took 23 s per small EPUB); per-format tab icons, file types and thumbnails.
 - Done since: fixed-layout EPUB at its viewport, one page per spine document (`kitab-mupdf/src/epub.rs` reads the OPF; MuPDF's page margins are absorbed by growing the page); right-to-left books swap the arrow keys (`PageLeft`/`PageRight`). Books are laid out to the reading area (one page per screen at fit width) and re-flow 220 ms after a resize; zoom in a book is its text size (`book_text_size`, 8–32 pt, default 12), kept across layouts by chapter and fraction (`reader/book.rs`).
 - Done since: typography (`BookStyle` in kitab-core: face from MuPDF's built-in Times, Helvetica and Courier, line spacing, `@page` margins) as a user style sheet; MuPDF reads it when a book is opened, so a change reopens the book on its worker under a style lock (`doc.rs`), while size and text-size changes stay a layout. The default writes no CSS, so expected.json's page counts hold.
-- Still to do: footnote popovers; Kindle KF8 (.azw3, refused for now: MuPDF reads only its cover); MuPDF's Charis SIL book face (Kitab uses Times to keep the installer small).
+- Done since: footnote popovers (`kitab_core::notes`, `reader/footnote.rs`): a link whose own text is a note mark shows the note's text, cut from the target page's characters (from the line opening with the mark near the target, to a blank gap or the next mark), tested against `epub/03`.
+- Still to do: Kindle KF8 (.azw3, refused for now: MuPDF reads only its cover); MuPDF's Charis SIL book face (Kitab uses Times to keep the installer small).
 
 ### Phase 5: Markdown → `0.5.0`
 

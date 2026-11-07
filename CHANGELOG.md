@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Footnotes open beside their mark: clicking a note number (1, [2], *, †) in a book or PDF shows the note in a small card instead of jumping away; Go to note jumps (Alt+Left comes back), Esc or a click elsewhere closes it. Other links still jump.
 - Book typography (Settings › Reading › Books): typeface (the book's own, serif, sans or mono), line spacing and margins for EPUB, MOBI, FB2 and text files, applied over the book's own styles. Pages and the contents' page numbers follow at once, at the same place in the book.
 - Mermaid diagrams in Markdown are drawn: flowcharts, sequence, class, state, entity-relationship, Gantt, pie, mindmap, timeline and git graphs, in the theme's colours, sharp at any zoom. A diagram that can't be read shows its source and why. Drawn off the UI thread in pure Rust (no browser or JavaScript).
 - Math in Markdown: `$$…$$` and ```math blocks are typeset (fractions, roots, sub- and superscripts, sums and integrals with limits, matrices and cases, Greek and symbols); inline `$…$` reads as one line of Unicode (πr², x₁ ≤ α). TeX that can't be read shows its source with a mark.

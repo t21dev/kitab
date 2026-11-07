@@ -8,6 +8,7 @@
 
 mod markup;
 mod model;
+pub mod notes;
 mod ranges;
 pub use markup::*;
 pub use model::*;
