@@ -1,0 +1,20 @@
+[package]
+name = "kitab-md"
+description = "Markdown for Kitab: GFM parsing into a sanitised block tree (PLAN.md §3.4)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish = false
+
+[dependencies]
+# MIT. Chosen over comrak for size: no HTML renderer, few dependencies.
+pulldown-cmark = { version = "0.13", default-features = false }
+
+[dev-dependencies]
+serde_json = { workspace = true }
+
+[lints]
+workspace = true

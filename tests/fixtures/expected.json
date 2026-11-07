@@ -810,19 +810,19 @@
       "bytes": 2723,
       "lines": 121,
       "mermaid_blocks": 0,
-      "headings": 19
+      "headings": 21
     },
     "02-mermaid.md": {
       "bytes": 2844,
       "lines": 150,
-      "mermaid_blocks": 12,
+      "mermaid_blocks": 11,
       "headings": 13
     },
     "03-code-highlighting.md": {
       "bytes": 2173,
       "lines": 99,
       "mermaid_blocks": 0,
-      "headings": 3
+      "headings": 1
     },
     "04-frontmatter.md": {
       "bytes": 455,

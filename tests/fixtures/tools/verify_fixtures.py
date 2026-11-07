@@ -9,7 +9,8 @@ If this script and the app disagree, the app is wrong (or the fixture changed
 on purpose and expected.json is regenerated in the same commit).
 """
 
-from __future__ import annotations
+from __future__ import re
+import annotations
 
 import json
 import sys
@@ -20,6 +21,41 @@ import pymupdf as fitz
 ROOT = Path(__file__).resolve().parents[1]
 fitz.TOOLS.mupdf_display_errors(False)
 
+
+
+def md_headings(text: str) -> int:
+    """Headings as CommonMark sees them: ATX (`# x`) and setext (a line
+    underlined with === or ---), outside code fences, outside frontmatter."""
+    lines = text.splitlines()
+    i = 0
+    if lines and lines[0] == "---":  # frontmatter
+        for j in range(1, len(lines)):
+            if lines[j] == "---":
+                i = j + 1
+                break
+    n, fence, prev = 0, None, ""
+    for line in lines[i:]:
+        s = line.lstrip()
+        m = re.match(r"(`{3,}|~{3,})", s)
+        if m:
+            if fence is None:
+                fence = m.group(1)[0]
+            elif s.startswith(fence * 3) and not s.strip(fence).strip():
+                fence = None
+            prev = ""
+            continue
+        if fence is not None:
+            continue
+        if re.match(r"#{1,6}(\s|$)", s) and len(line) - len(s) < 4:
+            n += 1
+            prev = ""
+            continue
+        if re.fullmatch(r"(=+|-+)\s*", line) and prev.strip() and not prev.lstrip().startswith(("-", "*", "+", ">")) and not re.match(r"\d+\.", prev.lstrip()):
+            n += 1
+            prev = ""
+            continue
+        prev = line
+    return n
 
 def count(doc, needle: str, case: bool = False) -> int:
     n = 0
@@ -110,7 +146,7 @@ def main() -> int:
     for p in sorted((ROOT / "md").glob("*.md")):
         text = p.read_text(encoding="utf-8")
         exp["md"][p.name] = {"bytes": p.stat().st_size, "lines": text.count("\n") + 1,
-                             "mermaid_blocks": text.count("```mermaid"), "headings": sum(1 for l in text.splitlines() if l.startswith("#"))}
+                             "mermaid_blocks": sum(1 for l in text.splitlines() if l.lstrip().startswith("```mermaid")), "headings": md_headings(text)}
 
     # Assertions the fixtures are built to satisfy. A failure means the generator is broken.
     P, E = exp["pdf"], exp["epub"]
