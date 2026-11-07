@@ -5,6 +5,7 @@
 
 pub mod assoc;
 pub mod instance;
+#[cfg(windows)]
 pub mod splash;
 pub mod update;
 

@@ -26,6 +26,8 @@ pub enum Claim {
     Forwarded,
 }
 
+// macOS hands opens to the running app itself, without a message.
+#[cfg_attr(target_os = "macos", allow(dead_code))]
 fn message(files: &[PathBuf]) -> Vec<u8> {
     let cwd = std::env::current_dir().unwrap_or_default();
     let mut text = String::from(MAGIC);
@@ -64,6 +66,7 @@ pub fn parse(bytes: &[u8]) -> Option<Vec<PathBuf>> {
     )
 }
 
+#[cfg_attr(target_os = "macos", allow(dead_code))]
 fn user_key() -> String {
     let user = std::env::var("USERNAME")
         .or_else(|_| std::env::var("USER"))

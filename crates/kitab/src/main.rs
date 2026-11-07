@@ -102,44 +102,83 @@ fn main() {
         first_frame::show(first, engine.clone(), &theme, settings.density);
     }
 
-    Application::new()
-        .with_assets(kitab_ui::Assets)
-        .run(move |cx| {
-            #[cfg(windows)]
-            cx.set_global(FirstPaint(Some(Box::new(kitab_os::splash::close))));
-            #[cfg(not(windows))]
-            cx.set_global(FirstPaint(None));
-            // Files from later launches arrive on a background thread.
-            let (tx, rx) = smol::channel::unbounded::<Vec<PathBuf>>();
-            listener.run(move |paths| {
+    // Files from later launches arrive on a background thread (Windows,
+    // Linux) or as "open" events from the system (macOS's Finder).
+    let (tx, rx) = smol::channel::unbounded::<Vec<PathBuf>>();
+    let app = Application::new().with_assets(kitab_ui::Assets);
+    {
+        let tx = tx.clone();
+        app.on_open_urls(move |urls| {
+            let paths: Vec<PathBuf> = urls.iter().filter_map(|u| path_of_url(u)).collect();
+            if !paths.is_empty() {
                 let _ = tx.send_blocking(paths);
-            });
-            cx.spawn(async move |cx| {
-                while let Ok(paths) = rx.recv().await {
-                    let _ = cx.update(|cx| kitab_ui::open_paths(cx, paths));
-                }
-            })
-            .detach();
-            let on_quit = library.clone();
-            cx.on_app_quit(move |cx| {
-                let library = on_quit.clone();
-                // Off the UI thread; the quit waits for it (bounded by GPUI's quit timeout).
-                cx.background_spawn(async move { library.end_session() })
-            })
-            .detach();
-            if !kitab_ui::open_main_window(
-                cx,
-                engine,
-                library,
-                theme,
-                settings,
-                save_settings,
-                files,
-            ) {
-                eprintln!("Kitab: could not open a window");
-                cx.quit();
             }
         });
+    }
+    app.run(move |cx| {
+        #[cfg(windows)]
+        cx.set_global(FirstPaint(Some(Box::new(kitab_os::splash::close))));
+        #[cfg(not(windows))]
+        cx.set_global(FirstPaint(None));
+        listener.run(move |paths| {
+            let _ = tx.send_blocking(paths);
+        });
+        cx.spawn(async move |cx| {
+            while let Ok(paths) = rx.recv().await {
+                let _ = cx.update(|cx| kitab_ui::open_paths(cx, paths));
+            }
+        })
+        .detach();
+        let on_quit = library.clone();
+        cx.on_app_quit(move |cx| {
+            let library = on_quit.clone();
+            // Off the UI thread; the quit waits for it (bounded by GPUI's quit timeout).
+            cx.background_spawn(async move { library.end_session() })
+        })
+        .detach();
+        if !kitab_ui::open_main_window(cx, engine, library, theme, settings, save_settings, files) {
+            eprintln!("Kitab: could not open a window");
+            cx.quit();
+        }
+    });
+}
+
+/// A `file://` URL (macOS hands opened files over as these) as a path.
+fn path_of_url(url: &str) -> Option<PathBuf> {
+    let rest = url.strip_prefix("file://")?;
+    // Undo %-escapes ("%20" for a space), byte by byte, then read as UTF-8.
+    let bytes = rest.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%' && i + 2 < bytes.len() {
+            let hex = std::str::from_utf8(&bytes[i + 1..i + 3]).ok()?;
+            out.push(u8::from_str_radix(hex, 16).ok()?);
+            i += 3;
+        } else {
+            out.push(bytes[i]);
+            i += 1;
+        }
+    }
+    let path = PathBuf::from(String::from_utf8(out).ok()?);
+    path.is_absolute().then_some(path)
+}
+
+#[cfg(test)]
+mod url_tests {
+    use super::path_of_url;
+
+    #[test]
+    fn file_urls_become_paths() {
+        #[cfg(not(windows))]
+        assert_eq!(
+            path_of_url("file:///Users/me/My%20Books/a.pdf"),
+            Some(std::path::PathBuf::from("/Users/me/My Books/a.pdf"))
+        );
+        assert_eq!(path_of_url("https://example.com/a.pdf"), None);
+        assert_eq!(path_of_url("file://relative.pdf"), None);
+        assert_eq!(path_of_url("file:///bad%zz"), None);
+    }
 }
 
 /// Write through a temporary file and rename, so a crash never leaves half a file.
