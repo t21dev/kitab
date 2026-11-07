@@ -91,16 +91,18 @@ fn fill(a: &mut PdfAnnotation, m: &Mark) -> Result<(), mupdf::Error> {
     Ok(())
 }
 
-/// Write `marks` into a copy of the PDF at `src` and put it at `out` (which
-/// may be `src` itself). Returns how many annotations were written. Nothing
-/// is changed if any mark is invalid or a page doesn't exist.
+/// Write `marks` into a copy of the PDF at `src`, apply `edits` to the
+/// annotations it already has, and put it at `out` (which may be `src`
+/// itself). Returns how many changes were made. Nothing is changed if any
+/// mark is invalid or a page or annotation doesn't exist.
 pub fn write_marks(
     src: &Path,
     password: Option<&str>,
     marks: &[Mark],
+    edits: &[kitab_core::AnnotEdit],
     out: &Path,
 ) -> Result<usize, String> {
-    if marks.is_empty() {
+    if marks.is_empty() && edits.is_empty() {
         return Err("there are no marks to save".into());
     }
     if marks.iter().any(|m| !m.is_valid()) {
@@ -110,7 +112,7 @@ pub fn write_marks(
     // and the rename at the end is on one volume.
     let tmp: PathBuf = out.with_extension("pdf.kitab-tmp");
     std::fs::copy(src, &tmp).map_err(|e| format!("could not copy the PDF: {e}"))?;
-    let result = annotate(&tmp, password, marks);
+    let result = annotate(&tmp, password, marks, edits);
     match result {
         Ok(n) => std::fs::rename(&tmp, out).map(|_| n).map_err(|e| {
             let _ = std::fs::remove_file(&tmp);
@@ -123,7 +125,12 @@ pub fn write_marks(
     }
 }
 
-fn annotate(tmp: &Path, password: Option<&str>, marks: &[Mark]) -> Result<usize, String> {
+fn annotate(
+    tmp: &Path,
+    password: Option<&str>,
+    marks: &[Mark],
+    edits: &[kitab_core::AnnotEdit],
+) -> Result<usize, String> {
     let name = tmp.to_str().ok_or("the file name is not valid Unicode")?;
     let mut doc = PdfDocument::open(name).map_err(|e| format!("could not open the PDF: {e}"))?;
     if doc.needs_password().map_err(|e| e.to_string())? {
@@ -136,7 +143,37 @@ fn annotate(tmp: &Path, password: Option<&str>, marks: &[Mark]) -> Result<usize,
     if marks.iter().any(|m| i64::from(m.page) >= i64::from(pages)) {
         return Err("a mark is on a page the PDF doesn't have".into());
     }
+    if edits
+        .iter()
+        .any(|e| i64::from(e.page()) >= i64::from(pages))
+    {
+        return Err("an annotation is on a page the PDF doesn't have".into());
+    }
     let mut written = 0;
+    // Deletions first, page by page, highest index first so the others keep
+    // their places (new marks are appended after).
+    let mut gone: Vec<(u32, u32)> = edits
+        .iter()
+        .map(|e| match e {
+            kitab_core::AnnotEdit::Delete { page, index } => (*page, *index),
+        })
+        .collect();
+    gone.sort_unstable();
+    gone.dedup();
+    for group in gone.chunk_by(|a, b| a.0 == b.0) {
+        let index = i32::try_from(group[0].0).map_err(|e| e.to_string())?;
+        let mut page = doc.load_pdf_page(index).map_err(|e| e.to_string())?;
+        let mut annots: Vec<Option<_>> = page.annotations().map(Some).collect();
+        for &(_, n) in group.iter().rev() {
+            let annot = annots
+                .get_mut(n as usize)
+                .and_then(Option::take)
+                .ok_or("an annotation to delete isn't in the PDF any more")?;
+            page.delete_annotation(annot)
+                .map_err(|e| format!("could not delete an annotation: {e}"))?;
+            written += 1;
+        }
+    }
     // One page at a time, in order.
     let mut order: Vec<&Mark> = marks.iter().collect();
     order.sort_by_key(|m| m.page);
@@ -271,7 +308,7 @@ mod tests {
         let out = temp("annotated.pdf");
         let marks = every_shape(1);
         assert_eq!(
-            write_marks(&src, None, &marks, &out).expect("writes"),
+            write_marks(&src, None, &marks, &[], &out).expect("writes"),
             marks.len()
         );
         let found = annots(&out, None, 1);
@@ -299,9 +336,9 @@ mod tests {
     fn a_locked_pdf_keeps_its_password() {
         let src = fixture("04a-encrypted-password-kitab.pdf");
         let out = temp("locked.pdf");
-        assert!(write_marks(&src, None, &every_shape(0), &out).is_err());
+        assert!(write_marks(&src, None, &every_shape(0), &[], &out).is_err());
         assert!(!out.exists(), "nothing written without the password");
-        write_marks(&src, Some("kitab"), &every_shape(0)[..2], &out).expect("writes");
+        write_marks(&src, Some("kitab"), &every_shape(0)[..2], &[], &out).expect("writes");
         let doc = PdfDocument::open(out.to_str().expect("utf-8")).expect("opens");
         assert!(doc.needs_password().expect("check"));
         assert_eq!(annots(&out, Some("kitab"), 0).len(), 2);
@@ -314,11 +351,11 @@ mod tests {
         let out = temp("bad.pdf");
         let mut marks = every_shape(0);
         marks[0].width = f32::NAN;
-        assert!(write_marks(&src, None, &marks, &out).is_err());
+        assert!(write_marks(&src, None, &marks, &[], &out).is_err());
         let mut far = every_shape(0);
         far[0].page = 10_000;
-        assert!(write_marks(&src, None, &far, &out).is_err());
-        assert!(write_marks(&src, None, &[], &out).is_err());
+        assert!(write_marks(&src, None, &far, &[], &out).is_err());
+        assert!(write_marks(&src, None, &[], &[], &out).is_err());
         assert!(!out.exists());
         assert!(!out.with_extension("pdf.kitab-tmp").exists());
     }
@@ -327,8 +364,34 @@ mod tests {
     fn saving_over_the_source_works() {
         let copy = temp("in-place.pdf");
         std::fs::copy(fixture("01-text-outline.pdf"), &copy).expect("copy");
-        write_marks(&copy, None, &every_shape(2)[..3], &copy).expect("writes in place");
+        write_marks(&copy, None, &every_shape(2)[..3], &[], &copy).expect("writes in place");
         assert_eq!(annots(&copy, None, 2).len(), 3);
+        let _ = std::fs::remove_file(&copy);
+    }
+
+    #[test]
+    fn annotations_already_in_the_pdf_can_be_deleted() {
+        use kitab_core::AnnotEdit;
+        let copy = temp("delete.pdf");
+        std::fs::copy(fixture("01-text-outline.pdf"), &copy).expect("copy");
+        write_marks(&copy, None, &every_shape(1)[..4], &[], &copy).expect("writes");
+        let before = annots(&copy, None, 1);
+        assert_eq!(before.len(), 4);
+        // Delete the first and the third; the others keep their order.
+        let edits = [
+            AnnotEdit::Delete { page: 1, index: 0 },
+            AnnotEdit::Delete { page: 1, index: 2 },
+        ];
+        assert_eq!(
+            write_marks(&copy, None, &[], &edits, &copy).expect("deletes"),
+            2
+        );
+        let after = annots(&copy, None, 1);
+        assert_eq!(after, vec![before[1], before[3]]);
+        // An index the page doesn't have changes nothing.
+        let missing = [AnnotEdit::Delete { page: 1, index: 40 }];
+        assert!(write_marks(&copy, None, &[], &missing, &copy).is_err());
+        assert_eq!(annots(&copy, None, 1).len(), 2);
         let _ = std::fs::remove_file(&copy);
     }
 }

@@ -81,12 +81,30 @@ pub struct Mark {
 #[derive(Debug, Clone, PartialEq)]
 pub struct FileAnnot {
     pub page: u32,
+    /// Its place among the page's annotations (all kinds, in file order):
+    /// how a deletion finds it again when saving.
+    pub index: u32,
     /// The PDF subtype: "Highlight", "Ink", "Text", "FreeText", …
     pub kind: String,
     /// Its text (a note's or a text box's contents), if any.
     pub text: Option<String>,
     pub rect: RectPt,
     pub color: Option<Rgb8>,
+}
+
+/// A change to an annotation already in the PDF, written on save.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AnnotEdit {
+    /// Take the page's `index`th annotation out of the file.
+    Delete { page: u32, index: u32 },
+}
+
+impl AnnotEdit {
+    pub fn page(&self) -> u32 {
+        match self {
+            AnnotEdit::Delete { page, .. } => *page,
+        }
+    }
 }
 
 /// Limits a mark must fit: anything bigger is a bug or a hostile store row.

@@ -74,9 +74,10 @@ pub trait DocEngine: Send + Sync + 'static {
         src: &Path,
         password: Option<&str>,
         marks: &[kitab_core::Mark],
+        edits: &[kitab_core::AnnotEdit],
         out: &Path,
     ) -> Result<usize, String> {
-        let _ = (src, password, marks, out);
+        let _ = (src, password, marks, edits, out);
         Err("this engine can't save marks".into())
     }
     /// The annotations already in the file (PDF only).

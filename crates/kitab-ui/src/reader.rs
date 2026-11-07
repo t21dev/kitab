@@ -1150,6 +1150,7 @@ impl Reader {
                     }))
                     .children(self.markup_overlay(ix, ppt))
                     .children(self.note_pins(ix, ppt, &st, cx))
+                    .children(self.deleted_outlines(ix, ppt, &st))
                     .children(self.bookmark_ribbon(ix, &st))
                     .children(self.selection_marks(ix, ppt, &st))
                     .children(self.find_marks(ix, ppt, &st))

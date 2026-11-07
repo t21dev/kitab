@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Delete annotations a PDF already has: the bin on a row of the Marks pane, or the eraser on the page. They are outlined in red until you save (Ctrl+S or the dock's Save, which counts them), when they are taken out of the file incrementally; the arrow on the row keeps one after all.
 - Toolbar buttons in the title bar: Find, Draw and More (⋯) now sit beside the window buttons, and the dock keeps paging and zoom. Settings › Appearance › Toolbar puts each button in the title bar, the dock, or nowhere (More is always in one of the two). They act on the open tab and stay put however many tabs are open; in a narrow window only More stays up top and the rest go back to the dock.
 - A status bar along the bottom of the page replaces the floating file info chip: format, file size, pages (lines in Markdown), word count and reading time for Markdown, and paper or text size on the left; your position (page 3 of 40, or how far through) and zoom on the right. Each item has a switch in Settings › Reading › Status bar, and Ctrl+I shows or hides the bar.
 - Footnotes open beside their mark: clicking a note number (1, [2], *, †) in a book or PDF shows the note in a small card instead of jumping away; Go to note jumps (Alt+Left comes back), Esc or a click elsewhere closes it. Other links still jump.

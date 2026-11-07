@@ -135,6 +135,9 @@ pub(super) struct MarkupState {
     /// The hex digits being typed in the picker (without '#'), while editing.
     pub hex: Option<String>,
     pub hex_focus: Option<FocusHandle>,
+    /// Annotations already in the PDF, deleted here: (page, index), written
+    /// out on save.
+    pub deleted: Vec<(u32, u32)>,
     next_local: u64,
 }
 
@@ -222,16 +225,18 @@ impl Reader {
             && !self.is_book()
     }
 
-    /// Show or hide the markup bar (Ctrl+Shift+D, or the dock's pen).
     /// The markup tools are out (the dock's or title bar's pen is lit).
     pub fn markup_on(&self) -> bool {
         self.markup.open
     }
 
+    /// Show or hide the markup bar (Ctrl+Shift+D, or the dock's pen).
     pub fn toggle_markup(&mut self, cx: &mut Context<Self>) {
         if !Style::get(cx).markup {
             return;
         }
+        // The eraser can take out the file's own annotations too.
+        self.load_file_annots(cx);
         let m = &mut self.markup;
         m.open = !m.open;
         if m.open {
@@ -429,6 +434,25 @@ impl Reader {
             if let Some(mark) = hit.and_then(|local| self.unplace(local, cx)) {
                 self.markup.undo.push(Edit::Removed(mark));
                 self.markup.redo.clear();
+            } else if self.is_pdf() {
+                // Not one of Kitab's: an annotation the PDF already has.
+                let file_hit = self
+                    .file_annots
+                    .as_ref()
+                    .and_then(|v| {
+                        v.iter().rev().find(|a| {
+                            let r = a.rect;
+                            a.page == page
+                                && at.x >= r.x - slack
+                                && at.x <= r.x + r.w + slack
+                                && at.y >= r.y - slack
+                                && at.y <= r.y + r.h + slack
+                        })
+                    })
+                    .map(|a| (a.page, a.index));
+                if let Some((p, i)) = file_hit {
+                    self.delete_file_annot(p, i, cx);
+                }
             }
             return true;
         }
@@ -860,20 +884,70 @@ impl Reader {
         self.markup.saving
     }
 
-    /// Unsaved marks in a PDF (they are kept in the library meanwhile).
+    /// Unsaved marks in a PDF (they are kept in the library meanwhile), and
+    /// deletions of its own annotations.
     pub fn unsaved_marks(&self) -> usize {
         if self.is_pdf() {
-            self.markup.marks.len()
+            self.markup.marks.len() + self.markup.deleted.len()
         } else {
             0
         }
+    }
+
+    /// Delete an annotation the PDF already has: outlined on the page until
+    /// Save (Ctrl+S) takes it out of the file.
+    pub fn delete_file_annot(&mut self, page: u32, index: u32, cx: &mut Context<Self>) {
+        if !self.markup.deleted.contains(&(page, index)) {
+            self.markup.deleted.push((page, index));
+            cx.notify();
+        }
+    }
+
+    /// Keep an annotation after all (before saving).
+    pub fn restore_file_annot(&mut self, page: u32, index: u32, cx: &mut Context<Self>) {
+        self.markup.deleted.retain(|d| *d != (page, index));
+        cx.notify();
+    }
+
+    pub fn is_annot_deleted(&self, page: u32, index: u32) -> bool {
+        self.markup.deleted.contains(&(page, index))
+    }
+
+    /// Red outlines over the file's annotations deleted but not saved yet.
+    pub(super) fn deleted_outlines(&self, ix: usize, ppt: f32, st: &Style) -> Vec<AnyElement> {
+        let page = ix as u32;
+        let Some(annots) = self.file_annots.as_ref() else {
+            return Vec::new();
+        };
+        let size = self.raw_page_size(ix);
+        annots
+            .iter()
+            .filter(|a| a.page == page && self.markup.deleted.contains(&(a.page, a.index)))
+            .map(|a| {
+                let r = super::geom::rect_to_view(a.rect, size, self.rotation, ppt);
+                div()
+                    .absolute()
+                    .left(px(r.x - 3.0))
+                    .top(px(r.y - 3.0))
+                    .w(px(r.w + 6.0))
+                    .h(px(r.h + 6.0))
+                    .rounded(px(4.0))
+                    .border_2()
+                    .border_color(st.c(|c| c.bad))
+                    .bg(st.c(|c| c.bad).opacity(0.12))
+                    .into_any_element()
+            })
+            .collect()
     }
 
     /// Ctrl+S in a PDF: write the marks into the file as annotations. The
     /// document is closed while the file is replaced (Windows can't rename
     /// over an open file), then opened again at the same place.
     pub fn save_marks(&mut self, cx: &mut Context<Self>) {
-        if !self.is_pdf() || self.markup.saving || self.markup.marks.is_empty() {
+        if !self.is_pdf()
+            || self.markup.saving
+            || (self.markup.marks.is_empty() && self.markup.deleted.is_empty())
+        {
             return;
         }
         let Some(doc) = self.doc else { return };
@@ -881,6 +955,12 @@ impl Reader {
         self.markup.note = Some("Saving…".into());
         self.save_now(cx);
         let marks: Vec<Mark> = self.markup.marks.iter().map(|p| p.mark.clone()).collect();
+        let edits: Vec<kitab_core::AnnotEdit> = self
+            .markup
+            .deleted
+            .iter()
+            .map(|&(page, index)| kitab_core::AnnotEdit::Delete { page, index })
+            .collect();
         let (engine, library, path) =
             (self.engine.clone(), self.library.clone(), self.path.clone());
         let password = self.unlock.clone();
@@ -889,7 +969,8 @@ impl Reader {
             let result = cx
                 .background_spawn(async move {
                     engine.close(doc);
-                    let result = engine.write_marks(&path, password.as_deref(), &marks, &path);
+                    let result =
+                        engine.write_marks(&path, password.as_deref(), &marks, &edits, &path);
                     if result.is_ok() {
                         library.clear_marks(&path);
                     }
@@ -907,10 +988,11 @@ impl Reader {
             Ok(n) => {
                 // The file draws them now, and lists them.
                 self.markup.marks.clear();
+                self.markup.deleted.clear();
                 self.file_annots = None;
                 self.markup.undo.clear();
                 self.markup.redo.clear();
-                let what = if n == 1 { "mark" } else { "marks" };
+                let what = if n == 1 { "change" } else { "changes" };
                 self.markup.note = Some(format!("Saved {n} {what} into the PDF").into());
             }
             Err(e) => {

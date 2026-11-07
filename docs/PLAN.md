@@ -456,7 +456,8 @@ Each phase ends with its exit criteria green in CI and a minor release. A phase 
 - Done: drawing and markup (pen, highlighter, line, arrow, rectangle, ellipse, eraser, colour picker, widths, undo/redo) on PDFs, comics, XPS and fixed-layout books; marks kept in the library as they are drawn (schema 2, `marks`), and saved into PDFs as standard annotations, incrementally (`kitab-mupdf/src/marks.rs`). A Settings switch hides the tools.
 - Done since: highlight, underline and strike-through from a text selection (H, right-click menu); Note and Text tools with a small writer (`text_field.rs`: a reusable field with input methods, clipboard, undo); notes are pins with their text as a tooltip.
 - Done since: the Marks pane (sidebar) lists Kitab's marks and the PDF's own annotations (`Engine::annotations`, tested against `annot_kinds_page1`/`annot_notes_page1` of fixture 09) with quotes for text markup, jump and delete, and exports Markdown or CSV (H3, H4).
-- Still to do: erasing or editing annotations already in a PDF; text highlights in re-flowing books.
+- Done since: deleting annotations already in a PDF (`AnnotEdit::Delete`, by page and place among the page's annotations; queued, outlined, written incrementally with new marks).
+- Still to do: editing the text of a PDF's own notes; text highlights in re-flowing books.
 - Exit: H1–H4.
 - Page thumbnails (Phase 3 leftover) done alongside: the sidebar's Pages pane, a virtual list sharing the reader's byte-bounded page cache, with its own wanted range so scrolled-away thumbnails are skipped (`reader/pages.rs`).
 - Bookmarks (Phase 3 leftover) done alongside: Ctrl+D toggles a bookmark on the current page, named after its chapter (`reader/bookmarks.rs`), kept in the library's `bookmarks` table, listed in the sidebar's Bookmarks pane, with a ribbon on the page. Books that re-flow wait for a layout-free locator.

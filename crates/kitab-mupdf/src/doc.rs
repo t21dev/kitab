@@ -554,7 +554,7 @@ pub(crate) fn annotations(doc: &OpenDoc) -> Result<Vec<kitab_core::FileAnnot>, S
         let Ok(page) = pdf.load_pdf_page(i) else {
             continue;
         };
-        for a in page.annotations() {
+        for (n, a) in page.annotations().enumerate() {
             let Ok(kind) = a.r#type() else { continue };
             let kind = format!("{kind:?}");
             if NOT_MARKUP.contains(&kind.as_str()) {
@@ -580,6 +580,7 @@ pub(crate) fn annotations(doc: &OpenDoc) -> Result<Vec<kitab_core::FileAnnot>, S
             };
             out.push(kitab_core::FileAnnot {
                 page: index,
+                index: u32::try_from(n).unwrap_or(u32::MAX),
                 kind,
                 text,
                 rect,

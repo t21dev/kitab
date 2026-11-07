@@ -12,8 +12,8 @@ use kitab_core::{MarkShape, RectPt};
 pub enum MarkSource {
     /// Drawn in Kitab: in a PDF not saved into the file yet, elsewhere kept in Kitab.
     Kitab(u64),
-    /// Already in the file.
-    File,
+    /// Already in the file: its page and place among the page's annotations.
+    File { page: u32, index: u32 },
 }
 
 /// One row of the Marks panel.
@@ -129,7 +129,10 @@ impl Reader {
                 kind: label_for(&a.kind).to_string(),
                 colour: a.color.map(|c| (c.r, c.g, c.b)),
                 text,
-                source: MarkSource::File,
+                source: MarkSource::File {
+                    page: a.page,
+                    index: a.index,
+                },
             });
         }
         for p in &self.markup.marks {
@@ -196,7 +199,7 @@ impl Reader {
                 .colour
                 .map(|(r, g, b)| format!("{r:02X}{g:02X}{b:02X}"))
                 .unwrap_or_default();
-            let saved = matches!(r.source, MarkSource::File);
+            let saved = matches!(r.source, MarkSource::File { .. });
             out.push_str(&format!(
                 "{},{},{},{},{}\n",
                 r.page + 1,

@@ -941,7 +941,12 @@ impl Workspace {
             let pending = match row.source {
                 crate::reader::MarkSource::Kitab(_) if pdf => Some("Not saved into the file yet"),
                 crate::reader::MarkSource::Kitab(_) => Some("Kept in Kitab"),
-                crate::reader::MarkSource::File => None,
+                crate::reader::MarkSource::File { page, index }
+                    if reader.read(cx).is_annot_deleted(page, index) =>
+                {
+                    Some("Deleted from the PDF when you save (Ctrl+S)")
+                }
+                crate::reader::MarkSource::File { .. } => None,
             };
             let delete = match row.source {
                 crate::reader::MarkSource::Kitab(local) => {
@@ -972,7 +977,44 @@ impl Workspace {
                             }),
                     )
                 }
-                crate::reader::MarkSource::File => None,
+                crate::reader::MarkSource::File { page, index } => {
+                    let r = reader.clone();
+                    let gone = reader.read(cx).is_annot_deleted(page, index);
+                    Some(
+                        div()
+                            .id(("mark-del", ix))
+                            .size(px(22.0))
+                            .flex_none()
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .rounded(px(6.0))
+                            .opacity(if gone { 1.0 } else { 0.0 })
+                            .group_hover("mark-row", |s| s.opacity(1.0))
+                            .hover(|d| d.bg(st.c(|c| c.raised)))
+                            .tip(if gone {
+                                "Keep it after all"
+                            } else {
+                                "Delete from the PDF (on save)"
+                            })
+                            .child(
+                                svg()
+                                    .path(icon(if gone { "undo" } else { "trash" }))
+                                    .size(px(12.0))
+                                    .text_color(st.c(|c| c.muted)),
+                            )
+                            .on_click(move |_, _, cx| {
+                                cx.stop_propagation();
+                                r.update(cx, |r, cx| {
+                                    if gone {
+                                        r.restore_file_annot(page, index, cx)
+                                    } else {
+                                        r.delete_file_annot(page, index, cx)
+                                    }
+                                });
+                            }),
+                    )
+                }
             };
             col = col.child(
                 div()

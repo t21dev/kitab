@@ -78,9 +78,10 @@ impl DocEngine for MupdfEngine {
         src: &Path,
         password: Option<&str>,
         marks: &[kitab_core::Mark],
+        edits: &[kitab_core::AnnotEdit],
         out: &Path,
     ) -> Result<usize, String> {
-        kitab_mupdf::marks::write_marks(src, password, marks, out)
+        kitab_mupdf::marks::write_marks(src, password, marks, edits, out)
     }
 
     fn relayout(
