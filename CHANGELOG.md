@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- A file info chip at the bottom left: format, file size, pages and paper size (a book shows its text size, Markdown its lines and words); point at it for the file's location. Settings › Reading › File info hides it.
 - Draw and mark up pages (Ctrl+Shift+D, or the pen in the dock): pen, highlighter, line, arrow, rectangle, ellipse and eraser, with six colours plus a picker of 84 more and any hex code (#RRGGBB or #RGB), three widths, undo and redo, and Shift for 45° lines, squares and circles. Marks are kept as you draw; in a PDF, Save in the dock (Ctrl+S) writes them into the file as standard annotations without touching the original bytes, so signatures stay valid. Comics, XPS and fixed-layout books keep their marks in Kitab. Settings › Reading › Drawing and markup turns the tools off.
 - Fixed-layout EPUBs show one page per spread at their own size, like a PDF, and don't re-flow. In right-to-left books (Arabic, Hebrew, manga) the left arrow goes to the next page.
 - Books (EPUB, MOBI, FB2, TXT) fill the window: pages re-flow when the window settles at a new size, and zoom changes the text size (8–32 pt, remembered; Ctrl+0 resets it). The reader keeps its place in the chapter.
