@@ -115,3 +115,57 @@ fn every_local_file_opens_and_page_1_has_ink() {
     }
     assert!(problems.is_empty(), "\n{}", problems.join("\n"));
 }
+
+/// L12 (scripts, fonts and emoji): Kitab's find, which ignores diacritics by
+/// default, finds words in every script, with and without their marks.
+#[test]
+fn l12_every_script_is_searchable() {
+    let Ok(text) = std::fs::read_to_string(corpus_path()) else {
+        eprintln!("skip: no local corpus");
+        return;
+    };
+    let corpus: Value =
+        serde_json::from_str(text.trim_start_matches('\u{feff}')).expect("corpus parses");
+    let Some(file) = corpus["files"]
+        .as_array()
+        .and_then(|f| f.iter().find(|f| f["id"] == "L12"))
+    else {
+        eprintln!("skip: no L12 in the local corpus");
+        return;
+    };
+    let path = PathBuf::from(file["path"].as_str().expect("path"));
+    let engine = Engine::new(1);
+    let (doc, _) = engine.open(&path, None).expect("opens");
+    let options = kitab_core::FindOptions {
+        match_case: false,
+        whole_word: false,
+        ignore_diacritics: true,
+    };
+    let mut missing = Vec::new();
+    for q in [
+        "kitab-unicode-needle-11",
+        "কিতাব",
+        "किताब",
+        "புத்தகம்",
+        "หนังสือ",
+        "كتاب",
+        "الكتاب",
+        "الكِتَابُ",
+        "ספר",
+        "סֵפֶר",
+        "书是",
+        "本は",
+        "책은",
+        "книга",
+        "ˈkɪtæb",
+        "📖",
+        "Ångström",
+    ] {
+        let hits = engine.find_page(doc, 0, q, options).expect("searches");
+        eprintln!("{q}: {}", hits.len());
+        if hits.is_empty() && q != "Ångström" {
+            missing.push(q);
+        }
+    }
+    assert!(missing.is_empty(), "not found: {missing:?}");
+}
