@@ -66,6 +66,19 @@ pub trait DocEngine: Send + Sync + 'static {
     ) -> Result<(), String>;
     /// Write all pages of `inputs` (path, password), in order, to `out`. Returns the page count.
     fn merge(&self, inputs: &[(PathBuf, Option<String>)], out: &Path) -> Result<u32, String>;
+    /// Write `marks` into the PDF at `src` as annotations and put it at `out`
+    /// (which may be `src`; close the document first on Windows). Returns how
+    /// many were written.
+    fn write_marks(
+        &self,
+        src: &Path,
+        password: Option<&str>,
+        marks: &[kitab_core::Mark],
+        out: &Path,
+    ) -> Result<usize, String> {
+        let _ = (src, password, marks, out);
+        Err("this engine can't save marks".into())
+    }
     /// Lay a reflowable book out again (new page size or text size) and
     /// describe it anew: page count, sizes and contents change.
     fn relayout(&self, doc: DocHandle, layout: BookLayout) -> Result<DocInfo, String> {

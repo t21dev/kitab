@@ -63,6 +63,16 @@ impl DocEngine for MupdfEngine {
         self.engine.render_when(id, req, move || wanted())
     }
 
+    fn write_marks(
+        &self,
+        src: &Path,
+        password: Option<&str>,
+        marks: &[kitab_core::Mark],
+        out: &Path,
+    ) -> Result<usize, String> {
+        kitab_mupdf::marks::write_marks(src, password, marks, out)
+    }
+
     fn relayout(
         &self,
         doc: DocHandle,
@@ -206,7 +216,52 @@ fn title_or_name(title: Option<String>, path: &Path) -> String {
     })
 }
 
+impl StoreLibrary {
+    /// The document row for `path`, if the library knows it.
+    fn doc_id(store: &kitab_store::Store, path: &Path) -> Option<kitab_store::DocumentId> {
+        store.document_by_path(path).ok().flatten().map(|d| d.id)
+    }
+}
+
 impl Library for StoreLibrary {
+    fn marks(&self, path: &Path) -> Vec<(i64, kitab_core::Mark)> {
+        let path = path.to_path_buf();
+        self.call(move |s| {
+            let store = s.store.as_ref()?;
+            let id = Self::doc_id(store, &path)?;
+            let marks = store.marks(id).ok()?;
+            Some(marks.into_iter().map(|(m, mark)| (m.0, mark)).collect())
+        })
+        .flatten()
+        .unwrap_or_default()
+    }
+
+    fn add_mark(&self, path: &Path, mark: kitab_core::Mark) -> Option<i64> {
+        let path = path.to_path_buf();
+        self.call(move |s| {
+            let store = s.store.as_mut()?;
+            let id = Self::doc_id(store, &path)?;
+            store.add_mark(id, &mark).ok().map(|m| m.0)
+        })
+        .flatten()
+    }
+
+    fn delete_mark(&self, id: i64) {
+        let _ = self.call(move |s| {
+            let store = s.store.as_mut()?;
+            store.delete_mark(kitab_store::MarkId(id)).ok()
+        });
+    }
+
+    fn clear_marks(&self, path: &Path) {
+        let path = path.to_path_buf();
+        let _ = self.call(move |s| {
+            let store = s.store.as_mut()?;
+            let id = Self::doc_id(store, &path)?;
+            store.clear_marks(id).ok()
+        });
+    }
+
     fn opened(&self, path: &Path, info: &DocInfo) -> Option<ReadingState> {
         let (path, meta) = (path.to_path_buf(), DocMeta::from(info));
         self.call(move |s| {

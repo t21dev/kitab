@@ -30,6 +30,11 @@ actions!(
         // The arrow keys: next/previous, swapped in a right-to-left book.
         PageRight,
         PageLeft,
+        // Markup
+        ToggleMarkup,
+        MarkupUndo,
+        MarkupRedo,
+        SaveMarks,
         FirstPage,
         LastPage,
         ScrollDown,
@@ -124,6 +129,11 @@ pub fn bind_default_keys(cx: &mut App) {
         KeyBinding::new("ctrl-shift-l", CycleTheme, w),
         KeyBinding::new("f11", ToggleMinimal, w),
         // Navigate (SumatraPDF-compatible where Sumatra has a binding)
+        KeyBinding::new("ctrl-shift-d", ToggleMarkup, r),
+        KeyBinding::new("ctrl-z", MarkupUndo, r),
+        KeyBinding::new("ctrl-y", MarkupRedo, r),
+        KeyBinding::new("ctrl-shift-z", MarkupRedo, r),
+        KeyBinding::new("ctrl-s", SaveMarks, r),
         KeyBinding::new("right", PageRight, r),
         KeyBinding::new("left", PageLeft, r),
         KeyBinding::new("n", NextPage, r),
@@ -215,6 +225,12 @@ pub fn bind_default_keys(cx: &mut App) {
             "alt-left",
             "alt-right",
             "ctrl-g",
+            // The editor's own undo, redo and save, not the markup's.
+            "ctrl-z",
+            "ctrl-y",
+            "ctrl-shift-z",
+            "ctrl-s",
+            "ctrl-shift-d",
         ]
         .map(|key| KeyBinding::new(key, NoAction, editor)),
     );

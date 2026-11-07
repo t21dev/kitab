@@ -12,6 +12,7 @@ pub use dock::TOP_INSET;
 mod geom;
 mod layer;
 mod markdown;
+mod markup;
 mod select;
 
 use crate::actions::*;
@@ -163,6 +164,8 @@ pub struct Reader {
     md: Option<markdown::MdState>,
     /// A book's layout (EPUB, MOBI, FB2, TXT); `None` for files with pages.
     book: Option<book::BookState>,
+    /// Drawing and markup on the pages.
+    markup: markup::MarkupState,
 }
 
 impl Reader {
@@ -223,6 +226,7 @@ impl Reader {
             top_inset: 0.0,
             md: None,
             book: None,
+            markup: markup::MarkupState::default(),
         };
         this.open(None, cx);
         this
@@ -393,6 +397,7 @@ impl Reader {
                 self.info = Some(info);
                 self.status = Status::Open;
                 self.password.clear();
+                self.load_marks(cx);
                 cx.emit(ReaderEvent::Opened);
             }
             Err(OpenError::NeedsPassword) => self.status = Status::NeedsPassword { wrong: false },
@@ -1044,11 +1049,18 @@ impl Reader {
                     .shadow(st.sheet())
                     .overflow_hidden()
                     .relative()
-                    .cursor(gpui::CursorStyle::IBeam)
+                    .cursor(if self.markup.open && self.markup.tool.is_some() {
+                        gpui::CursorStyle::Crosshair
+                    } else {
+                        gpui::CursorStyle::IBeam
+                    })
                     .on_mouse_down(
                         MouseButton::Left,
                         cx.listener(move |r, e: &MouseDownEvent, window, cx| {
-                            r.select_down(ix, e, window, cx)
+                            // A markup tool draws; otherwise the click selects text.
+                            if !r.markup_down(ix, e, cx) {
+                                r.select_down(ix, e, window, cx)
+                            }
                         }),
                     )
                     // Characters for selection load the first time the pointer is over the page.
@@ -1061,6 +1073,7 @@ impl Reader {
                             .h(px(h))
                             .rounded(radius)
                     }))
+                    .children(self.markup_overlay(ix, ppt))
                     .children(self.selection_marks(ix, ppt, &st))
                     .children(self.find_marks(ix, ppt, &st))
                     .children(self.link_marks(ix, ppt, &st, cx)),
@@ -1324,7 +1337,22 @@ impl Render for Reader {
             .on_action(cx.listener(|r, _: &Find, window, cx| r.open_find(window, cx)))
             .on_action(cx.listener(|r, _: &ToggleEdit, window, cx| r.toggle_edit(window, cx)))
             .on_action(cx.listener(|r, _: &Copy, _, cx| r.copy_selection(cx)))
-            .on_action(cx.listener(|r, _: &ClearSelection, _, cx| r.clear_selection(cx)))
+            .on_action(cx.listener(|r, _: &ClearSelection, _, cx| {
+                // Esc puts the pen down first, then clears the selection.
+                if r.markup.open {
+                    r.toggle_markup(cx)
+                } else {
+                    r.clear_selection(cx)
+                }
+            }))
+            .on_action(cx.listener(|r, _: &ToggleMarkup, _, cx| {
+                if r.can_markup(cx) {
+                    r.toggle_markup(cx)
+                }
+            }))
+            .on_action(cx.listener(|r, _: &MarkupUndo, _, cx| r.markup_undo(cx)))
+            .on_action(cx.listener(|r, _: &MarkupRedo, _, cx| r.markup_redo(cx)))
+            .on_action(cx.listener(|r, _: &SaveMarks, _, cx| r.save_marks(cx)))
             .on_action(cx.listener(|r, _: &FindNext, window, cx| r.find_step(true, window, cx)))
             .on_action(cx.listener(|r, _: &FindPrev, window, cx| r.find_step(false, window, cx)))
             .on_action(cx.listener(|r, _: &HistoryBack, _, cx| r.history(true, cx)))
@@ -1349,6 +1377,13 @@ impl Render for Reader {
             .on_key_down(cx.listener(|r, _: &gpui::KeyDownEvent, _, cx| r.wake_dock(cx)))
             .on_mouse_move(cx.listener(|r, e: &MouseMoveEvent, _, cx| {
                 r.wake_dock(cx);
+                if r.markup.drawing.is_some() {
+                    if e.pressed_button == Some(MouseButton::Left) {
+                        r.markup_move(e.position, e.modifiers.shift, cx);
+                    } else {
+                        r.markup_up(cx);
+                    }
+                }
                 if r.select.dragging {
                     if e.pressed_button == Some(MouseButton::Left) {
                         r.select_move(e.position, cx);
@@ -1366,9 +1401,10 @@ impl Render for Reader {
             }))
             .on_mouse_up(
                 MouseButton::Left,
-                cx.listener(|r, _, _, _| {
+                cx.listener(|r, _, _, cx| {
                     r.dragging = false;
                     r.select_up();
+                    r.markup_up(cx);
                 }),
             )
             .on_action(cx.listener(|r, _: &ScrollDown, _, cx| {
@@ -1432,6 +1468,7 @@ impl Render for Reader {
             .children(self.dock_view(&st, inset, window, cx))
             .children(self.edit_button(&st, cx))
             .children(self.find_bar(&st, window, cx))
+            .children(self.markup_bar(&st, cx))
     }
 }
 

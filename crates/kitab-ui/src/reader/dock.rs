@@ -230,6 +230,49 @@ impl Reader {
                                 }
                             })),
                     )
+                    .when(self.can_markup(cx), |g| {
+                        g.child(
+                            dock_button("dock-markup", "pen", self.markup.open, st)
+                                .tip("Draw and mark up  Ctrl+Shift+D")
+                                .on_click(cx.listener(|r, _, _, cx| r.toggle_markup(cx))),
+                        )
+                    })
+                    // Unsaved marks in a PDF: Save sits beside the pen, with a count.
+                    .when(self.unsaved_marks() > 0, |g| {
+                        let n = self.unsaved_marks();
+                        let saving = self.markup_saving();
+                        g.child(
+                            dock_button("dock-save-marks", "save", false, st)
+                                .relative()
+                                .tip(format!(
+                                    "Save {n} mark{} into the PDF  Ctrl+S",
+                                    if n == 1 { "" } else { "s" }
+                                ))
+                                .when(saving, |b| b.opacity(0.5))
+                                .on_click(cx.listener(|r, _, _, cx| r.save_marks(cx)))
+                                .child(
+                                    div()
+                                        .absolute()
+                                        .top(px(1.0))
+                                        .right(px(1.0))
+                                        .min_w(px(14.0))
+                                        .h(px(14.0))
+                                        .px(px(3.0))
+                                        .rounded_full()
+                                        .bg(st.c(|c| c.accent))
+                                        .text_color(st.c(|c| c.bg))
+                                        .text_size(px(9.0))
+                                        .flex()
+                                        .items_center()
+                                        .justify_center()
+                                        .child(if n > 99 {
+                                            "99+".to_string()
+                                        } else {
+                                            n.to_string()
+                                        }),
+                                ),
+                        )
+                    })
                     .child(
                         dock_button("dock-rotate", "rotate", false, st)
                             .when(compact, |b| b.hidden())
@@ -295,7 +338,7 @@ impl Reader {
     }
 }
 
-fn dock_button(
+pub(super) fn dock_button(
     id: &'static str,
     name: &'static str,
     on: bool,

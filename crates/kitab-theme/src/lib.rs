@@ -9,6 +9,7 @@ mod accent;
 mod code;
 mod color;
 mod density;
+pub mod markup;
 mod theme;
 mod thumb;
 

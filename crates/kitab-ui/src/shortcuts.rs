@@ -60,6 +60,17 @@ pub const GROUPS: &[Group] = &[
         ],
     },
     Group {
+        title: "Draw and mark up",
+        rows: &[
+            ("Show the markup tools", "Ctrl+Shift+D"),
+            ("Straight lines at 45°, squares, circles", "Hold Shift"),
+            ("Undo / redo a mark", "Ctrl+Z / Ctrl+Y"),
+            ("Redo a mark", "Ctrl+Shift+Z"),
+            ("Save marks into the PDF", "Ctrl+S"),
+            ("Put the pen down", "Esc"),
+        ],
+    },
+    Group {
         title: "Select and copy",
         rows: &[
             ("Select text", "Drag on the page"),

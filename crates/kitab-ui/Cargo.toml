@@ -20,6 +20,8 @@ serde_json = { workspace = true }
 image = { version = "0.25", default-features = false, features = ["png"] }
 anyhow = "1"
 log = "0.4"
+# Round caps and joins for pen strokes. The same lyon copy GPUI draws paths with.
+lyon_tessellation = "1"
 
 [lints]
 workspace = true

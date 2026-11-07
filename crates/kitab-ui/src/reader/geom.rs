@@ -8,7 +8,7 @@
 use kitab_core::{RectPt, SizePt};
 
 /// A point in page points → pixels from the sheet's top-left.
-fn point_to_view(x: f32, y: f32, page: SizePt, rotation: u16) -> (f32, f32) {
+pub fn point_to_view(x: f32, y: f32, page: SizePt, rotation: u16) -> (f32, f32) {
     match rotation % 360 {
         90 => (page.h - y, x),
         180 => (page.w - x, page.h - y),

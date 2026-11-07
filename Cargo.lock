@@ -3175,6 +3175,7 @@ dependencies = [
  "kitab-os",
  "kitab-theme",
  "log",
+ "lyon_tessellation",
  "serde",
  "serde_json",
 ]

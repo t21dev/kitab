@@ -41,6 +41,24 @@ pub trait Library: Send + Sync + 'static {
     fn end_session(&self);
     /// The tabs of the previous session.
     fn last_session(&self) -> Vec<SessionTab>;
+    /// Marks kept for `path` (not yet saved into the file, or a format Kitab
+    /// doesn't write into), with their store ids.
+    fn marks(&self, path: &Path) -> Vec<(i64, kitab_core::Mark)> {
+        let _ = path;
+        Vec::new()
+    }
+    /// Keep a mark; its store id, or `None` if it couldn't be kept.
+    fn add_mark(&self, path: &Path, mark: kitab_core::Mark) -> Option<i64> {
+        let _ = (path, mark);
+        None
+    }
+    fn delete_mark(&self, id: i64) {
+        let _ = id;
+    }
+    /// Forget every mark of `path` (they were saved into the file).
+    fn clear_marks(&self, path: &Path) {
+        let _ = path;
+    }
 }
 
 /// A library that remembers nothing (tests, or when the data folder can't be opened).

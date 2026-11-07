@@ -254,6 +254,8 @@ pub struct Settings {
     /// Text size of books (EPUB, MOBI, FB2, TXT) in points; zoom in a book
     /// changes it.
     pub book_text: f32,
+    /// Drawing and markup tools (the dock's pen, Ctrl+Shift+D).
+    pub markup: bool,
 }
 
 impl Settings {
@@ -320,6 +322,7 @@ impl Default for Settings {
             dock_compact: false,
             code_theme: CodeTheme::Kitab,
             book_text: BOOK_TEXT_DEFAULT,
+            markup: true,
         }
     }
 }
@@ -347,6 +350,7 @@ struct File {
     code_colours: String,
     /// Points.
     book_text_size: f32,
+    markup_tools: bool,
 }
 
 /// Books open at this text size (12 pt reads as 16 px at 100 %).
@@ -387,6 +391,7 @@ impl From<Settings> for File {
             dock_compact: s.dock_compact,
             code_colours: s.code_theme.id().to_string(),
             book_text_size: s.book_text,
+            markup_tools: s.markup,
         }
     }
 }
@@ -420,6 +425,7 @@ impl Settings {
             // A palette Kitab doesn't know falls back to the theme's colours.
             code_theme: CodeTheme::from_id(&f.code_colours).unwrap_or_default(),
             book_text: clamp_book_text(f.book_text_size),
+            markup: f.markup_tools,
         })
     }
 
@@ -455,6 +461,7 @@ mod tests {
             dock_compact: true,
             code_theme: CodeTheme::Dracula,
             book_text: 15.0,
+            markup: false,
         };
         assert_eq!(Settings::from_json(&s.to_json()), Ok(s));
     }

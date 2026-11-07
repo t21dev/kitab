@@ -474,6 +474,17 @@ fn reading(ws: &WeakEntity<Workspace>, st: &Style) -> AnyElement {
             st,
         ))
         .child(group(
+            "Drawing and markup",
+            Some("Pen, highlighter, lines, arrows and shapes on PDFs, comics and XPS (Ctrl+Shift+D). In a PDF, Ctrl+S saves them into the file."),
+            well_row(
+                "Show the markup tools",
+                "",
+                switch("markup-tools", st.markup, st, change(ws, |s: &mut Style| s.markup = !s.markup)),
+                st,
+            ),
+            st,
+        ))
+        .child(group(
             "Minimal mode",
             Some("F11 hides these for distraction-free reading. Point at the top edge for the window buttons and a way back."),
             minimal_rows(ws, st),
