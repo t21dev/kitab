@@ -11,6 +11,11 @@ use mupdf::pdf::{
 };
 use std::path::{Path, PathBuf};
 
+/// Open a PDF for a tool, with its password if it has one.
+pub(crate) fn open_pdf(path: &Path, password: Option<&str>) -> Result<PdfDocument, String> {
+    open(path, password)
+}
+
 fn open(path: &Path, password: Option<&str>) -> Result<PdfDocument, String> {
     let name = path.to_str().ok_or("the file name is not valid Unicode")?;
     let mut doc = PdfDocument::open(name).map_err(|e| format!("could not open the PDF: {e}"))?;
@@ -26,13 +31,30 @@ fn open(path: &Path, password: Option<&str>) -> Result<PdfDocument, String> {
     Ok(doc)
 }
 
+/// Save a tool's result next to `out`, then put it in place.
+pub(crate) fn save_pdf(doc: &PdfDocument, out: &Path) -> Result<(), String> {
+    save(doc, out)
+}
+
+pub(crate) fn save_with_options(
+    doc: &PdfDocument,
+    out: &Path,
+    options: PdfWriteOptions,
+) -> Result<(), String> {
+    save_with(doc, out, options)
+}
+
 fn save(doc: &PdfDocument, out: &Path) -> Result<(), String> {
     save_with(doc, out, PdfWriteOptions::default())
 }
 
 fn save_with(doc: &PdfDocument, out: &Path, mut options: PdfWriteOptions) -> Result<(), String> {
-    // Drop objects only the removed pages used, and keep streams compressed.
-    options.set_garbage(true).set_compress(true);
+    // Drop objects only the removed pages used, and keep streams compressed
+    // (unless the caller asked for more).
+    if options.garbage_level() == 0 {
+        options.set_garbage(true);
+    }
+    options.set_compress(true);
     let tmp: PathBuf = out.with_extension("pdf.kitab-tmp");
     let tmp_name = tmp.to_str().ok_or("the file name is not valid Unicode")?;
     doc.save_with_options(tmp_name, options)
@@ -149,7 +171,7 @@ fn file_name(p: &Path) -> String {
         .unwrap_or_default()
 }
 
-fn same_file(a: &Path, b: &Path) -> bool {
+pub(crate) fn same_file(a: &Path, b: &Path) -> bool {
     match (a.canonicalize(), b.canonicalize()) {
         (Ok(a), Ok(b)) => a == b,
         _ => a == b,

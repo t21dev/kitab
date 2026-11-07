@@ -28,6 +28,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::time::Duration;
 
+mod page_tools_ui;
 mod palette_ui;
 mod password_ui;
 mod print_ui;
@@ -117,6 +118,9 @@ pub struct Workspace {
     password_serial: u64,
     /// Sign…: the key sheet, the placement, the confirm.
     sign: sign_ui::SignState,
+    /// Page tools…, when open.
+    page_tools: Option<page_tools_ui::PageToolsSheet>,
+    page_tools_serial: u64,
 }
 
 /// The sidebar's panes for a document.
@@ -195,6 +199,8 @@ impl Workspace {
             password: None,
             password_serial: 0,
             sign: Default::default(),
+            page_tools: None,
+            page_tools_serial: 0,
         };
         // Leaving the hex field ends the edit.
         let hex_blur = cx.on_blur(&this.hex.focus, window, |ws, _, cx| {
@@ -1976,6 +1982,9 @@ impl Render for Workspace {
                     cx.listener(|ws, _: &PdfPassword, window, cx| ws.open_password(window, cx)),
                 )
                 .on_action(cx.listener(|ws, _: &SignPdf, window, cx| ws.open_sign(window, cx)))
+                .on_action(
+                    cx.listener(|ws, _: &PageTools, window, cx| ws.open_page_tools(window, cx)),
+                )
                 .child(reader)
                 .into_any_element();
         }
@@ -2738,6 +2747,12 @@ impl Workspace {
             .key("Ctrl+P")
             .disabled(self.active.is_none()),
             MenuItem::new(
+                "Page tools…",
+                self.on_ws(cx, |ws, window, cx| ws.open_page_tools(window, cx)),
+            )
+            .icon("pages")
+            .disabled(!self.active_reader().is_some_and(|r| r.read(cx).is_pdf())),
+            MenuItem::new(
                 "Sign…",
                 self.on_ws(cx, |ws, window, cx| ws.open_sign(window, cx)),
             )
@@ -3155,6 +3170,7 @@ impl Workspace {
         out.extend(self.password_view(st, cx));
         out.extend(self.sign_view(st, cx));
         out.extend(self.sign_confirm_view(st, cx));
+        out.extend(self.page_tools_view(st, cx));
 
         if let Some(section) = self.settings.or(self.settings_closing) {
             let closing = self.settings.is_none();

@@ -182,6 +182,72 @@ impl DocEngine for MupdfEngine {
             .collect())
     }
 
+    fn page_tool(
+        &self,
+        src: &Path,
+        password: Option<&str>,
+        op: &kitab_ui::engine::PageOp,
+        out: &Path,
+    ) -> Result<String, String> {
+        use kitab_mupdf::pages as p;
+        use kitab_ui::engine::PageOp;
+        let n = |count: usize, one: &str, many: &str| {
+            if count == 1 {
+                format!("1 {one}")
+            } else {
+                format!("{count} {many}")
+            }
+        };
+        Ok(match op {
+            PageOp::Delete(pages) => {
+                let left = p::delete_pages(src, password, pages, out)?;
+                format!(
+                    "Deleted {}; {} left",
+                    n(pages.len(), "page", "pages"),
+                    n(left as usize, "page", "pages")
+                )
+            }
+            PageOp::Move(pages, before) => {
+                p::move_pages(src, password, pages, *before, out)?;
+                format!("Moved {}", n(pages.len(), "page", "pages"))
+            }
+            PageOp::Rotate(pages, deg) => {
+                p::rotate_pages(src, password, pages, *deg, out)?;
+                format!("Turned {}", n(pages.len(), "page", "pages"))
+            }
+            PageOp::Compress => {
+                let (before, after) = p::compress(src, password, out)?;
+                let pct = (after * 100)
+                    .checked_div(before)
+                    .map_or(0, |share| 100 - share.min(100));
+                format!(
+                    "{} → {} ({pct}% smaller)",
+                    kitab_ui::reader::human_size(before),
+                    kitab_ui::reader::human_size(after)
+                )
+            }
+            PageOp::Number(first) => {
+                let count = p::number_pages(src, password, *first, out)?;
+                format!("Numbered {}", n(count as usize, "page", "pages"))
+            }
+            PageOp::Watermark(text) => {
+                let count = p::watermark(src, password, text, out)?;
+                format!("Watermarked {}", n(count as usize, "page", "pages"))
+            }
+            PageOp::Text => {
+                let count = p::extract_text(src, password, out)?;
+                format!("Saved the text of {}", n(count as usize, "page", "pages"))
+            }
+            PageOp::Images => {
+                let count = p::extract_images(src, password, out)?;
+                if count == 0 {
+                    return Err("this PDF has no pictures".into());
+                }
+                format!("Saved {}", n(count as usize, "picture", "pictures"))
+            }
+        })
+    }
+
     fn signer_of(&self, key_file: &Path, password: &str) -> Result<(String, String), String> {
         let bytes = std::fs::read(key_file).map_err(|e| e.to_string())?;
         let key = kitab_sign::sign::load_pfx(&bytes, password)?;

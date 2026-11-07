@@ -660,6 +660,12 @@ impl Workspace {
         let (r1, r2, r3) = (reader.clone(), reader.clone(), reader.clone());
         let mut items = vec![
             MenuItem::new(
+                "Page tools…",
+                self.on_ws(cx, |ws, window, cx| ws.open_page_tools(window, cx)),
+            )
+            .icon("pages")
+            .disabled(!is_pdf),
+            MenuItem::new(
                 "Save pages as a new PDF…",
                 self.on_ws(cx, move |ws, window, cx| {
                     ws.open_extract(r1.clone(), window, cx)

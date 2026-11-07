@@ -75,6 +75,13 @@ pub const COMMANDS: &[Command] = &[
     ),
     cmd!(
         "File",
+        "Page tools…",
+        "delete move reorder rotate turn compress shrink page numbers watermark extract text pictures images",
+        true,
+        PageTools
+    ),
+    cmd!(
+        "File",
         "Sign…",
         "signature certificate pfx p12 digital",
         true,

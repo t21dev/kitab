@@ -32,6 +32,25 @@ impl std::fmt::Debug for SignRequest {
     }
 }
 
+/// A page tool (Page tools…): each writes a new file.
+#[derive(Debug, Clone, PartialEq)]
+pub enum PageOp {
+    Delete(Vec<u32>),
+    /// Pages, and the page (0-based) they go before; the page count puts
+    /// them at the end.
+    Move(Vec<u32>, u32),
+    /// Pages and degrees clockwise.
+    Rotate(Vec<u32>, i32),
+    Compress,
+    /// Page numbers, starting at this one.
+    Number(u32),
+    Watermark(String),
+    /// The text, as a .txt file.
+    Text,
+    /// The pictures, as PNG files in the folder `out`.
+    Images,
+}
+
 /// A certificate the user trusts for signatures (Settings › Signing).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TrustedCert {
@@ -96,6 +115,18 @@ pub trait DocEngine: Send + Sync + 'static {
         pages: &[u32],
         out: &Path,
     ) -> Result<(), String>;
+    /// Run a page tool on the PDF at `src`, writing `out`. Returns what it
+    /// did, in words for a toast ("Deleted 2 pages").
+    fn page_tool(
+        &self,
+        src: &Path,
+        password: Option<&str>,
+        op: &PageOp,
+        out: &Path,
+    ) -> Result<String, String> {
+        let _ = (src, password, op, out);
+        Err("this engine has no page tools".into())
+    }
     /// Verify every signature in the PDF at `src` against the trusted
     /// certificates. Empty when it has none.
     fn signatures(

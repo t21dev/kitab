@@ -87,6 +87,8 @@ actions!(
         PdfPassword,
         // Signing
         SignPdf,
+        // Page tools
+        PageTools,
         // PDF tools
         ExtractPages,
         ToggleSplit,
