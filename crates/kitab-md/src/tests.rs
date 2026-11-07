@@ -271,3 +271,10 @@ fn frontmatter_edge_cases_from_md_viewer_pwa() {
     let doc = parse("► one\n➤ two\n· three\n");
     assert!(matches!(&doc.blocks[0], Block::List { items, .. } if items.len() == 3));
 }
+
+#[test]
+fn every_block_knows_its_source_line() {
+    let doc = parse("---\ntitle: T\n---\n# One\n\npara\n\n- a\n- b\n");
+    assert_eq!(doc.block_lines.len(), doc.blocks.len());
+    assert_eq!(doc.block_lines, vec![0, 3, 5, 7]);
+}

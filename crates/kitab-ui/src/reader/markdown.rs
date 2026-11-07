@@ -43,6 +43,12 @@ const MAX_DRAW_DEPTH: usize = 12;
 
 pub(super) struct MdState {
     pub doc: Arc<MdDoc>,
+    /// The file's text as loaded or last saved (what Edit starts from).
+    pub source: Arc<str>,
+    /// Source line of each block (see `MdDoc::block_lines`).
+    pub block_lines: Vec<usize>,
+    /// The editor, while editing.
+    pub edit: Option<super::editor::Editor>,
     pub dir: PathBuf,
     /// `<details>` the reader has opened, by block and position.
     pub open_details: HashSet<u64>,
@@ -1024,6 +1030,75 @@ fn text_el(d: &Draw, inlines: &[Inline], base: Base, _cx: &mut Context<Reader>) 
             },
         ))
         .into_any_element()
+}
+
+/// Source lines of a parsed document's blocks.
+pub(super) fn block_lines(_text: &str, doc: &MdDoc) -> Vec<usize> {
+    doc.block_lines.clone()
+}
+
+impl Reader {
+    /// A re-parse (after an edit) replaces the preview, keeping its place.
+    pub(super) fn show_parsed(&mut self, doc: MdDoc, lines: Vec<usize>, cx: &mut Context<Self>) {
+        let Some(md) = self.md.as_mut() else { return };
+        let top = self.list.logical_scroll_top();
+        let count = doc.blocks.len().max(1);
+        if let Some(info) = self.info.as_mut() {
+            info.outline = outline(&doc);
+            info.page_count = count as u32;
+            info.title = doc.title.clone().or(info.title.take());
+        }
+        md.doc = Arc::new(doc);
+        md.block_lines = lines;
+        self.list.reset(count);
+        self.list.scroll_to(ListOffset {
+            item_ix: top.item_ix.min(count - 1),
+            offset_in_item: top.offset_in_item,
+        });
+        cx.emit(ReaderEvent::PageChanged);
+        cx.notify();
+    }
+
+    /// "Edit" over a Markdown document, top right (hidden while editing).
+    pub(super) fn edit_button(&self, st: &Style, cx: &mut Context<Self>) -> Option<AnyElement> {
+        if self.md.is_none() || self.is_editing() || self.status != super::Status::Open {
+            return None;
+        }
+        Some(
+            div()
+                .absolute()
+                .top(px(14.0 + self.top_inset))
+                .right(px(22.0))
+                .child(
+                    div()
+                        .id("md-edit")
+                        .flex()
+                        .items_center()
+                        .gap(px(6.0))
+                        .h(px(30.0))
+                        .px(px(12.0))
+                        .rounded(px(9.0))
+                        .bg(st.c(|c| c.raised))
+                        .shadow(st.float())
+                        .border_1()
+                        .border_color(st.c(|c| c.line))
+                        .text_size(px(12.5))
+                        .text_color(st.c(|c| c.text))
+                        .cursor_pointer()
+                        .hover(|b| b.bg(st.c(|c| c.hover)))
+                        .tip("Edit this Markdown  Ctrl+E")
+                        .on_click(cx.listener(|r, _, window, cx| r.toggle_edit(window, cx)))
+                        .child(
+                            svg()
+                                .path(icon("edit"))
+                                .size(px(14.0))
+                                .text_color(st.c(|c| c.accent)),
+                        )
+                        .child("Edit"),
+                )
+                .into_any_element(),
+        )
+    }
 }
 
 /// Reveal block `ix` near the top of the view (find, anchors).

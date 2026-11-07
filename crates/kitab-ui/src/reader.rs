@@ -5,6 +5,7 @@
 //! and the error placeholders (PLAN.md Phase 1, DESIGN.md § Page sheets).
 
 mod dock;
+mod editor;
 mod find;
 pub use dock::TOP_INSET;
 mod geom;
@@ -329,11 +330,11 @@ impl Reader {
                         repaired: false,
                     };
                     let saved = library.opened(&path, &info);
-                    Ok((doc, info, saved))
+                    Ok((doc, info, saved, text.into_owned()))
                 })
                 .await;
             let _ = this.update(cx, |this, cx| match loaded {
-                Ok((doc, info, saved)) => {
+                Ok((doc, info, saved, source)) => {
                     this.restore = saved;
                     let dir = this
                         .path
@@ -341,9 +342,12 @@ impl Reader {
                         .map(|p| p.to_path_buf())
                         .unwrap_or_default();
                     this.md = Some(markdown::MdState {
+                        block_lines: doc.block_lines.clone(),
                         doc: Arc::new(doc),
                         dir,
                         open_details: Default::default(),
+                        source: source.into(),
+                        edit: None,
                     });
                     if let Some(state) = this.restore {
                         this.zoom = state.zoom;
@@ -1262,6 +1266,7 @@ impl Render for Reader {
             .on_action(cx.listener(|r, _: &LastPage, _, cx| r.jump(usize::MAX, cx)))
             .on_action(cx.listener(|r, _: &GoToPage, window, cx| r.edit_page(window, cx)))
             .on_action(cx.listener(|r, _: &Find, window, cx| r.open_find(window, cx)))
+            .on_action(cx.listener(|r, _: &ToggleEdit, window, cx| r.toggle_edit(window, cx)))
             .on_action(cx.listener(|r, _: &Copy, _, cx| r.copy_selection(cx)))
             .on_action(cx.listener(|r, _: &ClearSelection, _, cx| r.clear_selection(cx)))
             .on_action(cx.listener(|r, _: &FindNext, window, cx| r.find_step(true, window, cx)))
@@ -1333,12 +1338,22 @@ impl Render for Reader {
             .on_action(cx.listener(|r, _: &ActualSize, _, cx| r.set_zoom(ZoomMode::ActualSize, cx)))
             .on_action(cx.listener(|r, _: &RotateRight, _, cx| r.rotate(true, cx)))
             .on_action(cx.listener(|r, _: &RotateLeft, _, cx| r.rotate(false, cx)))
-            .child(
-                list(self.list.clone(), move |ix, window, cx| {
+            .child({
+                let pages = list(self.list.clone(), move |ix, window, cx| {
                     this.update(cx, |r, cx| r.page_element(ix, window, cx))
                 })
-                .size_full(),
-            )
+                .size_full();
+                // Editing Markdown: the source beside the live preview.
+                match self.editor_view(&st, window, cx) {
+                    Some(editor) => div()
+                        .flex()
+                        .size_full()
+                        .child(div().w(gpui::relative(0.5)).h_full().child(editor))
+                        .child(div().flex_1().min_w_0().h_full().relative().child(pages))
+                        .into_any_element(),
+                    None => pages.into_any_element(),
+                }
+            })
             // Ctrl+wheel zooms. This layer is painted after the list so it sees the
             // wheel first; it has no other handlers, so clicks pass through.
             .child(
@@ -1359,6 +1374,7 @@ impl Render for Reader {
             .children(status)
             .children(self.page_nav(&st, window, cx))
             .children(self.dock_view(&st, inset, window, cx))
+            .children(self.edit_button(&st, cx))
             .children(self.find_bar(&st, window, cx))
     }
 }

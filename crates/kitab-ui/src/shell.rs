@@ -263,6 +263,43 @@ impl Workspace {
         if ix >= self.tabs.len() {
             return;
         }
+        // Unsaved Markdown edits: ask first.
+        if self.tabs[ix].read(cx).has_unsaved_edits() {
+            let reader = self.tabs[ix].clone();
+            let name = reader.read(cx).title();
+            let answer = window.prompt(
+                gpui::PromptLevel::Warning,
+                &format!("Save your changes to {name}?"),
+                Some("Your edits will be lost if you don't save them."),
+                &["Save", "Don't save", "Cancel"],
+                cx,
+            );
+            cx.spawn_in(window, async move |this, cx| {
+                let choice = answer.await.ok();
+                let _ = this.update_in(cx, |ws, window, cx| {
+                    let Some(ix) = ws.tabs.iter().position(|t| *t == reader) else {
+                        return;
+                    };
+                    match choice {
+                        Some(0) => {
+                            reader.update(cx, |r, cx| r.save_markdown(cx));
+                            ws.force_close_tab(ix, window, cx);
+                        }
+                        Some(1) => ws.force_close_tab(ix, window, cx),
+                        _ => {}
+                    }
+                });
+            })
+            .detach();
+            return;
+        }
+        self.force_close_tab(ix, window, cx);
+    }
+
+    fn force_close_tab(&mut self, ix: usize, window: &mut Window, cx: &mut Context<Self>) {
+        if ix >= self.tabs.len() {
+            return;
+        }
         let closing = self.tabs.remove(ix);
         if self.tools.split.as_ref() == Some(&closing) {
             self.tools.split = None;

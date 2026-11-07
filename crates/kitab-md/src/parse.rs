@@ -89,6 +89,11 @@ struct Builder {
     footnotes: HashMap<String, usize>,
     slugs: HashMap<String, usize>,
     outline: Vec<Heading>,
+    /// Byte offset of the event being handled, and of the top-level block
+    /// that is open; each block added to the root records where it began.
+    offset: usize,
+    pending: Option<usize>,
+    starts: Vec<usize>,
 }
 
 pub fn blocks(text: &str) -> MdDoc {
@@ -108,8 +113,17 @@ pub fn blocks(text: &str) -> MdDoc {
         footnotes: HashMap::new(),
         slugs: HashMap::new(),
         outline: Vec::new(),
+        offset: 0,
+        pending: None,
+        starts: Vec::new(),
     };
-    for event in Parser::new_ext(text, options) {
+    for (event, range) in Parser::new_ext(text, options).into_offset_iter() {
+        b.offset = range.start;
+        if b.stack.len() == 1 && b.pending.is_none() {
+            if let Event::Start(_) = event {
+                b.pending = Some(range.start);
+            }
+        }
         b.event(event);
     }
     // Close anything left open (an unclosed <details>, say).
@@ -120,8 +134,18 @@ pub fn blocks(text: &str) -> MdDoc {
         Some(Frame::Root(blocks)) => blocks,
         _ => Vec::new(),
     };
+    // Byte offsets to line numbers.
+    let mut line_starts = vec![0];
+    line_starts.extend(text.match_indices('\n').map(|(i, _)| i + 1));
+    let line_of = |o: usize| match line_starts.binary_search(&o) {
+        Ok(i) => i,
+        Err(i) => i.saturating_sub(1),
+    };
+    let mut block_lines: Vec<usize> = b.starts.iter().map(|o| line_of(*o)).collect();
+    block_lines.resize(blocks.len(), block_lines.last().copied().unwrap_or(0));
     MdDoc {
         blocks,
+        block_lines,
         outline: b.outline,
         title: None,
         author: None,
@@ -140,6 +164,9 @@ impl Builder {
     fn emit(&mut self, block: Block) {
         self.close_implicit();
         for frame in self.stack.iter_mut().rev() {
+            if let Frame::Root(_) = frame {
+                self.starts.push(self.pending.take().unwrap_or(self.offset));
+            }
             match frame {
                 Frame::Root(blocks)
                 | Frame::Quote(blocks)

@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Edit Markdown in place (Edit, or Ctrl+E): the source beside a live preview, with undo/redo, clipboard, input methods, list continuation, line numbers and Ctrl+S to save. Closing with unsaved changes asks first.
 - Code blocks in Markdown have syntax colours that follow the theme (Rust, JavaScript and TypeScript, Python, Go, C and C++, C#, Java, shell, SQL, YAML, JSON, HTML, CSS and more).
 - The sidebar has its own hide button in its header.
 - Markdown files open in Kitab: GitHub-style tables, task lists, footnotes, code blocks with Copy, quotes, collapsible details, frontmatter shown as a properties card, local images, heading outline in the sidebar, links between files and to headings, find, zoom and session restore. Unsafe HTML, scripts and remote images are blocked.

@@ -23,6 +23,11 @@ pub fn parse(source: &str) -> MdDoc {
     let text = normalise(source);
     let (front, body) = front::split(&text);
     let mut doc = parse::blocks(body);
+    // Lines before the body (the frontmatter) count for the editor.
+    let front_lines = text[..text.len() - body.len()].matches('\n').count();
+    for l in &mut doc.block_lines {
+        *l += front_lines;
+    }
     match front {
         Some(front::Front::Valid(pairs)) => {
             doc.title = pairs
@@ -36,6 +41,7 @@ pub fn parse(source: &str) -> MdDoc {
                 .map(|(_, v)| v.clone())
                 .filter(|v| !v.is_empty());
             doc.blocks.insert(0, Block::Frontmatter(pairs));
+            doc.block_lines.insert(0, 0);
             doc.shift_outline(1);
         }
         Some(front::Front::Invalid(raw)) => {
@@ -47,6 +53,7 @@ pub fn parse(source: &str) -> MdDoc {
                     text: raw,
                 },
             );
+            doc.block_lines.insert(0, 0);
             doc.shift_outline(1);
         }
         None => {}

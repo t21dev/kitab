@@ -129,6 +129,8 @@ pub struct Heading {
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct MdDoc {
     pub blocks: Vec<Block>,
+    /// The source line (0-based) each top-level block starts on, for the editor.
+    pub block_lines: Vec<usize>,
     pub outline: Vec<Heading>,
     pub title: Option<String>,
     pub author: Option<String>,

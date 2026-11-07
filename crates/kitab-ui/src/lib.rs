@@ -6,6 +6,7 @@
 
 pub mod actions;
 pub mod cache;
+pub mod edit_buffer;
 pub mod engine;
 pub mod icons;
 pub mod library;

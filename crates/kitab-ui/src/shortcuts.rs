@@ -52,6 +52,14 @@ pub const GROUPS: &[Group] = &[
         ],
     },
     Group {
+        title: "Markdown",
+        rows: &[
+            ("Edit beside the preview", "Ctrl+E"),
+            ("Save (while editing)", "Ctrl+S"),
+            ("Undo / redo (while editing)", "Ctrl+Z / Ctrl+Y"),
+        ],
+    },
+    Group {
         title: "Select and copy",
         rows: &[
             ("Select text", "Drag on the page"),

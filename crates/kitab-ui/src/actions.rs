@@ -39,6 +39,8 @@ actions!(
         // Select and copy
         Copy,
         ClearSelection,
+        // Markdown
+        ToggleEdit,
         // Find
         Find,
         FindNext,
@@ -80,6 +82,8 @@ pub const WORKSPACE: &str = "Workspace";
 pub const PROMPT: &str = "PasswordPrompt";
 pub const PAGE_FIELD: &str = "PageField";
 pub const FIND_BAR: &str = "FindBar";
+/// The Markdown editor: typing keys are text here, not reader shortcuts.
+pub const MD_EDITOR: &str = "MdEditor";
 /// Settings and open menus: Escape closes them.
 pub const OVERLAY: &str = "Overlay";
 
@@ -136,6 +140,8 @@ pub fn bind_default_keys(cx: &mut App) {
         KeyBinding::new("alt-right", HistoryForward, r),
         KeyBinding::new("enter", ConfirmPage, Some(PAGE_FIELD)),
         KeyBinding::new("escape", CancelPage, Some(PAGE_FIELD)),
+        // Markdown
+        KeyBinding::new("ctrl-e", ToggleEdit, r),
         // Select and copy
         KeyBinding::new("ctrl-c", Copy, r),
         KeyBinding::new("escape", ClearSelection, r),
@@ -180,5 +186,33 @@ pub fn bind_default_keys(cx: &mut App) {
             "end",
         ]
         .map(|key| KeyBinding::new(key, NoAction, typing)),
+    );
+    // In the Markdown editor the reader's page keys move the caret instead,
+    // Ctrl+C copies the editor's selection and Esc ends editing.
+    let editor = Some(MD_EDITOR);
+    cx.bind_keys(
+        [
+            "n",
+            "p",
+            "j",
+            "k",
+            "/",
+            "space",
+            "shift-space",
+            "left",
+            "right",
+            "up",
+            "down",
+            "home",
+            "end",
+            "pageup",
+            "pagedown",
+            "ctrl-c",
+            "escape",
+            "alt-left",
+            "alt-right",
+            "ctrl-g",
+        ]
+        .map(|key| KeyBinding::new(key, NoAction, editor)),
     );
 }
