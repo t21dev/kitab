@@ -129,11 +129,10 @@ fn every_markdown_fixture_has_a_page_preview() {
         assert_eq!(t.height(), 256, "{name}");
         assert_eq!(t.width(), markdown::page_width(256), "{name}");
         assert!(t.has_content(), "{name}: text is drawn");
-        assert!(
-            start.elapsed() < Duration::from_secs(2),
-            "{name}: {:?}",
-            start.elapsed()
-        );
+        // Explorer gives a thumbnail a few seconds. The budget is for the
+        // release build; an unoptimised test build on a CI runner is slower.
+        let budget = Duration::from_secs(if cfg!(debug_assertions) { 6 } else { 2 });
+        assert!(start.elapsed() < budget, "{name}: {:?}", start.elapsed());
     }
 }
 
