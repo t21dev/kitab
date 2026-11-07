@@ -200,6 +200,8 @@ pub struct Reader {
     signatures: Option<Vec<kitab_core::SignatureCheck>>,
     /// Sign…: the next click on a page places the signature.
     placing: bool,
+    /// A page to show once the document is laid out (a library search hit).
+    pending_page: Option<u32>,
     /// The annotations already in the file, once the Marks panel asked.
     file_annots: Option<Vec<kitab_core::FileAnnot>>,
     /// Bookmarked pages (Ctrl+D), in page order.
@@ -286,6 +288,7 @@ impl Reader {
             file_size: None,
             signatures: None,
             placing: false,
+            pending_page: None,
             file_annots: None,
             bookmark_rows: Vec::new(),
             pages: pages::PagesState::default(),
@@ -438,6 +441,7 @@ impl Reader {
                     this.list.reset(info.page_count as usize);
                     this.info = Some(info);
                     this.status = Status::Open;
+                    this.index_text_later(cx);
                     cx.emit(ReaderEvent::Opened);
                     cx.notify();
                 }
@@ -471,6 +475,7 @@ impl Reader {
                 self.load_marks(cx);
                 self.load_bookmarks(cx);
                 self.check_signatures(cx);
+                self.index_text_later(cx);
                 cx.emit(ReaderEvent::Opened);
             }
             Err(OpenError::NeedsPassword) => self.status = Status::NeedsPassword { wrong: false },
@@ -690,6 +695,62 @@ impl Reader {
 
     pub fn jump_to(&mut self, page: u32, cx: &mut Context<Self>) {
         self.jump(page as usize, cx);
+    }
+
+    /// Show `page` now, or as soon as the document is open and laid out.
+    pub fn show_page(&mut self, page: u32, cx: &mut Context<Self>) {
+        if self.status == Status::Open && self.viewport.0 > 0.0 {
+            self.jump(page as usize, cx);
+        } else {
+            self.pending_page = Some(page);
+            self.restore = None;
+        }
+        cx.notify();
+    }
+
+    /// Keep the document's text for library search, a little after it
+    /// opens and off the UI thread; skipped when the file hasn't changed
+    /// since it was last read.
+    fn index_text_later(&mut self, cx: &mut Context<Self>) {
+        let (engine, library, path) =
+            (self.engine.clone(), self.library.clone(), self.path.clone());
+        let doc = self.doc;
+        let pages = self.page_count().min(5_000) as u32;
+        let source = self.md.as_ref().map(|m| m.source.to_string());
+        cx.spawn(async move |_, cx| {
+            cx.background_executor()
+                .timer(std::time::Duration::from_secs(3))
+                .await;
+            cx.background_spawn(async move {
+                let mtime = std::fs::metadata(&path)
+                    .and_then(|m| m.modified())
+                    .ok()
+                    .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                    .map_or(0, |d| d.as_millis() as i64);
+                if !library.needs_text(&path, mtime) {
+                    return;
+                }
+                let texts: Vec<String> = match (source, doc) {
+                    (Some(src), _) => vec![src],
+                    (None, Some(doc)) => {
+                        let mut out = Vec::with_capacity(pages as usize);
+                        for p in 0..pages {
+                            match engine.page_text(doc, p) {
+                                Some(t) => out.push(t),
+                                // Closed while reading it: try next time.
+                                None if p > 0 => return,
+                                None => out.push(String::new()),
+                            }
+                        }
+                        out
+                    }
+                    (None, None) => return,
+                };
+                library.index_text(&path, mtime, texts);
+            })
+            .await;
+        })
+        .detach();
     }
 
     pub fn can_go_back(&self) -> bool {
@@ -1417,6 +1478,9 @@ impl Render for Reader {
                     offset_in_item: px(offset),
                 });
                 self.last_page = page;
+            }
+            if let Some(page) = self.pending_page.take() {
+                self.jump(page as usize, cx);
             }
         }
         let inset = st.top_inset();

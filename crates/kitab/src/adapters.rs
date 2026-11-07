@@ -444,6 +444,85 @@ impl Library for StoreLibrary {
         .flatten()
     }
 
+    fn needs_text(&self, path: &Path, mtime: i64) -> bool {
+        let path = path.to_path_buf();
+        self.call(move |s| {
+            let store = s.store.as_ref()?;
+            let id = Self::doc_id(store, &path)?;
+            Some(store.text_indexed(id).ok()? != Some(mtime))
+        })
+        .flatten()
+        .unwrap_or(false)
+    }
+
+    fn index_text(&self, path: &Path, mtime: i64, pages: Vec<String>) {
+        let path = path.to_path_buf();
+        let _ = self.call(move |s| {
+            let store = s.store.as_mut()?;
+            let id = Self::doc_id(store, &path)?;
+            store.index_text(id, mtime, &pages).ok()
+        });
+    }
+
+    fn search(&self, query: &str, limit: usize) -> Vec<kitab_ui::LibraryHit> {
+        let query = query.to_string();
+        self.call(move |s| {
+            let store = s.store.as_ref()?;
+            let hits = store.search_text(&query, limit).ok()?;
+            Some(
+                hits.into_iter()
+                    .filter_map(|h| {
+                        let doc = store.document(h.document_id).ok()??;
+                        Some(kitab_ui::LibraryHit {
+                            title: title_or_name(doc.title.clone(), &doc.path),
+                            path: doc.path,
+                            format: doc.format,
+                            page: h.page,
+                            snippet: h.snippet,
+                        })
+                    })
+                    .collect(),
+            )
+        })
+        .flatten()
+        .unwrap_or_default()
+    }
+
+    fn add_reading(&self, path: &Path, day: &str, seconds: i64) {
+        let (path, day) = (path.to_path_buf(), day.to_string());
+        let _ = self.call(move |s| {
+            let store = s.store.as_mut()?;
+            let id = Self::doc_id(store, &path)?;
+            store.add_reading(id, &day, seconds).ok()
+        });
+    }
+
+    fn reading_stats(&self, today: &str) -> Option<kitab_ui::StatsView> {
+        let today = today.to_string();
+        self.call(move |s| {
+            let store = s.store.as_ref()?;
+            let st = store.reading_stats(&today, 28).ok()?;
+            let top = st
+                .top
+                .iter()
+                .filter_map(|(id, secs)| {
+                    let doc = store.document(*id).ok()??;
+                    Some((title_or_name(doc.title.clone(), &doc.path), doc.path, *secs))
+                })
+                .collect();
+            Some(kitab_ui::StatsView {
+                today_seconds: st.today_seconds,
+                week_seconds: st.week_seconds,
+                streak_days: st.streak_days,
+                longest_streak: st.longest_streak,
+                recent_days: st.recent_days,
+                top,
+                indexed: store.indexed_count().unwrap_or(0),
+            })
+        })
+        .flatten()
+    }
+
     fn bookmarks(&self, path: &Path) -> Vec<(i64, u32, String)> {
         let path = path.to_path_buf();
         self.call(move |s| {

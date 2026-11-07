@@ -72,7 +72,7 @@ pub(crate) fn fire_first_paint(window: &mut gpui::Window, cx: &mut gpui::App) {
     }
 }
 pub use icons::Assets;
-pub use library::{Library, NoLibrary, RecentItem, SessionTab};
+pub use library::{Library, LibraryHit, NoLibrary, RecentItem, SessionTab, StatsView};
 pub use settings::Settings;
 pub use style::Style;
 

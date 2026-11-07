@@ -3484,6 +3484,7 @@ dependencies = [
 name = "kitab-os"
 version = "0.0.1"
 dependencies = [
+ "libc",
  "serde_json",
  "windows 0.61.3",
 ]

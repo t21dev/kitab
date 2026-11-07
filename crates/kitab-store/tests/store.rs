@@ -643,3 +643,51 @@ fn optimize_reports_sizes_and_keeps_data() {
             .is_some()
     );
 }
+
+#[test]
+fn library_search_and_reading_stats() {
+    let mut store = Store::open_in_memory().unwrap();
+    let id = store
+        .upsert_document(
+            &fake_ident(9),
+            std::path::Path::new("/books/lease.pdf"),
+            &DocMeta::new(Format::Pdf),
+        )
+        .unwrap();
+    assert_eq!(store.text_indexed(id).unwrap(), None);
+    store
+        .index_text(
+            id,
+            1234,
+            &[
+                "Chapter one".into(),
+                "".into(),
+                "The rent is 25000 taka".into(),
+            ],
+        )
+        .unwrap();
+    assert_eq!(store.text_indexed(id).unwrap(), Some(1234));
+    let hits = store.search_text("rent 250", 10).unwrap();
+    assert_eq!(hits.len(), 1);
+    assert_eq!(hits[0].page, 2);
+    assert!(hits[0].snippet.contains("[rent]"), "{}", hits[0].snippet);
+    // Indexing again replaces, never doubles.
+    store
+        .index_text(id, 1235, &["The rent is due".into()])
+        .unwrap();
+    assert_eq!(store.search_text("rent", 10).unwrap().len(), 1);
+    assert!(store.search_text("\"", 10).unwrap().is_empty());
+
+    store.add_reading(id, "2026-11-05", 120).unwrap();
+    store.add_reading(id, "2026-11-06", 30).unwrap();
+    store.add_reading(id, "2026-11-07", 90).unwrap();
+    store.add_reading(id, "2026-11-07", 60).unwrap();
+    let s = store.reading_stats("2026-11-07", 7).unwrap();
+    assert_eq!(s.today_seconds, 150);
+    assert_eq!(s.week_seconds, 300);
+    // 11-06 had under a minute, so only today counts.
+    assert_eq!((s.streak_days, s.longest_streak), (1, 1));
+    assert_eq!(s.recent_days.len(), 7);
+    assert_eq!(s.recent_days[6], 150);
+    assert_eq!(s.top, vec![(id, 300)]);
+}

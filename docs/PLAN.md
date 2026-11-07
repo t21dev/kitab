@@ -476,7 +476,7 @@ Each phase ends with its exit criteria green in CI and a minor release. A phase 
 
 ### Phase 9: PDF tools, library search, stats → `0.9.0`
 
-> Pulled forward at the owner's request (2026-11-07): save a page as PDF/image/text, extract pages, merge, and split view shipped with the shell work, and the page tools (`kitab_mupdf::pages`: delete, move, rotate, compress, page numbers, watermark, extract text and images; tested; `shell/page_tools_ui.rs`), and encrypt/decrypt as the Password sheet (`shell/password_ui.rs`, `kitab_mupdf::tools::set_password`: AES-256, a copy, owner restrictions respected; tested). The rest of this phase is still to do.
+> Pulled forward at the owner's request (2026-11-07): save a page as PDF/image/text, extract pages, merge, and split view shipped with the shell work, and the page tools (`kitab_mupdf::pages`: delete, move, rotate, compress, page numbers, watermark, extract text and images; tested; `shell/page_tools_ui.rs`), and encrypt/decrypt as the Password sheet (`shell/password_ui.rs`, `kitab_mupdf::tools::set_password`: AES-256, a copy, owner restrictions respected; tested). Also done: library search (FTS5 `page_text`, schema 3, indexed after open off the UI thread, `shell/library_ui.rs`) and reading stats (`reading_days`, streaks, Home strip). Still to do: split by page ranges as its own tool, collections, smart collections, tags, watched folders.
 
 
 - Merge, split, extract, delete, reorder, rotate, compress, extract text and images, watermark, page numbers, encrypt/decrypt, print range. FTS5 library search, collections, smart collections, tags, watched folders, reading stats and streaks.

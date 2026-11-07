@@ -15,6 +15,35 @@ pub mod input;
 
 use std::path::PathBuf;
 
+/// Today's date on this computer's clock and time zone, "YYYY-MM-DD"
+/// (reading streaks count the user's own days).
+pub fn local_today() -> String {
+    #[cfg(windows)]
+    {
+        // SAFETY: GetLocalTime only fills the struct it is given.
+        let t = unsafe { windows::Win32::System::SystemInformation::GetLocalTime() };
+        format!("{:04}-{:02}-{:02}", t.wYear, t.wMonth, t.wDay)
+    }
+    #[cfg(unix)]
+    {
+        // SAFETY: time(NULL) reads the clock; localtime_r writes only into
+        // the zeroed struct passed to it and is thread-safe.
+        unsafe {
+            let now = libc::time(std::ptr::null_mut());
+            let mut tm: libc::tm = std::mem::zeroed();
+            if libc::localtime_r(&now, &mut tm).is_null() {
+                return String::new();
+            }
+            format!(
+                "{:04}-{:02}-{:02}",
+                tm.tm_year + 1900,
+                tm.tm_mon + 1,
+                tm.tm_mday
+            )
+        }
+    }
+}
+
 /// Kitab's data folder (PRIVACY.md): `%APPDATA%\t21\Kitab`,
 /// `~/Library/Application Support/dev.t21.kitab`, `$XDG_DATA_HOME/kitab`.
 /// A `portable` file next to the executable puts it in `data/` beside it.

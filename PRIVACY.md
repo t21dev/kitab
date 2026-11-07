@@ -10,7 +10,7 @@ Kitab Reader is local-first. This page says exactly what it does with your data.
   - **Online revocation checks** for digital signatures: contact the certificate authority's OCSP or CRL server named in the certificate.
   - **Links** you click open in your browser after Kitab asks the first time for each site.
 - **Signing keys stay local.** Kitab uses your certificate files or your system's certificate store to sign on your computer. It never sends keys or passwords anywhere and never stores a password unless you ask it to remember it in your system's credential store.
-- **What Kitab stores, in its data folder:** your library list, reading positions, tabs, bookmarks, highlights and notes, settings, a cache of page thumbnails, and a search index of your books' text, and the certificates you chose to trust for signatures (`trusted-certs/`). Delete the folder and all of it is gone. In portable mode, the folder sits next to the app.
+- **What Kitab stores, in its data folder:** your library list, reading positions, tabs, bookmarks, highlights and notes, settings, a cache of page thumbnails, and a search index of your books' text, how long you read each day, and the certificates you chose to trust for signatures (`trusted-certs/`). Delete the folder and all of it is gone. In portable mode, the folder sits next to the app.
 
 | Platform | Data folder |
 |---|---|

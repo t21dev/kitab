@@ -21,6 +21,33 @@ pub struct RecentItem {
     pub missing: bool,
 }
 
+/// A page that matches a library search.
+#[derive(Debug, Clone, PartialEq)]
+pub struct LibraryHit {
+    pub path: PathBuf,
+    pub title: String,
+    pub format: Format,
+    /// 0-based.
+    pub page: u32,
+    /// Words around the match; the matched words between `[` and `]`.
+    pub snippet: String,
+}
+
+/// Reading stats for Home.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct StatsView {
+    pub today_seconds: i64,
+    pub week_seconds: i64,
+    pub streak_days: u32,
+    pub longest_streak: u32,
+    /// Seconds per day, oldest first, ending today.
+    pub recent_days: Vec<i64>,
+    /// Read most in the last 30 days: (title, path, seconds).
+    pub top: Vec<(String, PathBuf, i64)>,
+    /// How many documents library search covers.
+    pub indexed: u64,
+}
+
 /// A tab to restore at start-up.
 #[derive(Debug, Clone, PartialEq)]
 pub struct SessionTab {
@@ -82,6 +109,29 @@ pub trait Library: Send + Sync + 'static {
     }
     /// The database's size in bytes, if there is one.
     fn size_bytes(&self) -> Option<u64> {
+        None
+    }
+    /// Whether `path`'s text needs (re)indexing for a file of `mtime`.
+    fn needs_text(&self, path: &Path, mtime: i64) -> bool {
+        let _ = (path, mtime);
+        false
+    }
+    /// Keep `path`'s page text for library search.
+    fn index_text(&self, path: &Path, mtime: i64, pages: Vec<String>) {
+        let _ = (path, mtime, pages);
+    }
+    /// Pages across the library that match `query`, best first.
+    fn search(&self, query: &str, limit: usize) -> Vec<LibraryHit> {
+        let _ = (query, limit);
+        Vec::new()
+    }
+    /// Add `seconds` of reading `path` on `day` ('YYYY-MM-DD', local).
+    fn add_reading(&self, path: &Path, day: &str, seconds: i64) {
+        let _ = (path, day, seconds);
+    }
+    /// Reading stats as of `today` ('YYYY-MM-DD', local).
+    fn reading_stats(&self, today: &str) -> Option<StatsView> {
+        let _ = today;
         None
     }
 }

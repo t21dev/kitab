@@ -36,17 +36,22 @@ use kitab_store::{DocumentId, Error, SCHEMA_VERSION, Store};
 use rusqlite::Connection;
 
 /// Frozen migrations, index = version - 1.
-const FROZEN: &[&str] = &[include_str!("schema/v1.sql"), include_str!("schema/v2.sql")];
+const FROZEN: &[&str] = &[
+    include_str!("schema/v1.sql"),
+    include_str!("schema/v2.sql"),
+    include_str!("schema/v3.sql"),
+];
 
 /// The live migrations, read straight from the source tree.
 const LIVE: &[&str] = &[
     include_str!("../src/migrations/0001_initial.sql"),
     include_str!("../src/migrations/0002_marks.sql"),
+    include_str!("../src/migrations/0003_search_stats.sql"),
 ];
 
 /// One fixture builder per released schema version.
 type Builder = fn(&Connection);
-const FIXTURES: &[(u32, Builder)] = &[(1, build_v1), (2, build_v2)];
+const FIXTURES: &[(u32, Builder)] = &[(1, build_v1), (2, build_v2), (3, build_v3)];
 
 fn normalise(s: &str) -> String {
     s.replace("\r\n", "\n")
@@ -94,6 +99,19 @@ fn build_v2(conn: &Connection) {
          INSERT INTO marks (document_id, page, kind, data, created_at)
          VALUES (7, 2, 'rect', '{{"color":"{amber}","width":2.0,"opacity":1.0,"rect":[10,20,30,40]}}', 2100);"#
     ))
+    .unwrap();
+}
+
+/// Schema 3: version 2's seed plus indexed page text and reading time.
+fn build_v3(conn: &Connection) {
+    build_v2(conn);
+    conn.execute_batch(FROZEN[2]).unwrap();
+    conn.execute_batch(
+        "PRAGMA user_version = 3;
+         INSERT INTO page_text (body, document_id, page) VALUES ('the lease ends in June', 7, 4);
+         INSERT INTO text_index (document_id, file_mtime, pages, indexed_at) VALUES (7, 1000, 12, 2200);
+         INSERT INTO reading_days (day, document_id, seconds) VALUES ('2026-11-06', 7, 600);",
+    )
     .unwrap();
 }
 
@@ -147,6 +165,16 @@ fn check_seed(store: &mut Store) {
     if let Some((_, m)) = marks.first() {
         assert_eq!(m.page, 2);
         assert_eq!(m.kind(), "rect");
+    }
+
+    // Schema 3: page text and reading time, when the version had them.
+    if store.text_indexed(id).unwrap().is_some() {
+        let hits = store.search_text("lease", 10).unwrap();
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].page, 4);
+        let stats = store.reading_stats("2026-11-07", 7).unwrap();
+        assert_eq!(stats.streak_days, 1);
+        assert_eq!(stats.week_seconds, 600);
     }
 }
 

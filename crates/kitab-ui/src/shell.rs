@@ -28,6 +28,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::time::Duration;
 
+mod library_ui;
 mod page_tools_ui;
 mod palette_ui;
 mod password_ui;
@@ -121,6 +122,8 @@ pub struct Workspace {
     /// Page tools…, when open.
     page_tools: Option<page_tools_ui::PageToolsSheet>,
     page_tools_serial: u64,
+    /// Home's library search and reading stats.
+    lib: library_ui::LibraryState,
 }
 
 /// The sidebar's panes for a document.
@@ -201,7 +204,9 @@ impl Workspace {
             sign: Default::default(),
             page_tools: None,
             page_tools_serial: 0,
+            lib: library_ui::LibraryState::new(cx),
         };
+        this.start_library(window, cx);
         // Leaving the hex field ends the edit.
         let hex_blur = cx.on_blur(&this.hex.focus, window, |ws, _, cx| {
             ws.hex.edit = None;
@@ -262,6 +267,7 @@ impl Workspace {
     }
 
     fn refresh_recent(&mut self, cx: &mut Context<Self>) {
+        self.refresh_stats(cx);
         let library = self.library.clone();
         cx.spawn(async move |this, cx| {
             let recent = cx.background_spawn(async move { library.recent(24) }).await;
@@ -1704,10 +1710,16 @@ impl Workspace {
                             .flex()
                             .items_center()
                             .gap(px(8.0))
+                            .child(self.search_field(st))
                             .child(settings_button)
                             .child(open_button),
                     ),
             );
+        // A query: its results instead of the lists.
+        if !self.lib.query.trim().is_empty() {
+            return page.child(self.search_results(st, cx)).into_any_element();
+        }
+        page = page.children(self.stats_strip(st));
         if !continuing.is_empty() {
             let mut row = div().flex().gap(px(16.0)).px(px(40.0)).pt(px(12.0));
             for (i, item) in continuing.into_iter().enumerate() {
@@ -2116,6 +2128,9 @@ impl Render for Workspace {
             .id("workspace")
             .key_context(WORKSPACE)
             .track_focus(&self.focus)
+            // Any input means someone is reading (reading time, library_ui.rs).
+            .capture_key_down(cx.listener(|ws, _: &gpui::KeyDownEvent, _, _| ws.note_input()))
+            .on_mouse_move(cx.listener(|ws, _: &gpui::MouseMoveEvent, _, _| ws.note_input()))
             .relative()
             .size_full()
             .flex()

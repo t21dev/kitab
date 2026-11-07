@@ -31,7 +31,9 @@ mod error;
 mod identity;
 mod marks;
 mod migrate;
+mod search;
 mod session;
+mod stats;
 mod store;
 mod upkeep;
 
@@ -41,7 +43,9 @@ pub use error::{Error, Result};
 pub use identity::{FileIdentity, QUICK_HASH_SPAN, identify};
 pub use marks::MarkId;
 pub use migrate::SCHEMA_VERSION;
+pub use search::{TextHit, fts_query};
 pub use session::{ClosedTab, ClosedTabId, LastSession, SessionId, SessionTab, TabRecord};
+pub use stats::{ReadingStats, STREAK_SECONDS, day_name, day_number, streaks};
 pub use store::Store;
 
 /// The closed-tab stack keeps this many entries; older ones are dropped.
