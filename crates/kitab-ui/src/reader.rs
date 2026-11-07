@@ -1196,6 +1196,19 @@ impl Render for Reader {
                 self.relayout(cx);
             }
         }
+        // The list's bounds above are last frame's: after a resize (or the
+        // sidebar opening) the new ones are known only once this frame is laid
+        // out. Look once more after it and redraw if they moved, or a fit mode
+        // would keep the old width until something else redraws (seen with
+        // EPUB pages that were already cached). Idle frames redraw nothing.
+        cx.on_next_frame(window, |r, _, cx| {
+            let vb = r.list.viewport_bounds();
+            let (w, h) = (f32::from(vb.size.width), f32::from(vb.size.height));
+            let moved = (w - r.viewport.0).abs() > 0.5 || (h - r.viewport.1).abs() > 0.5;
+            if w > 0.0 && h > 0.0 && moved {
+                cx.notify();
+            }
+        });
         if self.status == Status::Open && self.viewport.0 > 0.0 {
             if let Some(ReadingState {
                 locator: Locator::Fixed { page, y, .. },
