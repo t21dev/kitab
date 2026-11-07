@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Smoother scrolling through long PDFs: a page shows a quick soft render while its sharp one draws, the next and previous pages render ahead, and pages you scroll past are no longer rendered after the fact.
 - The header row is replaced by a quick dock floating over the page (sidebar, back/forward, zoom, fit, find, rotate, ⋯). Put it at the top, bottom (default, together with the page navigator), left or right in Settings › Appearance, and let it fade while you read.
 - Tabs can be listed in the sidebar instead of along the top (Settings › Appearance › Tabs), with full titles and the page you're on.
 - Minimal mode (F11): hide the tabs, sidebar, dock and page navigator for distraction-free reading; choose which in Settings › Reading. Point at the top edge for the window buttons and a way back.

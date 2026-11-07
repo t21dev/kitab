@@ -274,10 +274,21 @@ impl Engine {
     /// `req.generation` is older than the document's generation, checked when
     /// the job is queued, when it starts and when it finishes.
     pub fn render(&self, doc: DocId, req: RenderRequest) -> Result<Option<Bitmap>, String> {
+        self.render_when(doc, req, || true)
+    }
+
+    /// [`Engine::render`], also dropped (`Ok(None)`) when `wanted` says no at
+    /// those same three points: a page scrolled away while its job waited.
+    pub fn render_when(
+        &self,
+        doc: DocId,
+        req: RenderRequest,
+        wanted: impl Fn() -> bool + Send + Clone + 'static,
+    ) -> Result<Option<Bitmap>, String> {
         let (worker, _, generation) = self.entry(doc)?;
         let stale = {
             let generation = generation.clone();
-            move || req.generation < generation.load(Ordering::Relaxed)
+            move || req.generation < generation.load(Ordering::Relaxed) || !wanted()
         };
         if stale() {
             return Ok(None);

@@ -47,6 +47,12 @@ const ZOOM_STEPS: &[f32] = &[
 ];
 /// Rendered pages kept per tab (bytes). Phase 2 makes this a setting shared across tabs.
 const CACHE_BUDGET: usize = 96 * 1024 * 1024;
+/// A page with nothing to show yet first gets a quick render at this share of
+/// its sharp scale, so fast scrolling shows the page (soft) instead of paper.
+const PREVIEW_SCALE: f32 = 0.25;
+/// Pages kept wanted either side of the visible ones; queued renders further
+/// away are skipped when their turn comes.
+const WANTED_MARGIN: u32 = 2;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Status {
@@ -123,6 +129,13 @@ pub struct Reader {
     back: Vec<usize>,
     forward: Vec<usize>,
     _subs: Vec<Subscription>,
+    /// First and last page on screen last frame (packed hi << 32 | lo), read by
+    /// render workers to skip pages that scrolled away.
+    visible: Arc<std::sync::atomic::AtomicU64>,
+    /// `KITAB_TRACE_RENDER=1`: log render times and blank pages to stderr.
+    trace: bool,
+    blank_since: std::collections::HashMap<u32, std::time::Instant>,
+    last_frame: Option<std::time::Instant>,
     /// The password that opened this document, if it needed one (memory only).
     unlock: Option<String>,
     find: find::FindState,
@@ -175,6 +188,10 @@ impl Reader {
             back: Vec::new(),
             forward: Vec::new(),
             _subs: vec![blur],
+            visible: Arc::new(std::sync::atomic::AtomicU64::new(0)),
+            trace: std::env::var_os("KITAB_TRACE_RENDER").is_some(),
+            blank_since: std::collections::HashMap::new(),
+            last_frame: None,
             unlock: None,
             find: find::FindState::new(cx.focus_handle()),
             layers: layer::Layers::default(),
@@ -715,14 +732,41 @@ impl Reader {
             tile: None,
             generation: self.generation,
         };
+        let visible = self.visible.clone();
+        let page = ix as u32;
+        let wanted: crate::engine::Wanted = Arc::new(move || {
+            let v = visible.load(std::sync::atomic::Ordering::Relaxed);
+            let (lo, hi) = ((v & 0xFFFF_FFFF) as u32, (v >> 32) as u32);
+            page + WANTED_MARGIN >= lo && page <= hi + WANTED_MARGIN
+        });
+        let trace = self.trace;
         cx.spawn(async move |this, cx| {
             let result = cx
-                .background_spawn(async move { engine.render(doc, req) })
+                .background_spawn(async move {
+                    let started = std::time::Instant::now();
+                    let r = engine.render_when(doc, req, wanted);
+                    if trace {
+                        let what = match &r {
+                            Ok(Some(b)) => format!("{}x{}", b.width, b.height),
+                            Ok(None) => "skipped".into(),
+                            Err(_) => "failed".into(),
+                        };
+                        eprintln!(
+                            "render page={page} scale={:.2} {what} ms={}",
+                            req.scale,
+                            started.elapsed().as_millis()
+                        );
+                    }
+                    r
+                })
                 .await;
             let _ = this.update(cx, |this, cx| {
                 this.pending.remove(&key);
                 match result {
                     Ok(Some(bmp)) => {
+                        if let Some(since) = this.blank_since.remove(&page) {
+                            eprintln!("blank page={page} ms={}", since.elapsed().as_millis());
+                        }
                         let bytes = bmp.byte_size();
                         if let Some(buffer) = RgbaImage::from_raw(bmp.width, bmp.height, bmp.bgra) {
                             let image = Arc::new(RenderImage::new([Frame::new(buffer)]));
@@ -744,6 +788,19 @@ impl Reader {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> AnyElement {
+        // Frame timing: items of one frame are laid out microseconds apart, so
+        // a gap over 2 ms starts a new frame. (The list is borrowed here; ask
+        // it nothing.)
+        if self.trace {
+            let now = std::time::Instant::now();
+            if let Some(last) = self.last_frame {
+                let gap = now - last;
+                if gap.as_micros() > 2000 {
+                    eprintln!("frame us={}", gap.as_micros());
+                }
+            }
+            self.last_frame = Some(now);
+        }
         let st = Style::get(cx).clone();
         let size = self.page_size(ix);
         let ppt = self.px_per_pt(ix);
@@ -764,10 +821,40 @@ impl Reader {
                 Some(i)
             }
             None => {
+                let any = self.cache.any_for_page(ix as u32, self.rotation);
+                if any.is_none() {
+                    // Nothing yet: a quick soft render first, then the sharp one.
+                    let quick = (device_scale * PREVIEW_SCALE).max(0.05);
+                    let quick_key = PageKey {
+                        scale_key: scale_key(quick),
+                        ..key
+                    };
+                    self.request(ix, quick_key, quick, cx);
+                    if self.trace {
+                        self.blank_since
+                            .entry(ix as u32)
+                            .or_insert_with(std::time::Instant::now);
+                    }
+                }
                 self.request(ix, key, device_scale, cx);
-                self.cache.any_for_page(ix as u32, self.rotation)
+                any
             }
         };
+        // Render the neighbours ahead of time, so the next page is ready when
+        // it scrolls in (they queue behind the visible ones).
+        for n in [ix + 1, ix.wrapping_sub(1)] {
+            if n < self.page_count() {
+                let s = self.px_per_pt(n) * window.scale_factor();
+                let k = PageKey {
+                    page: n as u32,
+                    scale_key: scale_key(s),
+                    rotation: self.rotation,
+                };
+                if !self.cache.contains(&k) {
+                    self.request(n, k, s, cx);
+                }
+            }
+        }
         div()
             .w_full()
             .flex()
@@ -996,6 +1083,15 @@ impl Render for Reader {
             if self.status == Status::Open {
                 self.relayout(cx);
             }
+        }
+        {
+            let lo = self.list.logical_scroll_top().item_ix as u64;
+            let ppt = self.px_per_pt(lo as usize);
+            let page_h = (self.page_size(lo as usize).h * ppt + GAP).max(1.0);
+            let on_screen = (self.viewport.1 / page_h).ceil() as u64 + 1;
+            let hi = (lo + on_screen).min(self.page_count().saturating_sub(1) as u64);
+            self.visible
+                .store((hi << 32) | lo, std::sync::atomic::Ordering::Relaxed);
         }
         let page = self.current_page();
         if page != self.last_page {

@@ -10,10 +10,27 @@ use std::path::{Path, PathBuf};
 /// An open document inside the engine.
 pub type DocHandle = u64;
 
+/// Asked on the render worker whether a queued page is still worth drawing.
+pub type Wanted = std::sync::Arc<dyn Fn() -> bool + Send + Sync>;
+
 pub trait DocEngine: Send + Sync + 'static {
     fn open(&self, path: &Path, password: Option<&str>) -> Result<(DocHandle, DocInfo), OpenError>;
     /// `Ok(None)` when the request's generation is stale.
     fn render(&self, doc: DocHandle, req: RenderRequest) -> Result<Option<Bitmap>, String>;
+    /// [`DocEngine::render`], skipped (`Ok(None)`) if `wanted` returns false
+    /// when the job starts: the page left the screen while it waited.
+    fn render_when(
+        &self,
+        doc: DocHandle,
+        req: RenderRequest,
+        wanted: Wanted,
+    ) -> Result<Option<Bitmap>, String> {
+        if wanted() {
+            self.render(doc, req)
+        } else {
+            Ok(None)
+        }
+    }
     fn set_generation(&self, doc: DocHandle, generation: u64);
     fn links(&self, doc: DocHandle, page: u32) -> Vec<Link>;
     /// Calls `on_hit` for each hit in page order; stops when it returns false.

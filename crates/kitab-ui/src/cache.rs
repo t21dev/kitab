@@ -49,6 +49,11 @@ impl PageCache {
         Some(image)
     }
 
+    /// Whether this exact rendering is cached (no effect on eviction order).
+    pub fn contains(&self, key: &PageKey) -> bool {
+        self.map.contains_key(key)
+    }
+
     /// Any cached rendering of this page (another zoom), to show while the sharp one renders.
     pub fn any_for_page(&self, page: u32, rotation: u16) -> Option<Arc<RenderImage>> {
         self.order

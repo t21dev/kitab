@@ -515,6 +515,8 @@ fn run_steps(hwnd: isize, steps: &str) -> Result<(), String> {
                     "escape" => 0x1B,
                     "f3" => 0x72,
                     "f11" => 0x7A,
+                    "home" => 0x24,
+                    "pagedown" => 0x22,
                     "down" => 0x28,
                     "up" => 0x26,
                     "backspace" => 0x08,
@@ -560,6 +562,7 @@ fn shot(args: &[String]) -> i32 {
     let mut out = None;
     let mut wait = 2500u64;
     let mut steps = String::new();
+    let mut log: Option<String> = None;
     let mut cmd: Vec<String> = Vec::new();
     let mut it = args.iter();
     while let Some(a) = it.next() {
@@ -567,6 +570,8 @@ fn shot(args: &[String]) -> i32 {
             "--out" => out = it.next().cloned(),
             "--wait" => wait = it.next().and_then(|w| w.parse().ok()).unwrap_or(wait),
             "--do" => steps = it.next().cloned().unwrap_or_default(),
+            // The app's stderr goes to this file (render traces).
+            "--log" => log = it.next().cloned(),
             "--" => {
                 cmd = it.by_ref().cloned().collect();
                 break;
@@ -584,7 +589,10 @@ fn shot(args: &[String]) -> i32 {
     let mut child = match Command::new(exe)
         .args(rest)
         .stdout(Stdio::null())
-        .stderr(Stdio::null())
+        .stderr(match log.as_ref().map(std::fs::File::create) {
+            Some(Ok(f)) => Stdio::from(f),
+            _ => Stdio::null(),
+        })
         .spawn()
     {
         Ok(c) => c,
