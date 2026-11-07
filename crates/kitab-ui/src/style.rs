@@ -35,6 +35,8 @@ pub struct Style {
     pub book_text: f32,
     /// Drawing and markup tools are on.
     pub markup: bool,
+    /// The file info chip shows.
+    pub file_info: bool,
 }
 
 impl Global for Style {}
@@ -65,6 +67,7 @@ impl Style {
             code_theme: s.code_theme,
             book_text: s.book_text,
             markup: s.markup,
+            file_info: s.file_info,
         };
         style.resolve_accent();
         style
@@ -110,6 +113,7 @@ impl Style {
             code_theme: self.code_theme,
             book_text: self.book_text,
             markup: self.markup,
+            file_info: self.file_info,
         }
     }
 

@@ -579,6 +579,8 @@ impl Reader {
         self.layers = layer::Layers::default();
         let password = self.unlock.clone();
         self.open(password, cx);
+        // The file grew by the marks.
+        self.load_file_size(cx);
         cx.notify();
     }
 

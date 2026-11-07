@@ -256,6 +256,8 @@ pub struct Settings {
     pub book_text: f32,
     /// Drawing and markup tools (the dock's pen, Ctrl+Shift+D).
     pub markup: bool,
+    /// The file info chip at the bottom left (format, size, pages, paper).
+    pub file_info: bool,
 }
 
 impl Settings {
@@ -323,6 +325,7 @@ impl Default for Settings {
             code_theme: CodeTheme::Kitab,
             book_text: BOOK_TEXT_DEFAULT,
             markup: true,
+            file_info: true,
         }
     }
 }
@@ -351,6 +354,7 @@ struct File {
     /// Points.
     book_text_size: f32,
     markup_tools: bool,
+    file_info_chip: bool,
 }
 
 /// Books open at this text size (12 pt reads as 16 px at 100 %).
@@ -392,6 +396,7 @@ impl From<Settings> for File {
             code_colours: s.code_theme.id().to_string(),
             book_text_size: s.book_text,
             markup_tools: s.markup,
+            file_info_chip: s.file_info,
         }
     }
 }
@@ -426,6 +431,7 @@ impl Settings {
             code_theme: CodeTheme::from_id(&f.code_colours).unwrap_or_default(),
             book_text: clamp_book_text(f.book_text_size),
             markup: f.markup_tools,
+            file_info: f.file_info_chip,
         })
     }
 
@@ -462,6 +468,7 @@ mod tests {
             code_theme: CodeTheme::Dracula,
             book_text: 15.0,
             markup: false,
+            file_info: false,
         };
         assert_eq!(Settings::from_json(&s.to_json()), Ok(s));
     }

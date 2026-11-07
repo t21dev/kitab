@@ -474,6 +474,17 @@ fn reading(ws: &WeakEntity<Workspace>, st: &Style) -> AnyElement {
             st,
         ))
         .child(group(
+            "File info",
+            Some("A line at the bottom left with the format, file size, pages and paper size. Point at it for the file's location."),
+            well_row(
+                "Show file info",
+                "",
+                switch("file-info", st.file_info, st, change(ws, |s: &mut Style| s.file_info = !s.file_info)),
+                st,
+            ),
+            st,
+        ))
+        .child(group(
             "Drawing and markup",
             Some("Pen, highlighter, lines, arrows and shapes on PDFs, comics and XPS (Ctrl+Shift+D). In a PDF, Ctrl+S saves them into the file."),
             well_row(

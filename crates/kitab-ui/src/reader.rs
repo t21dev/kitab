@@ -10,6 +10,7 @@ mod editor;
 mod find;
 pub use dock::TOP_INSET;
 mod geom;
+mod info;
 mod layer;
 mod markdown;
 mod markup;
@@ -166,6 +167,8 @@ pub struct Reader {
     book: Option<book::BookState>,
     /// Drawing and markup on the pages.
     markup: markup::MarkupState,
+    /// The file's size in bytes, for the info chip (read off the UI thread).
+    file_size: Option<u64>,
 }
 
 impl Reader {
@@ -227,7 +230,9 @@ impl Reader {
             md: None,
             book: None,
             markup: markup::MarkupState::default(),
+            file_size: None,
         };
+        this.load_file_size(cx);
         this.open(None, cx);
         this
     }
@@ -1469,6 +1474,7 @@ impl Render for Reader {
             .children(self.edit_button(&st, cx))
             .children(self.find_bar(&st, window, cx))
             .children(self.markup_bar(&st, window, cx))
+            .children(self.info_chip(&st))
     }
 }
 
