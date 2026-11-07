@@ -52,6 +52,8 @@ pub(super) struct MdState {
     pub dir: PathBuf,
     /// `<details>` the reader has opened, by block and position.
     pub open_details: HashSet<u64>,
+    /// The file's modified time when last read (live reload, `live.rs`).
+    pub mtime: Option<std::time::SystemTime>,
 }
 
 /// What a block needs while it draws.

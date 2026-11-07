@@ -444,6 +444,7 @@ Each phase ends with its exit criteria green in CI and a minor release. A phase 
 
 - GFM rendering, code highlighting, Mermaid, math, frontmatter, sanitiser, links and anchors, live reload, md-viewer-pwa parity checklist.
 - Exit: G1–G7; `md/10-large.md` S4 within budget.
+- Done since: live reload (`reader/live.rs`): the showing tab's file is checked once a second (metadata only, off the UI thread), re-read and re-parsed off the UI thread when its modified time changes, and shown in place; tabs in the background and the editor are left alone.
 
 ### Phase 6: Annotations → `0.6.0`
 

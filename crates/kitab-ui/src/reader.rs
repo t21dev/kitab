@@ -16,6 +16,7 @@ pub use marks_list::{MarkRow, MarkSource};
 mod geom;
 mod info;
 mod layer;
+mod live;
 mod markdown;
 mod marks_list;
 mod markup;
@@ -186,6 +187,10 @@ pub struct Reader {
     pages: pages::PagesState,
     /// Presentation mode (F5), when on.
     present: Option<present::Present>,
+    /// This is the tab showing (Markdown live reload looks at its file).
+    watched: bool,
+    /// Bumped to end a live-reload loop.
+    watch_gen: u64,
 }
 
 /// What a page render is for: the reading view (a quick preview or the sharp
@@ -260,6 +265,8 @@ impl Reader {
             bookmark_rows: Vec::new(),
             pages: pages::PagesState::default(),
             present: None,
+            watched: false,
+            watch_gen: 0,
         };
         this.load_file_size(cx);
         this.open(None, cx);
@@ -359,6 +366,7 @@ impl Reader {
                     if meta.len() > MAX_BYTES {
                         return Err(OpenError::Unsupported);
                     }
+                    let mtime = meta.modified().ok();
                     let bytes = std::fs::read(&path).map_err(|_| OpenError::NotFound)?;
                     let text = String::from_utf8_lossy(&bytes);
                     let doc = kitab_md::parse(&text);
@@ -376,11 +384,11 @@ impl Reader {
                         right_to_left: false,
                     };
                     let saved = library.opened(&path, &info);
-                    Ok((doc, info, saved, text.into_owned()))
+                    Ok((doc, info, saved, text.into_owned(), mtime))
                 })
                 .await;
             let _ = this.update(cx, |this, cx| match loaded {
-                Ok((doc, info, saved, source)) => {
+                Ok((doc, info, saved, source, mtime)) => {
                     this.restore = saved;
                     let dir = this
                         .path
@@ -394,7 +402,9 @@ impl Reader {
                         open_details: Default::default(),
                         source: source.into(),
                         edit: None,
+                        mtime,
                     });
+                    this.start_watch(cx);
                     if let Some(state) = this.restore {
                         this.zoom = state.zoom;
                     }

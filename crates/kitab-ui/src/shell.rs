@@ -294,6 +294,7 @@ impl Workspace {
                 self.tools.split = self.active_reader().cloned();
             }
             self.active = Some(ix);
+            self.watch_active(cx);
             self.save_session(cx);
             let title = t.read(cx).title();
             window.set_window_title(&format!("{title} · Kitab"));
@@ -302,11 +303,23 @@ impl Workspace {
         cx.notify();
     }
 
+    /// Only the tab showing looks at its file for changes (Markdown live
+    /// reload); the split view's other pane shows too.
+    fn watch_active(&mut self, cx: &mut Context<Self>) {
+        let active = self.active;
+        let split = self.tools.split.clone();
+        for (i, t) in self.tabs.clone().into_iter().enumerate() {
+            let on = Some(i) == active || split.as_ref() == Some(&t);
+            t.update(cx, |r, cx| r.set_watched(on, cx));
+        }
+    }
+
     fn show_home(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.active.is_some() {
             self.home_serial += 1;
         }
         self.active = None;
+        self.watch_active(cx);
         self.refresh_recent(cx);
         self.save_session(cx);
         window.set_window_title("Kitab");
