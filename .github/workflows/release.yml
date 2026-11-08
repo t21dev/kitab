@@ -159,8 +159,19 @@ jobs:
       contents: write
     container:
       image: ghcr.io/flathub-infra/flatpak-github-actions:freedesktop-25.08
-      options: --privileged
+      # The runner's preinstalled tools, mounted to be deleted: the SDK, LLVM
+      # and the Rust build don't fit beside them.
+      options: >-
+        --privileged
+        -v /usr/share/dotnet:/hostfree/dotnet
+        -v /usr/local/lib/android:/hostfree/android
+        -v /opt/ghc:/hostfree/ghc
+        -v /opt/hostedtoolcache:/hostfree/toolcache
     steps:
+      - name: Free disk space
+        run: |
+          rm -rf /hostfree/dotnet/* /hostfree/android/* /hostfree/ghc/* /hostfree/toolcache/* || true
+          df -h / | tail -1
       - uses: actions/checkout@v4
       - name: Patched gpui and offline crate sources
         run: |
