@@ -206,31 +206,18 @@ def deb(v: str, root: pathlib.Path) -> None:
     size = sum(f.stat().st_size for f in stage.rglob("*") if f.is_file()) // 1024
     depends = deb_depends(REL / "kitab") if shutil.which("dpkg") else ""
     (stage / "DEBIAN" / "control").write_text(
-        "Package: kitab
-"
-        f"Version: {v}
-"
-        f"Architecture: {arch}
-"
-        "Maintainer: t21 dev <hello@t21.dev>
-"
-        f"Installed-Size: {size}
-"
-        + (f"Depends: {depends}
-" if depends else "")
-        + "Section: text
-Priority: optional
-"
-        "Homepage: https://github.com/t21dev/kitab
-"
-        "Description: Fast, native reader for PDF, ebooks, comics and Markdown
-"
-        " Kitab Reader opens PDF, EPUB, MOBI, FB2, CBZ, XPS, Markdown and text.
-"
-        " Mark up, fill forms, sign and print, with a library that remembers
-"
-        " where you stopped. No telemetry.
-",
+        "Package: kitab\n"
+        f"Version: {v}\n"
+        f"Architecture: {arch}\n"
+        "Maintainer: t21 dev <hello@t21.dev>\n"
+        f"Installed-Size: {size}\n"
+        + (f"Depends: {depends}\n" if depends else "")
+        + "Section: text\nPriority: optional\n"
+        "Homepage: https://github.com/t21dev/kitab\n"
+        "Description: Fast, native reader for PDF, ebooks, comics and Markdown\n"
+        " Kitab Reader opens PDF, EPUB, MOBI, FB2, CBZ, XPS, Markdown and text.\n"
+        " Mark up, fill forms, sign and print, with a library that remembers\n"
+        " where you stopped. No telemetry.\n",
         encoding="utf8",
     )
     out = DIST / f"Kitab_{v}_{arch}.deb"

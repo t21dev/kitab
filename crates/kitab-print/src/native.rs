@@ -33,7 +33,9 @@ pub enum Failure {
 #[cfg(target_os = "macos")]
 pub use mac::print_with_dialog;
 
+// objc 0.2's macros test `feature = "cargo-clippy"`, which newer Rust flags.
 #[cfg(target_os = "macos")]
+#[allow(unexpected_cfgs)]
 mod mac {
     use super::{Failure, Outcome};
     use objc::runtime::{NO, Object, YES};
