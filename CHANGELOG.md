@@ -8,10 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Settings › Appearance › Interface size: 90 % to 200 % of your system's scaling (100 % is the default and looks as before). Text, buttons, icons and pages grow together, at once. In a narrow window Home's Settings and Open file… become icon buttons.
 - Settings › Home: show the books as Covers or a List (a small cover, title, author, format and progress on each row), choose the cover size, and turn the reading stats and Continue reading on or off. A small Home at the top of the page follows every choice.
 - Search in Settings: type in the box above the sections to list the matching settings; pick one (or press Enter) to open its section.
 
 ### Changed
+- Kitab uses next to no CPU while you read or leave it open: it used to redraw its window on every screen refresh even when nothing changed (about 2 % of a core). Scrolling costs about a third of what it did.
+- Less memory while reading: fewer pages far from the one you're on are kept (those on screen and the next three always are), and MuPDF's cache of fonts and images is kept to 48 MB.
 - The tab count sits at the right of the title bar. The + isn't shown when nothing is open.
 - Book covers on Home fade in, and cards scrolled straight past aren't drawn; while a cover loads its place is a quiet block instead of a generated cover.
 - Home's pinned header has room below the shelf chips and a thin line once the books scroll beneath it. Its search box is the same height as the buttons beside it.

@@ -11,6 +11,9 @@ use serde::{Deserialize, Serialize};
 /// The settings format version, independent of the app version (PLAN.md §11).
 pub const SETTINGS_VERSION: u32 = 1;
 
+/// The interface sizes on offer (Settings › Appearance), in percent.
+pub const UI_SCALES: [u16; 7] = [90, 100, 110, 125, 150, 175, 200];
+
 /// How Home shows the books (Settings › Home).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -483,6 +486,8 @@ pub struct Settings {
     pub cover_size: CoverSize,
     pub home_stats: bool,
     pub home_continue: bool,
+    /// Interface size, in percent of the system's scaling (100 = as is).
+    pub ui_scale: u16,
     /// The main window's last place (none before the first close).
     pub window: Option<WindowPlace>,
 }
@@ -567,6 +572,7 @@ impl Default for Settings {
             cover_size: CoverSize::Medium,
             home_stats: true,
             home_continue: true,
+            ui_scale: 100,
             window: None,
         }
     }
@@ -616,6 +622,7 @@ struct File {
     cover_size: CoverSize,
     home_stats: bool,
     home_continue: bool,
+    ui_scale: u16,
     window: Option<WindowPlace>,
 }
 
@@ -706,6 +713,7 @@ impl From<Settings> for File {
             cover_size: s.cover_size,
             home_stats: s.home_stats,
             home_continue: s.home_continue,
+            ui_scale: s.ui_scale,
             window: s.window,
         }
     }
@@ -756,6 +764,11 @@ impl Settings {
             cover_size: f.cover_size,
             home_stats: f.home_stats,
             home_continue: f.home_continue,
+            ui_scale: if UI_SCALES.contains(&f.ui_scale) {
+                f.ui_scale
+            } else {
+                100
+            },
             window: f.window,
         })
     }
@@ -825,6 +838,7 @@ mod tests {
             cover_size: CoverSize::Large,
             home_stats: false,
             home_continue: false,
+            ui_scale: 125,
             window: Some(WindowPlace {
                 x: 40.0,
                 y: 30.0,

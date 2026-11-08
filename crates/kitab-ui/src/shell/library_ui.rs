@@ -188,8 +188,12 @@ impl Workspace {
 
     /// The search field for Home's header.
     pub(super) fn search_field(&self, st: &Style) -> AnyElement {
+        // Shrinks before the buttons beside it do, in a narrow window or at
+        // a large interface size.
         div()
-            .w(px(300.0))
+            .flex_1()
+            .min_w(px(120.0))
+            .max_w(px(300.0))
             .flex()
             .items_center()
             .gap(px(8.0))

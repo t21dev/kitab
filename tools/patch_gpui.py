@@ -19,6 +19,8 @@ an environment switch to turn it off so it can still be benchmarked:
           then WARP (software). KITAB_GPU=test-fallback goes straight to WARP.
   Frames  Windows are woken by the vsync thread only when something changed or
           an animation waits for a frame (idle CPU 0 %). KITAB_GPUI_FULL has no say.
+  Scale   An interface size factor (Settings › Appearance) multiplies every
+          window's scale; gpui::kitab_set_ui_scale sets it.
   Display A window reopened on a monitor with a different scale is placed with
           that monitor's scale.
   RTL     Right-to-left glyph runs (Arabic, Hebrew) are placed at DirectWrite's
@@ -483,6 +485,80 @@ struct WindowInvalidatorInner {"""),
                             let _ = RedrawWindow(Some(hwnd.as_raw()), None, None, RDW_INVALIDATE);
                         }
                     }"""),
+    ])
+    # 10. Interface size (Kitab's Settings › Appearance): every window's scale
+    #     is the monitor's times the user's factor, like a browser's zoom, so
+    #     text, icons, spacing and pages all grow together. A DPI message with
+    #     the window's own DPI and rectangle applies a new factor at once; the
+    #     handler now always lays the window out again (a same-size
+    #     SetWindowPos sends no WM_SIZE).
+    edit("src/window.rs", [
+        ("""struct WindowInvalidatorInner {""",
+         """/// Kitab patch: the interface size the user chose (1.0 = the system's),
+/// as f32 bits. Windows multiplies every window's scale by it.
+static KITAB_UI_SCALE: std::sync::atomic::AtomicU32 =
+    std::sync::atomic::AtomicU32::new(0x3f80_0000);
+
+/// Kitab patch: set the interface size (0.5 to 3.0 times the system's).
+/// New windows use it; existing ones on their next DPI message.
+pub fn kitab_set_ui_scale(scale: f32) {
+    let scale = if scale.is_finite() { scale.clamp(0.5, 3.0) } else { 1.0 };
+    KITAB_UI_SCALE.store(scale.to_bits(), std::sync::atomic::Ordering::Relaxed);
+}
+
+/// Kitab patch: the interface size factor.
+pub fn kitab_ui_scale() -> f32 {
+    f32::from_bits(KITAB_UI_SCALE.load(std::sync::atomic::Ordering::Relaxed))
+}
+
+struct WindowInvalidatorInner {"""),
+    ])
+    edit("src/platform/windows/window.rs", [
+        ("""            let monitor_dpi = unsafe { GetDpiForWindow(hwnd) } as f32;
+            monitor_dpi / USER_DEFAULT_SCREEN_DPI as f32
+        };""",
+         """            let monitor_dpi = unsafe { GetDpiForWindow(hwnd) } as f32;
+            // Kitab patch: times the interface size.
+            monitor_dpi / USER_DEFAULT_SCREEN_DPI as f32 * crate::kitab_ui_scale()
+        };"""),
+    ])
+    edit("src/platform/windows/events.rs", [
+        ("""        let new_scale_factor = new_dpi / USER_DEFAULT_SCREEN_DPI as f32;""",
+         """        // Kitab patch: times the interface size.
+        let new_scale_factor = new_dpi / USER_DEFAULT_SCREEN_DPI as f32 * crate::kitab_ui_scale();"""),
+        ("""        // When maximized, SetWindowPos doesn't send WM_SIZE, so we need to manually
+        // update the size and call the resize callback
+        if is_maximized {
+            let device_size = size(DevicePixels(width), DevicePixels(height));
+            self.handle_size_change(device_size, new_scale_factor, true);
+        }""",
+         """        // When maximized, SetWindowPos doesn't send WM_SIZE, so we need to manually
+        // update the size and call the resize callback. Kitab patch: nor does
+        // a move to the same rectangle (a new interface size), so always.
+        // The client area as it ended up (a minimum size may have grown it).
+        let _ = (is_maximized, width, height);
+        let mut client = RECT::default();
+        unsafe { GetClientRect(handle, &mut client) }.log_err();
+        let device_size = size(
+            DevicePixels(client.right - client.left),
+            DevicePixels(client.bottom - client.top),
+        );
+        self.handle_size_change(device_size, new_scale_factor, true);"""),
+        ("""        let min_size = lock.min_size?;
+        let scale_factor = lock.scale_factor;""",
+         """        let min_size = lock.min_size?;
+        // Kitab patch: the smallest window is set in screen terms, not grown
+        // with the interface size (at 200 % it wouldn't fit the screen).
+        let scale_factor = lock.scale_factor / crate::kitab_ui_scale();"""),
+    ])
+    # Displays measure in the same scaled points as windows, so positions,
+    # sizes and "which monitor is this on" agree at any interface size.
+    edit("src/platform/windows/display.rs", [
+        ("""    Ok(dpi_x as f32 / USER_DEFAULT_SCREEN_DPI as f32)
+}""",
+         """    // Kitab patch: times the interface size, like every window's scale.
+    Ok(dpi_x as f32 / USER_DEFAULT_SCREEN_DPI as f32 * crate::kitab_ui_scale())
+}"""),
     ])
     print(f"patched gpui copy: {DEST}")
 

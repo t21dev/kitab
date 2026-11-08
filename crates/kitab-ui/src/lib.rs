@@ -81,7 +81,7 @@ impl gpui::Global for Unrevealed {}
 /// How long a slow first page may keep the window hidden.
 const REVEAL_AT_LATEST: std::time::Duration = std::time::Duration::from_millis(700);
 
-fn hwnd_of(window: &gpui::Window) -> Option<isize> {
+pub(crate) fn hwnd_of(window: &gpui::Window) -> Option<isize> {
     #[cfg(windows)]
     {
         use raw_window_handle::{HasWindowHandle, RawWindowHandle};
@@ -200,6 +200,8 @@ pub fn open_main_window(
     save_settings: Arc<dyn Fn(String) + Send + Sync>,
     files: Vec<PathBuf>,
 ) -> bool {
+    // The interface size, before any window exists (gpui patch 10).
+    gpui::kitab_set_ui_scale(f32::from(settings.ui_scale) / 100.0);
     cx.set_global(Style::from_settings(theme, &settings));
     cx.set_global(shell::SettingsSink(save_settings));
     actions::bind_default_keys(cx);

@@ -408,6 +408,28 @@ fn appearance(
         ))
         .child(group("Density", None, density_cards, st))
         .child(group(
+            "Interface size",
+            Some("Text, buttons, icons and pages together. 100 % follows your system's own scaling."),
+            div()
+                .id("ui-scale")
+                .flex()
+                .child(segmented(
+                    crate::settings::UI_SCALES
+                        .into_iter()
+                        .map(|v| {
+                            (
+                                SharedString::from(format!("{v} %")),
+                                st.ui_scale == v,
+                                change(ws, move |s: &mut Style| s.ui_scale = v),
+                            )
+                        })
+                        .collect(),
+                    st,
+                ))
+                .into_any_element(),
+            st,
+        ))
+        .child(group(
             "Tabs",
             None,
             div().flex().flex_col().gap(px(12.0)).child(tab_cards).child(well_row(

@@ -1833,14 +1833,18 @@ impl Workspace {
     }
 
     fn home(&mut self, st: &Style, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
-        // Home's two buttons, alike: an icon and a word each.
+        // Home's two buttons, alike: an icon and a word each; just the icon
+        // when Home is narrow (a small window, or a large interface size).
+        let narrow = self.home.width > 0.0 && self.home.width < 640.0;
         let button = |id: &'static str, name: &str, label: &'static str| {
             crate::kbd::stop_solid(div().id(id), st)
                 .flex()
                 .items_center()
+                .justify_center()
                 .gap(px(8.0))
                 .h(st.px(|m| m.control_height))
-                .px(px(14.0))
+                .when(narrow, |d| d.w(st.px(|m| m.control_height)).tip(label))
+                .when(!narrow, |d| d.px(px(14.0)))
                 .rounded(st.px(|m| m.control_radius))
                 .bg(st.c(|c| c.raised))
                 .shadow(st.elev())
@@ -1853,7 +1857,7 @@ impl Workspace {
                         .size(px(15.0))
                         .text_color(st.c(|c| c.muted)),
                 )
-                .child(label)
+                .when(!narrow, |d| d.child(label))
         };
         let open_button = button("open", "folder-open", "Open file…")
             .on_click(cx.listener(|ws, _, window, cx| ws.open_dialog(window, cx)));
@@ -1924,7 +1928,8 @@ impl Workspace {
                     .pt(px(32.0))
                     .child(
                         div()
-                            .flex_1()
+                            .flex_none()
+                            .pr(px(16.0))
                             .flex()
                             .items_baseline()
                             .gap(px(14.0))
@@ -1946,12 +1951,15 @@ impl Workspace {
                     )
                     .child(
                         div()
+                            .flex_1()
+                            .min_w_0()
                             .flex()
+                            .justify_end()
                             .items_center()
                             .gap(px(8.0))
                             .child(self.search_field(st))
-                            .child(settings_button)
-                            .child(open_button),
+                            .child(settings_button.flex_none())
+                            .child(open_button.flex_none()),
                     ),
             )
             .child(self.shelf_chips(st, cx));
@@ -2772,7 +2780,27 @@ impl Render for Workspace {
 impl Workspace {
     /// Change the look, redraw, and save settings.json off the UI thread.
     pub(crate) fn change_style(&mut self, f: &dyn Fn(&mut Style), cx: &mut Context<Self>) {
+        let scale_before = Style::get(cx).ui_scale;
         f(cx.global_mut::<Style>());
+        let scale = Style::get(cx).ui_scale;
+        if scale != scale_before {
+            // A new interface size: the windows take it now. The message is
+            // sent once this update is over (the window answers it at once).
+            gpui::kitab_set_ui_scale(f32::from(scale) / 100.0);
+            let windows: Vec<_> = cx.windows();
+            cx.spawn(async move |_, cx| {
+                for w in windows {
+                    let hwnd = w
+                        .update(cx, |_, window, _| crate::hwnd_of(window))
+                        .ok()
+                        .flatten();
+                    if let Some(hwnd) = hwnd {
+                        kitab_os::refresh_window_scale(hwnd);
+                    }
+                }
+            })
+            .detach();
+        }
         let json = Style::get(cx).settings().to_json();
         if cx.has_global::<SettingsSink>() {
             let sink = cx.global::<SettingsSink>().0.clone();

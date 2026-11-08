@@ -236,3 +236,36 @@ pub fn set_window_placement(hwnd: isize, rect: [i32; 4], maximized: bool) -> boo
         false
     }
 }
+
+/// Make the window take a new interface size now: send it a DPI-changed
+/// message with its own DPI and rectangle, which GPUI (patch 10) answers by
+/// recomputing its scale and laying the window out again. Call it outside
+/// any GPUI update (the window handles the message before this returns).
+/// Windows only.
+pub fn refresh_window_scale(hwnd: isize) {
+    #[cfg(windows)]
+    {
+        use windows::Win32::Foundation::{HWND, LPARAM, RECT, WPARAM};
+        use windows::Win32::UI::HiDpi::GetDpiForWindow;
+        use windows::Win32::UI::WindowsAndMessaging::{GetWindowRect, SendMessageW, WM_DPICHANGED};
+        let hwnd = HWND(hwnd as *mut core::ffi::c_void);
+        // SAFETY: the app's own window; `rect` outlives the synchronous send.
+        unsafe {
+            let dpi = GetDpiForWindow(hwnd) as usize;
+            let mut rect = RECT::default();
+            if dpi == 0 || GetWindowRect(hwnd, &mut rect).is_err() {
+                return;
+            }
+            SendMessageW(
+                hwnd,
+                WM_DPICHANGED,
+                Some(WPARAM(dpi | (dpi << 16))),
+                Some(LPARAM(&rect as *const RECT as isize)),
+            );
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = hwnd;
+    }
+}

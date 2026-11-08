@@ -35,6 +35,11 @@ const INDEX: &[(Section, &str, &str)] = &[
         "Density",
         "compact dense standard spacing size",
     ),
+    (
+        Section::Appearance,
+        "Interface size",
+        "scale zoom bigger smaller dpi 125 150 200 text size ui",
+    ),
     (Section::Appearance, "Tabs", "tab bar"),
     (
         Section::Appearance,

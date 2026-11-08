@@ -59,6 +59,8 @@ pub struct Style {
     pub cover_size: crate::settings::CoverSize,
     pub home_stats: bool,
     pub home_continue: bool,
+    /// Interface size in percent (Settings › Appearance).
+    pub ui_scale: u16,
     /// The main window's last place, saved with the settings.
     pub window: Option<crate::settings::WindowPlace>,
 }
@@ -106,6 +108,7 @@ impl Style {
             cover_size: s.cover_size,
             home_stats: s.home_stats,
             home_continue: s.home_continue,
+            ui_scale: s.ui_scale,
             window: s.window,
         };
         style.resolve_accent();
@@ -181,6 +184,7 @@ impl Style {
             cover_size: self.cover_size,
             home_stats: self.home_stats,
             home_continue: self.home_continue,
+            ui_scale: self.ui_scale,
             window: self.window,
         }
     }
