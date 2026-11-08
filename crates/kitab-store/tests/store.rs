@@ -469,7 +469,7 @@ fn non_unicode_paths_are_an_error_not_a_panic() {
     assert!(matches!(err, kitab_store::Error::NonUnicodePath));
 }
 
-/// The start-up queries on a big library (PLAN.md Â§6.3). Prints the timing;
+/// The start-up queries on a big library (PLAN.md §6.3). Prints the timing;
 /// the assertion is loose so a slow CI machine does not flake.
 #[test]
 fn startup_queries_on_10k_documents() {

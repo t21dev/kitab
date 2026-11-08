@@ -2,7 +2,7 @@
 
 //! Phase 4 formats against the fixture corpus: every EPUB in expected.json
 //! opens (or fails) as recorded, with the recorded page count at the
-//! 400 Ãƒâ€” 600 pt, 11 pt layout, contents size and title; page 1 has ink; the
+//! 400 × 600 pt, 11 pt layout, contents size and title; page 1 has ink; the
 //! MANIFEST needles are found. Image files are refused (Kitab doesn't view
 //! them). AGENTS.md rule 21: no expectations retyped here.
 
@@ -161,7 +161,7 @@ fn needles_are_found_in_books() {
 
 #[test]
 fn the_large_book_opens_within_budget() {
-    // S4 (PLAN.md Ã‚Â§6) budgets the whole open-to-first-page; the engine part
+    // S4 (PLAN.md §6) budgets the whole open-to-first-page; the engine part
     // must stay well inside it.
     let start = Instant::now();
     let (id, info) = engine()
@@ -170,7 +170,9 @@ fn the_large_book_opens_within_budget() {
     let _ = page_one(id);
     let took = start.elapsed();
     eprintln!("06: {} pages, open + page 1 in {took:?}", info.page_count);
-    assert!(took < Duration::from_secs(3), "{took:?}");
+    // Debug builds on CI runners are several times slower than release.
+    let budget = if cfg!(debug_assertions) { 10 } else { 3 };
+    assert!(took < Duration::from_secs(budget), "{took:?}");
     engine().close(id);
 }
 

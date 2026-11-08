@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Print assets/sample/welcome.html to assets/sample/welcome.pdf with
 Microsoft Edge (headless), the guide a new Home offers. Headings become the
 PDF's outline (bookmarks). Run after editing the HTML; the PDF is committed

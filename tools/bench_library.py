@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Large-library memory scenario (Windows): what Kitab holds with hundreds of
 documents on Home, and whether it gives memory back while you only read.
 
