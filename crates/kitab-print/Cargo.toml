@@ -21,6 +21,15 @@ windows = { version = "0.61", features = [
     "Win32_UI_WindowsAndMessaging",
 ] }
 
+[target.'cfg(target_os = "macos")'.dependencies]
+# The same objc crate gpui uses, for PDFKit's print panel.
+objc = "0.2"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+# The same ashpd gpui uses (its file dialogs), for the print portal.
+ashpd = { version = "0.11", default-features = false, features = ["async-std"] }
+futures-lite = "2"
+
 # unsafe is allowed in this crate only for the OS print calls, each with a
 # SAFETY comment (AGENTS.md rule 10).
 [lints.rust]

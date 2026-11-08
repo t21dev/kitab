@@ -1,0 +1,70 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Flatpak manifest for Kitab Reader, built from source and offline.
+#
+#   python3 tools/patch_gpui.py               # the patched gpui (vendor/)
+#   packaging/flatpak/generate-sources.sh     # every crate, for the offline build
+#   flatpak-builder --user --install --install-deps-from=flathub --force-clean \
+#     build-dir packaging/flatpak/dev.t21.kitab.yml
+#   flatpak run dev.t21.kitab
+#
+# Run generate-sources.sh again whenever Cargo.lock changes.
+
+id: dev.t21.kitab
+runtime: org.freedesktop.Platform
+runtime-version: '25.08'
+sdk: org.freedesktop.Sdk
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.rust-stable
+  # libclang, for MuPDF's bindings (bindgen).
+  - org.freedesktop.Sdk.Extension.llvm20
+command: kitab
+
+finish-args:
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --share=ipc
+  - --device=dri
+  # Your documents, read and written in place: marks, form fields and
+  # signatures are saved into the file, and watched folders are scanned.
+  # External drives too. Nothing else, and no network: Flatpak brings the
+  # updates, so Kitab doesn't check for them.
+  - --filesystem=home
+  - --filesystem=/media
+  - --filesystem=/run/media
+  - --filesystem=/mnt
+
+modules:
+  - name: kitab
+    buildsystem: simple
+    build-options:
+      append-path: /usr/lib/sdk/rust-stable/bin:/usr/lib/sdk/llvm20/bin
+      env:
+        CARGO_HOME: /run/build/kitab/cargo
+        CARGO_NET_OFFLINE: 'true'
+        LIBCLANG_PATH: /usr/lib/sdk/llvm20/lib
+    sources:
+      # A Flathub copy of this manifest uses the release tag instead:
+      #   - type: git
+      #     url: https://github.com/t21dev/kitab.git
+      #     tag: v0.2.0
+      - type: dir
+        path: ../..
+        skip:
+          - target
+          - dist
+          - spikes
+          - .claude
+          - packaging/flatpak/build-dir
+          - packaging/flatpak/.flatpak-builder
+          - .flatpak-builder
+          - build-dir
+          - repo
+      - cargo-sources.json
+    build-commands:
+      - test -d vendor/gpui-0.2.2 || (echo 'run tools/patch_gpui.py first' && false)
+      - cargo --offline build --release -p kitab
+      - install -Dm755 target/release/kitab /app/bin/kitab
+      - install -Dm644 packaging/linux/dev.t21.kitab.desktop /app/share/applications/dev.t21.kitab.desktop
+      - install -Dm644 packaging/linux/dev.t21.kitab.metainfo.xml /app/share/metainfo/dev.t21.kitab.metainfo.xml
+      - install -Dm644 packaging/linux/dev.t21.kitab.xml /app/share/mime/packages/dev.t21.kitab.xml
+      - cp -r packaging/linux/icons /app/share/

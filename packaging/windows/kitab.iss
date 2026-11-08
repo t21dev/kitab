@@ -6,9 +6,13 @@
 ;
 ; Built by release.yml:
 ;   iscc /DAppVersion=0.1.0 /DSourceDir=..\..\dist\Kitab packaging\windows\kitab.iss
+; and for Windows on Arm, /DArch=arm64.
 
 #ifndef AppVersion
   #define AppVersion "0.0.0"
+#endif
+#ifndef Arch
+  #define Arch "x64"
 #endif
 #ifndef SourceDir
   #define SourceDir "..\..\target\release"
@@ -28,11 +32,16 @@ DefaultGroupName=Kitab Reader
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
+#if Arch == "arm64"
+ArchitecturesAllowed=arm64
+ArchitecturesInstallIn64BitMode=arm64
+#else
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
+#endif
 MinVersion=10.0.17763
 OutputDir=..\..\dist
-OutputBaseFilename=Kitab_{#AppVersion}_x64_setup
+OutputBaseFilename=Kitab_{#AppVersion}_{#Arch}_setup
 SetupIconFile=kitab.ico
 UninstallDisplayIcon={app}\kitab.exe
 UninstallDisplayName=Kitab Reader

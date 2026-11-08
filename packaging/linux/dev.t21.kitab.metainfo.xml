@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
+<component type="desktop-application">
+  <id>dev.t21.kitab</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>AGPL-3.0-or-later</project_license>
+  <name>Kitab Reader</name>
+  <summary>A fast, native reader for PDF, ebooks, comics and Markdown</summary>
+  <developer id="dev.t21">
+    <name>t21 dev</name>
+  </developer>
+  <description>
+    <p>
+      Kitab Reader opens PDF, EPUB, MOBI, FB2, CBZ, XPS, Markdown and plain
+      text in one native window. Pages are drawn by MuPDF on the GPU, so big
+      files open quickly and scroll smoothly.
+    </p>
+    <ul>
+      <li>Tabs, a library with shelves and collections, and full-text search</li>
+      <li>Highlights, notes, ink and shapes, saved into the PDF</li>
+      <li>PDF forms, digital signatures and password-protected files</li>
+      <li>Markdown with maths and Mermaid diagrams</li>
+      <li>Light, sepia and dark themes, and a focus mode</li>
+      <li>No telemetry: your files stay on your computer</li>
+    </ul>
+  </description>
+  <launchable type="desktop-id">dev.t21.kitab.desktop</launchable>
+  <url type="homepage">https://github.com/t21dev/kitab</url>
+  <url type="bugtracker">https://github.com/t21dev/kitab/issues</url>
+  <url type="vcs-browser">https://github.com/t21dev/kitab</url>
+  <content_rating type="oars-1.1"/>
+  <supports>
+    <control>pointing</control>
+    <control>keyboard</control>
+  </supports>
+  <screenshots>
+    <screenshot type="default">
+      <caption>Reading a PDF</caption>
+      <image>https://raw.githubusercontent.com/t21dev/kitab/main/docs/screenshots/reader-pdf.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>A book with its own typography</caption>
+      <image>https://raw.githubusercontent.com/t21dev/kitab/main/docs/screenshots/book-typography.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Markdown with maths</caption>
+      <image>https://raw.githubusercontent.com/t21dev/kitab/main/docs/screenshots/markdown-math.png</image>
+    </screenshot>
+  </screenshots>
+  <releases>
+    <release version="0.2.0" date="2026-11-08"/>
+    <release version="0.1.0" date="2026-11-08"/>
+  </releases>
+</component>

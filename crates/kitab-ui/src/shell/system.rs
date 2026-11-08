@@ -490,6 +490,9 @@ impl Workspace {
     /// Start-up: the first automatic check, 10 s after the window opened, if
     /// Settings › About › Check on start-up is on.
     pub(super) fn schedule_update_check(&mut self, delay: Duration, cx: &mut Context<Self>) {
+        if update::managed_by().is_some() {
+            return;
+        }
         self.after(delay, cx, |ws, cx| {
             if Style::get(cx).update_check {
                 ws.check_for_updates(false, cx);

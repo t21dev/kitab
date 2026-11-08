@@ -141,6 +141,25 @@ pub(super) fn keymap_row(ws: &WeakEntity<Workspace>, st: &Style) -> AnyElement {
 // ── File types ───────────────────────────────────────────────────────────
 
 pub(super) fn file_types(ws: &WeakEntity<Workspace>, info: &SystemInfo, st: &Style) -> AnyElement {
+    // Flatpak registers Kitab's file types itself when it installs.
+    if kitab_os::update::managed_by().is_some() {
+        return div()
+            .flex()
+            .flex_col()
+            .child(group(
+                "Default app",
+                None,
+                rows(vec![icon_row(
+                    Some("file"),
+                    "Flatpak set up Kitab's file types",
+                    "To open PDFs and ebooks in Kitab by default, choose it in your system's Default Applications settings, or with Open With in your file manager.",
+                    div().into_any_element(),
+                    st,
+                )]),
+                st,
+            ))
+            .into_any_element();
+    }
     let windows = cfg!(windows);
     let mut list = Vec::new();
     for (i, t) in FILE_TYPES.iter().enumerate() {
@@ -687,7 +706,21 @@ pub(super) fn about(ws: &WeakEntity<Workspace>, info: &SystemInfo, st: &Style) -
                         .child("Your library has a fast lane now. Rust underneath, a calm page on top. Free software by t21."),
                 ),
         )
-        .child(group(
+        .when_some(kitab_os::update::managed_by(), |d, by| {
+            d.child(group(
+                "Updates",
+                None,
+                rows(vec![icon_row(
+                    Some("download"),
+                    &format!("Updates come through {by}"),
+                    "Your software centre installs new versions, or run: flatpak update",
+                    div().into_any_element(),
+                    st,
+                )]),
+                st,
+            ))
+        })
+        .when(kitab_os::update::managed_by().is_none(), |d| d.child(group(
             "Updates",
             None,
             rows(vec![
@@ -706,7 +739,7 @@ pub(super) fn about(ws: &WeakEntity<Workspace>, info: &SystemInfo, st: &Style) -
                 ),
             ]),
             st,
-        ))
+        )))
         .child(group(
             "Links",
             None,

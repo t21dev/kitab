@@ -270,9 +270,14 @@ mod imp {
     }
 
     fn socket_path() -> PathBuf {
-        let dir = std::env::var_os("XDG_RUNTIME_DIR")
+        let mut dir = std::env::var_os("XDG_RUNTIME_DIR")
             .map(PathBuf::from)
             .unwrap_or_else(std::env::temp_dir);
+        // Flatpak gives each sandbox its own runtime folder; this one is
+        // shared by every running copy of the app.
+        if let Some(id) = std::env::var_os("FLATPAK_ID") {
+            dir = dir.join("app").join(id);
+        }
         dir.join(format!("kitab-{}.sock", user_key()))
     }
 

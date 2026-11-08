@@ -15,6 +15,8 @@ an environment switch to turn it off so it can still be benchmarked:
   Lean    Single-sampled path texture instead of a window-sized 4x MSAA one, and 2
           swap-chain buffers instead of 3. Off: KITAB_GPUI_FULL=1.
   Heap    The manifest enables the Windows segment heap.
+  Fallback When Direct3D 11 fails on the chosen adapter, every other one is tried,
+          then WARP (software). KITAB_GPU=test-fallback goes straight to WARP.
   RTL     Right-to-left glyph runs (Arabic, Hebrew) are placed at DirectWrite's
           origin and advance leftwards, instead of left to right.
 
@@ -276,6 +278,100 @@ fn kitab_buffer_count() -> u32 {
         };
 
         // Since these are handled in handle_nc_mouse_up_msg we must prevent the default window proc"""),
+    ])
+    # 7. A GPU that can't run gpui: when Direct3D 11 can't be created on the
+    #    chosen adapter (an old GPU, a broken driver, some virtual machines and
+    #    remote sessions), try every other adapter, then WARP (software
+    #    Direct3D, part of Windows) instead of failing to open a window.
+    #    KITAB_GPU=test-fallback skips the hardware adapters, to test this.
+    edit("src/platform/windows/directx_devices.rs", [
+        ("""        let adapter =
+            get_adapter(&dxgi_factory, debug_layer_available).context("Getting DXGI adapter")?;
+        let (device, device_context) = {
+            let mut context: Option<ID3D11DeviceContext> = None;
+            let mut feature_level = D3D_FEATURE_LEVEL::default();
+            let device = get_device(
+                &adapter,
+                Some(&mut context),
+                Some(&mut feature_level),
+                debug_layer_available,
+            )
+            .context("Creating Direct3D device")?;
+            match feature_level {""",
+         """        let first = get_adapter(&dxgi_factory, debug_layer_available)
+            .context("Getting DXGI adapter")
+            .log_err();
+        let (adapter, device, context, feature_level) =
+            kitab_open_device(&dxgi_factory, first, debug_layer_available)?;
+        let (device, device_context) = {
+            match feature_level {"""),
+        ("""            (device, context.unwrap())
+        };""",
+         """            (device, context)
+        };"""),
+        ("""#[inline]
+fn check_debug_layer_available() -> bool {""",
+         """/// Kitab patch: Direct3D 11 on the first adapter that can run it: the chosen
+/// one, then every other adapter, then WARP (software, always present).
+fn kitab_open_device(
+    factory: &IDXGIFactory6,
+    first: Option<IDXGIAdapter1>,
+    debug_layer_available: bool,
+) -> Result<(IDXGIAdapter1, ID3D11Device, ID3D11DeviceContext, D3D_FEATURE_LEVEL)> {
+    let skip_hardware = std::env::var("KITAB_GPU").is_ok_and(|v| v == "test-fallback");
+    // Adapters are told apart by LUID: each enumeration returns new objects.
+    let mut tried: Vec<(u32, i32)> = Vec::new();
+    let mut candidates: Vec<IDXGIAdapter1> = Vec::new();
+    if !skip_hardware {
+        candidates.extend(first);
+        for i in 0..16 {
+            match unsafe { factory.EnumAdapters(i) }.and_then(|a| a.cast::<IDXGIAdapter1>()) {
+                Ok(a) => candidates.push(a),
+                Err(_) => break,
+            }
+        }
+    }
+    if let Ok(warp) = unsafe { factory.EnumWarpAdapter::<IDXGIAdapter1>() } {
+        candidates.push(warp);
+    }
+    let mut last = anyhow::anyhow!("No graphics adapter");
+    for adapter in candidates {
+        let desc = unsafe { adapter.GetDesc1() }.unwrap_or_default();
+        let luid = (desc.AdapterLuid.LowPart, desc.AdapterLuid.HighPart);
+        if tried.contains(&luid) {
+            continue;
+        }
+        tried.push(luid);
+        let name = String::from_utf16_lossy(&desc.Description)
+            .trim_matches(char::from(0))
+            .to_string();
+        let mut context: Option<ID3D11DeviceContext> = None;
+        let mut feature_level = D3D_FEATURE_LEVEL::default();
+        match get_device(
+            &adapter,
+            Some(&mut context),
+            Some(&mut feature_level),
+            debug_layer_available,
+        ) {
+            Ok(device) => {
+                if let Some(context) = context {
+                    if tried.len() > 1 {
+                        log::warn!("Using GPU {name} after the first one failed");
+                    }
+                    return Ok((adapter, device, context, feature_level));
+                }
+            }
+            Err(e) => {
+                log::warn!("Direct3D 11 failed on {name}: {e:#}");
+                last = e;
+            }
+        }
+    }
+    Err(last.context("Creating Direct3D device"))
+}
+
+#[inline]
+fn check_debug_layer_available() -> bool {"""),
     ])
     print(f"patched gpui copy: {DEST}")
 

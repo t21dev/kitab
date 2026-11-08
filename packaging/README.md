@@ -13,3 +13,7 @@ Every system uses `kitab --thumbnail` (crate `kitab-thumb`): page 1 of a documen
 - Linux: `linux/dev.t21.kitab.thumbnailer` goes to `/usr/share/thumbnailers/`. GNOME Files, Nemo, Caja and Thunar (tumbler) then call `kitab --thumbnail -s SIZE IN OUT.png`. KDE Dolphin uses its own plugins.
 - Windows: `kitab_shell.dll` (crate `kitab-shell`) is the Explorer thumbnail provider. It pipes the file to `kitab.exe --thumbnail --stdin EXT --bgra` next to it, so MuPDF ships once and a bad file can't crash Explorer.
 - macOS: a Quick Look thumbnail extension, with the macOS build.
+
+## Linux packages and Flatpak
+
+`tools/package.py` lays the Linux files out once (`/usr/bin`, `/usr/share/...`, with `linux/dev.t21.kitab.metainfo.xml` for software centres) and builds the `.tar.gz`, `.deb`, `.rpm` and `.AppImage` from them. `flatpak/dev.t21.kitab.yml` builds the Flatpak from source, offline; `flatpak/generate-sources.sh` writes the crate list it needs.

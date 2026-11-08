@@ -9,11 +9,37 @@
 //! copies, then each page, drawn by MuPDF at the printer's resolution, goes
 //! to the printer's GDI device.
 //!
-//! macOS and Linux: CUPS. Kitab's own sheet lists the printers (`lpstat`) and
-//! takes the copies; the chosen pages are written to a PDF (vector pages, by
-//! MuPDF) and sent with `lp`, which scales and turns them for the paper.
+//! macOS and Linux: the document is written to a PDF (vector pages, by
+//! MuPDF) and handed to the system's print dialog (`native`). On Linux
+//! without a print portal, Kitab's own sheet lists the printers (`lpstat`)
+//! and sends the pages with `lp`, which scales and turns them for the paper.
 
 pub mod cups;
+pub mod native;
+
+/// A new temporary file for the pages to print. Older ones (a sheet on macOS
+/// reads its file after the call returns) are removed here, after an hour.
+pub fn temp_pdf() -> std::path::PathBuf {
+    let dir = std::env::temp_dir();
+    if let Ok(list) = std::fs::read_dir(&dir) {
+        for e in list.flatten() {
+            let old = e
+                .metadata()
+                .and_then(|m| m.modified())
+                .ok()
+                .and_then(|t| t.elapsed().ok())
+                .is_some_and(|age| age.as_secs() > 3600);
+            if old && e.file_name().to_string_lossy().starts_with("kitab-print-") {
+                let _ = std::fs::remove_file(e.path());
+            }
+        }
+    }
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis())
+        .unwrap_or(0);
+    dir.join(format!("kitab-print-{}-{stamp}.pdf", std::process::id()))
+}
 mod place;
 pub use place::{Placement, Scale, place};
 

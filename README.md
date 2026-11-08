@@ -15,14 +15,41 @@ Rust underneath, a calm page on top. Kitab never makes you wait.
 A **[t21 dev](https://github.com/t21dev)** project, by **[TriptoAfsin](https://github.com/TriptoAfsin)**, from the team behind [Turbo Reader](https://github.com/t21dev/turbo-reader).
 
 [![Licence: AGPL-3.0](https://img.shields.io/badge/licence-AGPL--3.0-blue?style=flat-square)](LICENSE)
-![Status: pre-release](https://img.shields.io/badge/status-pre--release-orange?style=flat-square)
+[![Latest release](https://img.shields.io/github/v/release/t21dev/kitab?style=flat-square)](https://github.com/t21dev/kitab/releases/latest)
 ![Built with Rust and GPUI](https://img.shields.io/badge/built%20with-Rust%20%2B%20GPUI-b7410e?style=flat-square)
 
 </div>
 
 ---
 
-> **Before 0.1.0.** Kitab works and builds from `main`, but there is no download yet. The first release ships when it is ready, with installers for Windows first. Follow the [changelog](CHANGELOG.md) or the [roadmap](docs/PLAN.md#12-roadmap) in the meantime.
+## Download
+
+Get the latest version from [Releases](https://github.com/t21dev/kitab/releases/latest).
+
+| System | Download |
+|---|---|
+| Windows 10 and 11 (Intel, AMD) | `Kitab_*_x64_setup.exe`, or `Kitab_*_x64_portable.zip` to run without installing |
+| Windows on Arm | `Kitab_*_arm64_setup.exe` or `Kitab_*_arm64_portable.zip` |
+| macOS, Apple silicon | `Kitab_*_aarch64.dmg` |
+| macOS, Intel | `Kitab_*_x86_64.dmg` |
+| Linux | `.flatpak`, `.AppImage`, `.deb`, `.rpm` or `.tar.gz` (x86_64; all but the Flatpak also for aarch64) |
+
+Or install with a package manager:
+
+```bash
+# macOS, Homebrew
+brew install --cask t21dev/tap/kitab
+
+# Windows, Scoop
+scoop bucket add t21dev https://github.com/t21dev/scoop-bucket
+scoop install t21dev/kitab
+```
+
+**Unsigned builds.** The downloads aren't code-signed yet. On Windows, SmartScreen may say "Windows protected your PC": choose More info, then Run anyway. On macOS, the first time, right-click Kitab in Applications and choose Open. Every release lists the SHA-256 checksum of each file.
+
+**Flatpak.** Install the bundle with `flatpak install --user Kitab_*_x86_64.flatpak`; Flatpak fetches the Freedesktop runtime from [Flathub](https://flathub.org/setup). Kitab can read and save files in your home folder and on external drives, and has no network access: Flatpak brings the updates. To make it the default app for PDFs, use your system's Default Applications settings.
+
+**AppImage.** `chmod +x Kitab_*.AppImage` and run it. The `.deb`, `.rpm` and `.tar.gz` also install a thumbnailer, so file managers show page 1 of your documents.
 
 ## Screenshots
 
@@ -120,6 +147,8 @@ cargo clippy --workspace --all-targets -- -D warnings
 python tools/check_source.py     # licence headers, no colour literals outside kitab-theme
 cargo deny check
 ```
+
+Release packages: `python tools/build_release.py`, then `python tools/package.py <version>` (an installer, portable zip, dmg, or on Linux the .tar.gz, .deb, .rpm and .AppImage). The Flatpak builds offline from `packaging/flatpak/dev.t21.kitab.yml`; its header lists the steps.
 
 The tests read a corpus of PDF, EPUB and Markdown fixtures with an `expected.json` oracle. To rebuild it:
 

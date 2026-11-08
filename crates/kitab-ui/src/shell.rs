@@ -135,6 +135,8 @@ pub struct Workspace {
     /// The print sheet (Ctrl+P), when open.
     print: Option<print_ui::PrintSheet>,
     print_serial: u64,
+    /// Linux without a print portal: Ctrl+P opens Kitab's own sheet.
+    print_no_portal: bool,
     /// The password sheet, when open.
     password: Option<password_ui::PasswordSheet>,
     password_serial: u64,
@@ -230,6 +232,7 @@ impl Workspace {
             title_squeezed: false,
             print: None,
             print_serial: 0,
+            print_no_portal: false,
             password: None,
             password_serial: 0,
             sign: Default::default(),

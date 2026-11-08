@@ -11,6 +11,12 @@
 
 use std::cmp::Ordering;
 
+/// The package manager that updates Kitab, when it isn't Kitab's own
+/// business: Flatpak (whose sandbox gives Kitab no network either).
+pub fn managed_by() -> Option<&'static str> {
+    std::env::var_os("FLATPAK_ID").map(|_| "Flatpak")
+}
+
 /// The project on GitHub.
 pub const REPO: &str = "https://github.com/t21dev/kitab";
 /// The latest release's page, where Download goes.

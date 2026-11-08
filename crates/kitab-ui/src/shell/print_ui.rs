@@ -62,6 +62,22 @@ impl Workspace {
             self.print_with_system_dialog(reader, window, cx);
             return;
         }
+        // macOS and Linux: the system's dialog, given the pages as a PDF.
+        if kitab_print::native::AVAILABLE && !self.print_no_portal {
+            self.print_with_native_dialog(reader, window, cx);
+            return;
+        }
+        self.open_print_sheet(reader, window, cx);
+    }
+
+    /// Kitab's own sheet (Linux without a print portal): pages, size,
+    /// printer and copies, sent through CUPS.
+    fn open_print_sheet(
+        &mut self,
+        reader: Entity<Reader>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let page = reader.read(cx).current_page() + 1;
         let range = new_field(&format!("{page}"), false, "1-3, 7, 10-", window, cx);
         let sub = cx.subscribe_in(
@@ -157,14 +173,7 @@ impl Workspace {
                 let result = cx
                     .background_spawn(async move {
                         // The pages as a PDF, handed to CUPS, then removed.
-                        let tmp = std::env::temp_dir().join(format!(
-                            "kitab-print-{}-{}.pdf",
-                            std::process::id(),
-                            std::time::SystemTime::now()
-                                .duration_since(std::time::UNIX_EPOCH)
-                                .map(|d| d.as_millis())
-                                .unwrap_or(0)
-                        ));
+                        let tmp = kitab_print::temp_pdf();
                         let sent = engine.write_pdf(doc, &pages, &tmp).and_then(|_| {
                             kitab_print::print_pdf(&printer, &tmp, &title, copies, scale, rotate)
                         });
@@ -272,6 +281,73 @@ impl Workspace {
         })
         .detach();
         cx.notify();
+    }
+
+    /// macOS and Linux: every page written to a PDF in the background, then
+    /// the system's print dialog, which picks the printer, copies, pages and
+    /// paper and prints. Linux without a print portal gets Kitab's sheet.
+    fn print_with_native_dialog(
+        &mut self,
+        reader: Entity<Reader>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let r = reader.read(cx);
+        let title = r.title().to_string();
+        let count = r.page_count() as u32;
+        let Ok((doc, _)) = r.print_source() else {
+            return;
+        };
+        let engine: Arc<dyn DocEngine> = self.engine.clone();
+        if count > 40 {
+            self.toast("Getting the pages ready to print…", false, None, cx);
+        }
+        cx.spawn_in(window, async move |this, cx| {
+            let tmp = kitab_print::temp_pdf();
+            let out = tmp.clone();
+            let written = cx
+                .background_spawn(async move {
+                    let pages: Vec<u32> = (0..count).collect();
+                    engine.write_pdf(doc, &pages, &out)
+                })
+                .await;
+            if let Err(e) = written {
+                let _ = std::fs::remove_file(&tmp);
+                let _ = this.update(cx, |ws, cx| {
+                    ws.toast(format!("Couldn't print: {e}"), true, None, cx)
+                });
+                return;
+            }
+            use kitab_print::native::{Failure, Outcome, print_with_dialog};
+            // macOS: the panel is a sheet on this window, from the main
+            // thread; it reads the file after this returns. Linux: the
+            // portal's dialog blocks, so it waits off the UI thread.
+            let result = if cfg!(target_os = "macos") {
+                this.update_in(cx, |_, window, _| {
+                    print_with_dialog(owner_of(window), &tmp, &title)
+                })
+                .unwrap_or(Err(Failure::Unavailable))
+            } else {
+                let file = tmp.clone();
+                let r = cx
+                    .background_spawn(async move { print_with_dialog(0, &file, &title) })
+                    .await;
+                let _ = std::fs::remove_file(&tmp);
+                r
+            };
+            let _ = this.update_in(cx, |ws, window, cx| match result {
+                Ok(Outcome::Printed) if !cfg!(target_os = "macos") => {
+                    ws.toast("Sent to the printer.", false, None, cx)
+                }
+                Ok(_) => {}
+                Err(Failure::Unavailable) => {
+                    ws.print_no_portal = true;
+                    ws.open_print_sheet(reader, window, cx);
+                }
+                Err(Failure::Failed(e)) => ws.toast(format!("Couldn't print: {e}"), true, None, cx),
+            });
+        })
+        .detach();
     }
 
     /// The system print dialog picks the printer, copies and pages; then
@@ -685,6 +761,16 @@ fn owner_of(window: &Window) -> isize {
             HasWindowHandle::window_handle(window).map(|h| h.as_raw())
         {
             return h.hwnd.get();
+        }
+    }
+    // macOS: the window's content view (the print panel finds its window).
+    #[cfg(target_os = "macos")]
+    {
+        use raw_window_handle::{HasWindowHandle, RawWindowHandle};
+        if let Ok(RawWindowHandle::AppKit(h)) =
+            HasWindowHandle::window_handle(window).map(|h| h.as_raw())
+        {
+            return h.ns_view.as_ptr() as isize;
         }
     }
     let _ = window;

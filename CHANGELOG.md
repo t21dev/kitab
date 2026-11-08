@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Downloads for every common system: Windows on Arm (installer and portable zip), macOS on Intel, and on Linux a Flatpak, an AppImage, a .deb and an .rpm beside the .tar.gz, for x86_64 and aarch64 (the Flatpak for x86_64). The release notes list each file's SHA-256 checksum.
+- Homebrew and Scoop: `brew install --cask t21dev/tap/kitab` and `scoop install t21dev/kitab`.
+- Printing on macOS and Linux uses the system's own print dialog, with the printer, copies, pages and paper: macOS's print panel as a sheet on the window, and on Linux the desktop's print portal (GNOME, KDE, and inside Flatpak). Linux without a print portal keeps Kitab's own sheet.
 - Middle-click scrolling in documents and on Home, as in a browser: click the wheel and move the pointer above or below the mark to scroll (faster further away); any click ends it. Holding the wheel while dragging scrolls only while it's held.
 - An open-tab count beside the tabs (Settings › Appearance › Tabs; off by default).
 - Settings › Appearance › Toolbar shows a small window that follows the choices: which buttons sit in the title bar, which in the dock, where the dock is, and whether it's compact or fades.
@@ -28,9 +31,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The + in the title bar opens Home (Open file… and your recent books) instead of going straight to the Open dialog; Ctrl+O still does.
 - Home's Settings button matches Open file…, with an icon and a word.
 - About › Links: each row is the link, with an arrow, instead of an Open button.
+- In the Flatpak, Kitab doesn't check for updates (Flatpak brings them, and the sandbox has no network), and Settings › File types points to the system's Default Applications instead of setting them itself. A second launch opens its files as tabs in the running Kitab there too.
 - Hovering a tab, button or row shows a clear highlight in every theme (it was nearly invisible in the dark ones).
 
 ### Fixed
+- Kitab opens on computers whose graphics can't run it: when Direct3D 11 fails on the first graphics adapter (an old GPU or driver, some virtual machines and remote desktops), it tries the others and then Windows' software renderer, instead of failing to start.
 - Ctrl+P prints again (and the keys for Password, Sign and Page tools work outside presentation mode). On Windows, Print opens Windows' own print dialog straight away, with the printer, copies and which pages (all, the current page, or ranges like 1-3, 7); the pages print shrunk to fit the paper and turned to match it.
 - A code block's Copy button says Copied, with a tick, for a moment after it copies.
 - The window can be dragged by its title bar again, and minimise, maximise and close work: a click there was being swallowed before Windows saw it.

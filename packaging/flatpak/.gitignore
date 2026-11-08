@@ -1,0 +1,5 @@
+cargo-sources.json
+flatpak-cargo-generator.py
+build-dir/
+.flatpak-builder/
+repo/
