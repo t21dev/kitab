@@ -17,6 +17,7 @@ use gpui::{
 };
 use kitab_theme::{Accent, AccentPreset, Appearance, Density, Theme, hue_swatch};
 
+mod search;
 mod system;
 pub use system::{SystemInfo, UpdateState};
 
@@ -79,7 +80,13 @@ impl Section {
     }
 }
 
+/// The first setting matching a search (Enter in the search field).
+pub fn first_match(query: &str) -> Option<(Section, &'static str)> {
+    search::matches(query).into_iter().next()
+}
+
 /// The panel (without the scrim; the shell positions and animates both).
+#[allow(clippy::too_many_arguments)] // the shell's state, passed as it is
 pub fn panel(
     ws: WeakEntity<Workspace>,
     section: Section,
@@ -87,8 +94,11 @@ pub fn panel(
     themes: &[Theme],
     hex: &HexState,
     sys: &SystemInfo,
+    search: Option<&gpui::Entity<crate::text_field::TextField>>,
+    query: &str,
     window: &Window,
 ) -> AnyElement {
+    let searching = !query.trim().is_empty();
     let rail = {
         let mut rail = div()
             .w(px(208.0))
@@ -114,9 +124,11 @@ pub fn panel(
                     .font_weight(FontWeight::SEMIBOLD)
                     .text_color(st.c(|c| c.text))
                     .child("Settings"),
-            );
+            )
+            // Search: type to list the matching settings.
+            .children(search.map(|field| div().px(px(2.0)).pb(px(10.0)).child(field.clone())));
         for s in Section::ALL {
-            let on = s == section;
+            let on = s == section && !searching;
             let ws = ws.clone();
             rail = rail.child(
                 crate::kbd::stop_fill(
@@ -159,6 +171,7 @@ pub fn panel(
     };
 
     let body = match section {
+        _ if searching => search::results(&ws, query, st),
         Section::Appearance => appearance(&ws, st, themes, hex, window),
         Section::Reading => reading(&ws, st),
         Section::Library => system::library(&ws, sys, st),
@@ -190,7 +203,7 @@ pub fn panel(
                         .text_size(px(15.0))
                         .font_weight(FontWeight::SEMIBOLD)
                         .text_color(st.c(|c| c.text))
-                        .child(section.label()),
+                        .child(if searching { "Search" } else { section.label() }),
                 )
                 .child(
                     div()
@@ -371,7 +384,7 @@ fn appearance(
             None,
             div().flex().flex_col().gap(px(12.0)).child(tab_cards).child(well_row(
                 "Show how many tabs are open",
-                "A small number beside the tabs in the title bar.",
+                "A small number at the right of the title bar.",
                 switch(
                     "tab-count",
                     st.tab_count,
@@ -747,7 +760,13 @@ fn toolbar_rows(ws: &WeakEntity<Workspace>, st: &Style) -> AnyElement {
             (SharedString::from(name), now == place, change(ws, set))
         })
         .collect();
-        col = col.child(well_row(label, "", segmented(choices, st), st));
+        // Every row has the same three labels: the row's own id keeps their
+        // buttons apart (without it, a click could land on another row).
+        let control = div()
+            .id(SharedString::from(format!("toolbar-{label}")))
+            .child(segmented(choices, st))
+            .into_any_element();
+        col = col.child(well_row(label, "", control, st));
     }
     let more = [("Title bar", true), ("Dock", false)]
         .into_iter()

@@ -194,7 +194,9 @@ impl Workspace {
             .items_center()
             .gap(px(8.0))
             .px(px(10.0))
-            .py(px(5.0))
+            // The same height as the Settings and Open file… buttons beside it.
+            .h(st.px(|m| m.control_height))
+            .overflow_hidden()
             .rounded(st.px(|m| m.control_radius))
             .bg(st.c(|c| c.raised))
             .shadow(st.well())

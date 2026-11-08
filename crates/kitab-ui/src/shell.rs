@@ -137,6 +137,8 @@ pub struct Workspace {
     print_serial: u64,
     /// Linux without a print portal: Ctrl+P opens Kitab's own sheet.
     print_no_portal: bool,
+    /// Settings' search field while Settings is open.
+    settings_search: Option<(Entity<crate::text_field::TextField>, Subscription)>,
     /// Debounces saving the window's place while it moves.
     place_serial: u64,
     /// The password sheet, when open.
@@ -235,6 +237,7 @@ impl Workspace {
             print: None,
             print_serial: 0,
             print_no_portal: false,
+            settings_search: None,
             place_serial: 0,
             password: None,
             password_serial: 0,
@@ -694,13 +697,16 @@ impl Workspace {
                     .tip("Home  Ctrl+Shift+H")
                     .on_click(cx.listener(|ws, _, window, cx| ws.show_home(window, cx))),
             )
-            .child(
-                div()
-                    .w(px(1.0))
-                    .h(px(18.0))
-                    .mx(px(4.0))
-                    .bg(st.c(|c| c.line)),
-            );
+            // The divider only separates Home from tabs that are there.
+            .when(!self.tabs.is_empty(), |b| {
+                b.child(
+                    div()
+                        .w(px(1.0))
+                        .h(px(18.0))
+                        .mx(px(4.0))
+                        .bg(st.c(|c| c.line)),
+                )
+            });
 
         // Room for tabs: the bar minus Home, the divider, the "All tabs"
         // button, a 96 px drag area and the three window buttons. Tabs share it
@@ -870,6 +876,7 @@ impl Workspace {
 
         // "All tabs" appears once the strip overflows: a menu of every tab.
         let overflowing = self.tab_scroll.max_offset().width > px(0.5);
+        // The open-tab count (Settings › Tabs), placed at the right below.
         let count = (st.tab_count && !self.tabs.is_empty()).then(|| {
             div()
                 .id("tab-count")
@@ -894,15 +901,17 @@ impl Workspace {
         });
         bar = bar
             .child(strip)
-            .children(count)
             // New tab: Home, with Open file… and the recent books (Ctrl+O
-            // still goes straight to the Open dialog).
-            .child(
-                icon_button("new-tab", "plus", false, st)
-                    .flex_none()
-                    .tip("New tab: Home and Open file…")
-                    .on_click(cx.listener(|ws, _, window, cx| ws.show_home(window, cx))),
-            )
+            // still goes straight to the Open dialog). Not when nothing is
+            // open: Home is all there is, and it would do nothing.
+            .when(!self.tabs.is_empty(), |b| {
+                b.child(
+                    icon_button("new-tab", "plus", false, st)
+                        .flex_none()
+                        .tip("New tab: Home and Open file…")
+                        .on_click(cx.listener(|ws, _, window, cx| ws.show_home(window, cx))),
+                )
+            })
             .when(overflowing, |b| {
                 b.child(
                     icon_button("all-tabs", "chevron-down", false, st)
@@ -924,6 +933,8 @@ impl Workspace {
                 .h_full()
                 .window_control_area(WindowControlArea::Drag),
         )
+        // The tab count sits on the right, before the title-bar buttons.
+        .children(count.map(|c| c.mr(px(6.0))))
         .children(actions)
         .children(pill)
         .child(window_button(
@@ -2822,7 +2833,53 @@ impl Workspace {
         self.system.confirm_clear = false;
         self.load_system_info(self.settings_section, cx);
         window.focus(&self.overlay_focus);
+        self.new_settings_search(window, cx);
         cx.notify();
+    }
+
+    /// An empty search field for Settings. Typing lists the matches; Enter
+    /// opens the first; Esc clears it, or closes Settings when it's empty.
+    fn new_settings_search(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let field =
+            cx.new(|cx| crate::text_field::TextField::new("", false, "Search settings", cx));
+        let sub = cx.subscribe_in(
+            &field,
+            window,
+            |ws, field, e: &crate::text_field::FieldEvent, window, cx| {
+                use crate::text_field::FieldEvent;
+                let text = field.read(cx).text();
+                match e {
+                    FieldEvent::Changed => cx.notify(),
+                    FieldEvent::Submit => {
+                        if let Some((s, _)) = crate::settings_view::first_match(&text) {
+                            ws.pick_setting(s, window, cx);
+                        }
+                    }
+                    FieldEvent::Cancel => {
+                        if text.is_empty() {
+                            ws.close_settings(window, cx);
+                        } else {
+                            ws.new_settings_search(window, cx);
+                            window.focus(&ws.overlay_focus);
+                            cx.notify();
+                        }
+                    }
+                }
+            },
+        );
+        self.settings_search = Some((field, sub));
+    }
+
+    /// A search result picked: its section, and the search cleared.
+    pub(crate) fn pick_setting(
+        &mut self,
+        section: Section,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.new_settings_search(window, cx);
+        window.focus(&self.overlay_focus);
+        self.set_settings_section(section, cx);
     }
 
     pub(crate) fn close_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -3667,6 +3724,12 @@ impl Workspace {
                 &self.themes,
                 &self.hex,
                 &self.system,
+                self.settings_search.as_ref().map(|(f, _)| f),
+                &self
+                    .settings_search
+                    .as_ref()
+                    .map(|(f, _)| f.read(cx).text())
+                    .unwrap_or_default(),
                 window,
             ));
             let (scrim, panel) = if closing {

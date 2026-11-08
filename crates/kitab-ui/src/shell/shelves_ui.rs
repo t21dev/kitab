@@ -298,7 +298,11 @@ impl Workspace {
                     cx.spawn(async move |this, cx| {
                         cx.background_spawn(async move { library.set_favourite(&p, !favourite) })
                             .await;
-                        let _ = this.update(cx, |ws, cx| ws.refresh_shelves(cx));
+                        // Recent shows the ribbon and progress too, not only the shelves.
+                        let _ = this.update(cx, |ws, cx| {
+                            ws.refresh_shelves(cx);
+                            ws.refresh_recent(cx);
+                        });
                     })
                     .detach();
                 }),
@@ -315,7 +319,11 @@ impl Workspace {
                     cx.spawn(async move |this, cx| {
                         cx.background_spawn(async move { library.set_finished(&p, true) })
                             .await;
-                        let _ = this.update(cx, |ws, cx| ws.refresh_shelves(cx));
+                        // Recent shows the ribbon and progress too, not only the shelves.
+                        let _ = this.update(cx, |ws, cx| {
+                            ws.refresh_shelves(cx);
+                            ws.refresh_recent(cx);
+                        });
                     })
                     .detach();
                 }),
@@ -334,7 +342,11 @@ impl Workspace {
                                 async move { library.set_in_collection(id, &p, !on) },
                             )
                             .await;
-                            let _ = this.update(cx, |ws, cx| ws.refresh_shelves(cx));
+                            // Recent shows the ribbon and progress too, not only the shelves.
+                            let _ = this.update(cx, |ws, cx| {
+                                ws.refresh_shelves(cx);
+                                ws.refresh_recent(cx);
+                            });
                         })
                         .detach();
                     }),

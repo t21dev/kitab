@@ -1937,16 +1937,38 @@ impl Reader {
             if st.page_nav == PageNav::Hidden {
                 return None;
             }
-            let at = self.current_page();
-            let percent = if count > 1 {
-                (at as f32 / (count - 1) as f32 * 100.0).round() as u32
-            } else {
+            // How far down it is, from the scroll position itself (the
+            // blocks aren't pages; a short document is all in view: 100 %).
+            let (fraction, shown) = self.scroll_fraction();
+            let percent = if shown >= 0.999 {
                 100
+            } else {
+                (fraction * 100.0).round() as u32
             };
-            return Some(vec![
-                self.track_element(st, cx),
-                div().child(format!("{percent} %")).into_any_element(),
-            ]);
+            let read = div().child(format!("{percent} %")).into_any_element();
+            // Markdown has no pages: the same styles, in how far through it
+            // you are, and the steppers move a screen at a time.
+            return Some(match st.page_nav {
+                PageNav::Stepper => vec![
+                    nav_button("prev-screen", "chevron-left", st)
+                        .tip("Up a screen  Page Up")
+                        .on_click(cx.listener(|r, _, _, cx| {
+                            r.list.scroll_by(px(-r.viewport.1 * 0.9));
+                            cx.notify()
+                        }))
+                        .into_any_element(),
+                    read,
+                    nav_button("next-screen", "chevron-right", st)
+                        .tip("Down a screen  Page Down")
+                        .on_click(cx.listener(|r, _, _, cx| {
+                            r.list.scroll_by(px(r.viewport.1 * 0.9));
+                            cx.notify()
+                        }))
+                        .into_any_element(),
+                ],
+                PageNav::Counter => vec![read],
+                _ => vec![self.track_element(st, cx), read],
+            });
         }
         let field = self.page_field(st, window, cx);
         Some(match st.page_nav {
