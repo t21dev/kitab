@@ -1907,6 +1907,15 @@ impl Workspace {
         let header = div()
             .flex_none()
             .bg(st.c(|c| c.bg))
+            // Room under the chips, and a hairline once cards pass beneath,
+            // so the pinned part ends cleanly instead of cutting them off.
+            .pb(px(14.0))
+            .border_b_1()
+            .border_color(if self.home.scrolled() {
+                st.c(|c| c.line)
+            } else {
+                st.c(|c| c.bg)
+            })
             .child(
                 div()
                     .flex()

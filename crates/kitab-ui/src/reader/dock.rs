@@ -181,6 +181,10 @@ impl Reader {
             .border_color(st.c(|c| c.line))
             .text_size(px(12.0))
             .text_color(st.c(|c| c.muted))
+            // The page's text cursor (I-beam) stays on the page: over the
+            // dock it's the arrow, and the page underneath gets no hover.
+            .occlude()
+            .cursor_default()
             .on_hover(cx.listener(|r, over: &bool, _, _| r.dock.hover = *over))
             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
             // Never wider (or taller) than the reading area: in a small window

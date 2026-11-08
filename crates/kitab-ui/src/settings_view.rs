@@ -126,7 +126,30 @@ pub fn panel(
                     .child("Settings"),
             )
             // Search: type to list the matching settings.
-            .children(search.map(|field| div().px(px(2.0)).pb(px(10.0)).child(field.clone())));
+            .children(search.map(|field| {
+                div().pb(px(10.0)).child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap(px(8.0))
+                        .px(px(10.0))
+                        .h(st.px(|m| m.control_height))
+                        .overflow_hidden()
+                        .rounded(st.px(|m| m.control_radius))
+                        .bg(st.c(|c| c.raised))
+                        .shadow(st.well())
+                        .border_1()
+                        .border_color(st.c(|c| c.line))
+                        .child(
+                            svg()
+                                .path(icon("search"))
+                                .size(px(14.0))
+                                .flex_none()
+                                .text_color(st.c(|c| c.faint)),
+                        )
+                        .child(div().flex_1().min_w_0().child(field.clone())),
+                )
+            }));
         for s in Section::ALL {
             let on = s == section && !searching;
             let ws = ws.clone();

@@ -2018,6 +2018,9 @@ impl Reader {
             .gap(px(if corner { 4.0 } else { 10.0 }))
             .h(px(if corner { 30.0 } else { 36.0 }))
             .px(px(if corner { 6.0 } else { 12.0 }))
+            // An arrow here, not the page's text cursor beneath.
+            .occlude()
+            .cursor_default()
             .rounded_full()
             .bg(st.c(|c| c.raised))
             .shadow(st.float())

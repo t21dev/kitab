@@ -37,9 +37,22 @@ const QUEUE_MAX: usize = 48;
 const LIFT: f32 = 6.0;
 const LIFT_FOR: Duration = Duration::from_millis(160);
 
+/// What a card shows for its cover right now.
+enum CoverState {
+    Ready(Arc<RenderImage>, Instant),
+    Loading,
+    /// No picture (missing file, or it couldn't be drawn): the generated cover.
+    Generated,
+}
+
+/// How long a cover takes to fade in, and the wait before covers are drawn.
+const COVER_FADE: std::time::Duration = std::time::Duration::from_millis(220);
+const COVER_WAIT: std::time::Duration = std::time::Duration::from_millis(120);
+
 enum Cover {
     Loading,
-    Ready(Arc<RenderImage>),
+    /// The picture, and when it arrived (it fades in from then).
+    Ready(Arc<RenderImage>, Instant),
     /// Couldn't be drawn: the generated cover stays.
     Failed,
 }
@@ -107,9 +120,15 @@ impl HomeView {
         }
     }
 
+    /// The cards have scrolled under Home's pinned header.
+    pub(super) fn scrolled(&self) -> bool {
+        let top = self.list.logical_scroll_top();
+        top.item_ix > 0 || top.offset_in_item > px(0.5)
+    }
+
     pub(super) fn drop_covers(&mut self) {
         for (_, c) in self.covers.drain() {
-            if let Cover::Ready(i) = c {
+            if let Cover::Ready(i, _) = c {
                 self.evicted.push(i);
             }
         }
@@ -443,26 +462,53 @@ impl Workspace {
         st: &Style,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let image = (!item.missing)
-            .then(|| self.cover_image(&item.path, cx))
-            .flatten();
-        let face = match image {
-            Some(image) => div()
+        let state = if item.missing {
+            CoverState::Generated
+        } else {
+            self.cover_image(&item.path, cx)
+        };
+        let face = match state {
+            CoverState::Ready(image, at) => {
+                let picture = div()
+                    .w(px(width))
+                    .h(px(width * 1.5))
+                    .flex_none()
+                    .rounded(px(4.0))
+                    .overflow_hidden()
+                    .bg(gpui::white())
+                    .shadow(st.elev())
+                    .child(
+                        img(image)
+                            .w(px(width))
+                            .h(px(width * 1.5))
+                            .object_fit(ObjectFit::Cover),
+                    );
+                // A cover that just arrived fades in instead of popping.
+                if st.animations && at.elapsed() < COVER_FADE {
+                    use std::hash::{Hash, Hasher};
+                    let mut h = std::collections::hash_map::DefaultHasher::new();
+                    item.path.hash(&mut h);
+                    picture
+                        .with_animation(
+                            ElementId::NamedInteger("cover-in".into(), h.finish()),
+                            Animation::new(COVER_FADE).with_easing(gpui::ease_out_quint()),
+                            |el, v| el.opacity(v),
+                        )
+                        .into_any_element()
+                } else {
+                    picture.into_any_element()
+                }
+            }
+            // Still coming: a quiet block the size of the cover, so nothing
+            // flashes a generated cover first.
+            CoverState::Loading => div()
                 .w(px(width))
                 .h(px(width * 1.5))
                 .flex_none()
                 .rounded(px(4.0))
-                .overflow_hidden()
-                .bg(gpui::white())
-                .shadow(st.elev())
-                .child(
-                    img(image)
-                        .w(px(width))
-                        .h(px(width * 1.5))
-                        .object_fit(ObjectFit::Cover),
-                )
+                .bg(st.c(|c| c.raised))
                 .into_any_element(),
-            None => cover(&item.title, width, st),
+            CoverState::Generated => cover(&item.title, width, st),
         };
         let lifted = self.home.hover == Some(i);
         let settling = !lifted && self.home.left == Some(i);
@@ -502,10 +548,11 @@ impl Workspace {
     }
 
     /// The cover for `path` if it's drawn; otherwise ask for it.
-    fn cover_image(&mut self, path: &Path, cx: &mut Context<Self>) -> Option<Arc<RenderImage>> {
+    fn cover_image(&mut self, path: &Path, cx: &mut Context<Self>) -> CoverState {
         match self.home.covers.get(path) {
-            Some(Cover::Ready(image)) => return Some(image.clone()),
-            Some(_) => return None,
+            Some(Cover::Ready(image, at)) => return CoverState::Ready(image.clone(), *at),
+            Some(Cover::Loading) => return CoverState::Loading,
+            Some(Cover::Failed) => return CoverState::Generated,
             None => {}
         }
         self.home.covers.insert(path.to_path_buf(), Cover::Loading);
@@ -516,8 +563,15 @@ impl Workspace {
                 self.home.covers.remove(&old);
             }
         }
-        self.pump_covers(cx);
-        None
+        // A moment's wait before drawing: cards scrolled straight past drop
+        // out of the queue above and are never drawn.
+        let timer = cx.background_executor().timer(COVER_WAIT);
+        cx.spawn(async move |this, cx| {
+            timer.await;
+            let _ = this.update(cx, |ws, cx| ws.pump_covers(cx));
+        })
+        .detach();
+        CoverState::Loading
     }
 
     /// Draw the next cover (the newest request first: it's on screen).
@@ -548,12 +602,14 @@ impl Workspace {
                 let h = &mut ws.home;
                 h.busy = false;
                 if h.covers.contains_key(&path) {
-                    h.covers
-                        .insert(path.clone(), image.map_or(Cover::Failed, Cover::Ready));
+                    h.covers.insert(
+                        path.clone(),
+                        image.map_or(Cover::Failed, |i| Cover::Ready(i, Instant::now())),
+                    );
                     h.order.push_back(path);
                     while h.order.len() > COVERS_KEPT {
                         if let Some(old) = h.order.pop_front() {
-                            if let Some(Cover::Ready(i)) = h.covers.remove(&old) {
+                            if let Some(Cover::Ready(i, _)) = h.covers.remove(&old) {
                                 h.evicted.push(i);
                             }
                         }
