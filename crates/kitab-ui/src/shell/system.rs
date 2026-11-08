@@ -111,14 +111,36 @@ impl Workspace {
         .detach();
     }
 
+    /// Ask before removing a watched folder (`None` cancels).
+    pub(crate) fn ask_unwatch(&mut self, path: Option<std::path::PathBuf>, cx: &mut Context<Self>) {
+        self.system.confirm_unwatch = path;
+        cx.notify();
+    }
+
     pub(crate) fn unwatch_folder(&mut self, path: std::path::PathBuf, cx: &mut Context<Self>) {
+        self.system.confirm_unwatch = None;
         let library = self.library.clone();
+        let name = path
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_else(|| path.display().to_string());
         cx.spawn(async move |this, cx| {
-            cx.background_spawn(async move { library.unwatch_folder(&path) })
+            let gone = cx
+                .background_spawn(async move { library.unwatch_folder(&path) })
                 .await;
-            let _ = this.update(cx, |ws, cx| ws.load_watched(cx));
+            let _ = this.update(cx, |ws, cx| {
+                let what = match gone {
+                    0 => "no documents left your library".to_string(),
+                    1 => "1 document left your library".to_string(),
+                    n => format!("{n} documents left your library"),
+                };
+                ws.toast(format!("Stopped watching {name}: {what}."), false, None, cx);
+                ws.load_watched(cx);
+                ws.refresh_shelves(cx);
+            });
         })
         .detach();
+        cx.notify();
     }
 
     fn load_trusted(&mut self, cx: &mut Context<Self>) {

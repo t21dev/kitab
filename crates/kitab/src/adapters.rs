@@ -833,9 +833,11 @@ impl Library for StoreLibrary {
         let _ = self.call(move |s| s.store.as_mut()?.watch_folder(&path).ok());
     }
 
-    fn unwatch_folder(&self, path: &Path) {
+    fn unwatch_folder(&self, path: &Path) -> usize {
         let path = path.to_path_buf();
-        let _ = self.call(move |s| s.store.as_mut()?.unwatch_folder(&path).ok());
+        self.call(move |s| s.store.as_mut()?.unwatch_folder(&path).ok())
+            .flatten()
+            .unwrap_or(0)
     }
 
     fn scan_watched(&self) -> u32 {

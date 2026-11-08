@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Removing a watched folder (Settings › Library) asks first, and takes the documents found only in that folder out of your library. Documents you've opened, favourites and documents in a collection stay; nothing on disk is touched.
+
 ## [0.3.1] - 2026-11-08
 
 ### Added

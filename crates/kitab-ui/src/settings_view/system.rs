@@ -32,6 +32,8 @@ pub struct SystemInfo {
     pub update_serial: u64,
     /// Clear reading history is waiting for its confirmation.
     pub confirm_clear: bool,
+    /// Removing this watched folder is waiting for its confirmation.
+    pub confirm_unwatch: Option<std::path::PathBuf>,
     /// Restore default settings is waiting for its confirmation.
     pub confirm_reset: bool,
 }
@@ -332,22 +334,54 @@ pub(super) fn library(ws: &WeakEntity<Workspace>, info: &SystemInfo, st: &Style)
         Some(folders) => {
             for (i, f) in folders.iter().enumerate() {
                 let path = f.clone();
-                let ws = ws.clone();
-                let remove: Click = Box::new(move |_, cx| {
-                    let path = path.clone();
-                    let _ = ws.update(cx, move |ws, cx| ws.unwatch_folder(path, cx));
-                });
+                let asking = info.confirm_unwatch.as_ref() == Some(f);
+                let ask: Click = {
+                    let (ws, path) = (ws.clone(), path.clone());
+                    Box::new(move |_, cx| {
+                        let path = path.clone();
+                        let _ = ws.update(cx, move |ws, cx| ws.ask_unwatch(Some(path), cx));
+                    })
+                };
+                let cancel: Click = {
+                    let ws = ws.clone();
+                    Box::new(move |_, cx| {
+                        let _ = ws.update(cx, |ws, cx| ws.ask_unwatch(None, cx));
+                    })
+                };
+                let remove: Click = {
+                    let (ws, path) = (ws.clone(), path.clone());
+                    Box::new(move |_, cx| {
+                        let path = path.clone();
+                        let _ = ws.update(cx, move |ws, cx| ws.unwatch_folder(path, cx));
+                    })
+                };
                 let name = f
                     .file_name()
                     .map(|n| n.to_string_lossy().to_string())
                     .unwrap_or_else(|| f.display().to_string());
-                list.push(icon_row(
-                    Some("folder-open"),
-                    &name,
-                    &f.display().to_string(),
-                    button(WATCH_IDS[i % WATCH_IDS.len()], "Remove", true, st, remove),
-                    st,
-                ));
+                if asking {
+                    // Asked first: say what leaves and what stays.
+                    list.push(icon_row(
+                        Some("folder-open"),
+                        &format!("Stop watching {name}?"),
+                        "Documents found only in this folder leave your library. Ones you've opened, favourites and documents in a collection stay. Nothing on disk is touched.",
+                        div()
+                            .flex()
+                            .gap(px(8.0))
+                            .child(button("watch-cancel", "Cancel", false, st, cancel))
+                            .child(button("watch-confirm", "Remove", true, st, remove))
+                            .into_any_element(),
+                        st,
+                    ));
+                } else {
+                    list.push(icon_row(
+                        Some("folder-open"),
+                        &name,
+                        &f.display().to_string(),
+                        button(WATCH_IDS[i % WATCH_IDS.len()], "Remove…", false, st, ask),
+                        st,
+                    ));
+                }
             }
         }
     }
@@ -377,7 +411,7 @@ pub(super) fn library(ws: &WeakEntity<Workspace>, info: &SystemInfo, st: &Style)
         .gap(px(28.0))
         .child(group(
             "Watched folders",
-            Some("Kitab looks in these folders when it starts and when you ask. Nothing is moved or changed; removing a folder keeps the documents already found."),
+            Some("Kitab looks in these folders when it starts and when you ask. Nothing is moved or changed. Removing a folder takes the documents found only there out of your library; ones you've opened stay."),
             rows(list),
             st,
         ))

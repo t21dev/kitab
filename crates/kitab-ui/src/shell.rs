@@ -3006,6 +3006,7 @@ impl Workspace {
         self.settings_closing = None;
         self.settings_serial += 1;
         self.system.confirm_clear = false;
+        self.system.confirm_unwatch = None;
         self.load_system_info(self.settings_section, cx);
         window.focus(&self.overlay_focus);
         self.new_settings_search(window, cx);
@@ -3130,6 +3131,7 @@ impl Workspace {
             self.settings = Some(section);
         }
         self.system.confirm_clear = false;
+        self.system.confirm_unwatch = None;
         self.load_system_info(section, cx);
         cx.notify();
     }

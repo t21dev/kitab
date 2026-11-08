@@ -209,11 +209,40 @@ impl Store {
         Ok(())
     }
 
-    /// Stop watching a folder; documents already found stay in the library.
-    pub fn unwatch_folder(&mut self, path: &Path) -> Result<()> {
-        self.conn
-            .prepare_cached("DELETE FROM watched_folders WHERE path = ?1")?
+    /// Stop watching a folder, and let go of the documents only it brought
+    /// in: ones under it that were never opened, aren't favourites, aren't
+    /// in a collection and aren't under another watched folder. Documents
+    /// you've used stay. Returns how many left the library. Files on disk
+    /// are never touched.
+    pub fn unwatch_folder(&mut self, path: &Path) -> Result<usize> {
+        let tx = self.conn.transaction()?;
+        tx.prepare_cached("DELETE FROM watched_folders WHERE path = ?1")?
             .execute([path.to_string_lossy()])?;
-        Ok(())
+        let others: Vec<String> = {
+            let mut stmt = tx.prepare_cached("SELECT path FROM watched_folders")?;
+            let rows = stmt.query_map([], |r| r.get::<_, String>(0))?;
+            rows.collect::<std::result::Result<_, _>>()?
+        };
+        let candidates: Vec<(i64, String)> = {
+            let mut stmt = tx.prepare_cached(
+                "SELECT d.id, d.path FROM documents d
+                 WHERE d.last_opened_at IS NULL AND d.favourite = 0
+                   AND NOT EXISTS (SELECT 1 FROM collection_items c WHERE c.document_id = d.id)",
+            )?;
+            let rows = stmt.query_map([], |r| Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?)))?;
+            rows.collect::<std::result::Result<_, _>>()?
+        };
+        let mut removed = 0;
+        {
+            let mut del = tx.prepare_cached("DELETE FROM documents WHERE id = ?1")?;
+            for (id, doc) in candidates {
+                let doc = Path::new(&doc);
+                if doc.starts_with(path) && !others.iter().any(|o| doc.starts_with(o)) {
+                    removed += del.execute([id])?;
+                }
+            }
+        }
+        tx.commit()?;
+        Ok(removed)
     }
 }

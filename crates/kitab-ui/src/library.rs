@@ -204,8 +204,12 @@ pub trait Library: Send + Sync + 'static {
     fn watch_folder(&self, path: &Path) {
         let _ = path;
     }
-    fn unwatch_folder(&self, path: &Path) {
+    /// Stop watching a folder; the documents only it brought in (never
+    /// opened, not favourites, in no collection) leave the library. Returns
+    /// how many left.
+    fn unwatch_folder(&self, path: &Path) -> usize {
         let _ = path;
+        0
     }
     /// Add the documents in the watched folders that the library doesn't
     /// know yet. Returns how many were added.

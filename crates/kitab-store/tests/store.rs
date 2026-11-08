@@ -756,3 +756,44 @@ fn collections_and_shelves() {
         .unwrap();
     assert!(store.watched_folders().unwrap().is_empty());
 }
+
+#[test]
+fn unwatching_a_folder_lets_go_of_what_only_it_brought_in() {
+    let mut store = Store::open_in_memory().unwrap();
+    let doc = |store: &mut Store, n: u64, path: &str| {
+        store
+            .upsert_document(
+                &fake_ident(n),
+                std::path::Path::new(path),
+                &DocMeta::new(Format::Pdf),
+            )
+            .unwrap()
+    };
+    store.watch_folder(std::path::Path::new("/scans")).unwrap();
+    store
+        .watch_folder(std::path::Path::new("/scans/keep"))
+        .unwrap();
+    let found = doc(&mut store, 31, "/scans/found.pdf");
+    let opened = doc(&mut store, 32, "/scans/opened.pdf");
+    let fav = doc(&mut store, 33, "/scans/fav.pdf");
+    let kept = doc(&mut store, 34, "/scans/in-collection.pdf");
+    let nested = doc(&mut store, 35, "/scans/keep/still-watched.pdf");
+    let elsewhere = doc(&mut store, 36, "/scansplus/other.pdf");
+    store.mark_opened(opened).unwrap();
+    store.set_favourite(fav, true).unwrap();
+    let c = store.create_collection("Keep").unwrap();
+    store.set_in_collection(c, kept, true).unwrap();
+
+    let gone = store
+        .unwatch_folder(std::path::Path::new("/scans"))
+        .unwrap();
+    assert_eq!(gone, 1, "only the never-used document under the folder");
+    assert!(store.document(found).unwrap().is_none());
+    for id in [opened, fav, kept, nested, elsewhere] {
+        assert!(store.document(id).unwrap().is_some());
+    }
+    assert_eq!(
+        store.watched_folders().unwrap(),
+        [std::path::PathBuf::from("/scans/keep")]
+    );
+}
