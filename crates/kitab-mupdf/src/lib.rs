@@ -63,6 +63,12 @@ pub use doc::{MAX_PAGES, MAX_PIXELS, MAX_SIDE_PX, REFLOW_EM, REFLOW_H, REFLOW_W,
 /// MuPDF's resource store limit (`FZ_STORE_DEFAULT`), shared by all workers.
 pub const STORE_LIMIT_BYTES: usize = 256 << 20;
 
+/// What MuPDF's store is trimmed back to after each render, as a share of
+/// its limit: 48 MiB of fonts, images and decoded objects. Plenty for the
+/// pages around the reader; its 256 MiB default made a long read grow by
+/// tens of megabytes that were never needed again.
+pub const STORE_KEEP_PERCENT: u32 = 19;
+
 /// Stack size of a worker thread. MuPDF recurses on deeply nested content.
 const WORKER_STACK_BYTES: usize = 8 << 20;
 
@@ -401,6 +407,10 @@ impl Engine {
                 .get(&doc)
                 .ok_or_else(|| "the document was closed".to_string())?;
             let bitmap = doc::render(&slot.doc, &req)?;
+            // Keep MuPDF's shared store near STORE_KEEP_BYTES: least
+            // recently used fonts and images go first, and only those no
+            // render holds. Nearly free when it's already under.
+            ffi::shrink_store(STORE_KEEP_PERCENT);
             Ok((!stale_on_worker()).then_some(bitmap))
         });
         counter.fetch_sub(1, Ordering::Relaxed);

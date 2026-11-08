@@ -17,6 +17,8 @@ an environment switch to turn it off so it can still be benchmarked:
   Heap    The manifest enables the Windows segment heap.
   Fallback When Direct3D 11 fails on the chosen adapter, every other one is tried,
           then WARP (software). KITAB_GPU=test-fallback goes straight to WARP.
+  Frames  Windows are woken by the vsync thread only when something changed or
+          an animation waits for a frame (idle CPU 0 %). KITAB_GPUI_FULL has no say.
   Display A window reopened on a monitor with a different scale is placed with
           that monitor's scale.
   RTL     Right-to-left glyph runs (Arabic, Hebrew) are placed at DirectWrite's
@@ -391,6 +393,96 @@ fn check_debug_layer_available() -> bool {"""),
         ("""    pub display_id: DisplayId,
     scale_factor: f32,""", """    pub display_id: DisplayId,
     pub(crate) scale_factor: f32,"""),
+    ])
+    # 9. Frames on demand: the vsync thread woke every window on every display
+    #    refresh (60-144 times a second), costing about 2 % of a core while
+    #    nothing changed. A window that changed, or waits for a frame
+    #    callback (animations), raises a flag; the vsync thread wakes windows
+    #    only while it's up, and rests in between. GPUI's one second of
+    #    presents after input (it keeps the display's refresh rate up) keeps
+    #    the flag up. Same idea as zed#63182.
+    edit("src/window.rs", [
+        ("""struct WindowInvalidatorInner {""",
+         """/// Kitab patch: a window changed or waits for a frame; the vsync thread
+/// wakes windows only while this is set.
+pub(crate) static KITAB_FRAME_WANTED: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(true);
+/// The vsync thread, woken when a frame is wanted while it rests.
+pub(crate) static KITAB_VSYNC_THREAD: std::sync::OnceLock<std::thread::Thread> =
+    std::sync::OnceLock::new();
+
+/// Kitab patch: ask the vsync thread for a frame.
+pub(crate) fn kitab_want_frame() {
+    if !KITAB_FRAME_WANTED.swap(true, std::sync::atomic::Ordering::AcqRel) {
+        if let Some(t) = KITAB_VSYNC_THREAD.get() {
+            t.unpark();
+        }
+    }
+}
+
+struct WindowInvalidatorInner {"""),
+        ("""        if inner.draw_phase == DrawPhase::None {
+            inner.dirty = true;
+            cx.push_effect(Effect::Notify { emitter: entity });""",
+         """        if inner.draw_phase == DrawPhase::None {
+            inner.dirty = true;
+            kitab_want_frame();
+            cx.push_effect(Effect::Notify { emitter: entity });"""),
+        ("""    pub fn set_dirty(&self, dirty: bool) {
+        self.inner.borrow_mut().dirty = dirty
+    }""",
+         """    pub fn set_dirty(&self, dirty: bool) {
+        if dirty {
+            kitab_want_frame();
+        }
+        self.inner.borrow_mut().dirty = dirty
+    }"""),
+        ("""    pub fn on_next_frame(&self, callback: impl FnOnce(&mut Window, &mut App) + 'static) {
+        RefCell::borrow_mut(&self.next_frame_callbacks).push(Box::new(callback));""",
+         """    pub fn on_next_frame(&self, callback: impl FnOnce(&mut Window, &mut App) + 'static) {
+        kitab_want_frame();
+        RefCell::borrow_mut(&self.next_frame_callbacks).push(Box::new(callback));"""),
+        ("""                let needs_present = request_frame_options.require_presentation
+                    || needs_present.get()
+                    || (active.get()
+                        && last_input_timestamp.get().elapsed() < Duration::from_secs(1));""",
+         """                let needs_present = request_frame_options.require_presentation
+                    || needs_present.get()
+                    || (active.get()
+                        && last_input_timestamp.get().elapsed() < Duration::from_secs(1));
+                // Kitab patch: presents still to come need frames too.
+                if needs_present {
+                    kitab_want_frame();
+                }"""),
+    ])
+    edit("src/platform/windows/platform.rs", [
+        ("""                let vsync_provider = VSyncProvider::new();
+                loop {
+                    vsync_provider.wait_for_vsync();""",
+         """                let vsync_provider = VSyncProvider::new();
+                let _ = crate::window::KITAB_VSYNC_THREAD.set(std::thread::current());
+                loop {
+                    // Kitab patch: rest until a frame is wanted (and check the
+                    // device a few times a second meanwhile).
+                    if !crate::window::KITAB_FRAME_WANTED.load(std::sync::atomic::Ordering::Acquire) {
+                        std::thread::park_timeout(std::time::Duration::from_millis(250));
+                    }
+                    vsync_provider.wait_for_vsync();"""),
+        ("""                    for hwnd in all_windows.read().iter() {
+                        unsafe {
+                            let _ = RedrawWindow(Some(hwnd.as_raw()), None, None, RDW_INVALIDATE);
+                        }
+                    }""",
+         """                    if !crate::window::KITAB_FRAME_WANTED
+                        .swap(false, std::sync::atomic::Ordering::AcqRel)
+                    {
+                        continue;
+                    }
+                    for hwnd in all_windows.read().iter() {
+                        unsafe {
+                            let _ = RedrawWindow(Some(hwnd.as_raw()), None, None, RDW_INVALIDATE);
+                        }
+                    }"""),
     ])
     print(f"patched gpui copy: {DEST}")
 

@@ -65,10 +65,13 @@ const GAP: f32 = crate::layout::PAGE_GAP;
 const ZOOM_STEPS: &[f32] = &[
     0.1, 0.25, 0.33, 0.5, 0.67, 0.75, 0.9, 1.0, 1.1, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0, 4.0, 5.0, 6.4,
 ];
-/// Rendered pages kept per tab (bytes). Phase 2 makes this a setting shared across tabs.
-/// The least kept; it grows to hold what's on screen and the pages
-/// around it on any window and screen (see `render`).
-const CACHE_BUDGET: usize = 96 * 1024 * 1024;
+/// Rendered pages kept per tab (bytes), at least.
+// The floor of the rendered-page cache. It always grows to hold the pages
+// on screen and the next three (see the budget in `layout`), so this only
+// decides how many pages further away are kept: 32 MB is a few at a typical
+// size. 96 MB kept up to ~16 pages that were drawn again in 20 ms anyway,
+// each costing RAM for its pixels as well as GPU memory.
+const CACHE_BUDGET: usize = 32 * 1024 * 1024;
 /// A page with nothing to show yet first gets a quick render at this share of
 /// its sharp scale, so fast scrolling shows the page (soft) instead of paper.
 const PREVIEW_SCALE: f32 = 0.25;

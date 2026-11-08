@@ -127,3 +127,18 @@ Same machine. `kitab-bench s2 --runs 15 --warmup 2`, medians. Kitab: release bui
 - The 150 ms between the window showing and the page being stable was Kitab's own tab and dock entrances resuming after the reveal (GPUI times an animation from its first frame with whatever duration it's given later), not Windows' open animation. Entrances begun off screen now stay finished (`motion.rs`): 2 frames after the reveal instead of about 30.
 - 120 ms of the CPU before any window is Direct3D device creation (the GPU driver starting) inside GPUI's `Application::new`, measured with temporary marks in gpui's platform set-up. SumatraPDF draws with GDI and doesn't pay it.
 - Memory: the page ahead renders only after the first scroll (about 11 MB at open), the page cache budget is 64 MB, and inactive tabs release pages after 20 s in the background.
+
+## Reading against SumatraPDF, and the idle-CPU round (8 November 2026)
+
+`python tools/bench_reading.py` (new): both apps in isolation in a 1200×800 window, `01-text-outline.pdf`, sampled from outside 4 s after start, 10 s later, after 60 wheel notches (3 s) and 15 s after that. CPU is the share of one core since the previous sample. NVIDIA RTX 5070 (Kitab's default adapter here; the AMD iGPU costs 60–100 MB more private, its textures live in system memory).
+
+| | Working set | Private | CPU idle | CPU scrolling | CPU idle after |
+|---|---|---|---|---|---|
+| SumatraPDF 3.6.1 | 34 MB | 15 MB | 0.0 % | 2.0 % | 0.0 % |
+| Kitab before | 118 MB (133 after scrolling) | 137 MB (172 after scrolling) | 2.2 % | 8.7 % | — |
+| Kitab after | 109 MB (114 after scrolling) | 129 MB (156 after scrolling) | 0.0–0.5 % | 2.4–7 % | 0.2 % |
+
+- **Frames on demand** (gpui patch 9): GPUI's vsync thread woke every window on every display refresh, idle or not. It now wakes them only when a window changed or an animation waits for a frame, and rests otherwise. Idle CPU 2.2 % → about 0 %, and scrolling costs a third of what it did.
+- **Page cache floor 96 → 32 MB:** the cache still always holds the pages on screen and the next three (the flicker fix); only how many pages further away it keeps went down. −18 MB private after scrolling.
+- **MuPDF store trimmed to 48 MB after each render** (its default limit is 256 MB). It made no difference on these files; it bounds image-heavy documents.
+- **What's left:** with nothing open Kitab holds about 88 MB private and 60 MB working set: GPUI's Direct3D 11 device, the NVIDIA user-mode driver and DirectWrite. SumatraPDF draws with GDI and has no such floor. A document adds about 44 MB, mostly rendered pages (each kept both as pixels in RAM and as a GPU texture).
