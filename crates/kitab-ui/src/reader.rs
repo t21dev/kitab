@@ -22,6 +22,16 @@ mod markdown;
 mod marks_list;
 mod markup;
 mod math_view;
+mod md_select;
+
+/// A code block's scroll bar thumb being dragged: which block, where the
+/// pointer and the scroll were when it was grabbed.
+#[derive(Clone, Copy)]
+pub(crate) struct HDrag {
+    key: u64,
+    from_x: f32,
+    from_offset: f32,
+}
 mod mermaid;
 mod pages;
 mod place_sig;
@@ -205,6 +215,10 @@ pub struct Reader {
     find: find::FindState,
     layers: layer::Layers,
     select: select::SelectState,
+    /// Text selection in Markdown (md_select.rs).
+    md_sel: md_select::MdSelect,
+    /// A code block's sideways scroll bar being dragged.
+    md_hdrag: Option<HDrag>,
     dock: dock::DockState,
     /// Room kept free above the first page (sidebar tabs: the window buttons).
     top_inset: f32,
@@ -312,6 +326,8 @@ impl Reader {
             find: find::FindState::new(cx.focus_handle()),
             layers: layer::Layers::default(),
             select: select::SelectState::default(),
+            md_sel: md_select::MdSelect::default(),
+            md_hdrag: None,
             dock: dock::DockState::default(),
             top_inset: 0.0,
             md: None,
@@ -462,6 +478,7 @@ impl Reader {
                         .parent()
                         .map(|p| p.to_path_buf())
                         .unwrap_or_default();
+                    this.md_sel.reset();
                     this.md = Some(markdown::MdState {
                         block_lines: doc.block_lines.clone(),
                         doc: Arc::new(doc),
@@ -471,6 +488,7 @@ impl Reader {
                         edit: None,
                         mtime,
                         diagrams: Default::default(),
+                        code_scroll: Default::default(),
                     });
                     this.start_watch(cx);
                     if let Some(state) = this.restore {
@@ -1585,6 +1603,10 @@ impl Render for Reader {
         if self.present.is_some() {
             return self.present_view(window, cx);
         }
+        // Markdown's text units are collected afresh as the blocks draw.
+        if self.md.is_some() {
+            self.md_sel.units.borrow_mut().clear();
+        }
         // Fit modes follow the viewport: re-measure when it changes.
         let vb = self.list.viewport_bounds();
         let vp = (f32::from(vb.size.width), f32::from(vb.size.height));
@@ -1816,6 +1838,21 @@ impl Render for Reader {
                         r.select_up();
                     }
                 }
+                if let Some(g) = r.md_hdrag {
+                    if e.pressed_button == Some(MouseButton::Left) {
+                        r.md_hdrag_to(g, f32::from(e.position.x), cx);
+                    } else {
+                        r.md_hdrag = None;
+                        cx.notify();
+                    }
+                }
+                if r.md_sel.dragging {
+                    if e.pressed_button == Some(MouseButton::Left) {
+                        r.md_select_move(e.position, cx);
+                    } else {
+                        r.md_sel.dragging = false;
+                    }
+                }
                 if r.dragging {
                     if e.pressed_button == Some(MouseButton::Left) {
                         r.seek_x(e.position.x, cx);
@@ -1840,6 +1877,10 @@ impl Render for Reader {
                         cx.notify();
                     }
                     r.select_up();
+                    r.md_sel.dragging = false;
+                    if r.md_hdrag.take().is_some() {
+                        cx.notify();
+                    }
                     r.markup_up(cx);
                 }),
             )

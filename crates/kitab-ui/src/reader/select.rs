@@ -132,10 +132,17 @@ pub(super) fn text_of(chars: &[TextChar], a: usize, b: usize, out: &mut String) 
 
 impl Reader {
     pub fn has_selection(&self) -> bool {
+        if self.md.is_some() {
+            return self.md_sel.range().is_some();
+        }
         self.select.range().is_some()
     }
 
     pub fn clear_selection(&mut self, cx: &mut Context<Self>) {
+        if self.md_sel.anchor.take().is_some() {
+            self.md_sel.head = None;
+            cx.notify();
+        }
         if self.select.anchor.take().is_some() {
             self.select.head = None;
             cx.notify();
@@ -247,6 +254,9 @@ impl Reader {
     /// The selected text, from pages whose characters are in (all of them,
     /// after a drag over each).
     fn selected_text_cached(&self) -> Option<String> {
+        if self.md.is_some() {
+            return self.md_sel.text();
+        }
         let ((p0, i0), (p1, i1)) = self.select.range()?;
         let mut out = String::new();
         for page in p0..=p1.min(p0 + MAX_COPY_PAGES) {
@@ -269,6 +279,9 @@ impl Reader {
         }
         if let Some(text) = self.selected_text_cached() {
             cx.write_to_clipboard(gpui::ClipboardItem::new_string(text));
+            return;
+        }
+        if self.md.is_some() {
             return;
         }
         let (Some(((p0, i0), (p1, i1))), Some(doc)) = (self.select.range(), self.doc) else {

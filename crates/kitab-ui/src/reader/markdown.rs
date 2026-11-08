@@ -6,8 +6,7 @@
 //! restore work unchanged. Text reflows in a centred column on the app's own
 //! surface; zoom scales the type.
 //!
-//! Not yet: syntax colours in code blocks, drawn Mermaid diagrams and typeset
-//! math (their source shows, styled), text selection, live reload.
+//! Text selection: md_select.rs.
 
 use super::{Reader, ReaderEvent};
 use crate::icons::icon;
@@ -50,6 +49,9 @@ pub(super) struct MdState {
     pub mtime: Option<std::time::SystemTime>,
     /// Drawn Mermaid diagrams (`mermaid.rs`).
     pub diagrams: super::mermaid::Diagrams,
+    /// Each wide code block's sideways scroll, by block and position.
+    pub code_scroll:
+        std::rc::Rc<std::cell::RefCell<std::collections::HashMap<u64, gpui::ScrollHandle>>>,
 }
 
 /// What a block needs while it draws.
@@ -64,9 +66,50 @@ struct Draw<'a> {
     seq: Cell<u64>,
     open: &'a HashSet<u64>,
     diagrams: &'a super::mermaid::Diagrams,
+    /// Text selection: the selected range, where units report in, and the
+    /// next unit's number in this block.
+    sel: Option<(super::md_select::End, super::md_select::End)>,
+    units: std::rc::Rc<std::cell::RefCell<Vec<super::md_select::Unit>>>,
+    texts: std::rc::Rc<
+        std::cell::RefCell<std::collections::BTreeMap<super::md_select::Key, SharedString>>,
+    >,
+    unit: Cell<u32>,
+    code_scroll:
+        std::rc::Rc<std::cell::RefCell<std::collections::HashMap<u64, gpui::ScrollHandle>>>,
+    /// The code block whose scroll bar is being dragged.
+    hdrag: Option<u64>,
 }
 
 impl Draw<'_> {
+    /// The next text unit in this block: its key, and its selected part.
+    fn unit(&self, len: usize) -> (super::md_select::Key, Option<Range<usize>>) {
+        let n = self.unit.get();
+        self.unit.set(n + 1);
+        let key = (self.block, n);
+        let part = self.sel.and_then(|((k0, o0), (k1, o1))| {
+            if key < k0 || key > k1 {
+                return None;
+            }
+            let a = if key == k0 { o0.min(len) } else { 0 };
+            let b = if key == k1 { o1.min(len) } else { len };
+            (a < b).then_some(a..b)
+        });
+        (key, part)
+    }
+
+    /// A drawn unit reports its laid-out text, for hit-testing and copying.
+    fn report(&self, key: super::md_select::Key, styled: &StyledText, text: SharedString) {
+        self.units.borrow_mut().push(super::md_select::Unit {
+            key,
+            layout: styled.layout().clone(),
+        });
+        self.texts.borrow_mut().insert(key, text);
+    }
+
+    fn sel_color(&self) -> Hsla {
+        self.st.c(|c| c.accent).opacity(0.3)
+    }
+
     fn id(&self, name: &'static str) -> gpui::ElementId {
         let n = self.seq.get();
         self.seq.set(n + 1);
@@ -250,6 +293,12 @@ impl Reader {
             seq: Cell::new(0),
             open: &md.open_details,
             diagrams: &md.diagrams,
+            sel: self.md_sel.range(),
+            units: self.md_sel.units.clone(),
+            texts: self.md_sel.texts.clone(),
+            unit: Cell::new(0),
+            code_scroll: md.code_scroll.clone(),
+            hdrag: self.md_hdrag.map(|g| g.key),
         };
         let el = block_el(&d, block, 0, cx);
         let last = ix + 1 == md.doc.blocks.len();
@@ -260,6 +309,10 @@ impl Reader {
             .px(px(28.0))
             .pt(px(if ix == 0 { 40.0 + self.top_inset } else { 0.0 }))
             .pb(px(if last { 120.0 } else { 0.0 }))
+            .on_mouse_down(
+                gpui::MouseButton::Left,
+                cx.listener(|r, e: &gpui::MouseDownEvent, _, cx| r.md_select_down(e, cx)),
+            )
             .child(div().w_full().max_w(px(COLUMN * scale.max(0.5))).child(el))
             .into_any_element()
     }
@@ -512,11 +565,40 @@ pub(crate) fn token_color(st: &Style, kind: TokenKind) -> Hsla {
 }
 
 /// One line of code with its colours (token offsets are into the whole block).
-fn code_line(st: &Style, line: &str, at: usize, tokens: &[Token]) -> StyledText {
+fn code_line(d: &Draw, line: &str, at: usize, tokens: &[Token]) -> StyledText {
+    let st = d.st;
     let shown = line.replace('\t', "    ");
+    let (key, part) = d.unit(shown.len());
+    let finish = |runs: Vec<TextRun>| {
+        let text = SharedString::from(shown.clone());
+        let styled = if runs.is_empty() {
+            StyledText::new(text.clone())
+        } else {
+            StyledText::new(text.clone()).with_runs(super::md_select::select_runs(
+                runs,
+                part.clone(),
+                d.sel_color(),
+            ))
+        };
+        d.report(key, &styled, text);
+        styled
+    };
+    let plain_run = |len: usize| TextRun {
+        len,
+        font: font(MONO_FONT, false, false),
+        color: token_color(st, TokenKind::Plain),
+        background_color: None,
+        underline: None,
+        strikethrough: None,
+    };
     if tokens.is_empty() || shown.len() != line.len() {
-        // No colours, or tabs moved the offsets: one plain run.
-        return StyledText::new(SharedString::from(shown));
+        // No colours, or tabs moved the offsets: one plain run (a run only
+        // when part of it is selected).
+        return finish(if part.is_some() && !shown.is_empty() {
+            vec![plain_run(shown.len())]
+        } else {
+            Vec::new()
+        });
     }
     let end = at + line.len();
     let plain = font(MONO_FONT, false, false);
@@ -554,9 +636,11 @@ fn code_line(st: &Style, line: &str, at: usize, tokens: &[Token]) -> StyledText 
         line.is_char_boundary(b)
     }) && b == line.len();
     if ok && !runs.is_empty() {
-        StyledText::new(SharedString::from(shown)).with_runs(runs)
+        finish(runs)
+    } else if part.is_some() && !shown.is_empty() {
+        finish(vec![plain_run(shown.len())])
     } else {
-        StyledText::new(SharedString::from(shown))
+        finish(Vec::new())
     }
 }
 
@@ -565,10 +649,19 @@ fn code_el(
     lang: &str,
     text: &str,
     tokens: &[Token],
-    _cx: &mut Context<Reader>,
+    cx: &mut Context<Reader>,
 ) -> AnyElement {
     let st = d.st;
     let copy_text = text.to_string();
+    // Lines wider than the column scroll sideways, with a bar to show it.
+    let code_key = ((d.block as u64) << 20) | d.seq.get();
+    let scroll = d
+        .code_scroll
+        .borrow_mut()
+        .entry(code_key)
+        .or_default()
+        .clone();
+    let bar = code_hbar(code_key, &scroll, d.hdrag == Some(code_key), st, cx);
     div()
         .mb(d.px(16.0))
         .rounded(px(10.0))
@@ -647,9 +740,39 @@ fn code_el(
             div()
                 .id(d.id("md-code"))
                 .overflow_x_scroll()
+                .track_scroll(&scroll)
+                // A plain wheel scrolls the page, not the block sideways;
+                // Shift+wheel (or a sideways swipe) scrolls the block.
+                .map(|mut el| {
+                    el.style().restrict_scroll_to_axis = Some(true);
+                    el
+                })
+                .on_scroll_wheel({
+                    let scroll = scroll.clone();
+                    move |e: &gpui::ScrollWheelEvent, window, cx| {
+                        if !e.modifiers.shift {
+                            return;
+                        }
+                        let delta = e.delta.pixel_delta(window.line_height());
+                        if delta.x.abs() > px(0.0) {
+                            return;
+                        }
+                        let max = scroll.max_offset().width;
+                        let mut at = scroll.offset();
+                        at.x = (at.x + delta.y).clamp(-max, px(0.0));
+                        scroll.set_offset(at);
+                        cx.stop_propagation();
+                        window.refresh();
+                    }
+                })
                 .p(d.px(14.0))
+                // The lines' box is as wide as the longest line (not the
+                // column), so there is something to scroll to.
+                .flex()
                 .child(
                     div()
+                        .flex_none()
+                        .min_w_full()
                         .whitespace_nowrap()
                         .font_family(MONO_FONT)
                         .text_size(d.px(BODY * 0.85))
@@ -661,7 +784,8 @@ fn code_el(
                                 .map(|line| {
                                     let el = div()
                                         .min_h(d.px(BODY * 0.85 * 1.5))
-                                        .child(code_line(st, line, at, tokens));
+                                        .cursor(gpui::CursorStyle::IBeam)
+                                        .child(code_line(d, line, at, tokens));
                                     at += line.len() + 1;
                                     el
                                 })
@@ -669,7 +793,73 @@ fn code_el(
                         }),
                 ),
         )
+        .children(bar)
         .into_any_element()
+}
+
+/// The sideways scroll bar under a code block, when its lines are wider
+/// than the column: drag the thumb, or click the track to jump.
+fn code_hbar(
+    key: u64,
+    scroll: &gpui::ScrollHandle,
+    held: bool,
+    st: &Style,
+    cx: &mut Context<Reader>,
+) -> Option<AnyElement> {
+    let max = f32::from(scroll.max_offset().width);
+    let view = f32::from(scroll.bounds().size.width);
+    if view < 1.0 {
+        // Not measured yet (it just came on screen): look again next frame.
+        cx.notify();
+        return None;
+    }
+    if max < 1.0 {
+        return None;
+    }
+    let shown = (view / (view + max)).clamp(0.08, 1.0);
+    let at = (-f32::from(scroll.offset().x) / max).clamp(0.0, 1.0);
+    let thumb = div()
+        .absolute()
+        .top_0()
+        .bottom_0()
+        .left(relative(at * (1.0 - shown)))
+        .w(relative(shown))
+        .rounded_full()
+        .bg(st.c(|c| c.muted).opacity(if held { 0.6 } else { 0.35 }))
+        .hover(|d| d.bg(st.c(|c| c.muted).opacity(0.6)));
+    let track = div()
+        .id(gpui::ElementId::NamedInteger("md-code-bar".into(), key))
+        .relative()
+        .mx(px(12.0))
+        .mb(px(6.0))
+        .h(px(6.0))
+        .cursor_default()
+        .on_mouse_down(gpui::MouseButton::Left, {
+            let scroll = scroll.clone();
+            cx.listener(move |r, e: &gpui::MouseDownEvent, _, cx| {
+                cx.stop_propagation();
+                // Off the thumb: jump so the thumb centres on the pointer.
+                let b = scroll.bounds();
+                let track_w = f32::from(b.size.width) - 24.0;
+                let x = f32::from(e.position.x - b.left()) - 12.0;
+                let thumb_w = track_w * shown;
+                let left = track_w * at * (1.0 - shown);
+                if x < left || x > left + thumb_w {
+                    let frac = ((x - thumb_w / 2.0) / (track_w - thumb_w).max(1.0)).clamp(0.0, 1.0);
+                    let mut o = scroll.offset();
+                    o.x = px(-frac * max);
+                    scroll.set_offset(o);
+                }
+                r.md_hdrag = Some(super::HDrag {
+                    key,
+                    from_x: f32::from(e.position.x),
+                    from_offset: -f32::from(scroll.offset().x),
+                });
+                cx.notify();
+            })
+        })
+        .child(thumb);
+    Some(track.into_any_element())
 }
 
 /// A Mermaid diagram: the drawing when ready, a quiet frame meanwhile, the
@@ -1125,8 +1315,13 @@ fn text_el(d: &Draw, inlines: &[Inline], base: Base, _cx: &mut Context<Reader>) 
         return div().into_any_element();
     }
     let rtl = starts_right_to_left(&text);
-    let styled = StyledText::new(SharedString::from(text)).with_runs(runs);
+    let (key, part) = d.unit(text.len());
+    let runs = super::md_select::select_runs(runs, part, d.sel_color());
+    let text = SharedString::from(text);
+    let styled = StyledText::new(text.clone()).with_runs(runs);
+    d.report(key, &styled, text);
     let container = div()
+        .cursor(gpui::CursorStyle::IBeam)
         .text_size(d.px(base.size))
         .line_height(relative(1.6))
         .font_family(d.st.md_face.family())
@@ -1158,6 +1353,8 @@ pub(super) fn block_lines(_text: &str, doc: &MdDoc) -> Vec<usize> {
 impl Reader {
     /// A re-parse (after an edit) replaces the preview, keeping its place.
     pub(super) fn show_parsed(&mut self, doc: MdDoc, lines: Vec<usize>, cx: &mut Context<Self>) {
+        // The text changed: a selection in the old text means nothing now.
+        self.md_sel.reset();
         let Some(md) = self.md.as_mut() else { return };
         let top = self.list.logical_scroll_top();
         let count = doc.blocks.len().max(1);

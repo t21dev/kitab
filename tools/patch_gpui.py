@@ -23,6 +23,7 @@ an environment switch to turn it off so it can still be benchmarked:
           window's scale; gpui::kitab_set_ui_scale sets it.
   Display A window reopened on a monitor with a different scale is placed with
           that monitor's scale.
+  Select  TextLayout::kitab_bounds: bounds without the panic, for hit-testing.
   RTL     Right-to-left glyph runs (Arabic, Hebrew) are placed at DirectWrite's
           origin and advance leftwards, instead of left to right.
 
@@ -559,6 +560,19 @@ struct WindowInvalidatorInner {"""),
          """    // Kitab patch: times the interface size, like every window's scale.
     Ok(dpi_x as f32 / USER_DEFAULT_SCREEN_DPI as f32 * crate::kitab_ui_scale())
 }"""),
+    ])
+    # 11. Text selection in Kitab's Markdown view hit-tests laid-out text; the
+    #     stock accessors panic before layout, so a checked one.
+    edit("src/elements/text.rs", [
+        ("""    /// The bounds of this layout.
+    pub fn bounds(&self) -> Bounds<Pixels> {""",
+         """    /// Kitab patch: the bounds once laid out and painted, else `None`.
+    pub fn kitab_bounds(&self) -> Option<Bounds<Pixels>> {
+        self.0.borrow().as_ref().and_then(|s| s.bounds)
+    }
+
+    /// The bounds of this layout.
+    pub fn bounds(&self) -> Bounds<Pixels> {"""),
     ])
     print(f"patched gpui copy: {DEST}")
 
