@@ -54,6 +54,11 @@ pub struct Style {
     pub scroll_bar: bool,
     /// The open-tab count in the title bar.
     pub tab_count: bool,
+    /// Home's layout (Settings › Home).
+    pub home_layout: crate::settings::HomeLayout,
+    pub cover_size: crate::settings::CoverSize,
+    pub home_stats: bool,
+    pub home_continue: bool,
     /// The main window's last place, saved with the settings.
     pub window: Option<crate::settings::WindowPlace>,
 }
@@ -97,6 +102,10 @@ impl Style {
             skipped_update: s.skipped_update.clone(),
             scroll_bar: s.scroll_bar,
             tab_count: s.tab_count,
+            home_layout: s.home_layout,
+            cover_size: s.cover_size,
+            home_stats: s.home_stats,
+            home_continue: s.home_continue,
             window: s.window,
         };
         style.resolve_accent();
@@ -168,6 +177,10 @@ impl Style {
             skipped_update: self.skipped_update.clone(),
             scroll_bar: self.scroll_bar,
             tab_count: self.tab_count,
+            home_layout: self.home_layout,
+            cover_size: self.cover_size,
+            home_stats: self.home_stats,
+            home_continue: self.home_continue,
             window: self.window,
         }
     }

@@ -103,6 +103,22 @@ const INDEX: &[(Section, &str, &str)] = &[
         "minimal distraction free hide tabs sidebar dock navigator",
     ),
     (
+        Section::Home,
+        "Layout",
+        "home covers list grid view books shelf",
+    ),
+    (
+        Section::Home,
+        "Cover size",
+        "home small medium large thumbnails covers",
+    ),
+    (
+        Section::Home,
+        "Reading stats",
+        "home streak today week time",
+    ),
+    (Section::Home, "Continue reading", "home in progress resume"),
+    (
         Section::Library,
         "Watched folders",
         "folder scan library add",

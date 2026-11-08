@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Settings › Home: show the books as Covers or a List (a small cover, title, author, format and progress on each row), choose the cover size, and turn the reading stats and Continue reading on or off. A small Home at the top of the page follows every choice.
+- Search in Settings: type in the box above the sections to list the matching settings; pick one (or press Enter) to open its section.
+
+### Changed
+- The tab count sits at the right of the title bar. The + isn't shown when nothing is open.
+- Book covers on Home fade in, and cards scrolled straight past aren't drawn; while a cover loads its place is a quiet block instead of a generated cover.
+- Home's pinned header has room below the shelf chips and a thin line once the books scroll beneath it. Its search box is the same height as the buttons beside it.
+- Markdown follows the chosen page navigator (Stepper moves a screen at a time; Counter shows how far through you are).
+
+### Fixed
+- The window opens on the monitor it was last on, at the same place and size, also on a monitor with different scaling.
+- In Settings › Appearance › Toolbar, choosing Dock (or Title bar) for Focus mode, Print and other rows works; the click used to land on another row.
+- Markdown's percentage showed 0 % while the slider moved; it now follows the scroll position.
+- Favourite and Mark finished show on Recent at once.
+- The text cursor no longer shows over the dock or the page navigator.
+
 ## [0.2.1] - 2026-11-08
 
 ### Fixed

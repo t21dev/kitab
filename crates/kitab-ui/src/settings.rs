@@ -11,6 +11,66 @@ use serde::{Deserialize, Serialize};
 /// The settings format version, independent of the app version (PLAN.md §11).
 pub const SETTINGS_VERSION: u32 = 1;
 
+/// How Home shows the books (Settings › Home).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum HomeLayout {
+    /// A grid of covers.
+    #[default]
+    Covers,
+    /// One book per row: a small cover, the title and author, progress.
+    List,
+}
+
+impl HomeLayout {
+    pub const ALL: [HomeLayout; 2] = [Self::Covers, Self::List];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Covers => "Covers",
+            Self::List => "List",
+        }
+    }
+
+    pub fn hint(self) -> &'static str {
+        match self {
+            Self::Covers => "A shelf of first pages",
+            Self::List => "More books on screen, with details",
+        }
+    }
+}
+
+/// How big the covers are on Home.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum CoverSize {
+    Small,
+    #[default]
+    Medium,
+    Large,
+}
+
+impl CoverSize {
+    pub const ALL: [CoverSize; 3] = [Self::Small, Self::Medium, Self::Large];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Small => "Small",
+            Self::Medium => "Medium",
+            Self::Large => "Large",
+        }
+    }
+
+    /// A card's width in points.
+    pub fn width(self) -> f32 {
+        match self {
+            Self::Small => 104.0,
+            Self::Medium => 132.0,
+            Self::Large => 168.0,
+        }
+    }
+}
+
 /// How the reader shows and changes the current page.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -418,6 +478,11 @@ pub struct Settings {
     pub scroll_bar: bool,
     /// How many tabs are open, as a small number in the title bar.
     pub tab_count: bool,
+    /// Home: covers or a list, the covers' size, and what's above them.
+    pub home_layout: HomeLayout,
+    pub cover_size: CoverSize,
+    pub home_stats: bool,
+    pub home_continue: bool,
     /// The main window's last place (none before the first close).
     pub window: Option<WindowPlace>,
 }
@@ -498,6 +563,10 @@ impl Default for Settings {
             skipped_update: String::new(),
             scroll_bar: true,
             tab_count: false,
+            home_layout: HomeLayout::Covers,
+            cover_size: CoverSize::Medium,
+            home_stats: true,
+            home_continue: true,
             window: None,
         }
     }
@@ -543,6 +612,10 @@ struct File {
     skipped_update: String,
     scroll_bar: bool,
     tab_count: bool,
+    home_layout: HomeLayout,
+    cover_size: CoverSize,
+    home_stats: bool,
+    home_continue: bool,
     window: Option<WindowPlace>,
 }
 
@@ -629,6 +702,10 @@ impl From<Settings> for File {
             skipped_update: s.skipped_update,
             scroll_bar: s.scroll_bar,
             tab_count: s.tab_count,
+            home_layout: s.home_layout,
+            cover_size: s.cover_size,
+            home_stats: s.home_stats,
+            home_continue: s.home_continue,
             window: s.window,
         }
     }
@@ -675,6 +752,10 @@ impl Settings {
             skipped_update: f.skipped_update.chars().take(32).collect(),
             scroll_bar: f.scroll_bar,
             tab_count: f.tab_count,
+            home_layout: f.home_layout,
+            cover_size: f.cover_size,
+            home_stats: f.home_stats,
+            home_continue: f.home_continue,
             window: f.window,
         })
     }
@@ -740,6 +821,10 @@ mod tests {
             skipped_update: "0.2.0".into(),
             scroll_bar: false,
             tab_count: true,
+            home_layout: HomeLayout::List,
+            cover_size: CoverSize::Large,
+            home_stats: false,
+            home_continue: false,
             window: Some(WindowPlace {
                 x: 40.0,
                 y: 30.0,

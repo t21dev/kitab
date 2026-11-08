@@ -23,8 +23,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-/// A card and the gap after it.
-const CARD_W: f32 = 132.0;
+/// The gap after a card (its width is Settings › Home › Cover size).
 const CARD_GAP: f32 = 20.0;
 const SIDE_PAD: f32 = 40.0;
 /// Covers kept in memory (a few screens of cards); more are dropped,
@@ -180,12 +179,26 @@ impl Workspace {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        self.home.cover_px = (CARD_W * 1.5 * window.scale_factor()).ceil() as u32;
+        let list_layout = st.home_layout == crate::settings::HomeLayout::List;
+        // Covers are drawn for the card's size (the list's are small, but
+        // drawn at the grid's size so switching back reuses them).
+        let card_w = st.cover_size.width();
+        self.home.cover_px = (card_w * 1.5 * window.scale_factor()).ceil() as u32;
         let n = self.home_slice().len();
         let room = self.home.width - 2.0 * SIDE_PAD + CARD_GAP;
-        let cols = ((room / (CARD_W + CARD_GAP)).floor() as usize).max(1);
+        let cols = if list_layout {
+            1
+        } else {
+            ((room / (card_w + CARD_GAP)).floor() as usize).max(1)
+        };
         let rows = n.div_ceil(cols);
-        let shape = (n, cols, self.shelf_key());
+        // A new layout or size starts from the top, like another shelf.
+        let key = self.shelf_key()
+            ^ ((list_layout as u64) << 60)
+            ^ ((st.cover_size as u64) << 56)
+            ^ ((st.home_stats as u64) << 54)
+            ^ ((st.home_continue as u64) << 53);
+        let shape = (n, cols, key);
         if shape != self.home.shape {
             let count = 1 + rows;
             if shape.2 != self.home.shape.2 {
@@ -406,6 +419,22 @@ impl Workspace {
             .collect();
         let last = (row + 1) * cols >= self.home_slice().len();
         let fresh = self.home.shown_at.elapsed() < Duration::from_millis(700);
+        if st.home_layout == crate::settings::HomeLayout::List {
+            let Some(item) = items.into_iter().next() else {
+                return div().into_any_element();
+            };
+            let card = self.recent_row(row, item, st, cx);
+            return div()
+                .px(px(SIDE_PAD))
+                .pt(px(if row == 0 { 12.0 } else { 0.0 }))
+                .pb(px(if last { 40.0 } else { 6.0 }))
+                .child(if fresh && row < 8 {
+                    self.card_enter(card, "row-in", row, st)
+                } else {
+                    card
+                })
+                .into_any_element();
+        }
         let mut el = div()
             .flex()
             .gap(px(CARD_GAP))
@@ -430,14 +459,19 @@ impl Workspace {
     fn home_top(&mut self, st: &Style, cx: &mut Context<Self>) -> AnyElement {
         let mut col = div().flex().flex_col();
         if self.shelves.kind == crate::library::ShelfKind::Recent {
-            col = col.children(self.stats_strip(st));
-            let continuing: Vec<RecentItem> = self
-                .recent
-                .iter()
-                .filter(|r| !r.missing && r.progress > 0.0 && r.progress < 0.995)
-                .take(3)
-                .cloned()
-                .collect();
+            if st.home_stats {
+                col = col.children(self.stats_strip(st));
+            }
+            let continuing: Vec<RecentItem> = if st.home_continue {
+                self.recent
+                    .iter()
+                    .filter(|r| !r.missing && r.progress > 0.0 && r.progress < 0.995)
+                    .take(3)
+                    .cloned()
+                    .collect()
+            } else {
+                Vec::new()
+            };
             if !continuing.is_empty() {
                 let mut row = div().flex().gap(px(16.0)).px(px(SIDE_PAD)).pt(px(12.0));
                 for (i, item) in continuing.into_iter().enumerate() {

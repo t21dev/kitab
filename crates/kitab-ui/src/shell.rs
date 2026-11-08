@@ -2139,7 +2139,7 @@ impl Workspace {
             .flex()
             .flex_col()
             .gap(px(8.0))
-            .w(px(132.0))
+            .w(px(st.cover_size.width()))
             .when(missing, |d| d.opacity(0.5))
             .when(!missing, |d| {
                 d.on_click(
@@ -2150,7 +2150,7 @@ impl Workspace {
             .child(
                 div()
                     .relative()
-                    .child(self.book_cover(i, &item, 132.0, st, cx))
+                    .child(self.book_cover(i, &item, st.cover_size.width(), st, cx))
                     // A favourite wears a ribbon over the cover's top edge.
                     .when(item.favourite, |d| {
                         d.child(
@@ -2216,6 +2216,135 @@ impl Workspace {
             } else {
                 progress_bar(item.progress, st)
             })
+            .into_any_element()
+    }
+}
+
+impl Workspace {
+    /// Home's list layout: one book per row, with a small cover, the title
+    /// and author, the format and how far you've read.
+    pub(super) fn recent_row(
+        &mut self,
+        i: usize,
+        item: RecentItem,
+        st: &Style,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let path = item.path.clone();
+        let menu_path = item.path.clone();
+        let missing = item.missing;
+        let percent = (item.progress * 100.0).round() as u32;
+        crate::kbd::stop(div().id(("recent-row", i)), st)
+            .flex()
+            .items_center()
+            .gap(px(14.0))
+            .px(px(10.0))
+            .py(px(8.0))
+            .rounded(px(10.0))
+            .cursor_pointer()
+            .hover(|d| d.bg(st.hover_bg()))
+            .when(missing, |d| d.opacity(0.5))
+            .when(!missing, |d| {
+                d.on_click(
+                    cx.listener(move |ws, _, window, cx| ws.open_tab(path.clone(), window, cx)),
+                )
+            })
+            .on_mouse_down(
+                MouseButton::Right,
+                cx.listener(move |ws, e: &MouseDownEvent, window, cx| {
+                    ws.card_menu_flags(menu_path.clone(), e.position, window, cx)
+                }),
+            )
+            .child(
+                div()
+                    .flex_none()
+                    .child(self.book_cover(usize::MAX - i, &item, 40.0, st, cx)),
+            )
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .flex()
+                    .flex_col()
+                    .gap(px(3.0))
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap(px(6.0))
+                            .when(item.favourite, |d| {
+                                d.child(
+                                    svg()
+                                        .flex_none()
+                                        .w(px(10.0))
+                                        .h(px(14.0))
+                                        .path(icon("ribbon"))
+                                        .text_color(RIBBON),
+                                )
+                            })
+                            .child(
+                                div()
+                                    .min_w_0()
+                                    .text_size(px(13.5))
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .text_color(st.c(|c| c.text))
+                                    .whitespace_nowrap()
+                                    .overflow_hidden()
+                                    .text_ellipsis()
+                                    .child(item.title.clone()),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .text_size(px(12.0))
+                            .text_color(st.c(|c| c.muted))
+                            .whitespace_nowrap()
+                            .overflow_hidden()
+                            .text_ellipsis()
+                            .child(item.author.clone().unwrap_or_default()),
+                    ),
+            )
+            .child(
+                div()
+                    .flex_none()
+                    .px(px(6.0))
+                    .py(px(1.0))
+                    .rounded(px(5.0))
+                    .bg(st.c(|c| c.raised))
+                    .text_size(px(10.5))
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .text_color(st.c(|c| c.muted))
+                    .child(format!("{:?}", item.format).to_uppercase()),
+            )
+            .child(
+                div()
+                    .flex_none()
+                    .w(px(150.0))
+                    .flex()
+                    .items_center()
+                    .gap(px(10.0))
+                    .child(if missing {
+                        div()
+                            .text_size(px(11.5))
+                            .text_color(st.c(|c| c.faint))
+                            .child("File not found")
+                            .into_any_element()
+                    } else {
+                        div()
+                            .flex_1()
+                            .child(progress_bar(item.progress, st))
+                            .into_any_element()
+                    })
+                    .when(!missing, |d| {
+                        d.child(
+                            div()
+                                .w(px(36.0))
+                                .text_size(px(11.5))
+                                .text_color(st.c(|c| c.faint))
+                                .child(format!("{percent} %")),
+                        )
+                    }),
+            )
             .into_any_element()
     }
 }

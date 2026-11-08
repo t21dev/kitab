@@ -33,6 +33,7 @@ pub enum Section {
     #[default]
     Appearance,
     Reading,
+    Home,
     Library,
     FileTypes,
     Shortcuts,
@@ -42,9 +43,10 @@ pub enum Section {
 }
 
 impl Section {
-    const ALL: [Section; 8] = [
+    const ALL: [Section; 9] = [
         Section::Appearance,
         Section::Reading,
+        Section::Home,
         Section::Library,
         Section::FileTypes,
         Section::Shortcuts,
@@ -57,6 +59,7 @@ impl Section {
         match self {
             Section::Appearance => "Appearance",
             Section::Reading => "Reading",
+            Section::Home => "Home",
             Section::Library => "Library",
             Section::FileTypes => "File types",
             Section::Shortcuts => "Shortcuts",
@@ -70,6 +73,7 @@ impl Section {
         match self {
             Section::Appearance => "sun",
             Section::Reading => "book",
+            Section::Home => "home",
             Section::Library => "folder-open",
             Section::FileTypes => "file",
             Section::Shortcuts => "keyboard",
@@ -197,6 +201,7 @@ pub fn panel(
         _ if searching => search::results(&ws, query, st),
         Section::Appearance => appearance(&ws, st, themes, hex, window),
         Section::Reading => reading(&ws, st),
+        Section::Home => home_section(&ws, st),
         Section::Library => system::library(&ws, sys, st),
         Section::FileTypes => system::file_types(&ws, sys, st),
         Section::Shortcuts => shortcuts_section(&ws, st),
@@ -1088,6 +1093,219 @@ pub(crate) fn segmented(choices: Vec<(SharedString, bool, Click)>, st: &Style) -
         );
     }
     row.into_any_element()
+}
+
+/// Settings › Home: covers or a list, the covers' size, and what sits above
+/// the books; a small Home at the top follows every choice.
+fn home_section(ws: &WeakEntity<Workspace>, st: &Style) -> AnyElement {
+    use crate::settings::{CoverSize, HomeLayout};
+    let mut layout_cards = div().flex().flex_wrap().gap(px(12.0));
+    for (ix, l) in HomeLayout::ALL.into_iter().enumerate() {
+        layout_cards = layout_cards.child(choice_card(
+            ("home-layout", ix).into(),
+            st.home_layout == l,
+            l.label().into(),
+            Some(l.hint()),
+            home_preview(l, st.cover_size, true, true, 0.6, st),
+            220.0,
+            st,
+            change(ws, move |s| s.home_layout = l),
+        ));
+    }
+    let sizes = CoverSize::ALL
+        .into_iter()
+        .map(|c| {
+            (
+                SharedString::from(c.label()),
+                st.cover_size == c,
+                change(ws, move |s: &mut Style| s.cover_size = c),
+            )
+        })
+        .collect();
+    let size_row = div()
+        .id("home-cover-size")
+        .child(segmented(sizes, st))
+        .into_any_element();
+    let shows = div()
+        .flex()
+        .flex_col()
+        .gap(px(8.0))
+        .child(well_row(
+            "Reading stats",
+            "Time read today and this week, and your streak.",
+            switch(
+                "home-stats",
+                st.home_stats,
+                st,
+                change(ws, |s: &mut Style| s.home_stats = !s.home_stats),
+            ),
+            st,
+        ))
+        .child(well_row(
+            "Continue reading",
+            "Up to three books you're partway through, on Recent.",
+            switch(
+                "home-continue",
+                st.home_continue,
+                st,
+                change(ws, |s: &mut Style| s.home_continue = !s.home_continue),
+            ),
+            st,
+        ));
+    div()
+        .flex()
+        .flex_col()
+        .gap(px(28.0))
+        .child(
+            div()
+                .w(px(440.0))
+                .h(px(220.0))
+                .rounded(px(10.0))
+                .overflow_hidden()
+                .border_1()
+                .border_color(st.c(|c| c.line))
+                .child(home_preview(
+                    st.home_layout,
+                    st.cover_size,
+                    st.home_stats,
+                    st.home_continue,
+                    1.0,
+                    st,
+                )),
+        )
+        .child(group("Layout", None, layout_cards, st))
+        .child(group(
+            "Covers",
+            None,
+            div().flex().flex_col().gap(px(8.0)).child(well_row(
+                "Cover size",
+                "How big the books are in the Covers layout.",
+                size_row,
+                st,
+            )),
+            st,
+        ))
+        .child(group("Above the books", None, shows, st))
+        .into_any_element()
+}
+
+/// A tiny Home: the header, the stats and Continue reading if shown, then
+/// covers (at the chosen size) or list rows. `scale` shrinks it for a card.
+fn home_preview(
+    layout: crate::settings::HomeLayout,
+    size: crate::settings::CoverSize,
+    stats: bool,
+    continuing: bool,
+    scale: f32,
+    st: &Style,
+) -> AnyElement {
+    let k = |v: f32| px(v * scale);
+    let bar = |w: f32, c: gpui::Hsla| div().w(k(w)).h(k(5.0)).rounded_full().bg(c);
+    let muted = st.c(|c| c.line);
+    // Covers in the theme's own colours, at a few strengths.
+    let alphas = [0.55, 0.3, 0.75, 0.4, 0.62, 0.25, 0.5, 0.68];
+    let tint = |i: usize| st.ca(|c| c.accent, alphas[i % alphas.len()]);
+    let mut body = div().flex().flex_col().gap(k(10.0)).p(k(14.0));
+    body = body.child(
+        div()
+            .flex()
+            .items_center()
+            .gap(k(8.0))
+            .child(bar(40.0, st.c(|c| c.text)))
+            .child(div().flex_1())
+            .child(
+                div()
+                    .w(k(70.0))
+                    .h(k(12.0))
+                    .rounded(k(4.0))
+                    .bg(st.c(|c| c.raised)),
+            ),
+    );
+    if stats {
+        body = body.child(div().flex().gap(k(6.0)).children((0..3).map(|_| {
+            div()
+                .w(k(46.0))
+                .h(k(14.0))
+                .rounded(k(4.0))
+                .bg(st.c(|c| c.raised))
+        })));
+    }
+    if continuing {
+        body = body.child(div().flex().gap(k(8.0)).children((0..2).map(|i| {
+            div()
+                .flex()
+                .gap(k(6.0))
+                .p(k(5.0))
+                .w(k(110.0))
+                .rounded(k(5.0))
+                .bg(st.c(|c| c.raised))
+                .child(div().w(k(14.0)).h(k(20.0)).rounded(k(2.0)).bg(tint(i + 4)))
+                .child(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .gap(k(4.0))
+                        .child(bar(56.0, muted))
+                        .child(bar(36.0, st.c(|c| c.accent))),
+                )
+        })));
+    }
+    match layout {
+        crate::settings::HomeLayout::Covers => {
+            let w = size.width() * 0.26;
+            body = body.child(
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .gap(k(8.0))
+                    .children((0..8).map(|i| {
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap(k(4.0))
+                            .child(div().w(k(w)).h(k(w * 1.5)).rounded(k(2.0)).bg(tint(i)))
+                            .child(bar(w * 0.8, muted))
+                    })),
+            );
+        }
+        crate::settings::HomeLayout::List => {
+            body = body.child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap(k(6.0))
+                    .children((0..5).map(|i| {
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap(k(8.0))
+                            .child(div().w(k(10.0)).h(k(15.0)).rounded(k(2.0)).bg(tint(i)))
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .flex()
+                                    .flex_col()
+                                    .gap(k(3.0))
+                                    .child(bar(90.0 - i as f32 * 8.0, st.c(|c| c.muted)))
+                                    .child(bar(50.0, muted)),
+                            )
+                            .child(
+                                div()
+                                    .w(k(40.0))
+                                    .h(k(3.0))
+                                    .rounded_full()
+                                    .bg(st.c(|c| c.accent)),
+                            )
+                    })),
+            );
+        }
+    }
+    div()
+        .size_full()
+        .bg(st.c(|c| c.bg))
+        .overflow_hidden()
+        .child(body)
+        .into_any_element()
 }
 
 /// The status bar's switch and its items.
