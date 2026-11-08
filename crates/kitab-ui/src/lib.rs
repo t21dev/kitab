@@ -71,6 +71,11 @@ impl gpui::Global for FirstPaint {}
 /// so nothing half-built ever shows: no empty frame, no stand-in window.
 /// `true` until it has appeared.
 struct Unrevealed(bool);
+
+/// Windows: the exact place to put the window back, applied just before
+/// it's first shown (after GPUI's own placement).
+struct PendingPlace(Option<([i32; 4], bool)>);
+impl gpui::Global for PendingPlace {}
 impl gpui::Global for Unrevealed {}
 
 /// How long a slow first page may keep the window hidden.
@@ -92,6 +97,16 @@ fn hwnd_of(window: &gpui::Window) -> Option<isize> {
 
 fn reveal(window: &mut gpui::Window, cx: &mut gpui::App) {
     if cx.try_global::<Unrevealed>().is_some_and(|u| u.0) {
+        // The saved place first, then show it a frame later at that size.
+        let pending = cx.try_global::<PendingPlace>().and_then(|p| p.0);
+        if let (Some((rect, maximized)), Some(hwnd)) = (pending, hwnd_of(window)) {
+            cx.set_global(PendingPlace(None));
+            if kitab_os::set_window_placement(hwnd, rect, maximized) {
+                window.on_next_frame(reveal);
+                window.refresh();
+                return;
+            }
+        }
         cx.set_global(Unrevealed(false));
         motion::set_on_screen();
         kitab_os::trace::mark("window shown");
@@ -123,24 +138,35 @@ pub use style::Style;
 /// The saved window place as GPUI bounds, if enough of it (a strip of the
 /// title bar) is on a screen that's connected now: a monitor that was
 /// unplugged mustn't leave the window off screen.
-fn saved_bounds(p: settings::WindowPlace, cx: &App) -> Option<WindowBounds> {
+fn saved_bounds(
+    p: settings::WindowPlace,
+    cx: &App,
+) -> Option<(WindowBounds, Option<gpui::DisplayId>)> {
     if !(p.x.is_finite() && p.y.is_finite() && p.w >= 320.0 && p.h >= 240.0) {
         return None;
     }
     let b = Bounds::new(gpui::point(px(p.x), px(p.y)), size(px(p.w), px(p.h)));
     let title = Bounds::new(b.origin, size(b.size.width, px(40.0)));
-    let visible = cx.displays().iter().any(|d| {
-        let o = d.bounds().intersect(&title);
-        f32::from(o.size.width) >= 120.0 && f32::from(o.size.height) >= 20.0
-    });
-    if !visible {
-        return None;
-    }
-    Some(if p.maximized {
+    // The screen it's on: GPUI opens the window on that display (it puts
+    // bounds outside the display it was given back on the primary one).
+    // The monitor under its centre (as GPUI decides), else one showing
+    // enough of its title bar to grab.
+    let displays = cx.displays();
+    let display = displays
+        .iter()
+        .find(|d| d.bounds().contains(&b.center()))
+        .or_else(|| {
+            displays.iter().find(|d| {
+                let o = d.bounds().intersect(&title);
+                f32::from(o.size.width) >= 120.0 && f32::from(o.size.height) >= 20.0
+            })
+        })?;
+    let bounds = if p.maximized {
         WindowBounds::Maximized(b)
     } else {
         WindowBounds::Windowed(b)
-    })
+    };
+    Some((bounds, Some(display.id())))
 }
 
 /// The window's place to save: its normal bounds (also while maximised or
@@ -156,6 +182,9 @@ pub(crate) fn window_place(window: &gpui::Window) -> settings::WindowPlace {
         w: f32::from(b.size.width),
         h: f32::from(b.size.height),
         maximized,
+        raw: hwnd_of(window)
+            .and_then(kitab_os::window_placement)
+            .map(|(r, _)| r),
     }
 }
 
@@ -176,18 +205,22 @@ pub fn open_main_window(
     actions::bind_default_keys(cx);
     // Where the window was when Kitab last closed, if that place is still on
     // a screen; otherwise the default size, centred.
-    let bounds = settings
+    let (bounds, display_id) = settings
         .window
         .and_then(|p| saved_bounds(p, cx))
         .unwrap_or_else(|| {
-            WindowBounds::Windowed(Bounds::centered(
+            (
+                WindowBounds::Windowed(Bounds::centered(
+                    None,
+                    size(px(layout::WINDOW_W), px(layout::WINDOW_H)),
+                    cx,
+                )),
                 None,
-                size(px(layout::WINDOW_W), px(layout::WINDOW_H)),
-                cx,
-            ))
+            )
         });
     let options = WindowOptions {
         window_bounds: Some(bounds),
+        display_id,
         titlebar: Some(TitlebarOptions {
             title: Some("Kitab".into()),
             appears_transparent: true,
@@ -204,6 +237,11 @@ pub fn open_main_window(
         ..Default::default()
     };
     cx.set_global(Unrevealed(true));
+    cx.set_global(PendingPlace(
+        settings
+            .window
+            .and_then(|p| p.raw.map(|r| (r, p.maximized))),
+    ));
     match cx.open_window(options, |window, cx| {
         cx.new(|cx| shell::Workspace::new(engine, library, files, window, cx))
     }) {

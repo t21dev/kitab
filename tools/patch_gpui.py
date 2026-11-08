@@ -17,6 +17,8 @@ an environment switch to turn it off so it can still be benchmarked:
   Heap    The manifest enables the Windows segment heap.
   Fallback When Direct3D 11 fails on the chosen adapter, every other one is tried,
           then WARP (software). KITAB_GPU=test-fallback goes straight to WARP.
+  Display A window reopened on a monitor with a different scale is placed with
+          that monitor's scale.
   RTL     Right-to-left glyph runs (Arabic, Hebrew) are placed at DirectWrite's
           origin and advance leftwards, instead of left to right.
 
@@ -372,6 +374,23 @@ fn kitab_open_device(
 
 #[inline]
 fn check_debug_layer_available() -> bool {"""),
+    ])
+    # 8. A window reopened on another monitor: the saved bounds are in that
+    #    monitor's logical pixels, and the check for which monitor they're
+    #    on uses its scale; place the window with that scale too, not the
+    #    primary monitor's, or it lands elsewhere when the two differ.
+    edit("src/platform/windows/window.rs", [
+        ("""    let bounds = bounds.to_device_pixels(scale_factor);
+    placement.rcNormalPosition = calculate_window_rect(bounds, border_offset);""",
+         """    // Kitab patch: the display's own scale (it's where the window goes).
+    let _ = scale_factor;
+    let bounds = bounds.to_device_pixels(display.scale_factor);
+    placement.rcNormalPosition = calculate_window_rect(bounds, border_offset);"""),
+    ])
+    edit("src/platform/windows/display.rs", [
+        ("""    pub display_id: DisplayId,
+    scale_factor: f32,""", """    pub display_id: DisplayId,
+    pub(crate) scale_factor: f32,"""),
     ])
     print(f"patched gpui copy: {DEST}")
 

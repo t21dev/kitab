@@ -359,6 +359,9 @@ pub struct WindowPlace {
     pub w: f32,
     pub h: f32,
     pub maximized: bool,
+    /// Windows: the normal rectangle in Windows' own pixels, which puts the
+    /// window back exactly on any monitor whatever its scaling.
+    pub raw: Option<[i32; 4]>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -743,6 +746,7 @@ mod tests {
                 w: 1200.0,
                 h: 800.0,
                 maximized: true,
+                raw: Some([10, 20, 1210, 820]),
             }),
         };
         assert_eq!(Settings::from_json(&s.to_json()), Ok(s));

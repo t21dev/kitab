@@ -157,3 +157,82 @@ pub fn is_cloaked(hwnd: isize) -> bool {
         false
     }
 }
+
+/// The window's normal (not maximised) rectangle in Windows' own pixels
+/// (left, top, right, bottom), and whether it's maximised: what Kitab saves
+/// to put the window back exactly, on whichever monitor, at any scaling.
+/// Windows only; `None` elsewhere.
+pub fn window_placement(hwnd: isize) -> Option<([i32; 4], bool)> {
+    #[cfg(windows)]
+    {
+        use windows::Win32::Foundation::HWND;
+        use windows::Win32::UI::WindowsAndMessaging::{
+            GetWindowPlacement, SW_SHOWMAXIMIZED, WINDOWPLACEMENT,
+        };
+        let mut p = WINDOWPLACEMENT {
+            length: std::mem::size_of::<WINDOWPLACEMENT>() as u32,
+            ..Default::default()
+        };
+        // SAFETY: the app's own window; `p` states its size.
+        unsafe { GetWindowPlacement(HWND(hwnd as *mut core::ffi::c_void), &mut p) }.ok()?;
+        let r = p.rcNormalPosition;
+        Some((
+            [r.left, r.top, r.right, r.bottom],
+            p.showCmd == SW_SHOWMAXIMIZED.0 as u32,
+        ))
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = hwnd;
+        None
+    }
+}
+
+/// Put the window back where `window_placement` found it, if that rectangle
+/// is still on a monitor. Returns whether it did. Windows only.
+pub fn set_window_placement(hwnd: isize, rect: [i32; 4], maximized: bool) -> bool {
+    #[cfg(windows)]
+    {
+        use windows::Win32::Foundation::{HWND, RECT};
+        use windows::Win32::Graphics::Gdi::{MONITOR_DEFAULTTONULL, MonitorFromRect};
+        use windows::Win32::UI::WindowsAndMessaging::{
+            GetWindowPlacement, SW_SHOWMAXIMIZED, SW_SHOWNORMAL, SetWindowPlacement,
+            WINDOWPLACEMENT,
+        };
+        let r = RECT {
+            left: rect[0],
+            top: rect[1],
+            right: rect[2],
+            bottom: rect[3],
+        };
+        if r.right - r.left < 200 || r.bottom - r.top < 150 {
+            return false;
+        }
+        // SAFETY: a plain query on a rectangle.
+        if unsafe { MonitorFromRect(&r, MONITOR_DEFAULTTONULL) }.is_invalid() {
+            return false;
+        }
+        let hwnd = HWND(hwnd as *mut core::ffi::c_void);
+        let mut p = WINDOWPLACEMENT {
+            length: std::mem::size_of::<WINDOWPLACEMENT>() as u32,
+            ..Default::default()
+        };
+        // SAFETY: the app's own window; `p` states its size.
+        if unsafe { GetWindowPlacement(hwnd, &mut p) }.is_err() {
+            return false;
+        }
+        p.rcNormalPosition = r;
+        p.showCmd = if maximized {
+            SW_SHOWMAXIMIZED.0 as u32
+        } else {
+            SW_SHOWNORMAL.0 as u32
+        };
+        // SAFETY: as above.
+        unsafe { SetWindowPlacement(hwnd, &p) }.is_ok()
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = (hwnd, rect, maximized);
+        false
+    }
+}
