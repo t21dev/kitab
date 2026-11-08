@@ -48,7 +48,7 @@ jobs:
           | System | File |
           |---|---|
           | Windows (Intel, AMD) | \`Kitab_${VERSION}_x64_setup.exe\` installs for your account, with no administrator prompt. \`Kitab_${VERSION}_x64_portable.zip\` runs without installing. |
-          | Windows on Arm | \`Kitab_${VERSION}_arm64_setup.exe\` or \`Kitab_${VERSION}_arm64_portable.zip\` |
+          | Windows on Arm | The x64 downloads; Windows runs them through its emulation. |
           | macOS, Apple silicon | \`Kitab_${VERSION}_aarch64.dmg\` |
           | macOS, Intel | \`Kitab_${VERSION}_x86_64.dmg\` |
           | Linux | \`.flatpak\`, \`.AppImage\`, \`.deb\` (Debian, Ubuntu), \`.rpm\` (Fedora, openSUSE) or \`.tar.gz\` (unpack it and run \`./install.sh\`). x86_64, and aarch64 except the Flatpak. |
@@ -71,9 +71,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Windows x64 and Arm64, macOS Apple silicon and Intel, Linux x86_64
-        # and aarch64 (Ubuntu 22.04: the oldest glibc GitHub still offers).
-        os: [windows-latest, windows-11-arm, macos-latest, macos-15-intel, ubuntu-22.04, ubuntu-22.04-arm]
+        # Windows x64 (Windows on Arm runs it too), macOS Apple silicon and
+        # Intel, Linux x86_64 and aarch64 (Ubuntu 22.04: the oldest glibc
+        # GitHub still offers). Not windows-11-arm yet: mupdf-sys 0.8 only
+        # builds MuPDF for x86 and x64 with MSVC.
+        os: [windows-latest, macos-latest, macos-15-intel, ubuntu-22.04, ubuntu-22.04-arm]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -195,7 +197,9 @@ jobs:
   # of the notes, then publish.
   publish:
     needs: [create-release, build, flatpak]
-    if: github.event_name == 'push'
+    # Publish what was built even if one system's build failed; its file is
+    # simply missing and can be added to the release later.
+    if: always() && github.event_name == 'push' && needs.create-release.result == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: write

@@ -29,7 +29,7 @@ Get the latest version from [Releases](https://github.com/t21dev/kitab/releases/
 | System | Download |
 |---|---|
 | Windows 10 and 11 (Intel, AMD) | `Kitab_*_x64_setup.exe`, or `Kitab_*_x64_portable.zip` to run without installing |
-| Windows on Arm | `Kitab_*_arm64_setup.exe` or `Kitab_*_arm64_portable.zip` |
+| Windows on Arm | The x64 downloads, which Windows runs through its emulation |
 | macOS, Apple silicon | `Kitab_*_aarch64.dmg` |
 | macOS, Intel | `Kitab_*_x86_64.dmg` |
 | Linux | `.flatpak`, `.AppImage`, `.deb`, `.rpm` or `.tar.gz` (x86_64; all but the Flatpak also for aarch64) |

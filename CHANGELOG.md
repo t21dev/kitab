@@ -7,8 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-08
+
 ### Added
-- Downloads for every common system: Windows on Arm (installer and portable zip), macOS on Intel, and on Linux a Flatpak, an AppImage, a .deb and an .rpm beside the .tar.gz, for x86_64 and aarch64 (the Flatpak for x86_64). The release notes list each file's SHA-256 checksum.
+- Downloads for every common system: macOS on Intel, and on Linux a Flatpak, an AppImage, a .deb and an .rpm beside the .tar.gz, for x86_64 and aarch64 (the Flatpak for x86_64). The release notes list each file's SHA-256 checksum.
 - Homebrew and Scoop: `brew install --cask t21dev/tap/kitab` and `scoop install t21dev/kitab`.
 - Printing on macOS and Linux uses the system's own print dialog, with the printer, copies, pages and paper: macOS's print panel as a sheet on the window, and on Linux the desktop's print portal (GNOME, KDE, and inside Flatpak). Linux without a print portal keeps Kitab's own sheet.
 - Middle-click scrolling in documents and on Home, as in a browser: click the wheel and move the pointer above or below the mark to scroll (faster further away); any click ends it. Holding the wheel while dragging scrolls only while it's held.
@@ -154,5 +156,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fit width and fit page follow a window resize even when no new page has to be drawn.
 - The Settings window shrinks to fit small windows instead of running off the left edge.
 
-[Unreleased]: https://github.com/t21dev/kitab/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/t21dev/kitab/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/t21dev/kitab/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/t21dev/kitab/releases/tag/v0.1.0
