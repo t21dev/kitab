@@ -37,7 +37,16 @@ pub(super) struct DockState {
     pub timer: bool,
     /// The dock scrolls along its length when the window is too small for it.
     pub scroll: gpui::ScrollHandle,
+    /// Hide and show animate: whether the dock was hidden at the last frame,
+    /// when it was hidden (it slides out until HIDE_FOR has passed), and how
+    /// many times it came back (each return slides in again).
+    pub seen_hidden: std::cell::Cell<Option<bool>>,
+    pub hid_at: std::cell::Cell<Option<Instant>>,
+    pub shown: std::cell::Cell<u64>,
 }
+
+/// How long the dock takes to slide out when it's hidden (Ctrl+. or its arrow).
+const HIDE_FOR: Duration = Duration::from_millis(220);
 
 impl Reader {
     /// The pointer moved or a key was pressed: show a faded dock and restart
@@ -97,7 +106,32 @@ impl Reader {
         } else {
             0.0
         };
-        if st.dock_hidden {
+        // Hidden or shown again since the last frame: slide out, or in.
+        let hidden = st.dock_hidden;
+        if self.dock.seen_hidden.get() != Some(hidden) {
+            let first = self.dock.seen_hidden.get().is_none();
+            self.dock.seen_hidden.set(Some(hidden));
+            if !first && hidden && st.animations {
+                self.dock.hid_at.set(Some(Instant::now()));
+                // One more frame once it's out, to put the handle there.
+                let timer = cx.background_executor().timer(HIDE_FOR);
+                cx.spawn(async move |this, cx| {
+                    timer.await;
+                    let _ = this.update(cx, |_, cx| cx.notify());
+                })
+                .detach();
+            } else if !first && !hidden {
+                self.dock.hid_at.set(None);
+                self.dock.shown.set(self.dock.shown.get() + 1);
+            }
+        }
+        let hiding = hidden
+            && self
+                .dock
+                .hid_at
+                .get()
+                .is_some_and(|t| t.elapsed() < HIDE_FOR);
+        if hidden && !hiding {
             return Some(dock_handle(at, top_inset, bar, st));
         }
         let upright = at.upright();
@@ -383,20 +417,14 @@ impl Reader {
                                 ),
                         )
                     })
-                    // Markdown: its typeface, a tap away (System, Serif, Mono).
+                    // Markdown: typeface and text size in a small panel.
                     .when(self.is_markdown(), |g| {
-                        let face = st.md_face;
                         g.child(
-                            dock_button("dock-md-face", "text", false, st)
-                                .tip(format!(
-                                    "Font: {}. Click for {}",
-                                    face.label(),
-                                    face.next().label()
-                                ))
-                                .on_click(|_, window, cx| {
-                                    window
-                                        .dispatch_action(Box::new(crate::actions::CycleMdFace), cx)
-                                }),
+                            dock_button("dock-md-type", "typography", false, st)
+                                .tip("Typography: font and size")
+                                .on_click(cx.listener(|_, e: &gpui::ClickEvent, _, cx| {
+                                    cx.emit(ReaderEvent::TypeMenu(e.position()))
+                                })),
                         )
                     })
                     .when(show_rotate, |g| {
@@ -459,8 +487,22 @@ impl Reader {
             DockAt::Bottom => motion::From::Below(8.0),
             DockAt::Left | DockAt::Right => motion::From::Fade,
         };
-        let id = |name: &str| ElementId::NamedInteger(name.to_string().into(), self.dock.serial);
-        let dock = if faded {
+        // Slides further toward its edge when it's being hidden.
+        let toward = match at {
+            DockAt::Top => motion::From::Above(40.0),
+            DockAt::Bottom => motion::From::Below(40.0),
+            DockAt::Left => motion::From::Left(40.0),
+            DockAt::Right => motion::From::Fade,
+        };
+        let id = |name: &str| {
+            ElementId::NamedInteger(
+                name.to_string().into(),
+                self.dock.serial * 1000 + self.dock.shown.get(),
+            )
+        };
+        let dock = if hiding {
+            motion::exit(dock, id("dock-hide"), toward, HIDE_FOR)
+        } else if faded {
             motion::exit(dock, id("dock-out"), from, motion::EXIT_BASE * 2)
         } else {
             motion::enter(

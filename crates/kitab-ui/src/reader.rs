@@ -105,6 +105,8 @@ pub enum ReaderEvent {
     ContextMenu(Point<Pixels>),
     /// The dock's ⋯ button, at this window position.
     MoreMenu(Point<Pixels>),
+    /// Markdown's typography panel (typeface and text size), at the dock's button.
+    TypeMenu(Point<Pixels>),
     /// A link in a Markdown document points at another file: open it in a tab.
     OpenPath(PathBuf),
     /// Zoom in a book changed the text size (points), for every book.

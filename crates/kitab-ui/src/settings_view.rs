@@ -478,6 +478,26 @@ fn appearance(
             "Tabs",
             None,
             div().flex().flex_col().gap(px(12.0)).child(tab_cards).child(well_row(
+                "The + button",
+                "What a new tab opens.",
+                div()
+                    .id("new-tab-choice")
+                    .child(segmented(
+                        [("Home", crate::settings::NewTab::Home), ("Open a file", crate::settings::NewTab::OpenFile)]
+                            .into_iter()
+                            .map(|(name, v)| {
+                                (
+                                    SharedString::from(name),
+                                    st.new_tab == v,
+                                    change(ws, move |s: &mut Style| s.new_tab = v),
+                                )
+                            })
+                            .collect(),
+                        st,
+                    ))
+                    .into_any_element(),
+                st,
+            )).child(well_row(
                 "Show how many tabs are open",
                 "A small number at the right of the title bar.",
                 switch(
@@ -895,10 +915,29 @@ fn toolbar_rows(ws: &WeakEntity<Workspace>, st: &Style) -> AnyElement {
             )
         })
         .collect();
+    let open = [("Show", true), ("Hide", false)]
+        .into_iter()
+        .map(|(name, on)| {
+            (
+                SharedString::from(name),
+                st.title_items.open == on,
+                change(ws, move |s: &mut Style| s.title_items.open = on),
+            )
+        })
+        .collect();
     col.child(well_row(
         "More (⋯)",
         "Everything else lives here, so it is always in one of the two.",
         segmented(more, st),
+        st,
+    ))
+    .child(well_row(
+        "Open file…",
+        "A folder button in the title bar, beside More. Ctrl+O works either way.",
+        div()
+            .id("toolbar-open")
+            .child(segmented(open, st))
+            .into_any_element(),
         st,
     ))
     .into_any_element()

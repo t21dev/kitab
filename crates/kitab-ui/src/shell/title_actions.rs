@@ -19,10 +19,11 @@ use kitab_core::ZoomMode;
 /// Buttons in the title bar for `t`, with a document open or not.
 pub(super) fn count(t: TitleItems, has_doc: bool) -> usize {
     if !has_doc {
-        return usize::from(t.more);
+        return usize::from(t.more) + usize::from(t.open);
     }
     [
         t.sidebar, t.find, t.bookmark, t.markup, t.rotate, t.minimal, t.print, t.password, t.more,
+        t.open,
     ]
     .iter()
     .filter(|b| **b)
@@ -59,6 +60,7 @@ impl Workspace {
         if crowded {
             TitleItems {
                 more: st.title_items.more,
+                open: st.title_items.open,
                 ..TitleItems::NONE
             }
         } else {
@@ -231,6 +233,17 @@ impl Workspace {
                     ))
                 });
         }
+        // Open file… stands on its own: there's always something to open.
+        if t.open {
+            row = row.child(
+                icon_button("t-open", "folder-open", false, st)
+                    .flex_none()
+                    .tip("Open file…  Ctrl+O")
+                    .on_click(cx.listener(|ws, _: &gpui::ClickEvent, window, cx| {
+                        ws.open_dialog(window, cx)
+                    })),
+            );
+        }
         if t.more {
             row = row.child(
                 icon_button("t-more", "more-vertical", false, st)
@@ -253,7 +266,8 @@ mod tests {
     #[test]
     fn home_shows_only_more() {
         let t = TitleItems::default();
-        assert_eq!(count(t, false), 1);
+        // More and Open file… on Home.
+        assert_eq!(count(t, false), 2);
         assert!(count(t, true) > 1);
         let none = TitleItems {
             more: false,

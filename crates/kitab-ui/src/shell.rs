@@ -45,6 +45,9 @@ pub use system::VERSION;
 use tools_ui::ToolsState;
 
 /// Writes settings.json (the app passes it in; called off the UI thread).
+/// The typography panel's height, near enough to place it above the dock.
+const TYPE_MENU_H: f32 = 182.0;
+
 pub struct SettingsSink(pub Arc<dyn Fn(String) + Send + Sync>);
 
 /// The title bar is too narrow for its buttons this frame: the dock shows
@@ -401,6 +404,7 @@ impl Workspace {
                     ReaderEvent::PageChanged => cx.notify(),
                     ReaderEvent::ContextMenu(at) => this.page_menu(reader.clone(), *at, window, cx),
                     ReaderEvent::MoreMenu(at) => this.more_menu(Some(*at), window, cx),
+                    ReaderEvent::TypeMenu(at) => this.type_menu(reader.clone(), *at, window, cx),
                     ReaderEvent::OpenPath(path) => this.open_tab(path.clone(), window, cx),
                     ReaderEvent::Presenting(on) => this.set_presenting(*on, window, cx),
                     ReaderEvent::Print => this.open_print(window, cx),
@@ -904,15 +908,26 @@ impl Workspace {
         });
         bar = bar
             .child(strip)
-            // New tab: Home, with Open file… and the recent books (Ctrl+O
-            // still goes straight to the Open dialog). Not when nothing is
-            // open: Home is all there is, and it would do nothing.
+            // New tab (Settings › Appearance › Tabs): Home, with Open file…
+            // and the recent books, or the Open dialog straight away. Not
+            // when nothing is open: Home is all there is.
             .when(!self.tabs.is_empty(), |b| {
+                let open = st.new_tab == crate::settings::NewTab::OpenFile;
                 b.child(
                     icon_button("new-tab", "plus", false, st)
                         .flex_none()
-                        .tip("New tab: Home and Open file…")
-                        .on_click(cx.listener(|ws, _, window, cx| ws.show_home(window, cx))),
+                        .tip(if open {
+                            "New tab: open a file  Ctrl+O"
+                        } else {
+                            "New tab: Home and Open file…"
+                        })
+                        .on_click(cx.listener(move |ws, _, window, cx| {
+                            if open {
+                                ws.open_dialog(window, cx)
+                            } else {
+                                ws.show_home(window, cx)
+                            }
+                        })),
                 )
             })
             .when(overflowing, |b| {
@@ -3709,6 +3724,84 @@ impl Workspace {
         items.push(file_item_copy(&path));
         items.push(file_item_reveal(&path));
         self.open_menu(at, false, 300.0, items, window, cx);
+    }
+
+    /// Markdown's typography panel from the dock: the typeface (System,
+    /// Serif, Mono) and the text size. Its rows read the current values each
+    /// frame and keep the panel open, so either can be pressed again.
+    fn type_menu(
+        &mut self,
+        reader: Entity<Reader>,
+        at: Point<Pixels>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let ws = cx.weak_entity();
+        let faces = MenuItem::Custom(Rc::new(move |st: &Style, _cx: &mut App| {
+            let choices = crate::settings::MdFace::ALL
+                .into_iter()
+                .map(|f| {
+                    let ws = ws.clone();
+                    let click: crate::settings_view::Click = Box::new(move |_, cx| {
+                        let _ = ws.update(cx, |ws, cx| {
+                            ws.change_style(&|s: &mut Style| s.md_face = f, cx)
+                        });
+                    });
+                    (SharedString::from(f.label()), st.md_face == f, click)
+                })
+                .collect();
+            div()
+                .px(px(6.0))
+                .py(px(4.0))
+                .flex()
+                .child(crate::settings_view::segmented(choices, st))
+                .into_any_element()
+        }));
+        let size = {
+            let reader = reader.clone();
+            MenuItem::Custom(Rc::new(move |st: &Style, cx: &mut App| {
+                let percent = reader.read(cx).zoom_percent();
+                let go = |up: bool| {
+                    let reader = reader.clone();
+                    move |_: &mut Window, cx: &mut App| {
+                        reader.update(cx, |r, cx| r.zoom_step(up, cx))
+                    }
+                };
+                menu::tool_row(
+                    "type-size",
+                    vec![vec![
+                        Tool::new("minus", "Smaller text (Ctrl+-)", go(false)),
+                        Tool::new("plus", "Bigger text (Ctrl+=)", go(true)),
+                    ]],
+                    Some(0),
+                    Some(format!("{percent} %").into()),
+                    st,
+                )
+            }))
+        };
+        let reset = {
+            let reader = reader.clone();
+            MenuItem::new("Default size", move |_, cx: &mut App| {
+                reader.update(cx, |r, cx| r.set_zoom_mode(ZoomMode::FitWidth, cx))
+            })
+            .key("Ctrl+2")
+        };
+        let items = vec![
+            MenuItem::Heading("Typeface".into()),
+            faces,
+            MenuItem::Heading("Text size".into()),
+            size,
+            reset,
+        ];
+        // Above the button when the dock is low in the window, below it
+        // when it's high; lined up with the button's right edge.
+        let h = f32::from(window.viewport_size().height);
+        let at = if f32::from(at.y) > h / 2.0 {
+            point(at.x + px(14.0), at.y - px(TYPE_MENU_H + 22.0))
+        } else {
+            point(at.x + px(14.0), at.y + px(22.0))
+        };
+        self.open_menu(at, true, 260.0, items, window, cx);
     }
 
     /// Every open tab, the active one checked; the menu scrolls when long.

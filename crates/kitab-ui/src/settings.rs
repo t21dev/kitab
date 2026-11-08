@@ -79,6 +79,17 @@ impl MdFace {
     }
 }
 
+/// What the tab bar's + does (Settings › Appearance › Tabs).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum NewTab {
+    /// Show Home, with Open file… and the recent books.
+    #[default]
+    Home,
+    /// Go straight to the Open dialog.
+    OpenFile,
+}
+
 /// Where messages ("Saved", "Couldn't print") appear (Settings › Appearance).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -380,6 +391,8 @@ pub struct TitleItems {
     pub print: bool,
     pub password: bool,
     pub more: bool,
+    /// Open file… (the title bar only; on Home too).
+    pub open: bool,
 }
 
 impl TitleItems {
@@ -396,6 +409,7 @@ impl TitleItems {
         print: false,
         password: false,
         more: false,
+        open: false,
     };
 }
 
@@ -407,6 +421,7 @@ impl Default for TitleItems {
             markup: true,
             password: true,
             more: true,
+            open: true,
             ..Self::NONE
         }
     }
@@ -617,6 +632,8 @@ pub struct Settings {
     pub toast_at: ToastAt,
     /// Markdown's typeface.
     pub md_face: MdFace,
+    /// What the tab bar's + does.
+    pub new_tab: NewTab,
     /// The main window's last place (none before the first close).
     pub window: Option<WindowPlace>,
 }
@@ -704,6 +721,7 @@ impl Default for Settings {
             ui_scale: 100,
             toast_at: ToastAt::TopCenter,
             md_face: MdFace::System,
+            new_tab: NewTab::Home,
             window: None,
         }
     }
@@ -756,6 +774,7 @@ struct File {
     ui_scale: u16,
     toast_at: ToastAt,
     md_face: MdFace,
+    new_tab: NewTab,
     window: Option<WindowPlace>,
 }
 
@@ -849,6 +868,7 @@ impl From<Settings> for File {
             ui_scale: s.ui_scale,
             toast_at: s.toast_at,
             md_face: s.md_face,
+            new_tab: s.new_tab,
             window: s.window,
         }
     }
@@ -906,6 +926,7 @@ impl Settings {
             },
             toast_at: f.toast_at,
             md_face: f.md_face,
+            new_tab: f.new_tab,
             window: f.window,
         })
     }
@@ -978,6 +999,7 @@ mod tests {
             ui_scale: 125,
             toast_at: ToastAt::BottomRight,
             md_face: MdFace::Mono,
+            new_tab: NewTab::OpenFile,
             window: Some(WindowPlace {
                 x: 40.0,
                 y: 30.0,

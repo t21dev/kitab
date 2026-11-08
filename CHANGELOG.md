@@ -7,7 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- An Open file… button in the title bar, beside More. Settings › Appearance › Toolbar shows or hides it.
+- Settings › Appearance › Tabs › The + button: a new tab shows Home (as before) or opens the Open dialog straight away.
+- Markdown's dock has a typography button: a small panel to pick the typeface (System, Serif, Mono) and change the text size, which stays open while you try them.
+
 ### Changed
+- Hiding the dock slides it away toward its edge before the handle appears, and showing it slides it back.
 - Removing a watched folder (Settings › Library) asks first, and takes the documents found only in that folder out of your library. Documents you've opened, favourites and documents in a collection stay; nothing on disk is touched.
 
 ## [0.3.1] - 2026-11-08

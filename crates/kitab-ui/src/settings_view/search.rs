@@ -48,6 +48,11 @@ const INDEX: &[(Section, &str, &str)] = &[
     (Section::Appearance, "Tabs", "tab bar"),
     (
         Section::Appearance,
+        "The + button",
+        "new tab plus open file home",
+    ),
+    (
+        Section::Appearance,
         "Show how many tabs are open",
         "tab count number badge",
     ),
