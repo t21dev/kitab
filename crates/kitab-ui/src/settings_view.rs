@@ -430,6 +430,51 @@ fn appearance(
             st,
         ))
         .child(group(
+            "Messages",
+            Some("Where notes like \u{201c}Saved\u{201d} or \u{201c}Couldn\u{2019}t print\u{201d} appear."),
+            {
+                use crate::settings::ToastAt;
+                let at = st.toast_at;
+                div()
+                    .id("toast-at")
+                    .flex()
+                    .flex_wrap()
+                    .gap(px(10.0))
+                    .child(segmented(
+                        [("Top", true), ("Bottom", false)]
+                            .into_iter()
+                            .map(|(label, top)| {
+                                (
+                                    SharedString::from(label),
+                                    at.top() == top,
+                                    change(ws, move |s: &mut Style| {
+                                        s.toast_at = ToastAt::at(top, s.toast_at.side())
+                                    }),
+                                )
+                            })
+                            .collect(),
+                        st,
+                    ))
+                    .child(segmented(
+                        [("Left", 0u8), ("Centre", 1), ("Right", 2)]
+                            .into_iter()
+                            .map(|(label, side)| {
+                                (
+                                    SharedString::from(label),
+                                    at.side() == side,
+                                    change(ws, move |s: &mut Style| {
+                                        s.toast_at = ToastAt::at(s.toast_at.top(), side)
+                                    }),
+                                )
+                            })
+                            .collect(),
+                        st,
+                    ))
+                    .into_any_element()
+            },
+            st,
+        ))
+        .child(group(
             "Tabs",
             None,
             div().flex().flex_col().gap(px(12.0)).child(tab_cards).child(well_row(
@@ -582,6 +627,28 @@ fn reading(ws: &WeakEntity<Workspace>, st: &Style) -> AnyElement {
                 ),
                 st,
             ),
+            st,
+        ))
+        .child(group(
+            "Markdown typeface",
+            Some("The font Markdown is read in. The Aa button in the dock switches it too."),
+            div()
+                .id("md-face")
+                .flex()
+                .child(segmented(
+                    crate::settings::MdFace::ALL
+                        .into_iter()
+                        .map(|v| {
+                            (
+                                SharedString::from(v.label()),
+                                st.md_face == v,
+                                change(ws, move |s: &mut Style| s.md_face = v),
+                            )
+                        })
+                        .collect(),
+                    st,
+                ))
+                .into_any_element(),
             st,
         ))
         .child(group(

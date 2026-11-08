@@ -137,6 +137,8 @@ pub struct Workspace {
     print_serial: u64,
     /// Linux without a print portal: Ctrl+P opens Kitab's own sheet.
     print_no_portal: bool,
+    /// A Markdown document laid out on paper while it prints.
+    md_print: Option<print_ui::MdPrint>,
     /// Settings' search field while Settings is open.
     settings_search: Option<(Entity<crate::text_field::TextField>, Subscription)>,
     /// Debounces saving the window's place while it moves.
@@ -237,6 +239,7 @@ impl Workspace {
             print: None,
             print_serial: 0,
             print_no_portal: false,
+            md_print: None,
             settings_search: None,
             place_serial: 0,
             password: None,
@@ -2567,7 +2570,10 @@ impl Render for Workspace {
                             .flex_1()
                             .min_w_0()
                             .h_full()
-                            .pt(px(if side_tabs && !st.minimal {
+                            // Under the floating strip, also in focus mode:
+                            // the strip's window buttons and drag area would
+                            // cover the top of Home's Settings and Open file.
+                            .pt(px(if side_tabs || st.minimal {
                                 crate::reader::TOP_INSET
                             } else {
                                 0.0
@@ -2713,6 +2719,9 @@ impl Render for Workspace {
                 // Show or hide the status bar, remembered across launches
                 // (settings.json `file_info_chip`).
                 ws.change_style(&|st: &mut Style| st.file_info = !st.file_info, cx);
+            }))
+            .on_action(cx.listener(|ws, _: &CycleMdFace, _, cx| {
+                ws.change_style(&|st: &mut Style| st.md_face = st.md_face.next(), cx);
             }))
             .on_action(cx.listener(|ws, _: &ToggleDock, _, cx| {
                 // Remembered across launches (settings.json `dock_hidden`).

@@ -30,12 +30,6 @@ use std::sync::Arc;
 const COLUMN: f32 = 720.0;
 /// Body text size at 100 %.
 const BODY: f32 = 16.0;
-/// Stand-ins until Literata and JetBrains Mono ship (DESIGN.md § Typography).
-/// Cambria on Windows: lining figures (Georgia's old-style "1" reads as "ı").
-#[cfg(windows)]
-const READING_FONT: &str = "Cambria";
-#[cfg(not(windows))]
-const READING_FONT: &str = "Georgia";
 const MONO_FONT: &str = "Consolas";
 const MATH_FONT: &str = "Cambria Math";
 /// Nesting drawn before deeper blocks are drawn flat.
@@ -604,21 +598,25 @@ fn code_el(
                     let done = copied_recently(key);
                     div()
                         .id(d.id("md-copy"))
+                        .group("md-copy")
                         .flex()
                         .items_center()
-                        .gap(d.px(4.0))
-                        .px(d.px(6.0))
-                        .py(d.px(2.0))
+                        .justify_center()
+                        .size(d.px(24.0))
                         .rounded(px(5.0))
                         .cursor_pointer()
-                        .when(done, |b| b.text_color(st.c(|c| c.accent)))
+                        .text_color(if done {
+                            st.c(|c| c.accent)
+                        } else {
+                            st.c(|c| c.faint)
+                        })
                         .hover(|b| b.bg(st.hover_bg()).text_color(st.c(|c| c.text)))
-                        .tip("Copy code")
+                        .tip(if done { "Copied" } else { "Copy code" })
                         .on_click(move |_, _, cx| {
                             cx.write_to_clipboard(gpui::ClipboardItem::new_string(
                                 copy_text.clone(),
                             ));
-                            // "Copied" for a moment, then back to "Copy".
+                            // A check for a moment, then back to the copy icon.
                             if let Ok(mut c) = COPIED.lock() {
                                 *c = Some((key, std::time::Instant::now()));
                             }
@@ -630,15 +628,19 @@ fn code_el(
                             })
                             .detach();
                         })
-                        .when(done, |b| {
-                            b.child(
-                                gpui::svg()
-                                    .path(crate::icons::icon("check"))
-                                    .size(d.px(12.0))
-                                    .text_color(st.c(|c| c.accent)),
-                            )
-                        })
-                        .child(if done { "Copied" } else { "Copy" })
+                        .child(
+                            gpui::svg()
+                                .path(crate::icons::icon(if done { "check" } else { "copy" }))
+                                .size(d.px(14.0))
+                                .text_color(if done {
+                                    st.c(|c| c.accent)
+                                } else {
+                                    st.c(|c| c.faint)
+                                })
+                                .when(!done, |s| {
+                                    s.group_hover("md-copy", |s| s.text_color(st.c(|c| c.text)))
+                                }),
+                        )
                 }),
         )
         .child(
@@ -1044,7 +1046,7 @@ fn text_el(d: &Draw, inlines: &[Inline], base: Base, _cx: &mut Context<Reader>) 
         } else if style.math {
             MATH_FONT
         } else {
-            READING_FONT
+            st.md_face.family()
         };
         let color = if bad_math {
             st.c(|c| c.bad)
@@ -1127,7 +1129,7 @@ fn text_el(d: &Draw, inlines: &[Inline], base: Base, _cx: &mut Context<Reader>) 
     let container = div()
         .text_size(d.px(base.size))
         .line_height(relative(1.6))
-        .font_family(READING_FONT)
+        .font_family(d.st.md_face.family())
         // A paragraph whose first strong letter is Arabic or Hebrew reads from the right.
         .when(rtl, |c| c.text_right());
     if links.is_empty() {

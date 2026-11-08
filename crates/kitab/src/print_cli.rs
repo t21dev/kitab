@@ -100,7 +100,8 @@ fn print(args: &[String]) -> Result<usize, String> {
                 scale,
                 rotation,
                 tile: None,
-                generation: 0,
+                // Never stale: a view change mustn't drop a page being printed.
+                generation: u64::MAX,
             };
             match engine.render(doc, req)? {
                 Some(b) => Ok((b.bgra, b.width, b.height)),

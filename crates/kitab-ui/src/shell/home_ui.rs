@@ -26,9 +26,15 @@ use std::time::{Duration, Instant};
 /// The gap after a card (its width is Settings › Home › Cover size).
 const CARD_GAP: f32 = 20.0;
 const SIDE_PAD: f32 = 40.0;
-/// Covers kept in memory (a few screens of cards); more are dropped,
-/// oldest first, and come back from the disk cache if their card does.
-const COVERS_KEPT: usize = 96;
+/// Covers kept in memory (several screens of cards, about 20 MB); more are
+/// dropped, the longest unseen first, and come back from the disk cache.
+const COVERS_KEPT: usize = 200;
+/// Covers drawn at once (decoding a cached one takes a millisecond or two;
+/// one at a time made a fresh screen of cards fill in card by card).
+const COVERS_AT_ONCE: usize = 4;
+/// A cover that arrives within this of its card showing appears at once;
+/// only slower ones (drawn for the first time) fade in.
+const COVER_QUICK: std::time::Duration = std::time::Duration::from_millis(180);
 /// Covers waiting to be drawn; the oldest requests (cards long scrolled
 /// past) are forgotten.
 const QUEUE_MAX: usize = 48;
@@ -46,10 +52,11 @@ enum CoverState {
 
 /// How long a cover takes to fade in, and the wait before covers are drawn.
 const COVER_FADE: std::time::Duration = std::time::Duration::from_millis(220);
-const COVER_WAIT: std::time::Duration = std::time::Duration::from_millis(120);
+const COVER_WAIT: std::time::Duration = std::time::Duration::from_millis(40);
 
 enum Cover {
-    Loading,
+    /// Asked for at this moment.
+    Loading(Instant),
     /// The picture, and when it arrived (it fades in from then).
     Ready(Arc<RenderImage>, Instant),
     /// Couldn't be drawn: the generated cover stays.
@@ -65,7 +72,8 @@ pub(super) struct HomeView {
     covers: HashMap<PathBuf, Cover>,
     order: VecDeque<PathBuf>,
     queue: VecDeque<PathBuf>,
-    busy: bool,
+    /// Covers being drawn now.
+    busy: usize,
     /// Dropped covers, freed from the GPU on the next frame.
     evicted: Vec<Arc<RenderImage>>,
     /// The card under the pointer, and the one it just left (it settles).
@@ -93,7 +101,7 @@ impl HomeView {
             covers: HashMap::new(),
             order: VecDeque::new(),
             queue: VecDeque::new(),
-            busy: false,
+            busy: 0,
             evicted: Vec::new(),
             hover: None,
             left: None,
@@ -584,12 +592,25 @@ impl Workspace {
     /// The cover for `path` if it's drawn; otherwise ask for it.
     fn cover_image(&mut self, path: &Path, cx: &mut Context<Self>) -> CoverState {
         match self.home.covers.get(path) {
-            Some(Cover::Ready(image, at)) => return CoverState::Ready(image.clone(), *at),
-            Some(Cover::Loading) => return CoverState::Loading,
+            Some(Cover::Ready(image, at)) => {
+                let state = CoverState::Ready(image.clone(), *at);
+                // Seen again: last to be dropped.
+                if self.home.order.back().map(PathBuf::as_path) != Some(path) {
+                    if let Some(ix) = self.home.order.iter().position(|p| p == path) {
+                        if let Some(p) = self.home.order.remove(ix) {
+                            self.home.order.push_back(p);
+                        }
+                    }
+                }
+                return state;
+            }
+            Some(Cover::Loading(_)) => return CoverState::Loading,
             Some(Cover::Failed) => return CoverState::Generated,
             None => {}
         }
-        self.home.covers.insert(path.to_path_buf(), Cover::Loading);
+        self.home
+            .covers
+            .insert(path.to_path_buf(), Cover::Loading(Instant::now()));
         self.home.queue.push_back(path.to_path_buf());
         // Cards long scrolled past: forget their requests.
         while self.home.queue.len() > QUEUE_MAX {
@@ -610,13 +631,16 @@ impl Workspace {
 
     /// Draw the next cover (the newest request first: it's on screen).
     fn pump_covers(&mut self, cx: &mut Context<Self>) {
-        if self.home.busy {
-            return;
+        while self.home.busy < COVERS_AT_ONCE {
+            let Some(path) = self.home.queue.pop_back() else {
+                return;
+            };
+            self.home.busy += 1;
+            self.draw_cover(path, cx);
         }
-        let Some(path) = self.home.queue.pop_back() else {
-            return;
-        };
-        self.home.busy = true;
+    }
+
+    fn draw_cover(&mut self, path: PathBuf, cx: &mut Context<Self>) {
         let library = self.library.clone();
         let size = self.home.cover_px;
         cx.spawn(async move |this, cx| {
@@ -634,11 +658,20 @@ impl Workspace {
                 .await;
             let _ = this.update(cx, |ws, cx| {
                 let h = &mut ws.home;
-                h.busy = false;
-                if h.covers.contains_key(&path) {
+                h.busy = h.busy.saturating_sub(1);
+                if let Some(Cover::Loading(asked)) = h.covers.get(&path) {
+                    // Quick (from the disk cache): shown as if long there,
+                    // so it doesn't fade; slow: fades in from now.
+                    let at = if asked.elapsed() < COVER_QUICK {
+                        Instant::now()
+                            .checked_sub(COVER_FADE)
+                            .unwrap_or_else(Instant::now)
+                    } else {
+                        Instant::now()
+                    };
                     h.covers.insert(
                         path.clone(),
-                        image.map_or(Cover::Failed, |i| Cover::Ready(i, Instant::now())),
+                        image.map_or(Cover::Failed, |i| Cover::Ready(i, at)),
                     );
                     h.order.push_back(path);
                     while h.order.len() > COVERS_KEPT {

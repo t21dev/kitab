@@ -61,6 +61,8 @@ pub struct Style {
     pub home_continue: bool,
     /// Interface size in percent (Settings › Appearance).
     pub ui_scale: u16,
+    pub toast_at: crate::settings::ToastAt,
+    pub md_face: crate::settings::MdFace,
     /// The main window's last place, saved with the settings.
     pub window: Option<crate::settings::WindowPlace>,
 }
@@ -109,6 +111,8 @@ impl Style {
             home_stats: s.home_stats,
             home_continue: s.home_continue,
             ui_scale: s.ui_scale,
+            toast_at: s.toast_at,
+            md_face: s.md_face,
             window: s.window,
         };
         style.resolve_accent();
@@ -185,6 +189,8 @@ impl Style {
             home_stats: self.home_stats,
             home_continue: self.home_continue,
             ui_scale: self.ui_scale,
+            toast_at: self.toast_at,
+            md_face: self.md_face,
             window: self.window,
         }
     }

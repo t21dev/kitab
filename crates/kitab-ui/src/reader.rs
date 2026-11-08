@@ -974,7 +974,8 @@ impl Reader {
     /// this tab can't print.
     pub fn print_source(&self) -> Result<(DocHandle, Vec<SizePt>), &'static str> {
         if self.md.is_some() {
-            return Err("Printing Markdown comes in a later version.");
+            // Laid out on paper first (Workspace::prepare_md_print).
+            return Err("Markdown is laid out for paper before it prints.");
         }
         let (Some(doc), Some(info)) = (self.doc, self.info.as_ref()) else {
             return Err("The document isn't open yet.");
@@ -989,6 +990,11 @@ impl Reader {
             .map(|i| self.page_size_pt(i))
             .collect();
         Ok((doc, sizes))
+    }
+
+    /// The parsed Markdown, for printing.
+    pub fn markdown_doc(&self) -> Option<std::sync::Arc<kitab_md::MdDoc>> {
+        self.md.as_ref().map(|m| m.doc.clone())
     }
 
     pub fn is_markdown(&self) -> bool {

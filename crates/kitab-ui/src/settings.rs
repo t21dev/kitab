@@ -14,6 +14,131 @@ pub const SETTINGS_VERSION: u32 = 1;
 /// The interface sizes on offer (Settings › Appearance), in percent.
 pub const UI_SCALES: [u16; 7] = [90, 100, 110, 125, 150, 175, 200];
 
+/// The typeface Markdown is read in (the dock's Aa button, Settings › Reading).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum MdFace {
+    /// The system's interface font (Segoe UI, San Francisco, …).
+    #[default]
+    System,
+    Serif,
+    Mono,
+}
+
+impl MdFace {
+    pub const ALL: [MdFace; 3] = [Self::System, Self::Serif, Self::Mono];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::System => "System",
+            Self::Serif => "Serif",
+            Self::Mono => "Mono",
+        }
+    }
+
+    /// The next one, for the dock's button.
+    pub fn next(self) -> Self {
+        match self {
+            Self::System => Self::Serif,
+            Self::Serif => Self::Mono,
+            Self::Mono => Self::System,
+        }
+    }
+
+    /// The font family to set.
+    pub fn family(self) -> &'static str {
+        match self {
+            Self::System => {
+                if cfg!(target_os = "macos") {
+                    ".SystemUIFont"
+                } else if cfg!(windows) {
+                    "Segoe UI"
+                } else {
+                    "Noto Sans"
+                }
+            }
+            // Cambria on Windows: lining figures (Georgia's old-style "1"
+            // reads as "ı").
+            Self::Serif => {
+                if cfg!(windows) {
+                    "Cambria"
+                } else {
+                    "Georgia"
+                }
+            }
+            Self::Mono => {
+                if cfg!(target_os = "macos") {
+                    "Menlo"
+                } else if cfg!(windows) {
+                    "Consolas"
+                } else {
+                    "DejaVu Sans Mono"
+                }
+            }
+        }
+    }
+}
+
+/// Where messages ("Saved", "Couldn't print") appear (Settings › Appearance).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ToastAt {
+    TopLeft,
+    #[default]
+    TopCenter,
+    TopRight,
+    BottomLeft,
+    BottomCenter,
+    BottomRight,
+}
+
+impl ToastAt {
+    pub const ALL: [ToastAt; 6] = [
+        Self::TopLeft,
+        Self::TopCenter,
+        Self::TopRight,
+        Self::BottomLeft,
+        Self::BottomCenter,
+        Self::BottomRight,
+    ];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::TopLeft => "Top left",
+            Self::TopCenter => "Top centre",
+            Self::TopRight => "Top right",
+            Self::BottomLeft => "Bottom left",
+            Self::BottomCenter => "Bottom centre",
+            Self::BottomRight => "Bottom right",
+        }
+    }
+
+    pub fn top(self) -> bool {
+        matches!(self, Self::TopLeft | Self::TopCenter | Self::TopRight)
+    }
+
+    /// 0 left, 1 centre, 2 right.
+    pub fn side(self) -> u8 {
+        match self {
+            Self::TopLeft | Self::BottomLeft => 0,
+            Self::TopCenter | Self::BottomCenter => 1,
+            Self::TopRight | Self::BottomRight => 2,
+        }
+    }
+
+    /// The one at `top` (or the bottom) and `side` (0 left, 1 centre, 2 right).
+    pub fn at(top: bool, side: u8) -> Self {
+        match (top, side) {
+            (true, 0) => Self::TopLeft,
+            (true, 2) => Self::TopRight,
+            (true, _) => Self::TopCenter,
+            (false, 0) => Self::BottomLeft,
+            (false, 2) => Self::BottomRight,
+            (false, _) => Self::BottomCenter,
+        }
+    }
+}
+
 /// How Home shows the books (Settings › Home).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -488,6 +613,10 @@ pub struct Settings {
     pub home_continue: bool,
     /// Interface size, in percent of the system's scaling (100 = as is).
     pub ui_scale: u16,
+    /// Where messages appear.
+    pub toast_at: ToastAt,
+    /// Markdown's typeface.
+    pub md_face: MdFace,
     /// The main window's last place (none before the first close).
     pub window: Option<WindowPlace>,
 }
@@ -573,6 +702,8 @@ impl Default for Settings {
             home_stats: true,
             home_continue: true,
             ui_scale: 100,
+            toast_at: ToastAt::TopCenter,
+            md_face: MdFace::System,
             window: None,
         }
     }
@@ -623,6 +754,8 @@ struct File {
     home_stats: bool,
     home_continue: bool,
     ui_scale: u16,
+    toast_at: ToastAt,
+    md_face: MdFace,
     window: Option<WindowPlace>,
 }
 
@@ -714,6 +847,8 @@ impl From<Settings> for File {
             home_stats: s.home_stats,
             home_continue: s.home_continue,
             ui_scale: s.ui_scale,
+            toast_at: s.toast_at,
+            md_face: s.md_face,
             window: s.window,
         }
     }
@@ -769,6 +904,8 @@ impl Settings {
             } else {
                 100
             },
+            toast_at: f.toast_at,
+            md_face: f.md_face,
             window: f.window,
         })
     }
@@ -839,6 +976,8 @@ mod tests {
             home_stats: false,
             home_continue: false,
             ui_scale: 125,
+            toast_at: ToastAt::BottomRight,
+            md_face: MdFace::Mono,
             window: Some(WindowPlace {
                 x: 40.0,
                 y: 30.0,

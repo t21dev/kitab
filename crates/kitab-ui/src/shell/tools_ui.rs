@@ -266,11 +266,21 @@ impl Workspace {
                 )
             })
             .when(t.open.is_none() && !t.bad, |d| d.pr(px(14.0)));
+        // Settings › Appearance › Messages: top centre by default, under the
+        // title bar; at the bottom, above the dock. Each slides in from its
+        // own edge and leaves the same way.
+        use crate::settings::ToastAt;
+        let at = st.toast_at;
+        let from = if at.top() {
+            motion::From::Above(10.0)
+        } else {
+            motion::From::Below(10.0)
+        };
         let pill = if closing {
             motion::exit(
                 pill,
                 ElementId::NamedInteger("toast-out".into(), serial),
-                motion::From::Below(10.0),
+                from,
                 motion::EXIT_BASE,
             )
         } else {
@@ -278,22 +288,23 @@ impl Workspace {
                 pill,
                 ElementId::NamedInteger("toast-in".into(), serial),
                 st.animations,
-                motion::From::Below(10.0),
+                from,
                 motion::BASE,
                 Duration::ZERO,
             )
         };
-        Some(
-            div()
-                .absolute()
-                .bottom(px(72.0))
-                .left_0()
-                .right_0()
-                .flex()
-                .justify_center()
-                .child(pill)
-                .into_any_element(),
-        )
+        let row = div().absolute().left_0().right_0().px(px(16.0)).flex();
+        let row = if at.top() {
+            row.top(st.px(|m| m.title_bar) + px(12.0))
+        } else {
+            row.bottom(px(72.0))
+        };
+        let row = match at {
+            ToastAt::TopLeft | ToastAt::BottomLeft => row.justify_start(),
+            ToastAt::TopCenter | ToastAt::BottomCenter => row.justify_center(),
+            ToastAt::TopRight | ToastAt::BottomRight => row.justify_end(),
+        };
+        Some(row.child(pill).into_any_element())
     }
 
     // ── extract pages ──

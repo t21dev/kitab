@@ -2,7 +2,8 @@
 
 //! Markdown for Kitab (PLAN.md §3.4): `text → normalise → frontmatter →
 //! pulldown-cmark (GFM) → sanitise → block tree`. The UI draws the tree; no
-//! HTML is ever produced or run. Raw HTML passes through an allow-list
+//! HTML is ever run. The one HTML Kitab makes is for printing ([`print`]):
+//! the escaped tree, laid out on paper by MuPDF, no scripts or links. Raw HTML passes through an allow-list
 //! (`details`, `summary`, `kbd`, `sub`, `sup`, `br`, `img`, `a` and inline
 //! formatting); everything else is dropped, and `<script>`, `<style>`,
 //! `<iframe>`, `<svg>` and friends lose their content too (AGENTS.md rule 11).
@@ -13,6 +14,7 @@ mod html;
 pub mod math;
 mod model;
 mod parse;
+pub mod print;
 mod slug;
 
 pub use highlight::highlight;

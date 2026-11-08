@@ -383,6 +383,22 @@ impl Reader {
                                 ),
                         )
                     })
+                    // Markdown: its typeface, a tap away (System, Serif, Mono).
+                    .when(self.is_markdown(), |g| {
+                        let face = st.md_face;
+                        g.child(
+                            dock_button("dock-md-face", "text", false, st)
+                                .tip(format!(
+                                    "Font: {}. Click for {}",
+                                    face.label(),
+                                    face.next().label()
+                                ))
+                                .on_click(|_, window, cx| {
+                                    window
+                                        .dispatch_action(Box::new(crate::actions::CycleMdFace), cx)
+                                }),
+                        )
+                    })
                     .when(show_rotate, |g| {
                         g.child(
                             dock_button("dock-rotate", "rotate", false, st)

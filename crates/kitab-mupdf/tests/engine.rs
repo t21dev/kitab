@@ -449,6 +449,12 @@ fn stale_generation_is_dropped() {
     // Generations never go back.
     engine.set_generation(id, 1);
     assert_eq!(engine.render(id, stale).unwrap(), None);
+    // Printing asks with u64::MAX, so no view change can drop its pages.
+    let print = RenderRequest {
+        generation: u64::MAX,
+        ..request(0, 0.25)
+    };
+    assert!(engine.render(id, print).unwrap().is_some());
     engine.close(id);
 }
 

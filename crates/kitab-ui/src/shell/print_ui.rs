@@ -22,6 +22,25 @@ use kitab_core::{RenderRequest, parse_page_ranges};
 use kitab_print::{Job, PageSize, Printer, Scale, print_pages};
 use std::sync::Arc;
 
+/// A Markdown document laid out for paper while it prints: MuPDF's pages
+/// of kitab-md's print HTML (A4), closed and deleted when printing ends.
+pub(super) struct MdPrint {
+    reader: gpui::EntityId,
+    doc: crate::engine::DocHandle,
+    sizes: Vec<kitab_core::SizePt>,
+    file: std::path::PathBuf,
+}
+
+/// What printing draws from: the tab's document, or its paper layout.
+struct PrintSrc {
+    doc: crate::engine::DocHandle,
+    sizes: Vec<kitab_core::SizePt>,
+    title: String,
+    count: u32,
+    /// 0-based.
+    current: u32,
+}
+
 #[derive(Clone, Copy, PartialEq)]
 enum Which {
     All,
@@ -50,12 +69,133 @@ impl Workspace {
         let Some(reader) = self.active_reader().cloned() else {
             return;
         };
+        if reader.read(cx).is_markdown() {
+            self.menu = None;
+            self.menu_closing = None;
+            self.prepare_md_print(reader, window, cx);
+            return;
+        }
         if let Err(why) = reader.read(cx).print_source() {
             self.toast(why, true, None, cx);
             return;
         }
         self.menu = None;
         self.menu_closing = None;
+        self.start_print(reader, window, cx);
+    }
+
+    /// Markdown: written as HTML for paper and laid out on A4 by MuPDF, off
+    /// the UI thread; then printed like any document.
+    fn prepare_md_print(
+        &mut self,
+        reader: Entity<Reader>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.finish_md_print();
+        let Some(doc) = reader.read(cx).markdown_doc() else {
+            return;
+        };
+        // MuPDF lays out with its own fonts, picked by generic family.
+        let body = match Style::get(cx).md_face {
+            crate::settings::MdFace::System => "sans-serif",
+            crate::settings::MdFace::Serif => "serif",
+            crate::settings::MdFace::Mono => "monospace",
+        }
+        .to_string();
+        let mono = "monospace".to_string();
+        let engine: Arc<dyn DocEngine> = self.engine.clone();
+        let id = reader.entity_id();
+        cx.spawn_in(window, async move |this, cx| {
+            let laid = cx
+                .background_spawn(async move {
+                    let html = kitab_md::print::to_print_html(
+                        &doc,
+                        &kitab_md::print::PrintStyle {
+                            body_font: &body,
+                            mono_font: &mono,
+                        },
+                    );
+                    // kitab-print-*.html: the one HTML the engine opens.
+                    let file = kitab_print::temp_pdf().with_extension("html");
+                    std::fs::write(&file, html).map_err(|e| e.to_string())?;
+                    let (handle, _) = match engine.open(&file, None) {
+                        Ok(o) => o,
+                        Err(e) => {
+                            let _ = std::fs::remove_file(&file);
+                            return Err(format!("{e:?}"));
+                        }
+                    };
+                    let a4 = kitab_core::BookLayout {
+                        width: 595.0,
+                        height: 842.0,
+                        em: 10.5,
+                        ..kitab_core::BookLayout::DEFAULT
+                    };
+                    match engine.relayout(handle, a4) {
+                        Ok(info) => Ok(MdPrint {
+                            reader: id,
+                            doc: handle,
+                            sizes: info.page_sizes.clone(),
+                            file,
+                        }),
+                        Err(e) => {
+                            engine.close(handle);
+                            let _ = std::fs::remove_file(&file);
+                            Err(e)
+                        }
+                    }
+                })
+                .await;
+            let _ = this.update_in(cx, |ws, window, cx| match laid {
+                Ok(m) => {
+                    ws.md_print = Some(m);
+                    ws.start_print(reader, window, cx);
+                }
+                Err(e) => ws.toast(format!("Couldn't print: {e}"), true, None, cx),
+            });
+        })
+        .detach();
+    }
+
+    /// Printing is over (sent, cancelled or failed): let go of Markdown's
+    /// paper layout.
+    fn finish_md_print(&mut self) {
+        if let Some(m) = self.md_print.take() {
+            self.engine.close(m.doc);
+            let _ = std::fs::remove_file(&m.file);
+        }
+    }
+
+    /// What printing `reader` draws from.
+    fn print_src(&self, reader: &Entity<Reader>, cx: &gpui::App) -> Result<PrintSrc, String> {
+        let r = reader.read(cx);
+        let title = r.title().to_string();
+        if let Some(m) = self
+            .md_print
+            .as_ref()
+            .filter(|m| m.reader == reader.entity_id())
+        {
+            return Ok(PrintSrc {
+                doc: m.doc,
+                sizes: m.sizes.clone(),
+                title,
+                count: m.sizes.len() as u32,
+                current: 0,
+            });
+        }
+        let (doc, sizes) = r.print_source().map_err(str::to_string)?;
+        Ok(PrintSrc {
+            doc,
+            sizes,
+            title,
+            count: r.page_count() as u32,
+            current: r.current_page() as u32,
+        })
+    }
+
+    /// The print dialog (or sheet) for `reader`, its source ready.
+    fn start_print(&mut self, reader: Entity<Reader>, window: &mut Window, cx: &mut Context<Self>) {
         // Windows: its own print dialog straight away, with everything in
         // it (printer, copies, which pages); Kitab's sheet is for CUPS.
         if kitab_print::SYSTEM_DIALOG {
@@ -78,7 +218,9 @@ impl Workspace {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let page = reader.read(cx).current_page() + 1;
+        let page = self
+            .print_src(&reader, cx)
+            .map_or(1, |s| s.current as usize + 1);
         let range = new_field(&format!("{page}"), false, "1-3, 7, 10-", window, cx);
         let sub = cx.subscribe_in(
             &range,
@@ -126,6 +268,7 @@ impl Workspace {
 
     pub(super) fn close_print(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.print.take().is_some() {
+            self.finish_md_print();
             self.refocus(window, cx);
             cx.notify();
         }
@@ -136,11 +279,11 @@ impl Workspace {
         let Some(s) = self.print.as_ref() else {
             return Err(String::new());
         };
-        let r = s.reader.read(cx);
-        let count = r.page_count() as u32;
+        let src = self.print_src(&s.reader, cx)?;
+        let count = src.count;
         match s.which {
             Which::All => Ok((0..count).collect()),
-            Which::Current => Ok(vec![r.current_page() as u32]),
+            Which::Current => Ok(vec![src.current]),
             Which::Range => parse_page_ranges(&s.range.read(cx).text(), count),
         }
     }
@@ -160,9 +303,7 @@ impl Workspace {
                 return;
             };
             let copies = sheet.copies;
-            let r = sheet.reader.read(cx);
-            let title = r.title().to_string();
-            let Ok((doc, _)) = r.print_source() else {
+            let Ok(PrintSrc { doc, title, .. }) = self.print_src(&sheet.reader, cx) else {
                 return;
             };
             self.refocus(window, cx);
@@ -181,6 +322,7 @@ impl Workspace {
                         sent
                     })
                     .await;
+                let _ = this.update(cx, |ws, _| ws.finish_md_print());
                 let _ = this.update(cx, |ws, cx| match result {
                     Ok(()) => {
                         let what = if total == 1 { "page" } else { "pages" };
@@ -198,9 +340,10 @@ impl Workspace {
             cx.notify();
             return;
         }
-        let r = sheet.reader.read(cx);
-        let title = r.title().to_string();
-        let Ok((doc, sizes)) = r.print_source() else {
+        let Ok(PrintSrc {
+            doc, sizes, title, ..
+        }) = self.print_src(&sheet.reader, cx)
+        else {
             return;
         };
         self.refocus(window, cx);
@@ -241,7 +384,8 @@ impl Workspace {
                             scale,
                             rotation,
                             tile: None,
-                            generation: 0,
+                            // Never stale: a view change mustn't drop a page being printed.
+                            generation: u64::MAX,
                         };
                         match engine.render(doc, req)? {
                             Some(b) => Ok((b.bgra, b.width, b.height)),
@@ -265,6 +409,7 @@ impl Workspace {
             })
             .detach();
             let result = job.await;
+            let _ = this.update(cx, |ws, _| ws.finish_md_print());
             let _ = this.update(cx, |ws, cx| match result {
                 Ok(true) => {
                     let what = if total == 1 { "page" } else { "pages" };
@@ -292,10 +437,10 @@ impl Workspace {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let r = reader.read(cx);
-        let title = r.title().to_string();
-        let count = r.page_count() as u32;
-        let Ok((doc, _)) = r.print_source() else {
+        let Ok(PrintSrc {
+            doc, title, count, ..
+        }) = self.print_src(&reader, cx)
+        else {
             return;
         };
         let engine: Arc<dyn DocEngine> = self.engine.clone();
@@ -311,6 +456,8 @@ impl Workspace {
                     engine.write_pdf(doc, &pages, &out)
                 })
                 .await;
+            // The PDF holds the pages now: Markdown's layout can go.
+            let _ = this.update(cx, |ws, _| ws.finish_md_print());
             if let Err(e) = written {
                 let _ = std::fs::remove_file(&tmp);
                 let _ = this.update(cx, |ws, cx| {
@@ -359,10 +506,14 @@ impl Workspace {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let r = reader.read(cx);
-        let title = r.title().to_string();
-        let (count, current) = (r.page_count() as u32, r.current_page() as u32);
-        let Ok((doc, sizes)) = r.print_source() else {
+        let Ok(PrintSrc {
+            doc,
+            sizes,
+            title,
+            count,
+            current,
+        }) = self.print_src(&reader, cx)
+        else {
             return;
         };
         let owner = owner_of(window);
@@ -378,9 +529,13 @@ impl Workspace {
             kitab_os::trace::mark("print: dialog closed");
             let (mut printer, chosen) = match chosen {
                 Ok(Some(p)) => p,
-                Ok(None) => return,
+                Ok(None) => {
+                    let _ = this.update(cx, |ws, _| ws.finish_md_print());
+                    return;
+                }
                 Err(e) => {
                     let _ = this.update(cx, |ws, cx| {
+                        ws.finish_md_print();
                         ws.toast(format!("Couldn't print: {e}"), true, None, cx)
                     });
                     return;
@@ -419,7 +574,8 @@ impl Workspace {
                             scale,
                             rotation,
                             tile: None,
-                            generation: 0,
+                            // Never stale: a view change mustn't drop a page being printed.
+                            generation: u64::MAX,
                         };
                         match engine.render(doc, req)? {
                             Some(b) => Ok((b.bgra, b.width, b.height)),
@@ -442,6 +598,7 @@ impl Workspace {
             })
             .detach();
             let result = job.await;
+            let _ = this.update(cx, |ws, _| ws.finish_md_print());
             let _ = this.update(cx, |ws, cx| match result {
                 Ok(Some(n)) => {
                     let what = if n == 1 { "page" } else { "pages" };
@@ -456,8 +613,11 @@ impl Workspace {
 
     pub(super) fn print_view(&mut self, st: &Style, cx: &mut Context<Self>) -> Option<AnyElement> {
         let s = self.print.as_ref()?;
+        let count = self
+            .print_src(&s.reader, cx)
+            .map_or(0, |s| s.count as usize);
         let r = s.reader.read(cx);
-        let (title, count) = (r.title(), r.page_count());
+        let title = r.title();
         let pages = self.print_pages(cx);
         let ws = cx.weak_entity();
         let set = |f: fn(&mut PrintSheet)| -> Click {

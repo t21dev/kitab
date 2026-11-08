@@ -115,8 +115,17 @@ pub(crate) fn open(
         return Err(OpenError::Unsupported);
     }
     // Kitab reads documents, not image files (Markdown has its own reader).
+    // Kitab's own print layout of a Markdown document (kitab-md's print
+    // module writes it as kitab-print-*.html): laid out like a text file.
+    // Other HTML files stay unsupported.
+    let printable = ext.eq_ignore_ascii_case("html")
+        && path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .is_some_and(|n| n.starts_with("kitab-print-"));
     let format = match by_name {
         _ if looks_like_pdf => Format::Pdf,
+        _ if printable => Format::Txt,
         Some(Format::Image | Format::Markdown) | None => return Err(OpenError::Unsupported),
         Some(f) => f,
     };

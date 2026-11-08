@@ -40,6 +40,11 @@ const INDEX: &[(Section, &str, &str)] = &[
         "Interface size",
         "scale zoom bigger smaller dpi 125 150 200 text size ui",
     ),
+    (
+        Section::Appearance,
+        "Messages",
+        "toast notification popup position top bottom left right centre center",
+    ),
     (Section::Appearance, "Tabs", "tab bar"),
     (
         Section::Appearance,
@@ -78,6 +83,11 @@ const INDEX: &[(Section, &str, &str)] = &[
         Section::Reading,
         "Show the scroll bar",
         "scrollbar scrolling",
+    ),
+    (
+        Section::Reading,
+        "Markdown typeface",
+        "font face serif sans mono system markdown text",
     ),
     (
         Section::Reading,

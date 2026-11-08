@@ -36,6 +36,8 @@ actions!(
         HighlightSelection,
         ToggleBookmark,
         ToggleDock,
+        // Markdown's typeface: System, Serif, Mono, round.
+        CycleMdFace,
         ToggleFileInfo,
         MarkupUndo,
         MarkupRedo,

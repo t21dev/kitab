@@ -1,4 +1,4 @@
-﻿// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 
 //! Phase 4 formats against the fixture corpus: every EPUB in expected.json
 //! opens (or fails) as recorded, with the recorded page count at the
@@ -497,4 +497,50 @@ fn footnote_links_lead_to_their_notes() {
     assert_eq!(notes[0].0, "1");
     assert_eq!(notes[0].1, "1. The first footnote, shown as a popover.");
     assert_eq!(notes[1].1, "2. The second footnote.");
+}
+
+/// Printing Markdown: Kitab writes the document as HTML (kitab-md's
+/// print module) and MuPDF lays it out on A4, like an EPUB chapter.
+#[test]
+fn printable_html_lays_out_on_a4() {
+    let dir = std::env::temp_dir().join(format!("kitab-print-test-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let file = dir.join("kitab-print-test.html");
+    let mut body = String::from("<!DOCTYPE html><html><body><h1>Title</h1>");
+    for i in 0..120 {
+        body.push_str(&format!(
+            "<p>Paragraph {i} of plain sample text for the printer.</p>"
+        ));
+    }
+    body.push_str("<pre>fn main() {}</pre></body></html>");
+    std::fs::write(&file, body).unwrap();
+    let layout = kitab_core::BookLayout {
+        width: 595.0,
+        height: 842.0,
+        em: 10.5,
+        ..kitab_core::BookLayout::DEFAULT
+    };
+    let (id, info) = engine().open_with(&file, None, layout).unwrap();
+    assert!(info.page_count >= 2, "{} pages", info.page_count);
+    let size = info.page_sizes[0];
+    assert!(
+        (size.w - 595.0).abs() < 1.0 && (size.h - 842.0).abs() < 1.0,
+        "{size:?}"
+    );
+    assert!(ink_ratio(&page_one(id)) > 0.001);
+    engine().close(id);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn other_html_files_stay_unsupported() {
+    let dir = std::env::temp_dir().join(format!("kitab-html-test-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let file = dir.join("page.html");
+    std::fs::write(&file, "<html><body><p>hi</p></body></html>").unwrap();
+    assert!(matches!(
+        engine().open(&file, None),
+        Err(OpenError::Unsupported)
+    ));
+    let _ = std::fs::remove_dir_all(&dir);
 }
