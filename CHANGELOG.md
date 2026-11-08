@@ -7,33 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-08
+
 ### Added
+- Print Markdown: Ctrl+P (or Print… in the ⋯ menu) lays the document out on A4, with headings, lists, tables, quotes and code, and prints it like any other document.
+- Settings › Appearance › Messages: put notes like "Saved" or "Couldn't print" at the top or bottom, on the left, in the centre or on the right. Top centre is the new default.
+- Markdown's typeface: System (the default), Serif or Mono, from the new font button in the dock or Settings › Reading.
 - Settings › Appearance › Interface size: 90 % to 200 % of your system's scaling (100 % is the default and looks as before). Text, buttons, icons and pages grow together, at once. In a narrow window Home's Settings and Open file… become icon buttons.
 - Settings › Home: show the books as Covers or a List (a small cover, title, author, format and progress on each row), choose the cover size, and turn the reading stats and Continue reading on or off. A small Home at the top of the page follows every choice.
 - Search in Settings: type in the box above the sections to list the matching settings; pick one (or press Enter) to open its section.
 
 ### Changed
+- Markdown reads in your system's font by default instead of a serif.
+- A code block's Copy is an icon (a check for a moment after copying).
+- Covers on Home load four at a time and more of them are kept, so scrolling a big library no longer flashes empty cards. Covers that arrive quickly appear at once and only ones drawn for the first time fade in; cards scrolled straight past aren't drawn, and a loading cover's place is a quiet block instead of a generated cover.
 - Kitab uses next to no CPU while you read or leave it open: it used to redraw its window on every screen refresh even when nothing changed (about 2 % of a core). Scrolling costs about a third of what it did.
 - Less memory while reading: fewer pages far from the one you're on are kept (those on screen and the next three always are), and MuPDF's cache of fonts and images is kept to 48 MB.
 - The tab count sits at the right of the title bar. The + isn't shown when nothing is open.
-- Book covers on Home fade in, and cards scrolled straight past aren't drawn; while a cover loads its place is a quiet block instead of a generated cover.
 - Home's pinned header has room below the shelf chips and a thin line once the books scroll beneath it. Its search box is the same height as the buttons beside it.
 - Markdown follows the chosen page navigator (Stepper moves a screen at a time; Counter shows how far through you are).
 
 ### Fixed
+- Printing failed with "Couldn't print: page 1: it didn't draw" once you'd zoomed or scrolled. Pages always print now.
+- Windows' print dialog said "Printing from Win32 application"; it says "Kitab - Print", and Windows names Kitab properly elsewhere too (Task Manager, Open with).
+- In focus mode, the top of Home's Settings and Open file… buttons didn't respond: the window buttons' strip lay over them. Home now starts below it.
+- Print (Ctrl+P, or Print… in the ⋯ menu) crashed Kitab on Windows. Windows' print dialog now opens on the window as it should.
+- Kitab remembers where its window was and how big, and whether it was maximised, and opens there next time. A place on a screen that's no longer connected is ignored.
+- On Home, every book card is the same height: a long title takes two lines and ends in "…" (the whole title shows on hover), and the author line keeps its place.
+- Hovering the hidden dock's handle, and other floating buttons and cards, no longer turns them into a grey glow: their fill stays solid.
 - The window opens on the monitor it was last on, at the same place and size, also on a monitor with different scaling.
 - In Settings › Appearance › Toolbar, choosing Dock (or Title bar) for Focus mode, Print and other rows works; the click used to land on another row.
 - Markdown's percentage showed 0 % while the slider moved; it now follows the scroll position.
 - Favourite and Mark finished show on Recent at once.
 - The text cursor no longer shows over the dock or the page navigator.
-
-## [0.2.1] - 2026-11-08
-
-### Fixed
-- Print (Ctrl+P, or Print… in the ⋯ menu) crashed Kitab on Windows. Windows' print dialog now opens on the window as it should.
-- Kitab remembers where its window was and how big, and whether it was maximised, and opens there next time. A place on a screen that's no longer connected is ignored.
-- On Home, every book card is the same height: a long title takes two lines and ends in "…" (the whole title shows on hover), and the author line keeps its place.
-- Hovering the hidden dock's handle, and other floating buttons and cards, no longer turns them into a grey glow: their fill stays solid.
 
 ## [0.2.0] - 2026-11-08
 
@@ -184,7 +190,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fit width and fit page follow a window resize even when no new page has to be drawn.
 - The Settings window shrinks to fit small windows instead of running off the left edge.
 
-[Unreleased]: https://github.com/t21dev/kitab/compare/v0.2.1...HEAD
-[0.2.1]: https://github.com/t21dev/kitab/compare/v0.2.0...v0.2.1
+[Unreleased]: https://github.com/t21dev/kitab/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/t21dev/kitab/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/t21dev/kitab/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/t21dev/kitab/releases/tag/v0.1.0
