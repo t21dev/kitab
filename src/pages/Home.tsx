@@ -5,45 +5,60 @@
 import { useEffect, useState } from "react";
 import { FAQ, ROADMAP, SITE, SPECS, STEPS, type Step } from "../content";
 import { KitabApp } from "../mock/KitabApp";
-import { SCENES } from "../mock/scenes";
+import { HERO, SCENES } from "../mock/scenes";
 import type { PageData } from "../data";
 import { FEATURE_ICONS, Icon } from "../components/Icon";
 
 function Hero({ data }: { data: PageData }) {
   return (
     <section className="hero wrap" aria-labelledby="hero-title">
-      <p className="status rise" style={{ "--i": 0 } as React.CSSProperties}>
-        <i />
-        {data.release ? `Version ${data.release.tag.replace(/^v/, "")} is out` : `In development · ${SITE.phase}`}
-      </p>
-      <h1 id="hero-title" className="rise" style={{ "--i": 1 } as React.CSSProperties}>
-        {SITE.tagline}
-      </h1>
-      <p className="lede rise" style={{ "--i": 2 } as React.CSSProperties}>
-        <span className="lede__lead">{SITE.subtitle}</span> A reader for PDF, EPUB, Markdown and comics, written in Rust and
-        drawn on the GPU with GPUI, with MuPDF rendering the pages and no browser engine inside. Your files stay on your
-        computer.
-      </p>
-      <div className="ctas rise" style={{ "--i": 3 } as React.CSSProperties}>
-        <a className="btn btn--primary" href={SITE.repo}>
-          <Icon name="github" size={16} /> Follow on GitHub
-        </a>
-        <a className="btn btn--raised" href="/download">
-          {data.release ? "Download" : "Release status"}
-        </a>
+      <div className="hero__text">
+        <p className="status rise" style={{ "--i": 0 } as React.CSSProperties}>
+          <i />
+          {`${data.release ? data.release.tag.replace(/^v/, "") : SITE.latest} is out · ${SITE.latestNote}`}
+        </p>
+        <h1 id="hero-title" className="rise" style={{ "--i": 1 } as React.CSSProperties}>
+          {SITE.tagline}
+        </h1>
+        <p className="lede rise" style={{ "--i": 2 } as React.CSSProperties}>
+          <span className="lede__lead">{SITE.subtitle}</span> A reader for PDF, EPUB, Markdown and comics, written in Rust and
+          drawn on the GPU with GPUI, with MuPDF rendering the pages and no browser engine inside. Your files stay on your
+          computer.
+        </p>
+        <div className="ctas rise" style={{ "--i": 3 } as React.CSSProperties}>
+          <a className="btn btn--primary" href={SITE.repo}>
+            <Icon name="github" size={16} /> Follow on GitHub
+          </a>
+          <a className="btn btn--raised" href="/download">
+            {data.release ? "Download" : "Release status"}
+          </a>
+        </div>
+        <ul className="facts rise" style={{ "--i": 4 } as React.CSSProperties}>
+          <li>
+            <b>Free</b> · AGPL-3.0
+          </li>
+          <li>
+            <b>Windows, macOS</b> and <b>Linux</b>
+          </li>
+          <li>
+            <b>No</b> account, no telemetry
+          </li>
+        </ul>
       </div>
-      <ul className="facts rise" style={{ "--i": 4 } as React.CSSProperties}>
-        <li>
-          <b>Free</b> · AGPL-3.0
-        </li>
-        <li>
-          <b>Windows, macOS</b> and <b>Linux</b>
-        </li>
-        <li>
-          <b>No</b> account, no telemetry
-        </li>
-      </ul>
+      <HeroShot />
     </section>
+  );
+}
+
+/** The product shot beside the hero text: a book open in Kitab, in the same HTML window as the
+ * feature stage, so it can be used right here. */
+function HeroShot() {
+  return (
+    <div className="hero__shot rise" style={{ "--i": 3 } as React.CSSProperties}>
+      <div className="hero__tilt">
+        <KitabApp start={HERO.start} label={HERO.label} />
+      </div>
+    </div>
   );
 }
 
@@ -141,9 +156,10 @@ function Roadmap() {
             Where it stands
           </h2>
           <p className="band__lede">
-            Kitab is in its first phase: the foundations, and a test of how fast the interface can start and draw the first
-            page. Every phase after that ends with its tests passing and a release. The <a href={SITE.plan}>plan is public</a>,
-            and so is every line of code.
+            Two releases are out. 0.1.0 brought the reader, books, Markdown, markup, printing, signatures and the PDF tools;
+            0.2.0 added each system's own print dialog, more downloads and a Home built for big libraries. What is left before
+            1.0.0 is the last phase: accessibility, the published benchmark, signed installers, winget and Flathub. The{" "}
+            <a href={SITE.plan}>plan is public</a>, and so is every line of code.
           </p>
         </div>
         <ol className="phases">
@@ -152,8 +168,9 @@ function Roadmap() {
               <span className="phases__dot" aria-hidden="true" />
               <div>
                 <h3>
-                  Phase {p.n}: {p.title} <span className="mono">{p.version}</span>
+                  Phase {p.n}: {p.title} {p.release ? <span className="mono">{p.release}</span> : null}
                   {p.state === "now" ? <span className="now">Now</span> : null}
+                  {p.state === "done" ? <span className="now now--done">Shipped</span> : null}
                 </h3>
                 <p>{p.summary}</p>
               </div>

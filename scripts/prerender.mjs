@@ -108,7 +108,7 @@ No telemetry. No network request unless you turn a feature on (update check, rem
 
 ## Roadmap
 
-${ROADMAP.map((p) => `- **Phase ${p.n}: ${p.title}** (${p.version})${p.state === "now" ? " — in progress" : ""}. ${p.summary}`).join("\n")}
+${ROADMAP.map((p) => `- **Phase ${p.n}: ${p.title}**${p.release ? ` (shipped in ${p.release})` : ""}${p.state === "now" ? " (in progress)" : p.state === "done" && !p.release ? " (done)" : ""}. ${p.summary}`).join("\n")}
 
 ## Frequently asked questions
 

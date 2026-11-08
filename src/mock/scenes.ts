@@ -4,6 +4,12 @@ import type { Start } from "./KitabApp";
 
 export type Scene = { start: Start; label: string; hint: string };
 
+/** The hero's product shot: a book open, two more documents in tabs. Not part of the story. */
+export const HERO: Omit<Scene, "hint"> = {
+  start: { tabs: ["pride", "welcome", "notes"], active: "pride", sidebar: false },
+  label: "Kitab reading Pride and Prejudice, with two more documents open in tabs and the dock floating under the page",
+};
+
 export const SCENES: Record<string, Scene> = {
   pages: {
     start: { tabs: ["sizes", "welcome"], active: "sizes", sidebar: false, zoom: 25 },

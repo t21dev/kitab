@@ -127,6 +127,25 @@
 .rise { animation: rise 600ms var(--ease-out) both; animation-delay: calc(var(--i, 0) * 60ms); }
 @keyframes rise { from { opacity: 0; transform: translateY(10px); } }
 
+/* Hero product shot: the same HTML window as the stage, turned a little toward the text, and
+   flat again under the pointer. Below 960px it stacks under the text, flat. */
+@media (min-width: 960px) {
+  .hero { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); align-items: center; gap: var(--space-xl); overflow-x: clip; }
+  .hero h1 { font-size: clamp(44px, 5vw, 72px); }
+}
+.hero__tilt { aspect-ratio: 860 / 600; transform: perspective(2400px) rotateY(-7deg) rotateX(2deg); transform-origin: 0 50%; }
+@media (min-width: 960px) and (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  .hero__tilt { transition: transform 700ms var(--ease-out); }
+  .hero__shot:hover .hero__tilt { transform: perspective(2400px) rotateY(-2deg) rotateX(0.5deg); }
+}
+@media (max-width: 959px) {
+  .hero__shot { margin-top: var(--space-xl); }
+  .hero__tilt { transform: none; }
+}
+@media (max-width: 639px) {
+  .hero__tilt { aspect-ratio: 5 / 4.6; }
+}
+
 /* ── Feature stack ───────────────────────────────────────────────────── */
 .stack { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 8fr); gap: var(--space-2xl); padding-bottom: var(--space-2xl); }
 .story { list-style: none; margin: 0; padding: 0; }
@@ -168,9 +187,11 @@
 .phases li { position: relative; display: flex; gap: 12px; }
 .phases__dot { position: absolute; left: -27.5px; top: 7px; width: 10px; height: 10px; border-radius: 50%; background: var(--bg); box-shadow: inset 0 0 0 1.4px var(--ring); }
 .phases li[data-state="now"] .phases__dot { background: var(--accent); box-shadow: 0 0 0 4px var(--highlight); }
+.phases li[data-state="done"] .phases__dot { background: var(--muted); box-shadow: none; }
 .phases h3 { margin: 0; font-size: 15px; font-weight: 600; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
 .phases p { margin: 4px 0 0; font-size: 14px; color: var(--muted); }
 .now { padding: 1px 8px; border-radius: 999px; background: var(--raised); box-shadow: var(--elev); font-size: 11.5px; font-weight: 500; color: var(--accent-text); }
+.now--done { color: var(--muted); }
 
 .faq { margin-top: var(--space-xl); border-radius: 14px; box-shadow: inset 0 0 0 1px var(--line); }
 .faq details { border-bottom: 1px solid var(--line); padding: 16px 20px; }

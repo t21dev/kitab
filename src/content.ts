@@ -21,7 +21,10 @@ export const SITE = {
   author: { name: "TriptoAfsin", github: "https://github.com/TriptoAfsin" },
   license: { name: "AGPL-3.0-or-later", url: "https://www.gnu.org/licenses/agpl-3.0.html" },
   status: "In development. There is no release to download yet.",
-  phase: "Before 0.1.0: reader, tabs, books, Markdown and markup work; printing and signatures are next",
+  phase: "Phase 10, polish, accessibility and distribution before 1.0.0",
+  /** The hero badge. The release in it comes from GitHub at build time when GitHub answers. */
+  latest: "0.2",
+  latestNote: "printing, signatures and a faster reader",
   locale: "en",
 } as const;
 
@@ -161,20 +164,22 @@ export const FAQ: FaqItem[] = [
   },
 ];
 
-export type Phase = { n: number; title: string; version: string; summary: string; state: "now" | "next" | "later" };
+/** From docs/PLAN.md §8. `release` is the release a phase's work shipped in (CHANGELOG.md), not the plan's
+ * target version: the work of phases 1 to 9 landed together in 0.1.0, and native print dialogs in 0.2.0. */
+export type Phase = { n: number; title: string; release?: string; summary: string; state: "done" | "now" | "next" };
 
 export const ROADMAP: Phase[] = [
-  { n: 0, title: "Foundations and spikes", version: "0.0.x", summary: "Workspace, CI, and the first spike: a GPU-drawn window showing real PDF pages, with start-up timed.", state: "now" },
-  { n: 1, title: "PDF reader core", version: "0.1.0", summary: "Open (including password-protected files), progressive rendering, true page sizes, zoom, keyboard navigation, position memory. First release, with brew, scoop and winget.", state: "now" },
-  { n: 2, title: "Shell, Home and Settings", version: "0.2.0", summary: "Tabs, session restore, Home, the themes, command palette, keymap.json.", state: "now" },
-  { n: 3, title: "Find and navigation", version: "0.3.0", summary: "Find bar, outline, thumbnails, bookmarks, history, presentation mode.", state: "now" },
-  { n: 4, title: "Books and other formats", version: "0.4.0", summary: "EPUB reflow, MOBI, FB2, CBZ, XPS, text, typography, footnotes.", state: "now" },
-  { n: 5, title: "Markdown", version: "0.5.0", summary: "GitHub-flavoured Markdown, code, Mermaid, math, live reload.", state: "now" },
-  { n: 6, title: "Annotations and forms", version: "0.6.0", summary: "Highlights, notes, ink, export; fill and save PDF forms.", state: "now" },
-  { n: 7, title: "Native print", version: "0.7.0", summary: "Print on all three systems, per-page orientation.", state: "next" },
-  { n: 8, title: "Signatures", version: "0.8.0", summary: "Verify and sign PDFs, locally.", state: "later" },
-  { n: 9, title: "PDF tools and library search", version: "0.9.0", summary: "Merge, split, compress, full-text library search, collections.", state: "later" },
-  { n: 10, title: "Polish and distribution", version: "1.0.0", summary: "Accessibility, the full published benchmark, signed installers, Flathub.", state: "later" },
+  { n: 0, title: "Foundations and spikes", summary: "Workspace, CI, and the first spike: a GPU-drawn window showing real PDF pages, with start-up timed.", state: "done" },
+  { n: 1, title: "PDF reader core", release: "0.1.0", summary: "Open (including password-protected files), progressive rendering, true page sizes, zoom, keyboard navigation, position memory.", state: "done" },
+  { n: 2, title: "Shell, Home and Settings", release: "0.1.0", summary: "Tabs, session restore, Home, the themes, command palette, keymap.json.", state: "done" },
+  { n: 3, title: "Find and navigation", release: "0.1.0", summary: "Find bar, outline, thumbnails, bookmarks, history, presentation mode.", state: "done" },
+  { n: 4, title: "Books and other formats", release: "0.1.0", summary: "EPUB reflow, MOBI, FB2, CBZ, XPS, text, typography, footnotes.", state: "done" },
+  { n: 5, title: "Markdown", release: "0.1.0", summary: "GitHub-flavoured Markdown, code, Mermaid, math, live reload.", state: "done" },
+  { n: 6, title: "Annotations", release: "0.1.0", summary: "Highlights, notes, ink and shapes saved into the PDF, the Marks pane, export to Markdown or CSV.", state: "done" },
+  { n: 7, title: "Native print", release: "0.1.0, 0.2.0", summary: "Print on all three systems, with each system's own print dialog since 0.2.0.", state: "done" },
+  { n: 8, title: "Signatures", release: "0.1.0", summary: "Verify and sign PDFs, locally.", state: "done" },
+  { n: 9, title: "PDF tools and library search", release: "0.1.0", summary: "Merge, split, compress, full-text library search, collections, reading stats.", state: "done" },
+  { n: 10, title: "Polish and distribution", summary: "Accessibility, the full published benchmark, signed installers, winget and Flathub, then 1.0.0.", state: "now" },
 ];
 
 export type ShortcutGroup = { area: string; keys: [string, string][] };
