@@ -83,7 +83,7 @@
 .pill:active { transform: scale(0.98); }
 .pill__text { flex: 1; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 @media (hover: hover) and (pointer: fine) { .pill:hover { color: var(--muted); } }
-.nav__links { display: flex; gap: 2px; }
+.nav__links { display: flex; gap: 2px; margin-left: auto; }
 .nav__links a { padding: 8px 10px; border-radius: 8px; font-size: 13.5px; color: var(--muted); text-decoration: none; transition: color 150ms ease, background-color 150ms ease; white-space: nowrap; }
 @media (hover: hover) and (pointer: fine) { .nav__links a:hover { color: var(--text); background: var(--hover); } }
 .nav__end { display: flex; align-items: center; gap: 6px; }

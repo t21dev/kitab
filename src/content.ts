@@ -20,7 +20,7 @@ export const SITE = {
   org: { name: "Team 21", short: "t21", url: "https://t21.dev", github: "https://github.com/t21dev", email: "contact@t21.dev" },
   author: { name: "TriptoAfsin", github: "https://github.com/TriptoAfsin" },
   license: { name: "AGPL-3.0-or-later", url: "https://www.gnu.org/licenses/agpl-3.0.html" },
-  status: "In development. There is no release to download yet.",
+  status: "Released for Windows, macOS and Linux; still in development toward 1.0.0.",
   phase: "Phase 10, polish, accessibility and distribution before 1.0.0",
   /** The hero badge. The release in it comes from GitHub at build time when GitHub answers. */
   latest: "0.2",
@@ -128,7 +128,7 @@ export type FaqItem = { q: string; a: string };
 export const FAQ: FaqItem[] = [
   {
     q: "Can I download Kitab Reader now?",
-    a: "Not yet. Kitab is in development and has no release. Releases will appear on GitHub Releases for Windows, macOS and Linux. Watch the repository to hear when the first one lands.",
+    a: "Yes. Every release is on GitHub Releases for Windows, macOS and Linux: an installer or portable zip for Windows, a .dmg for macOS, and an AppImage, .deb, .rpm or Flatpak for Linux. Homebrew and Scoop users can install it from the t21dev tap and bucket.",
   },
   {
     q: "Is it free?",

@@ -85,6 +85,9 @@ function ThemeMenu() {
   );
 }
 
+/** Show the search pill in the header. */
+const SHOW_SEARCH = false;
+
 function Header({ onSearch }: { onSearch: () => void }) {
   return (
     <header className="nav">
@@ -95,11 +98,14 @@ function Header({ onSearch }: { onSearch: () => void }) {
           </span>
           Kitab
         </a>
-        <button type="button" className="pill" onClick={onSearch} aria-label="Search the site (Ctrl K)" aria-haspopup="dialog">
-          <Icon name="search" size={15} />
-          <span className="pill__text">Formats, shortcuts, privacy…</span>
-          <kbd>Ctrl K</kbd>
-        </button>
+        {/* The site search pill is hidden for now; Ctrl+K still opens the palette. */}
+        {SHOW_SEARCH ? (
+          <button type="button" className="pill" onClick={onSearch} aria-label="Search the site (Ctrl K)" aria-haspopup="dialog">
+            <Icon name="search" size={15} />
+            <span className="pill__text">Formats, shortcuts, privacy…</span>
+            <kbd>Ctrl K</kbd>
+          </button>
+        ) : null}
         <nav className="nav__links" aria-label="Main">
           <a href="/#features">Features</a>
           <a href="/shortcuts">Shortcuts</a>
