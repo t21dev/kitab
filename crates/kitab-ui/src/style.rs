@@ -54,6 +54,8 @@ pub struct Style {
     pub scroll_bar: bool,
     /// The open-tab count in the title bar.
     pub tab_count: bool,
+    /// The main window's last place, saved with the settings.
+    pub window: Option<crate::settings::WindowPlace>,
 }
 
 impl Global for Style {}
@@ -95,6 +97,7 @@ impl Style {
             skipped_update: s.skipped_update.clone(),
             scroll_bar: s.scroll_bar,
             tab_count: s.tab_count,
+            window: s.window,
         };
         style.resolve_accent();
         style
@@ -106,6 +109,12 @@ impl Style {
     pub fn hover_bg(&self) -> Hsla {
         let light = self.theme.appearance == kitab_theme::Appearance::Light;
         self.ca(|c| c.text, if light { 0.06 } else { 0.08 })
+    }
+
+    /// The hover on something raised that casts a shadow: solid, so the
+    /// shadow beneath doesn't show through as a grey glow.
+    pub fn raised_hover(&self) -> Hsla {
+        self.c(|c| c.raised).blend(self.hover_bg())
     }
 
     pub fn set_theme(&mut self, theme: Theme) {
@@ -159,6 +168,7 @@ impl Style {
             skipped_update: self.skipped_update.clone(),
             scroll_bar: self.scroll_bar,
             tab_count: self.tab_count,
+            window: self.window,
         }
     }
 

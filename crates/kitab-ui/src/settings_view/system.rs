@@ -76,7 +76,7 @@ fn button(id: &'static str, label: &str, danger: bool, st: &Style, on_click: Cli
             st.c(|c| c.text)
         })
         .cursor_pointer()
-        .hover(|b| b.bg(st.hover_bg()))
+        .hover(|b| b.bg(st.raised_hover()))
         .on_click(move |_, window, cx| on_click(window, cx))
         .child(label.to_string())
         .into_any_element()

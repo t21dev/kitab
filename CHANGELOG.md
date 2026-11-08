@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-11-08
+
+### Fixed
+- Print (Ctrl+P, or Print… in the ⋯ menu) crashed Kitab on Windows. Windows' print dialog now opens on the window as it should.
+- Kitab remembers where its window was and how big, and whether it was maximised, and opens there next time. A place on a screen that's no longer connected is ignored.
+- On Home, every book card is the same height: a long title takes two lines and ends in "…" (the whole title shows on hover), and the author line keeps its place.
+- Hovering the hidden dock's handle, and other floating buttons and cards, no longer turns them into a grey glow: their fill stays solid.
+
 ## [0.2.0] - 2026-11-08
 
 ### Added
@@ -156,6 +164,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fit width and fit page follow a window resize even when no new page has to be drawn.
 - The Settings window shrinks to fit small windows instead of running off the left edge.
 
-[Unreleased]: https://github.com/t21dev/kitab/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/t21dev/kitab/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/t21dev/kitab/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/t21dev/kitab/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/t21dev/kitab/releases/tag/v0.1.0

@@ -120,6 +120,45 @@ pub use library::{
 pub use settings::Settings;
 pub use style::Style;
 
+/// The saved window place as GPUI bounds, if enough of it (a strip of the
+/// title bar) is on a screen that's connected now: a monitor that was
+/// unplugged mustn't leave the window off screen.
+fn saved_bounds(p: settings::WindowPlace, cx: &App) -> Option<WindowBounds> {
+    if !(p.x.is_finite() && p.y.is_finite() && p.w >= 320.0 && p.h >= 240.0) {
+        return None;
+    }
+    let b = Bounds::new(gpui::point(px(p.x), px(p.y)), size(px(p.w), px(p.h)));
+    let title = Bounds::new(b.origin, size(b.size.width, px(40.0)));
+    let visible = cx.displays().iter().any(|d| {
+        let o = d.bounds().intersect(&title);
+        f32::from(o.size.width) >= 120.0 && f32::from(o.size.height) >= 20.0
+    });
+    if !visible {
+        return None;
+    }
+    Some(if p.maximized {
+        WindowBounds::Maximized(b)
+    } else {
+        WindowBounds::Windowed(b)
+    })
+}
+
+/// The window's place to save: its normal bounds (also while maximised or
+/// full screen) and whether it's maximised.
+pub(crate) fn window_place(window: &gpui::Window) -> settings::WindowPlace {
+    let (b, maximized) = match window.window_bounds() {
+        WindowBounds::Windowed(b) | WindowBounds::Fullscreen(b) => (b, false),
+        WindowBounds::Maximized(b) => (b, true),
+    };
+    settings::WindowPlace {
+        x: f32::from(b.origin.x),
+        y: f32::from(b.origin.y),
+        w: f32::from(b.size.width),
+        h: f32::from(b.size.height),
+        maximized,
+    }
+}
+
 /// Register globals and key bindings, then open the main window on `files`.
 /// `theme` is the one `settings.theme` names; `save_settings` writes settings.json.
 /// Returns false if the window could not be created.
@@ -135,9 +174,20 @@ pub fn open_main_window(
     cx.set_global(Style::from_settings(theme, &settings));
     cx.set_global(shell::SettingsSink(save_settings));
     actions::bind_default_keys(cx);
-    let bounds = Bounds::centered(None, size(px(layout::WINDOW_W), px(layout::WINDOW_H)), cx);
+    // Where the window was when Kitab last closed, if that place is still on
+    // a screen; otherwise the default size, centred.
+    let bounds = settings
+        .window
+        .and_then(|p| saved_bounds(p, cx))
+        .unwrap_or_else(|| {
+            WindowBounds::Windowed(Bounds::centered(
+                None,
+                size(px(layout::WINDOW_W), px(layout::WINDOW_H)),
+                cx,
+            ))
+        });
     let options = WindowOptions {
-        window_bounds: Some(WindowBounds::Windowed(bounds)),
+        window_bounds: Some(bounds),
         titlebar: Some(TitlebarOptions {
             title: Some("Kitab".into()),
             appears_transparent: true,

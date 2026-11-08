@@ -14,7 +14,7 @@ use windows::Win32::Graphics::Gdi::{
     VERTRES,
 };
 use windows::Win32::Storage::Xps::{AbortDoc, DOCINFOW, EndDoc, EndPage, StartDocW, StartPage};
-use windows::Win32::System::Com::{COINIT_APARTMENTTHREADED, CoInitializeEx};
+use windows::Win32::System::Com::{COINIT_APARTMENTTHREADED, CoInitializeEx, CoUninitialize};
 use windows::Win32::UI::Controls::Dialogs::{
     PD_CURRENTPAGE, PD_NOCURRENTPAGE, PD_NOPAGENUMS, PD_NOSELECTION, PD_PAGENUMS, PD_RESULT_PRINT,
     PD_RETURNDC, PD_USEDEVMODECOPIESANDCOLLATE, PRINTDLGEXW, PRINTPAGERANGE, PrintDlgExW,
@@ -25,6 +25,26 @@ use windows::core::{HSTRING, PCWSTR};
 const START_PAGE_GENERAL: u32 = 0xFFFF_FFFF;
 
 /// A printer chosen in the dialog, with its device context.
+/// Run the print dialog in a single-threaded COM apartment, which
+/// `PrintDlgEx` needs. Call it on the UI thread (already one, since GPUI
+/// sets up OLE there) from a task outside any GPUI update: on a pooled
+/// background thread (multi-threaded COM) the dialog crashed in combase.dll,
+/// and on a thread of its own it never appeared. Anywhere COM can't be set
+/// up this way, it says so instead of crashing.
+fn on_dialog_thread<T>(f: impl FnOnce() -> Result<T, String>) -> Result<T, String> {
+    // SAFETY: balanced below; S_FALSE (already initialised) also counts.
+    let hr = unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED) };
+    if hr.is_err() {
+        return Err(format!(
+            "Windows couldn't open the print dialog here ({hr:?})"
+        ));
+    }
+    let out = f();
+    // SAFETY: balances the successful CoInitializeEx above.
+    unsafe { CoUninitialize() };
+    out
+}
+
 pub struct Printer {
     dc: HDC,
     started: bool,
@@ -47,9 +67,14 @@ impl Printer {
         page_count: u32,
         current: u32,
     ) -> Result<Option<(Printer, Chosen)>, String> {
-        // SAFETY: COM for the dialog on this thread; a second call on the
-        // same thread is harmless (it reports S_FALSE).
-        let _ = unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED) };
+        on_dialog_thread(move || Self::choose_pages_here(owner, page_count, current))
+    }
+
+    fn choose_pages_here(
+        owner: isize,
+        page_count: u32,
+        current: u32,
+    ) -> Result<Option<(Printer, Chosen)>, String> {
         let last = page_count.max(1);
         let mut ranges = vec![PRINTPAGERANGE::default(); MAX_RANGES];
         ranges[0] = PRINTPAGERANGE {
@@ -110,9 +135,10 @@ impl Printer {
     /// Show the print dialog over `owner` (a window handle, or 0). `None`
     /// when the reader cancels.
     pub fn choose(owner: isize, copies: u32) -> Result<Option<Printer>, String> {
-        // SAFETY: COM for the dialog on this thread; a second call on the
-        // same thread is harmless (it reports S_FALSE).
-        let _ = unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED) };
+        on_dialog_thread(move || Self::choose_here(owner, copies))
+    }
+
+    fn choose_here(owner: isize, copies: u32) -> Result<Option<Printer>, String> {
         let mut pd = PRINTDLGEXW {
             lStructSize: std::mem::size_of::<PRINTDLGEXW>() as u32,
             hwndOwner: HWND(owner as *mut core::ffi::c_void),

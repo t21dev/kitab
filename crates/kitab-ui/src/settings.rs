@@ -349,6 +349,18 @@ impl From<Density> for DensityName {
     }
 }
 
+/// Where the main window was when Kitab last closed: its normal (restored)
+/// position and size in screen points, and whether it was maximised.
+#[derive(Debug, Clone, Copy, PartialEq, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct WindowPlace {
+    pub x: f32,
+    pub y: f32,
+    pub w: f32,
+    pub h: f32,
+    pub maximized: bool,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Settings {
     /// A built-in theme id (`kitab_theme::BUILTIN_IDS`).
@@ -403,6 +415,8 @@ pub struct Settings {
     pub scroll_bar: bool,
     /// How many tabs are open, as a small number in the title bar.
     pub tab_count: bool,
+    /// The main window's last place (none before the first close).
+    pub window: Option<WindowPlace>,
 }
 
 impl Settings {
@@ -481,6 +495,7 @@ impl Default for Settings {
             skipped_update: String::new(),
             scroll_bar: true,
             tab_count: false,
+            window: None,
         }
     }
 }
@@ -525,6 +540,7 @@ struct File {
     skipped_update: String,
     scroll_bar: bool,
     tab_count: bool,
+    window: Option<WindowPlace>,
 }
 
 fn face_name(f: kitab_core::BookFace) -> &'static str {
@@ -610,6 +626,7 @@ impl From<Settings> for File {
             skipped_update: s.skipped_update,
             scroll_bar: s.scroll_bar,
             tab_count: s.tab_count,
+            window: s.window,
         }
     }
 }
@@ -655,6 +672,7 @@ impl Settings {
             skipped_update: f.skipped_update.chars().take(32).collect(),
             scroll_bar: f.scroll_bar,
             tab_count: f.tab_count,
+            window: f.window,
         })
     }
 
@@ -719,6 +737,13 @@ mod tests {
             skipped_update: "0.2.0".into(),
             scroll_bar: false,
             tab_count: true,
+            window: Some(WindowPlace {
+                x: 40.0,
+                y: 30.0,
+                w: 1200.0,
+                h: 800.0,
+                maximized: true,
+            }),
         };
         assert_eq!(Settings::from_json(&s.to_json()), Ok(s));
     }

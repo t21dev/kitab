@@ -1201,7 +1201,7 @@ impl Reader {
                         .text_size(px(12.5))
                         .text_color(st.c(|c| c.text))
                         .cursor_pointer()
-                        .hover(|b| b.bg(st.hover_bg()))
+                        .hover(|b| b.bg(st.raised_hover()))
                         .tip("Edit this Markdown  Ctrl+E")
                         .on_click(cx.listener(|r, _, window, cx| r.toggle_edit(window, cx)))
                         .child(

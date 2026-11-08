@@ -137,6 +137,8 @@ pub struct Workspace {
     print_serial: u64,
     /// Linux without a print portal: Ctrl+P opens Kitab's own sheet.
     print_no_portal: bool,
+    /// Debounces saving the window's place while it moves.
+    place_serial: u64,
     /// The password sheet, when open.
     password: Option<password_ui::PasswordSheet>,
     password_serial: u64,
@@ -233,6 +235,7 @@ impl Workspace {
             print: None,
             print_serial: 0,
             print_no_portal: false,
+            place_serial: 0,
             password: None,
             password_serial: 0,
             sign: Default::default(),
@@ -283,7 +286,28 @@ impl Workspace {
             }
         });
         this.subs.push(activation);
+        // Remember where the window is: shortly after it stops moving or
+        // resizing, and once more as it closes.
+        let moved = cx.observe_window_bounds(window, |ws, window, cx| ws.window_moved(window, cx));
+        this.subs.push(moved);
+        window.on_window_should_close(cx, |window, cx| {
+            save_window_place(crate::window_place(window), true, cx);
+            true
+        });
         this
+    }
+
+    fn window_moved(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        // Minimised, Windows reports the normal bounds anyway; a window
+        // that isn't shown yet hasn't been placed by the user.
+        let place = crate::window_place(window);
+        self.place_serial += 1;
+        let serial = self.place_serial;
+        self.after(Duration::from_millis(600), cx, move |ws, cx| {
+            if ws.place_serial == serial {
+                save_window_place(place, false, cx);
+            }
+        });
     }
 
     fn restore_session(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -1015,7 +1039,10 @@ impl Workspace {
                     st.c(|c| c.muted)
                 })
                 .when(on, |d| d.bg(st.c(|c| c.raised)).shadow(st.elev()))
-                .hover(|d| d.bg(st.hover_bg()).text_color(st.c(|c| c.text)))
+                .hover(|d| {
+                    d.bg(if on { st.raised_hover() } else { st.hover_bg() })
+                        .text_color(st.c(|c| c.text))
+                })
                 .on_click(move |_, _, cx| {
                     if let Some(p) = target {
                         reader.update(cx, |r, cx| r.jump_to(p, cx));
@@ -1319,7 +1346,10 @@ impl Workspace {
                         st.c(|c| c.muted)
                     })
                     .when(on, |d| d.bg(st.c(|c| c.raised)).shadow(st.elev()))
-                    .hover(|d| d.bg(st.hover_bg()).text_color(st.c(|c| c.text)))
+                    .hover(|d| {
+                        d.bg(if on { st.raised_hover() } else { st.hover_bg() })
+                            .text_color(st.c(|c| c.text))
+                    })
                     .on_click(move |_, _, cx| jump.update(cx, |r, cx| r.jump_to(page, cx)))
                     .child(
                         svg()
@@ -1577,7 +1607,10 @@ impl Workspace {
                     })
                     .when(on, |d| d.bg(st.c(|c| c.raised)).shadow(st.elev()))
                     .when(side, |d| d.bg(st.c(|c| c.hover)))
-                    .hover(|d| d.bg(st.hover_bg()).text_color(st.c(|c| c.text)))
+                    .hover(|d| {
+                        d.bg(if on { st.raised_hover() } else { st.hover_bg() })
+                            .text_color(st.c(|c| c.text))
+                    })
                     .on_click(cx.listener(move |ws, _, window, cx| ws.activate(ix, window, cx)))
                     .on_mouse_up(
                         MouseButton::Middle,
@@ -1802,7 +1835,7 @@ impl Workspace {
                 .shadow(st.elev())
                 .text_size(st.px(|m| m.ui_text))
                 .text_color(st.c(|c| c.text))
-                .hover(|d| d.bg(st.hover_bg()))
+                .hover(|d| d.bg(st.raised_hover()))
                 .child(
                     svg()
                         .path(icon(name))
@@ -1948,7 +1981,7 @@ impl Workspace {
             .rounded(px(12.0))
             .bg(st.c(|c| c.raised))
             .shadow(st.elev())
-            .hover(|d| d.bg(st.hover_bg()))
+            .hover(|d| d.bg(st.raised_hover()))
             .on_click(cx.listener(move |ws, _, window, cx| ws.open_tab(path.clone(), window, cx)))
             .child(self.book_cover(usize::MAX - i, &item, 56.0, st, cx))
             .child(
@@ -2001,7 +2034,7 @@ impl Workspace {
             .bg(st.c(|c| c.raised))
             .shadow(st.elev())
             .cursor_pointer()
-            .hover(|d| d.bg(st.hover_bg()))
+            .hover(|d| d.bg(st.raised_hover()))
             .on_click(cx.listener(|ws, _, window, cx| ws.open_welcome(window, cx)))
             .child(div().flex_none().child(cover("Welcome to Kitab", 64.0, st)))
             .child(
@@ -2126,23 +2159,34 @@ impl Workspace {
                             .child(format!("{:?}", item.format).to_uppercase()),
                     ),
             )
+            // Every card the same height: the title always takes two lines
+            // (longer ones end in …, the whole title in the tooltip) and the
+            // author line is kept even when there is none.
             .child(
                 div()
+                    .id(("recent-title", i))
+                    .h(px(36.0))
                     .text_size(px(13.0))
+                    .line_height(px(18.0))
                     .font_weight(FontWeight::MEDIUM)
                     .text_color(st.c(|c| c.text))
+                    .overflow_hidden()
                     .line_clamp(2)
+                    .text_ellipsis()
+                    .tip(item.title.clone())
                     .child(item.title.clone()),
             )
-            .children(item.author.clone().map(|a| {
+            .child(
                 div()
+                    .h(px(16.0))
                     .text_size(px(12.0))
+                    .line_height(px(16.0))
                     .text_color(st.c(|c| c.muted))
                     .whitespace_nowrap()
                     .overflow_hidden()
                     .text_ellipsis()
-                    .child(a)
-            }))
+                    .child(item.author.clone().unwrap_or_default()),
+            )
             .child(if missing {
                 div()
                     .text_size(px(11.5))
@@ -2153,6 +2197,29 @@ impl Workspace {
                 progress_bar(item.progress, st)
             })
             .into_any_element()
+    }
+}
+
+/// Keep the window's place in settings.json. `now` writes before returning
+/// (the window is closing and the app may exit next); otherwise the file is
+/// written off the UI thread. Nothing is written when nothing changed.
+fn save_window_place(place: crate::settings::WindowPlace, now: bool, cx: &mut App) {
+    // A minimised window parked off screen (-32000 on Windows) isn't a place.
+    if place.x < -10_000.0 || place.y < -10_000.0 || place.w < 100.0 || place.h < 100.0 {
+        return;
+    }
+    if Style::get(cx).window == Some(place) {
+        return;
+    }
+    cx.global_mut::<Style>().window = Some(place);
+    let json = Style::get(cx).settings().to_json();
+    if cx.has_global::<SettingsSink>() {
+        let sink = cx.global::<SettingsSink>().0.clone();
+        if now {
+            sink(json);
+        } else {
+            cx.background_spawn(async move { sink(json) }).detach();
+        }
     }
 }
 

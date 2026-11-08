@@ -366,15 +366,28 @@ impl Workspace {
             return;
         };
         let owner = owner_of(window);
+        kitab_os::trace::mark(&format!("print: system dialog, owner {owner:#x}"));
         let engine: Arc<dyn DocEngine> = self.engine.clone();
         cx.spawn(async move |this, cx| {
+            // The dialog runs here, on the UI thread, as GPUI runs Windows'
+            // file dialogs: a task outside any update, so its modal loop can
+            // still dispatch to the window. On a pooled thread PrintDlgEx
+            // crashed in COM; on a thread of its own it never appeared.
+            kitab_os::trace::mark("print: dialog opening");
+            let chosen = Printer::choose_pages(owner, count, current + 1);
+            kitab_os::trace::mark("print: dialog closed");
+            let (mut printer, chosen) = match chosen {
+                Ok(Some(p)) => p,
+                Ok(None) => return,
+                Err(e) => {
+                    let _ = this.update(cx, |ws, cx| {
+                        ws.toast(format!("Couldn't print: {e}"), true, None, cx)
+                    });
+                    return;
+                }
+            };
             let (tx, rx) = smol::channel::unbounded::<(usize, usize)>();
             let job = cx.background_spawn(async move {
-                let (mut printer, chosen) = match Printer::choose_pages(owner, count, current + 1) {
-                    Ok(Some(p)) => p,
-                    Ok(None) => return Ok(None),
-                    Err(e) => return Err(e),
-                };
                 let pages = chosen.pages(count, current);
                 if pages.is_empty() {
                     return Err("those pages aren't in this document".to_string());
@@ -709,7 +722,7 @@ impl Workspace {
                 .bg(st.c(|c| c.raised))
                 .shadow(st.elev())
                 .cursor_pointer()
-                .hover(|d| d.bg(st.hover_bg()))
+                .hover(|d| d.bg(st.raised_hover()))
                 .on_click(cx.listener(move |ws, _, _, cx| {
                     if let Some(s) = ws.print.as_mut() {
                         s.copies = (s.copies as i32 + delta).clamp(1, 99) as u32;

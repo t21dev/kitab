@@ -562,14 +562,19 @@ fn dock_handle(at: DockAt, top_inset: f32, bar: f32, st: &Style) -> AnyElement {
         .border_color(st.c(|c| c.line))
         // Floats like the dock, so it reads over a white page.
         .shadow(st.float())
-        .hover(|d| d.bg(st.hover_bg()))
+        // The fill stays solid on hover: a see-through highlight let the
+        // shadow beneath show as a grey glow. The border and arrow light up.
+        .group("dock-handle")
+        .hover(|d| d.border_color(st.c(|c| c.ring)))
+        .cursor_pointer()
         .tip("Show the dock  Ctrl+.")
         .on_click(|_, window, cx| window.dispatch_action(Box::new(crate::actions::ToggleDock), cx))
         .child(
             svg()
                 .path(icon(away_from_edge(at)))
                 .size(px(14.0))
-                .text_color(st.c(|c| c.muted)),
+                .text_color(st.c(|c| c.muted))
+                .group_hover("dock-handle", |s| s.text_color(st.c(|c| c.text))),
         );
     let place = div().absolute();
     match at {

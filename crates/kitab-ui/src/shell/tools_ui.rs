@@ -99,7 +99,7 @@ pub(super) fn dialog_button(
             b.bg(st.c(|c| c.raised))
                 .text_color(st.c(|c| c.text))
                 .shadow(st.elev())
-                .hover(|b| b.bg(st.hover_bg()))
+                .hover(|b| b.bg(st.raised_hover()))
         })
         .child(label)
 }
