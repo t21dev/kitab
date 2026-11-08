@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-11-08
+
 ### Added
 - Select text in Markdown: drag across paragraphs, headings, lists, tables and code; double-click a word, triple-click a paragraph or a line of code, Shift+click to extend. Ctrl+C copies, and the page menu offers Copy and Find.
 - Code blocks wider than the page have a scroll bar: drag it, or click along it to jump. Shift+wheel scrolls a block sideways.
@@ -202,7 +204,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fit width and fit page follow a window resize even when no new page has to be drawn.
 - The Settings window shrinks to fit small windows instead of running off the left edge.
 
-[Unreleased]: https://github.com/t21dev/kitab/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/t21dev/kitab/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/t21dev/kitab/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/t21dev/kitab/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/t21dev/kitab/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/t21dev/kitab/releases/tag/v0.1.0
