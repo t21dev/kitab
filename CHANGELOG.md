@@ -11,7 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Select text in Markdown: drag across paragraphs, headings, lists, tables and code; double-click a word, triple-click a paragraph or a line of code, Shift+click to extend. Ctrl+C copies, and the page menu offers Copy and Find.
 - Code blocks wider than the page have a scroll bar: drag it, or click along it to jump. Shift+wheel scrolls a block sideways.
 
+### Changed
+- Markdown bookmarks are named after their section ("Lists"), not a page number, and the right-click menu in Markdown keeps to what applies there: back and forward, zoom, Bookmark this section, Print… and the file.
+
 ### Fixed
+- In Markdown, keyboard shortcuts such as Ctrl+D (bookmark) and Ctrl+C (copy) did nothing after clicking in the text: the click didn't give the document the keyboard.
 - Long lines in a Markdown code block couldn't be scrolled to; they were cut off at the edge.
 - The mouse wheel over a code block scrolled the block sideways as well as the page; it scrolls only the page now.
 

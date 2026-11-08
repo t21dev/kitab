@@ -3508,6 +3508,8 @@ impl Workspace {
         let (page, has_doc) = (r.current_page(), r.status == crate::reader::Status::Open);
         let (sel_preview, may_copy) = (r.selection_preview(), r.may_copy());
         let mode = r.zoom_mode();
+        // Markdown has sections, not pages: no page items, fit modes or rotate.
+        let md = r.is_markdown();
         // One toolbar row (back/forward, zoom, rotate) that reads the reader's
         // state each frame and keeps the menu open, so it can be pressed again;
         // everything else is an ordinary row (DESIGN.md § Menus).
@@ -3521,48 +3523,51 @@ impl Workspace {
                     let reader = reader.clone();
                     move |_: &mut Window, cx: &mut App| reader.update(cx, f)
                 };
+                let mut groups = vec![
+                    vec![
+                        Tool::new(
+                            "arrow-left",
+                            "Back (Alt+Left)",
+                            go(|r, cx| r.history(true, cx)),
+                        )
+                        .disabled(!back),
+                        Tool::new(
+                            "arrow-right",
+                            "Forward (Alt+Right)",
+                            go(|r, cx| r.history(false, cx)),
+                        )
+                        .disabled(!forward),
+                    ],
+                    vec![
+                        Tool::new(
+                            "minus",
+                            "Zoom out (Ctrl+-)",
+                            go(|r, cx| r.zoom_step(false, cx)),
+                        ),
+                        Tool::new(
+                            "plus",
+                            "Zoom in (Ctrl+=)",
+                            go(|r, cx| r.zoom_step(true, cx)),
+                        ),
+                    ],
+                ];
+                if !md {
+                    groups.push(vec![
+                        Tool::new(
+                            "rotate-left",
+                            "Rotate counter-clockwise (Ctrl+Shift+-)",
+                            go(|r, cx| r.rotate(false, cx)),
+                        ),
+                        Tool::new(
+                            "rotate",
+                            "Rotate clockwise (Ctrl+Shift+=)",
+                            go(|r, cx| r.rotate(true, cx)),
+                        ),
+                    ]);
+                }
                 menu::tool_row(
                     "menu-tools",
-                    vec![
-                        vec![
-                            Tool::new(
-                                "arrow-left",
-                                "Back (Alt+Left)",
-                                go(|r, cx| r.history(true, cx)),
-                            )
-                            .disabled(!back),
-                            Tool::new(
-                                "arrow-right",
-                                "Forward (Alt+Right)",
-                                go(|r, cx| r.history(false, cx)),
-                            )
-                            .disabled(!forward),
-                        ],
-                        vec![
-                            Tool::new(
-                                "minus",
-                                "Zoom out (Ctrl+-)",
-                                go(|r, cx| r.zoom_step(false, cx)),
-                            ),
-                            Tool::new(
-                                "plus",
-                                "Zoom in (Ctrl+=)",
-                                go(|r, cx| r.zoom_step(true, cx)),
-                            ),
-                        ],
-                        vec![
-                            Tool::new(
-                                "rotate-left",
-                                "Rotate counter-clockwise (Ctrl+Shift+-)",
-                                go(|r, cx| r.rotate(false, cx)),
-                            ),
-                            Tool::new(
-                                "rotate",
-                                "Rotate clockwise (Ctrl+Shift+=)",
-                                go(|r, cx| r.rotate(true, cx)),
-                            ),
-                        ],
-                    ],
+                    groups,
                     Some(1),
                     Some(format!("{percent} %").into()),
                     st,
@@ -3577,27 +3582,30 @@ impl Workspace {
             .key(key)
             .checked(mode == m)
         };
-        let mut items = vec![
-            tool_row,
-            MenuItem::Separator,
-            zoom("Fit width", "Ctrl+2", ZoomMode::FitWidth),
-            zoom("Fit page", "Ctrl+0", ZoomMode::FitPage),
-            zoom("Actual size", "Ctrl+1", ZoomMode::ActualSize),
-            MenuItem::Separator,
-            MenuItem::new("Go to page…", {
-                let reader = reader.clone();
-                move |window: &mut Window, cx: &mut App| {
-                    reader.update(cx, |r, cx| r.edit_page(window, cx))
-                }
-            })
-            .icon("hash")
-            .key("Ctrl+G"),
+        let mut items = vec![tool_row, MenuItem::Separator];
+        if !md {
+            items.extend([
+                zoom("Fit width", "Ctrl+2", ZoomMode::FitWidth),
+                zoom("Fit page", "Ctrl+0", ZoomMode::FitPage),
+                zoom("Actual size", "Ctrl+1", ZoomMode::ActualSize),
+                MenuItem::Separator,
+                MenuItem::new("Go to page…", {
+                    let reader = reader.clone();
+                    move |window: &mut Window, cx: &mut App| {
+                        reader.update(cx, |r, cx| r.edit_page(window, cx))
+                    }
+                })
+                .icon("hash")
+                .key("Ctrl+G"),
+            ]);
+        }
+        items.extend([
             {
                 let marked = reader.read(cx).is_bookmarked(page as u32);
-                let label = if marked {
-                    "Remove bookmark"
-                } else {
-                    "Bookmark this page"
+                let label = match (marked, md) {
+                    (true, _) => "Remove bookmark",
+                    (false, true) => "Bookmark this section",
+                    (false, false) => "Bookmark this page",
                 };
                 MenuItem::new(label, {
                     let reader = reader.clone();
@@ -3613,7 +3621,7 @@ impl Workspace {
                 .disabled(!reader.read(cx).can_bookmark())
             },
             MenuItem::Separator,
-        ];
+        ]);
         if let Some(preview) = sel_preview {
             items.push(
                 MenuItem::new("Copy", {
@@ -3653,6 +3661,23 @@ impl Workspace {
                 }
             }
             items.push(MenuItem::Separator);
+        }
+        if md {
+            items.push(
+                MenuItem::new("Print…", {
+                    let reader = reader.clone();
+                    let _ = reader;
+                    // The menu is for the tab in front, which Print prints.
+                    self.on_ws(cx, move |ws, window, cx| ws.open_print(window, cx))
+                })
+                .icon("print")
+                .key("Ctrl+P"),
+            );
+            items.push(MenuItem::Separator);
+            items.push(file_item_copy(&path));
+            items.push(file_item_reveal(&path));
+            self.open_menu(at, false, 300.0, items, window, cx);
+            return;
         }
         items.extend([
             MenuItem::new(format!("Copy text of page {}", page + 1), {

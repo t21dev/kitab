@@ -311,7 +311,11 @@ impl Reader {
             .pb(px(if last { 120.0 } else { 0.0 }))
             .on_mouse_down(
                 gpui::MouseButton::Left,
-                cx.listener(|r, e: &gpui::MouseDownEvent, _, cx| r.md_select_down(e, cx)),
+                cx.listener(|r, e: &gpui::MouseDownEvent, window, cx| {
+                    // Keys (Ctrl+C, Ctrl+D, …) go to this tab after a click.
+                    window.focus(&r.focus);
+                    r.md_select_down(e, cx)
+                }),
             )
             .child(div().w_full().max_w(px(COLUMN * scale.max(0.5))).child(el))
             .into_any_element()

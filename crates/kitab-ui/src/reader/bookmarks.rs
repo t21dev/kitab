@@ -14,8 +14,10 @@ pub struct BookmarkRow {
     pub title: String,
 }
 
-/// The name for a bookmark on `page`: the last contents entry at or before it.
-pub(super) fn title_for(page: u32, outline: &[OutlineItem]) -> String {
+/// The name for a bookmark on `page`: the last contents entry at or before
+/// it, with the page number (`pages`) or alone (Markdown, whose "pages" are
+/// its blocks).
+pub(super) fn title_for(page: u32, outline: &[OutlineItem], pages: bool) -> String {
     fn walk<'a>(items: &'a [OutlineItem], page: u32, best: &mut Option<(u32, &'a str)>) {
         for it in items {
             if let Some(p) = it.page.filter(|&p| p <= page) {
@@ -28,9 +30,11 @@ pub(super) fn title_for(page: u32, outline: &[OutlineItem]) -> String {
     }
     let mut best = None;
     walk(outline, page, &mut best);
-    match best {
-        Some((_, title)) => format!("{title} · page {}", page + 1),
-        None => format!("Page {}", page + 1),
+    match (best, pages) {
+        (Some((_, title)), true) => format!("{title} · page {}", page + 1),
+        (Some((_, title)), false) => title.to_string(),
+        (None, true) => format!("Page {}", page + 1),
+        (None, false) => "Start".to_string(),
     }
 }
 
@@ -93,7 +97,7 @@ impl Reader {
             cx.notify();
             return;
         }
-        let title = title_for(page, self.outline());
+        let title = title_for(page, self.outline(), !self.is_markdown());
         self.bookmark_rows.push(BookmarkRow {
             id: None,
             page,
@@ -171,8 +175,11 @@ mod tests {
             item("Chapter 1", 0, vec![item("Section 1.1", 2, vec![])]),
             item("Chapter 2", 5, vec![]),
         ];
-        assert_eq!(title_for(3, &outline), "Section 1.1 · page 4");
-        assert_eq!(title_for(7, &outline), "Chapter 2 · page 8");
-        assert_eq!(title_for(0, &[]), "Page 1");
+        assert_eq!(title_for(3, &outline, true), "Section 1.1 · page 4");
+        assert_eq!(title_for(7, &outline, true), "Chapter 2 · page 8");
+        assert_eq!(title_for(0, &[], true), "Page 1");
+        // Markdown: the heading alone.
+        assert_eq!(title_for(3, &outline, false), "Section 1.1");
+        assert_eq!(title_for(0, &[], false), "Start");
     }
 }
