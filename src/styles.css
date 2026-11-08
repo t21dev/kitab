@@ -2,10 +2,12 @@
 /* Hallmark · macrostructure: Feature Stack · tone: technical-calm · anchor hue: amber (app accent)
  * genre: modern-minimal · theme: DESIGN.md Light + Dark (system, with a visitor override)
  * nav: N13 inline Ctrl-K pill · footer: Ft4 dense colophon · enrichment: real app captures only
- * motion: hero rise (once) · stage cross-fade with 2px blur · press scale · below-fold reveal */
+ * motion: hero rise (once) · stage cross-fade with 2px blur · press scale · below-fold reveal
+ * stage: Kitab rebuilt in HTML (src/mock), no screenshots */
 @import "tailwindcss";
 @import "@fontsource-variable/inter";
 @import "@fontsource-variable/literata";
+@import "./mock/mock.css";
 
 /* Theme variables (--bg, --text, --elev …) come from src/themes.ts, inlined by the prerender step. */
 @theme inline {
@@ -54,12 +56,6 @@
 .wrap { max-width: 1200px; margin: 0 auto; padding-left: max(var(--gutter), env(safe-area-inset-left, 0px)); padding-right: max(var(--gutter), env(safe-area-inset-right, 0px)); }
 .skip { position: fixed; left: 12px; top: 12px; z-index: 80; padding: 8px 12px; border-radius: 10px; background: var(--raised); box-shadow: var(--float); }
 .skip:not(:focus) { clip-path: inset(50%); width: 1px; height: 1px; overflow: hidden; padding: 0; box-shadow: none; }
-
-/* The shots follow the theme: Light capture on Light, Dark capture on Dark. */
-.only-dark { display: none; }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .only-dark { display: block; } :root:not([data-theme="light"]) .only-light { display: none; } }
-:root[data-theme="dark"] .only-dark { display: block; }
-:root[data-theme="dark"] .only-light { display: none; }
 
 /* ── Buttons ─────────────────────────────────────────────────────────── */
 .btn { display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 16px; border-radius: 10px; font: 500 14px/1 var(--font-sans); text-decoration: none; white-space: nowrap; cursor: pointer;
@@ -132,17 +128,17 @@
 @keyframes rise { from { opacity: 0; transform: translateY(10px); } }
 
 /* ── Feature stack ───────────────────────────────────────────────────── */
-.stack { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: var(--space-2xl); padding-bottom: var(--space-2xl); }
+.stack { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 8fr); gap: var(--space-2xl); padding-bottom: var(--space-2xl); }
 .story { list-style: none; margin: 0; padding: 0; }
 .step { min-height: 64vh; display: flex; flex-direction: column; justify-content: center; gap: 12px; padding-block: var(--space-xl); opacity: 0.4; transition: opacity 300ms var(--ease-out); }
 .step[data-active] { opacity: 1; }
 .step:first-child { justify-content: flex-start; padding-top: 0; }
 .step__icon { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 11px; background: var(--raised); box-shadow: var(--elev); color: var(--accent); }
-.step h2 { margin: 4px 0 0; font: 600 clamp(26px, 3vw, 34px)/1.15 var(--font-serif); letter-spacing: -0.015em; text-wrap: balance; }
-.step p { margin: 0; max-width: 48ch; font: 400 17px/1.7 var(--font-serif); color: var(--read); }
-.step ul { margin: 4px 0 0; padding: 0; list-style: none; display: grid; gap: 6px; font-size: 14px; color: var(--muted); }
-.step ul li { display: flex; gap: 10px; }
-.step ul li::before { content: ""; flex: none; width: 6px; height: 6px; margin-top: 8px; border-radius: 50%; background: var(--ring); }
+.step > h2 { margin: 4px 0 0; font: 600 clamp(26px, 3vw, 34px)/1.15 var(--font-serif); letter-spacing: -0.015em; text-wrap: balance; }
+.step > p { margin: 0; max-width: 48ch; font: 400 17px/1.7 var(--font-serif); color: var(--read); }
+.step > ul { margin: 4px 0 0; padding: 0; list-style: none; display: grid; gap: 6px; font-size: 14px; color: var(--muted); }
+.step > ul li { display: flex; gap: 10px; }
+.step > ul li::before { content: ""; flex: none; width: 6px; height: 6px; margin-top: 8px; border-radius: 50%; background: var(--ring); }
 .step__shot { display: none; }
 
 .stage { position: sticky; top: calc(var(--nav-h) + 28px); height: min(640px, calc(100dvh - var(--nav-h) - 56px)); }
@@ -151,14 +147,9 @@
   transition: opacity 280ms var(--ease-out), filter 280ms var(--ease-out), transform 280ms var(--ease-out); }
 .stage__scene[data-on] { opacity: 1; filter: none; transform: none; pointer-events: auto; }
 
-.shot { margin: 0; height: 100%; display: flex; flex-direction: column; gap: 10px; }
-.shot__frame { flex: 1; min-height: 0; display: block; border-radius: 16px; overflow: hidden; background: var(--desk); box-shadow: var(--float); }
-.shot__frame img { width: 100%; height: 100%; object-fit: contain; object-position: center; }
-.shot figcaption { font-size: 12.5px; color: var(--faint); }
-.pending { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: var(--space-xl); text-align: center;
-  border-radius: 16px; background: var(--panel); box-shadow: var(--well); color: var(--ring); }
-.pending__title { margin: 4px 0 0; font-size: 15px; font-weight: 600; color: var(--text); }
-.pending__body { margin: 0; max-width: 40ch; font-size: 13.5px; color: var(--muted); }
+.shot { margin: 0; height: 100%; display: flex; flex-direction: column; justify-content: center; gap: 12px; }
+.shot__frame { flex: none; width: 100%; aspect-ratio: 860 / 600; max-height: calc(100% - 32px); }
+.shot figcaption { font-size: 13px; color: var(--muted); }
 
 /* ── Bands ───────────────────────────────────────────────────────────── */
 .band { border-top: 1px solid var(--line); padding-block: var(--space-2xl); }
@@ -242,9 +233,10 @@
 @media (max-width: 1023px) {
   .nav__links { display: none; }
   .stack { gap: var(--space-xl); grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .shot__frame { aspect-ratio: 5 / 6; }
   .band__grid { grid-template-columns: minmax(0, 1fr); gap: var(--space-xl); }
 }
-/* ── Phone: no sticky stage; each step carries its own screenshot ──── */
+/* ── Phone: no sticky stage; each step carries its own window ──────── */
 @media (max-width: 767px) {
   :root { --nav-h: 56px; }
   .pill { width: 36px; padding: 0; justify-content: center; margin: 0 0 0 auto; }
@@ -256,8 +248,8 @@
   .step { min-height: 0; opacity: 1; padding-block: var(--space-xl); border-top: 1px solid var(--line); }
   .step__shot { display: block; margin-top: var(--space-sm); }
   .step__shot .shot { height: auto; }
-  .step__shot .shot__frame img { height: auto; aspect-ratio: 1000 / 998; max-height: 420px; }
-  .step__shot .pending { height: auto; padding: var(--space-lg); }
+  .step__shot .shot__frame { aspect-ratio: auto; height: min(600px, 128vw); max-height: none; }
+  .step__shot .kwin { --ks: .7; }
 }
 /* Small phones: each spec row stacks, label above value. */
 @media (max-width: 639px) {

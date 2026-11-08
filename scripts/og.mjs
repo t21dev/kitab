@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Writes the share image and icons into public/. Run with `npm run og` after a
-// new screenshot lands; the outputs are committed, so builds don't need fonts.
+// new capture lands; the outputs are committed, so builds don't need fonts.
 //   public/og.png (1200 × 630), favicon.svg, apple-touch-icon.png, icon-192.png, icon-512.png, site.webmanifest
-// The OG image uses a real capture of the app (public/shots/dark/pages.png), never a drawing of it.
+// The OG image uses a real capture of the app (scripts/og/capture-dark-pages.png; it is not published on the site itself).
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -37,7 +37,7 @@ function render(svg, width) {
 }
 
 // ── OG image ─────────────────────────────────────────────────────────────
-const shot = read("public/shots/dark/pages.png").toString("base64");
+const shot = read("scripts/og/capture-dark-pages.png").toString("base64");
 const og = `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1200" height="630" viewBox="0 0 1200 630">
   <rect width="1200" height="630" fill="${C.bg}"/>
   <g transform="translate(72 74)">

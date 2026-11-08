@@ -1,8 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Layout: mockup A (Feature Stack: a sticky stage beside the story). Copy: mockup B.
-// The stage shows only real captures of the app; a feature with none yet says which phase brings it.
+// The stage shows Kitab itself, rebuilt in HTML from the app's own tokens, icons and sizes
+// (src/mock), so each feature can be tried right here.
 import { useEffect, useState } from "react";
 import { FAQ, ROADMAP, SITE, SPECS, STEPS, type Step } from "../content";
+import { KitabApp } from "../mock/KitabApp";
+import { SCENES } from "../mock/scenes";
 import type { PageData } from "../data";
 import { FEATURE_ICONS, Icon } from "../components/Icon";
 
@@ -44,28 +47,15 @@ function Hero({ data }: { data: PageData }) {
   );
 }
 
-function Shot({ step, eager = false }: { step: Step; eager?: boolean }) {
-  const phase = ROADMAP.find((p) => p.n === step.phase);
-  if (!step.shot) {
-    return (
-      <div className="pending" role="note">
-        <Icon name={FEATURE_ICONS[step.id] ?? "file"} size={22} />
-        <p className="pending__title">Screenshot arrives with Phase {step.phase}</p>
-        <p className="pending__body">
-          {phase ? `${phase.title} (${phase.version}).` : ""} This panel only ever shows real captures of the app, taken from
-          the build itself, so it stays empty until the feature exists.
-        </p>
-      </div>
-    );
-  }
-  const s = step.shot;
+function Scene({ step }: { step: Step }) {
+  const scene = SCENES[step.id];
+  if (!scene) return null;
   return (
     <figure className="shot">
-      <span className="shot__frame">
-        <img className="only-light" src={`/shots/light/${s.file}`} alt={s.alt} width={s.width} height={s.height} loading={eager ? "eager" : "lazy"} decoding="async" />
-        <img className="only-dark" src={`/shots/dark/${s.file}`} alt={s.alt} width={s.width} height={s.height} loading={eager ? "eager" : "lazy"} decoding="async" />
-      </span>
-      <figcaption>{s.caption}</figcaption>
+      <div className="shot__frame">
+        <KitabApp start={scene.start} label={scene.label} />
+      </div>
+      <figcaption>{scene.hint}</figcaption>
     </figure>
   );
 }
@@ -100,15 +90,15 @@ function Features() {
               </ul>
             ) : null}
             <div className="step__shot">
-              <Shot step={s} />
+              <Scene step={s} />
             </div>
           </li>
         ))}
       </ol>
-      <div className="stage" aria-hidden="true">
-        {STEPS.map((s, i) => (
-          <div key={s.id} className="stage__scene" data-on={active === s.id || undefined}>
-            <Shot step={s} eager={i < 2} />
+      <div className="stage">
+        {STEPS.map((s) => (
+          <div key={s.id} className="stage__scene" data-on={active === s.id || undefined} inert={active !== s.id}>
+            <Scene step={s} />
           </div>
         ))}
       </div>

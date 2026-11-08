@@ -25,15 +25,13 @@ export const SITE = {
   locale: "en",
 } as const;
 
-/** A screenshot slot. `phase` is when a real capture of this feature can exist;
- *  `shot` names the files in public/shots/{light,dark}/ once one does. */
+/** A feature in the story. The stage beside it shows Kitab doing it (src/mock/scenes.ts). */
 export type Step = {
   id: string;
   title: string;
   body: string[];
   points?: string[];
   phase: number;
-  shot?: { file: string; alt: string; caption: string; width: number; height: number };
 };
 
 /** The feature story, in reading order. Copy follows mockup B; layout follows mockup A. */
@@ -45,20 +43,13 @@ export const STEPS: Step[] = [
       "A landscape chart sits between portrait pages instead of being squeezed to one width. A4, A5, Letter and receipt-sized pages each keep their shape at one zoom, and print at their own orientation.",
     ],
     phase: 0,
-    shot: {
-      file: "pages.png",
-      alt: "Kitab at 25 % zoom showing an A4 portrait page above an A4 landscape page, each at its own size, with the status bar reading PDF, 3.9 KB, 6 pages, A4.",
-      caption: "Real capture of the current build from main, on the 02-mixed-page-sizes.pdf fixture from the test corpus.",
-      width: 1773,
-      height: 1041,
-    },
   },
   {
     id: "speed",
     title: "Fast is a feature",
     body: [
       "A reader should be open before you have finished double-clicking. Kitab shows the first page as soon as its window appears, and stays smooth with dozens of tabs open and while you resize the window.",
-      "Speed is tested, not assumed. A benchmark starts Kitab and watches its window until the page is drawn and stable, fifteen times per scenario, against SumatraPDF on the same machine.",
+      "Speed is tested, not assumed. A benchmark starts Kitab and watches its window until the page is drawn and stable, fifteen times per scenario.",
     ],
     points: ["Results are published with each release, along with the machine they ran on."],
     phase: 1,
@@ -71,13 +62,6 @@ export const STEPS: Step[] = [
     ],
     points: ["PDF, EPUB, MOBI, FB2, XPS, CBZ, Markdown and text", "Reopen closed tabs, split view, and a command palette (Ctrl+K)"],
     phase: 2,
-    shot: {
-      file: "tabs.png",
-      alt: "Kitab with three tabs open (an EPUB, a Markdown file and a PDF), the PDF showing with its contents in the sidebar and the status bar at the bottom.",
-      caption: "Real capture of the current build from main, on the 01-text-outline.pdf fixture from the test corpus.",
-      width: 1773,
-      height: 1041,
-    },
   },
   {
     id: "find",
@@ -86,13 +70,6 @@ export const STEPS: Step[] = [
       "Press Ctrl+F in a PDF, a book or a Markdown file. Every hit is highlighted on the page, with match case, whole word and accents ignored.",
     ],
     phase: 3,
-    shot: {
-      file: "find.png",
-      alt: "Find in Kitab: the word kerning highlighted across a page, the find bar reading 2 of 331.",
-      caption: "Real capture of the current build from main, on the 01-text-outline.pdf fixture from the test corpus.",
-      width: 1773,
-      height: 1041,
-    },
   },
   {
     id: "markdown",
@@ -101,13 +78,6 @@ export const STEPS: Step[] = [
       "Markdown renders like GitHub, with Mermaid diagrams drawn in your theme's colours, highlighted code and typeset math, and reloads when you save the file. Books reflow in your choice of typeface, line spacing and margins.",
     ],
     phase: 5,
-    shot: {
-      file: "markdown.png",
-      alt: "A Markdown file in Kitab with a Mermaid flowchart and a sequence diagram drawn in the theme's colours.",
-      caption: "Real capture of the current build from main, on the 02-mermaid.md fixture from the test corpus.",
-      width: 1773,
-      height: 1041,
-    },
   },
   {
     id: "forms",
@@ -116,6 +86,7 @@ export const STEPS: Step[] = [
       "Fill PDF forms, with totals and dates worked out the way the form expects, and no document scripts ever run. Open password-protected files of every standard kind.",
       "Check whether a signature is valid and whether the file changed after signing, or sign it yourself with a certificate that never leaves your computer. Merge, split, compress, watermark and redact without uploading anything.",
     ],
+    points: ["Mark up any page with a pen, a highlighter, lines, arrows, boxes, text and notes. In a PDF they save into the file, so other readers show them too."],
     phase: 6,
   },
   {

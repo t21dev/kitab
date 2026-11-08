@@ -5,7 +5,7 @@ This is the `landing` branch of [t21dev/kitab](https://github.com/t21dev/kitab).
 - **Stack:** React + TypeScript + Vite + Tailwind CSS v4. Every route is **prerendered to static HTML** at build time (`scripts/prerender.mjs`), so search engines and LLM crawlers get the whole page without running JavaScript. React hydrates for the interactive parts (theme menu, Ctrl+K search, the feature stage).
 - **Hosting:** Cloudflare Workers **static assets only** (no Worker script), configured in `wrangler.jsonc` with the custom domain `kitab.t21.dev`. `dist/_headers` sets the CSP and security headers.
 - **This branch is an orphan.** Never merge it with `main`. Content from the app (`content/CHANGELOG.md`, `content/PRIVACY.md`) is copied in with `npm run sync`, not edited here.
-- **Rules:** follows `DESIGN.md` on `main` (Light and Dark themes only on the site). No trackers, no third-party scripts or fonts, no cookies. No invented numbers: every figure is a measured one with its source. **Screenshots are real captures of the app only** (`public/shots/{light,dark}/`); a feature without one says which phase brings it.
+- **Rules:** follows `DESIGN.md` on `main` (Light and Dark themes only on the site). No trackers, no third-party scripts or fonts, no cookies. No invented numbers: every figure is a measured one with its source. **No screenshots on the site:** the feature stage is Kitab itself rebuilt in HTML (`src/mock/`), from the app's own theme tokens, icons and sizes, so visitors can use it. It shows only what the app does.
 
 ## What the build produces
 
@@ -25,7 +25,7 @@ npm install
 npm run dev        # Vite dev server (client only, no prerender)
 npm run build      # typecheck, build, prerender into dist/
 npm run preview    # build, then serve dist/ with wrangler exactly as Cloudflare will
-npm run og         # regenerate og.png and icons after new screenshots
+npm run og         # regenerate og.png and icons (from scripts/og/capture-dark-pages.png)
 npm run sync       # copy CHANGELOG.md and PRIVACY.md from origin/main
 npm run deploy     # build and deploy with wrangler (needs `wrangler login`)
 ```
@@ -40,6 +40,14 @@ The `t21.dev` zone must be in the Cloudflare account you deploy from.
 
 The build asks GitHub for the latest release to fill the download page. Set `GITHUB_TOKEN` in the build environment to avoid rate limits, or `KITAB_OFFLINE=1` to skip it.
 
-## Screenshots
+## The app on the page
 
-Captures come from the app itself (today from the Phase 0 spike, later from `kitab-e2e --capture-landing`). Each feature in `src/content.ts` (`STEPS`) names its file and the phase that brings it. Put `light` and `dark` PNGs of the same name in `public/shots/`, add the `shot` entry, and run `npm run og` if the OG image should change.
+`src/mock/` rebuilds Kitab's window in React: the title bar and tabs, Home, the sidebar, PDF pages, books, Markdown, the quick dock with the page slider and zoom, Find, the markup bar, the ⋯ menu and Settings. It follows `main`:
+
+- `themes.css` and `theme-list.ts` are generated from `assets/themes/*.json` (all eight themes; with none picked, the mock follows the site's Light/Dark).
+- `icons.ts` is generated from `assets/icons/*.svg`.
+- Sizes and copy come from `DESIGN.md` and `crates/kitab-ui` (Compact density). The PDF is the app's own "Welcome to Kitab" guide.
+
+`src/mock/scenes.ts` says which window each feature in `src/content.ts` (`STEPS`) shows. When the app's look changes, update the mock in the same spirit: only what the app really has.
+
+The OG image still uses a real capture (`scripts/og/capture-dark-pages.png`, not published); run `npm run og` after replacing it.

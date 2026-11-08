@@ -1,0 +1,197 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Generated from assets/themes/*.json on main. The names and colours the theme cards and swatches show.
+export type KTheme = { id: string; name: string; light: boolean; c: Record<string, string> };
+export const KTHEMES: KTheme[] = [
+ {
+  "id": "dark",
+  "name": "Dark",
+  "light": false,
+  "c": {
+   "bg": "#141415",
+   "panel": "#111112",
+   "desk": "#0F0F10",
+   "raised": "#1E1E21",
+   "hover": "#18181A",
+   "line": "#27272B",
+   "text": "#ECECEE",
+   "read": "#D9D9DD",
+   "muted": "#A1A1A7",
+   "faint": "#8C8C92",
+   "ring": "#5C5C63",
+   "accent": "#E6B450",
+   "highlight": "rgba(230,180,80,.30)",
+   "ok": "#4CC38A",
+   "warn": "#E6B450",
+   "bad": "#F06A6A",
+   "scrim": "rgba(0,0,0,.55)"
+  }
+ },
+ {
+  "id": "gray",
+  "name": "Gray",
+  "light": false,
+  "c": {
+   "bg": "#191919",
+   "panel": "#161616",
+   "desk": "#131313",
+   "raised": "#232323",
+   "hover": "#1E1E1E",
+   "line": "#2D2D2D",
+   "text": "#EDEDED",
+   "read": "#DADADA",
+   "muted": "#A6A6A6",
+   "faint": "#919191",
+   "ring": "#606060",
+   "accent": "#E6B450",
+   "highlight": "rgba(230,180,80,.30)",
+   "ok": "#4CC38A",
+   "warn": "#E6B450",
+   "bad": "#F06A6A",
+   "scrim": "rgba(0,0,0,.55)"
+  }
+ },
+ {
+  "id": "light",
+  "name": "Light",
+  "light": true,
+  "c": {
+   "bg": "#FFFFFF",
+   "panel": "#FAFAFB",
+   "desk": "#F2F2F4",
+   "raised": "#FFFFFF",
+   "hover": "#F3F3F5",
+   "line": "#E8E8EC",
+   "text": "#18181B",
+   "read": "#232326",
+   "muted": "#55555D",
+   "faint": "#6B6B73",
+   "ring": "#B5B5BC",
+   "accent": "#B7791F",
+   "highlight": "#FBE2A6",
+   "ok": "#1F9D63",
+   "warn": "#B7791F",
+   "bad": "#D33B3B",
+   "scrim": "rgba(20,20,30,.28)"
+  }
+ },
+ {
+  "id": "paper",
+  "name": "Paper",
+  "light": true,
+  "c": {
+   "bg": "#F4EEE3",
+   "panel": "#EFE8DB",
+   "desk": "#EBE3D5",
+   "raised": "#FAF6EE",
+   "hover": "#EDE5D7",
+   "line": "#DCD1BF",
+   "text": "#2B241D",
+   "read": "#2B241D",
+   "muted": "#5F5346",
+   "faint": "#6E6253",
+   "ring": "#B5A893",
+   "accent": "#A65424",
+   "highlight": "#EFD08F",
+   "ok": "#4E8A57",
+   "warn": "#B87A1E",
+   "bad": "#B5402F",
+   "scrim": "rgba(60,40,20,.25)"
+  }
+ },
+ {
+  "id": "nord",
+  "name": "Nord",
+  "light": false,
+  "c": {
+   "bg": "#2E3440",
+   "panel": "#2A303B",
+   "desk": "#292E39",
+   "raised": "#3B4252",
+   "hover": "#343A47",
+   "line": "#434C5E",
+   "text": "#ECEFF4",
+   "read": "#E5E9F0",
+   "muted": "#C3CAD6",
+   "faint": "#A3ACBC",
+   "ring": "#4C566A",
+   "accent": "#88C0D0",
+   "highlight": "rgba(235,203,139,.30)",
+   "ok": "#A3BE8C",
+   "warn": "#EBCB8B",
+   "bad": "#BF616A",
+   "scrim": "rgba(0,0,0,.45)"
+  }
+ },
+ {
+  "id": "noctua",
+  "name": "Noctua",
+  "light": false,
+  "c": {
+   "bg": "#0E1626",
+   "panel": "#0B1220",
+   "desk": "#0A101C",
+   "raised": "#17223A",
+   "hover": "#121C30",
+   "line": "#1F2B45",
+   "text": "#E6ECF7",
+   "read": "#DCE3F0",
+   "muted": "#A9B5CE",
+   "faint": "#8A97B3",
+   "ring": "#33405E",
+   "accent": "#F2A65A",
+   "highlight": "rgba(242,166,90,.28)",
+   "ok": "#5FD3A3",
+   "warn": "#F2C14E",
+   "bad": "#F07A7A",
+   "scrim": "rgba(0,0,0,.55)"
+  }
+ },
+ {
+  "id": "vampire",
+  "name": "Vampire",
+  "light": false,
+  "c": {
+   "bg": "#17121A",
+   "panel": "#130F16",
+   "desk": "#120E14",
+   "raised": "#231B28",
+   "hover": "#1D1621",
+   "line": "#2F2534",
+   "text": "#F2EAF0",
+   "read": "#EADFE6",
+   "muted": "#C2B2BF",
+   "faint": "#A2909F",
+   "ring": "#4A3B50",
+   "accent": "#E0466A",
+   "highlight": "rgba(224,70,106,.28)",
+   "ok": "#6CCB97",
+   "warn": "#E8B04A",
+   "bad": "#FF8F5A",
+   "scrim": "rgba(0,0,0,.55)"
+  }
+ },
+ {
+  "id": "ink",
+  "name": "Ink",
+  "light": false,
+  "c": {
+   "bg": "#000000",
+   "panel": "#050506",
+   "desk": "#000000",
+   "raised": "#131316",
+   "hover": "#0C0C0E",
+   "line": "#1E1E23",
+   "text": "#F4F4F6",
+   "read": "#E2E2E7",
+   "muted": "#A7A7B0",
+   "faint": "#8E8E98",
+   "ring": "#4A4A53",
+   "accent": "#8EA8FF",
+   "highlight": "rgba(142,168,255,.28)",
+   "ok": "#4CC38A",
+   "warn": "#E6B450",
+   "bad": "#F06A6A",
+   "scrim": "rgba(0,0,0,.7)"
+  }
+ }
+];
