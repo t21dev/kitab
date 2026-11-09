@@ -5,6 +5,8 @@ import type { PageData } from "./data";
 
 export { ROUTES, SITE, STEPS, FAQ, ROADMAP, SHORTCUTS, SPECS, PLATFORMS, FORMATS } from "./content";
 export { themeCss } from "./themes";
+export { DOCS, md as docsInline } from "./docs-content";
+export { PALETTE } from "./app-keys";
 
 export function render(path: string, data: PageData): string {
   return renderToString(<App path={path} data={data} />);

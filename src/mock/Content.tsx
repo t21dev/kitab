@@ -2,7 +2,7 @@
 // The documents' own content: PDF pages as white sheets (sizes in points), the
 // Markdown file as Kitab lays it out (DESIGN.md § Markdown reading), and books
 // reflowed in the reading face. Find highlights hits in all three.
-import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { KIcon } from "./atoms";
 import type { Block, Doc, Page } from "./docs";
 
@@ -257,6 +257,8 @@ function CodeBlock() {
 
 /** The flowchart, drawn in the theme's tokens like Kitab's Mermaid renderer. */
 function Flowchart() {
+  // One id per diagram: the page can show several windows, each with this chart.
+  const arrow = `mm-arrow${useId().replace(/:/g, "")}`;
   const node = (x: number, y: number, w: number, label: string) => (
     <g key={label}>
       <rect x={x} y={y} width={w} height="34" rx="3" className="mm-node" />
@@ -265,7 +267,7 @@ function Flowchart() {
       </text>
     </g>
   );
-  const edge = (d: string, k: string) => <path key={k} d={d} className="mm-edge" markerEnd="url(#mm-arrow)" />;
+  const edge = (d: string, k: string) => <path key={k} d={d} className="mm-edge" markerEnd={`url(#${arrow})`} />;
   const lab = (x: number, y: number, s: string) => (
     <g key={s}>
       <rect x={x - s.length * 3.1 - 5} y={y - 9} width={s.length * 6.2 + 10} height="16" className="mm-lab" />
@@ -277,7 +279,7 @@ function Flowchart() {
   return (
     <svg className="md-mermaid" viewBox="0 0 640 190" role="img" aria-label="Flowchart: Open file, then by format to the page renderer, the reflow layout or the native renderer, then the reader view">
       <defs>
-        <marker id="mm-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <marker id={arrow} viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
           <path d="M0 0 10 5 0 10z" className="mm-head" />
         </marker>
       </defs>

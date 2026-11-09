@@ -108,6 +108,7 @@ function Header({ onSearch }: { onSearch: () => void }) {
         ) : null}
         <nav className="nav__links" aria-label="Main">
           <a href="/#features">Features</a>
+          <a href="/docs">Docs</a>
           <a href="/shortcuts">Shortcuts</a>
           <a href="/download">Download</a>
         </nav>
@@ -129,6 +130,7 @@ function Footer() {
       <div className="wrap colophon__in">
         <nav aria-label="Footer" className="colophon__links">
           <a href="/download">Download</a>
+          <a href="/docs">Docs</a>
           <a href="/shortcuts">Shortcuts</a>
           <a href="/changelog">Changelog</a>
           <a href="/privacy">Privacy</a>

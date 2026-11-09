@@ -13,7 +13,7 @@ import { marked } from "marked";
 const root = new URL("../", import.meta.url);
 const dist = new URL("dist/", root);
 const ssr = await import(pathToFileURL(new URL("dist-ssr/entry-server.js", root).pathname.replace(/^\/([A-Za-z]:)/, "$1")).href);
-const { render, ROUTES, SITE, STEPS, FAQ, ROADMAP, SHORTCUTS, SPECS, PLATFORMS, FORMATS, themeCss } = ssr;
+const { render, ROUTES, SITE, STEPS, FAQ, ROADMAP, SHORTCUTS, SPECS, PLATFORMS, FORMATS, DOCS, docsInline, PALETTE, themeCss } = ssr;
 
 const template = readFileSync(new URL("index.html", dist), "utf8");
 const builtAt = new Date().toISOString().slice(0, 10);
@@ -62,7 +62,9 @@ const SITE_PRIVACY = `
 
 const changelogMd = read("content/CHANGELOG.md");
 const privacyMd = read("content/PRIVACY.md").trimEnd() + "\n" + SITE_PRIVACY;
-const mdHtml = (md) => marked.parse(md, { async: false, gfm: true });
+// The page header already has the title, so the document's own "# Title" is left out of the HTML
+// (one h1 per page); the Markdown mirror keeps it.
+const mdHtml = (md) => marked.parse(md.replace(/^# .*\r?\n/m, ""), { async: false, gfm: true });
 
 // ---------------------------------------------------------------- markdown mirrors (also feed llms-full.txt)
 
@@ -104,7 +106,7 @@ Six built-in themes (Dark, Light, Paper, Nord, Noctua, Vampire) and any accent c
 
 ## Privacy
 
-No telemetry. No network request unless you turn a feature on (update check, remote images, online revocation checks). Signing keys and passwords never leave your computer. Full details: ${abs("/privacy")}
+No telemetry and no account. The only request Kitab makes on its own is the update check (GitHub's latest version number), which Settings › About turns off. Signing keys and passwords never leave your computer. Full details: ${abs("/privacy")}
 
 ## Roadmap
 
@@ -128,21 +130,47 @@ ${head}
 
 ${table(["System", "Packages", "When"], PLATFORMS.map((p) => [p.os, p.formats, p.when]))}
 
-Homebrew, Scoop and winget packages and a Flathub listing follow version 1.0. Early builds are not code-signed, so Windows SmartScreen and macOS Gatekeeper may warn before the first run. Every release lists SHA-256 checksums.
+Homebrew and Scoop install it today; WinGet and Flathub listings are planned for version 1.0. The builds are not code-signed yet, so Windows SmartScreen and macOS Gatekeeper may warn before the first run (${abs("/docs")}#first-run says what to do). Every release lists SHA-256 checksums.
 `;
 }
 
 function shortcutsMd() {
   return `# Kitab Reader keyboard shortcuts
 
-Kitab is built to be used from the keyboard. Every shortcut can be changed in Settings › Shortcuts or in \`keymap.json\`. On macOS, Ctrl is Cmd.
+Kitab is built to be used from the keyboard. These are the defaults, read from Kitab's own list. Change any of them in \`keymap.json\` (Settings › Shortcuts › Edit keymap.json). The keys are the same on Windows, macOS and Linux. Every command is described at ${abs("/docs")}#keyboard.
 
 ${SHORTCUTS.map((g) => `## ${g.area}\n\n${table(["Keys", "Action"], g.keys.map(([k, a]) => [`\`${k}\``, a]))}`).join("\n\n")}
 `;
 }
 
+function docsMd() {
+  const fence = "```";
+  const cell = (s) => docsInline(s).replace(/\|/g, "\\|");
+  const keys = (k) => "`" + k + "`";
+  const block = (b) => {
+    if ("p" in b) return docsInline(b.p);
+    if ("note" in b) return `> ${docsInline(b.note)}`;
+    if ("list" in b) return b.list.map((t, i) => `${b.ordered ? `${i + 1}.` : "-"} ${docsInline(t)}`).join("\n");
+    if ("img" in b) return `![${b.img.alt}](${SITE.url}${b.img.src})`;
+    if ("table" in b) return table(b.table.head, b.table.rows.map((r) => r.map(cell)));
+    if ("code" in b) return `${fence}\n${b.code}\n${fence}`;
+    if ("keytable" in b) return table(["Action", "Keys"], b.keytable.rows.map(([what, k]) => [what, k.split(" / ").map(keys).join(" or ").replace(/\|/g, "\\|")]));
+    if ("palette" in b) return table(["Group", "Command", "Keys"], PALETTE.map((c) => [c.group, c.label, c.keys.length ? c.keys.map(keys).join(" or ") : "None by default"]));
+    return ""; // the HTML mock window has no text form
+  };
+  return `# Kitab Reader documentation
+
+How to use every part of Kitab Reader. The web version, with search and screenshots: ${abs("/docs")}
+
+${DOCS.map((s) => `- [${s.title}](${abs("/docs")}#${s.id}): ${s.summary}`).join("\n")}
+
+${DOCS.map((s) => `## ${s.title}\n\n${s.summary}\n\n${s.topics.map((t) => `### ${t.title}\n\n${t.blocks.map(block).filter(Boolean).join("\n\n")}`).join("\n\n")}`).join("\n\n")}
+`;
+}
+
 const MD = {
   "/": homeMd(),
+  "/docs": docsMd(),
   "/download": downloadMd(),
   "/shortcuts": shortcutsMd(),
   "/changelog": changelogMd.replace(/^# Changelog/m, "# Kitab Reader changelog"),
@@ -192,7 +220,8 @@ const WEBSITE = { "@type": "WebSite", "@id": `${SITE.url}/#website`, url: `${SIT
 function jsonLd(route) {
   const url = abs(route.path);
   const page = {
-    "@type": route.path === "/" ? "WebPage" : route.path === "/privacy" ? ["WebPage", "AboutPage"] : "WebPage",
+    "@type": route.path === "/privacy" ? ["WebPage", "AboutPage"] : route.path === "/docs" ? ["WebPage", "TechArticle"] : "WebPage",
+    ...(route.path === "/docs" ? { headline: route.title } : {}),
     "@id": `${url}#page`,
     url,
     name: route.title,
@@ -333,7 +362,8 @@ Key facts:
 - Formats: ${FORMATS.join(", ")}. Markdown includes Mermaid diagrams, code highlighting and math.
 - Built with Rust and GPUI (Zed's GPU interface framework), with MuPDF as the document engine. No browser engine inside.
 - Speed: built to show the first page as soon as the window opens, measured by a benchmark in CI. No results are published yet; do not quote any figure.
-- Privacy: no telemetry, no account, no network request unless the user turns a feature on. Signing keys never leave the computer.
+- Privacy: no telemetry, no account. The only network request Kitab makes on its own is the update check (GitHub's latest version number), which the user can turn off. Signing keys never leave the computer.
+- Documentation: ${abs("/docs")} (Markdown: ${SITE.url}/docs.md) covers every feature, setting and keyboard shortcut.
 - Licence: ${SITE.license.name}. Free, no paid tier.
 - Platforms: Windows, macOS and Linux, from the same code.
 - Made by ${SITE.org.name} (${SITE.org.url}, ${SITE.org.email}) and ${SITE.author.name}.
@@ -411,6 +441,9 @@ writeFileSync(
 
 /og.png
   Cache-Control: public, max-age=86400
+
+/docs/*
+  Cache-Control: public, max-age=604800
 `,
 );
 

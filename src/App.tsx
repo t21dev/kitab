@@ -2,6 +2,7 @@
 import type { PageData } from "./data";
 import { Layout } from "./components/Layout";
 import { Home } from "./pages/Home";
+import { Docs } from "./pages/Docs";
 import { Download, MarkdownPage, NotFound, Shortcuts } from "./pages/Other";
 
 export function App({ path, data }: { path: string; data: PageData }) {
@@ -14,6 +15,8 @@ function page(path: string, data: PageData) {
       return <Home data={data} />;
     case "/download":
       return <Download data={data} />;
+    case "/docs":
+      return <Docs />;
     case "/shortcuts":
       return <Shortcuts />;
     case "/changelog":

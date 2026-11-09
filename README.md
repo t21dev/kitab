@@ -4,14 +4,14 @@ This is the `landing` branch of [t21dev/kitab](https://github.com/t21dev/kitab).
 
 - **Stack:** React + TypeScript + Vite + Tailwind CSS v4. Every route is **prerendered to static HTML** at build time (`scripts/prerender.mjs`), so search engines and LLM crawlers get the whole page without running JavaScript. React hydrates for the interactive parts (theme menu, Ctrl+K search, the feature stage).
 - **Hosting:** Cloudflare Workers **static assets only** (no Worker script), configured in `wrangler.jsonc` with the custom domain `kitab.t21.dev`. `dist/_headers` sets the CSP and security headers.
-- **This branch is an orphan.** Never merge it with `main`. Content from the app (`content/CHANGELOG.md`, `content/PRIVACY.md`) is copied in with `npm run sync`, not edited here.
-- **Rules:** follows `DESIGN.md` on `main` (Light and Dark themes only on the site). No trackers, no third-party scripts or fonts, no cookies. No invented numbers: every figure is a measured one with its source. **No screenshots on the site:** the feature stage is Kitab itself rebuilt in HTML (`src/mock/`), from the app's own theme tokens, icons and sizes, so visitors can use it. It shows only what the app does.
+- **This branch is an orphan.** Never merge it with `main`. Content from the app (`content/CHANGELOG.md`, `content/PRIVACY.md`, and `src/app-keys.ts`: the shortcut list and command palette read from `crates/kitab-ui`) is copied in with `npm run sync`, not edited here.
+- **Rules:** follows `DESIGN.md` on `main` (Light and Dark themes only on the site). No trackers, no third-party scripts or fonts, no cookies. No invented numbers: every figure is a measured one with its source. **No screenshots on the home page:** the feature stage is Kitab itself rebuilt in HTML (`src/mock/`), from the app's own theme tokens, icons and sizes, so visitors can use it. It shows only what the app does. The one exception is `/docs`, which shows real captures of the current release (`public/docs/*.webp`, see below) so every dialog and setting looks exactly as it is.
 
 ## What the build produces
 
 | File | Purpose |
 |---|---|
-| `index.html`, `download.html`, `shortcuts.html`, `changelog.html`, `privacy.html`, `404.html` | Prerendered pages with title, description, canonical, Open Graph, Twitter card and JSON-LD (`SoftwareApplication`, `SoftwareSourceCode`, `FAQPage`, `BreadcrumbList`) |
+| `index.html`, `download.html`, `docs.html`, `shortcuts.html`, `changelog.html`, `privacy.html`, `404.html` | Prerendered pages with title, description, canonical, Open Graph, Twitter card and JSON-LD (`SoftwareApplication`, `SoftwareSourceCode`, `FAQPage`, `BreadcrumbList`) |
 | `index.md` … `privacy.md` | Markdown mirror of every page (`<link rel="alternate" type="text/markdown">`) |
 | `llms.txt`, `llms-full.txt` | Summary and full text for LLMs ([llmstxt.org](https://llmstxt.org)) |
 | `sitemap.xml`, `robots.txt` | Search engines and AI crawlers are explicitly welcome |
@@ -26,7 +26,8 @@ npm run dev        # Vite dev server (client only, no prerender)
 npm run build      # typecheck, build, prerender into dist/
 npm run preview    # build, then serve dist/ with wrangler exactly as Cloudflare will
 npm run og         # regenerate og.png and icons (from scripts/og/capture-dark-pages.png)
-npm run sync       # copy CHANGELOG.md and PRIVACY.md from origin/main
+npm run sync       # copy CHANGELOG.md and PRIVACY.md from origin/main, and generate src/app-keys.ts
+npm run check      # after a build: titles, descriptions, canonicals, OG, headings, images, links, sitemap, llms.txt
 npm run deploy     # build and deploy with wrangler (needs `wrangler login`)
 ```
 
@@ -39,6 +40,12 @@ The `t21.dev` zone must be in the Cloudflare account you deploy from.
 3. Or connect this repository in **Workers & Pages → Create → Import a repository**, branch `landing`, build command `npm run build`, deploy command `npx wrangler deploy`. Then every push to `landing` deploys.
 
 The build asks GitHub for the latest release to fill the download page. Set `GITHUB_TOKEN` in the build environment to avoid rate limits, or `KITAB_OFFLINE=1` to skip it.
+
+## The docs (/docs)
+
+`src/docs-content.ts` holds every section and topic; the page (`src/pages/Docs.tsx`), its Markdown mirror (`/docs.md`) and llms-full.txt are built from it. Every claim comes from the app's CHANGELOG.md, README.md, PRIVACY.md or its source; the shortcut tables and the command list come from `src/app-keys.ts` (`npm run sync`). Search runs in the page: every word must match the start of a word in a topic; "/" focuses the box, Up and Down pick, Enter jumps, Esc clears, and `?q=` opens the page searched. Without JavaScript the box stays hidden and all of the content is there.
+
+The screenshots in `public/docs/` are real captures of the release build, taken with `kitab-bench shot` (it captures only Kitab's window) from the test fixtures in `tests/fixtures/` with a fresh, empty profile, then saved as WebP. Retake them when the app's look changes; keep each one's `w`/`h` in `docs-content.ts` in step.
 
 ## The app on the page
 

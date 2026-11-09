@@ -80,8 +80,9 @@ export function Download({ data }: { data: PageData }) {
           </table>
         </div>
         <p className="mt-4 max-w-2xl text-[14px] text-faint">
-          Homebrew, Scoop and winget packages and a Flathub listing follow version 1.0. Early builds are not code-signed, so
-          Windows SmartScreen and macOS Gatekeeper may warn before the first run. Every release lists SHA-256 checksums.
+          Homebrew and Scoop install it today; WinGet and Flathub listings are planned for version 1.0. The builds are not
+          code-signed yet, so Windows SmartScreen and macOS Gatekeeper may warn before the first run (the{" "}
+          <a href="/docs#first-run" className="underline decoration-accent underline-offset-2">docs</a> say what to do). Every release lists SHA-256 checksums.
         </p>
       </div>
     </>
@@ -96,8 +97,9 @@ export function Shortcuts() {
         title="Keyboard shortcuts"
         lead={
           <>
-            Kitab is built to be used from the keyboard. Every shortcut can be changed in Settings › Shortcuts or in{" "}
-            <code className="rounded bg-hover px-1 font-mono text-[0.9em] shadow-well">keymap.json</code>. On macOS, Ctrl is Cmd.
+            Kitab is built to be used from the keyboard. These are the defaults, read from Kitab's own list. Change any of them in{" "}
+            <code className="rounded bg-hover px-1 font-mono text-[0.9em] shadow-well">keymap.json</code> (Settings › Shortcuts › Edit keymap.json). The keys are the same on Windows, macOS and Linux. The{" "}
+            <a href="/docs#keyboard" className="underline decoration-accent underline-offset-2">docs</a> cover every command.
           </>
         }
       />

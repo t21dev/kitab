@@ -4,6 +4,8 @@
 // disagree. Rules (DESIGN.md § Principles): plain sentences, sentence case, no
 // invented numbers. Every figure on the site must be a measured one with a source.
 
+import { KEY_GROUPS } from "./app-keys";
+
 export const SITE = {
   name: "Kitab Reader",
   shortName: "Kitab",
@@ -86,8 +88,8 @@ export const STEPS: Step[] = [
     id: "forms",
     title: "Fill it, sign it, print it",
     body: [
-      "Fill PDF forms, with totals and dates worked out the way the form expects, and no document scripts ever run. Open password-protected files of every standard kind.",
-      "Check whether a signature is valid and whether the file changed after signing, or sign it yourself with a certificate that never leaves your computer. Merge, split, compress, watermark and redact without uploading anything.",
+      "Fill PDF forms right on the page, and no document scripts ever run. Open password-protected files of every standard kind.",
+      "Check whether a signature is valid and whether the file changed after signing, or sign it yourself with a certificate that never leaves your computer. Merge, split, compress and watermark without uploading anything.",
     ],
     points: ["Mark up any page with a pen, a highlighter, lines, arrows, boxes, text and notes. In a PDF they save into the file, so other readers show them too."],
     phase: 6,
@@ -96,7 +98,7 @@ export const STEPS: Step[] = [
     id: "privacy",
     title: "Your files stay where they are",
     body: [
-      "There is no telemetry and no account. Kitab makes no network request until you turn something on, like the update check, and each setting says so where you turn it on. Your library, highlights and settings live in one folder. Delete it and they are gone.",
+      "There is no telemetry and no account. The only request Kitab makes on its own is the update check, which asks GitHub for the latest version number and nothing else, and one switch in Settings turns it off. Your library, highlights and settings live in one folder. Delete it and they are gone.",
     ],
     phase: 2,
   },
@@ -115,10 +117,10 @@ export const SPECS: Spec[] = [
   { what: "Library", value: "Home, collections, tags and full-text search" },
   { what: "Reading memory", value: "Page, zoom, rotation and layout per file, and the whole session" },
   { what: "Annotations", value: "Highlights in colours, notes, underline, strike and ink, with export" },
-  { what: "Forms", value: "Fill, save and export data; totals and dates worked out" },
+  { what: "Forms", value: "Fill in and save, without running document scripts" },
   { what: "Passwords", value: "Every standard encryption type, with permissions explained" },
   { what: "Signatures", value: "Verify and sign, with keys that stay on your computer" },
-  { what: "PDF tools", value: "Merge, split, rotate, compress, watermark, redact" },
+  { what: "PDF tools", value: "Merge, split, rotate, compress, number pages, watermark" },
   { what: "Platforms", value: "Windows, macOS and Linux" },
   { what: "Licence", value: "AGPL-3.0, free and open source" },
 ];
@@ -128,11 +130,15 @@ export type FaqItem = { q: string; a: string };
 export const FAQ: FaqItem[] = [
   {
     q: "Can I download Kitab Reader now?",
-    a: "Yes. Every release is on GitHub Releases for Windows, macOS and Linux: an installer or portable zip for Windows, a .dmg for macOS, and an AppImage, .deb, .rpm or Flatpak for Linux. Homebrew and Scoop users can install it from the t21dev tap and bucket.",
+    a: "Yes. Every release is on GitHub Releases for Windows, macOS and Linux: an installer or portable zip for Windows, a .dmg for macOS, and a Flatpak, AppImage, .deb, .rpm or .tar.gz for Linux. Homebrew and Scoop users can install it from the t21dev tap and bucket.",
   },
   {
     q: "Is it free?",
     a: "Yes. Kitab is free and open source under the GNU AGPL-3.0-or-later licence. There is no paid tier and no account.",
+  },
+  {
+    q: "What does the AGPL licence mean for me?",
+    a: "You can use Kitab for anything, at home or at work, for free, and read and change its source. If you share a changed version of Kitab, or let people use it over a network, you have to share your changes under the same licence. Kitab is built on MuPDF by Artifex, which is under the AGPL too.",
   },
   {
     q: "What is it built with?",
@@ -140,23 +146,47 @@ export const FAQ: FaqItem[] = [
   },
   {
     q: "Which file formats does it open?",
-    a: "PDF, EPUB and MOBI without DRM, FB2, XPS, CBZ comics, plain text and Markdown. Kitab is a document reader, so image files stay with your image viewer. DjVu, CBR and Kindle KF8 (AZW3) are planned after version 1.0.",
+    a: "PDF, EPUB and MOBI without DRM, FB2, XPS, CBZ comics, plain text and Markdown. Kitab is a document reader, so image files stay with your image viewer. DjVu, CBR and Kindle KF8 (AZW3) aren't supported yet.",
+  },
+  {
+    q: "Windows says it protected my PC, or macOS won't open Kitab. Is it safe?",
+    a: "The downloads aren't code-signed yet, so your system warns about them. On Windows, choose More info, then Run anyway. On macOS, right-click Kitab in Applications and choose Open, the first time only. Every release lists the SHA-256 checksum of each file, so you can check a download first, and the source is public.",
   },
   {
     q: "Does Kitab send my documents or usage data anywhere?",
-    a: "No. There is no telemetry. Kitab reads files from your disk and never uploads them. It makes a network request only when you turn on a feature that needs one, such as the update check or online certificate revocation checks.",
+    a: "No. There is no telemetry and no account. Kitab reads files from your disk and never uploads them. The only request it makes on its own is the update check, which asks GitHub for the latest version number and sends nothing about you or your files. Settings › About › Check on start-up turns it off.",
+  },
+  {
+    q: "Where does Kitab keep my library, marks and settings?",
+    a: "In one data folder: %APPDATA%\\t21\\Kitab on Windows, ~/Library/Application Support/dev.t21.kitab on macOS, and ~/.local/share/kitab on Linux. Settings › Advanced › Data folder opens it. Delete it and everything Kitab stored is gone. Marks you saved into a PDF stay in that PDF.",
+  },
+  {
+    q: "Can I run Kitab without installing it?",
+    a: "Yes, on Windows. Unzip the portable zip and run kitab.exe. It keeps its data in a data folder next to the app, because of the file named portable beside it, so it can live on a USB stick.",
+  },
+  {
+    q: "How do I make Kitab my default PDF reader?",
+    a: "Open Settings › File types. It shows whether Kitab opens PDF, EPUB, Markdown, MOBI, FB2, CBZ, XPS and text files, with Set up on each type and Set up all. On Windows, Windows then asks you to pick Kitab in Default apps. In the Flatpak, use your system's Default Applications settings.",
+  },
+  {
+    q: "Do my highlights and drawings show in other PDF readers?",
+    a: "Yes. In a PDF, Ctrl+S saves them into the file as standard annotations, after the file's original bytes, so other readers show them and signatures already in the file stay valid.",
+  },
+  {
+    q: "Can it fill PDF forms and open password-protected PDFs?",
+    a: "Yes. Click a field on the page to fill it in, and Ctrl+S saves the values into the file. Kitab never runs a document's scripts, so a form's own calculations don't run. It opens password-protected PDFs, can add, change or remove a password on a copy, and never stores a password.",
+  },
+  {
+    q: "Can I change the keyboard shortcuts?",
+    a: "Yes. Settings › Shortcuts › Edit keymap.json creates a file listing every action. Add your own keys there, or set one to null to remove it, and they apply when you switch back to Kitab.",
   },
   {
     q: "How is the speed measured?",
     a: "A benchmark tool starts Kitab and watches its window until the first page is drawn and stable. It runs each scenario 15 times after two warm-up runs and reports the median. Results are published with each release.",
   },
   {
-    q: "Can it fill PDF forms and open password-protected PDFs?",
-    a: "Yes. Kitab fills every kind of form field and works out totals, currency and dates the way the form expects, without running any script inside the PDF. You can save the filled copy or export the data. It opens password-protected PDFs of every standard encryption type, and never stores a password unless you ask it to.",
-  },
-  {
     q: "Which operating systems are supported?",
-    a: "Windows, macOS and Linux, from the same code: an installer, MSI and portable zip on Windows, a DMG on macOS, and AppImage, deb, rpm and Flatpak on Linux. From the first release it also installs with Homebrew, Scoop and winget.",
+    a: "Windows 10 and 11, macOS on Apple silicon and Intel, and Linux on x86_64 and aarch64, from the same code. Windows on Arm runs the x64 build. WinGet and Flathub listings are planned for version 1.0.",
   },
   {
     q: "Who makes it?",
@@ -184,96 +214,18 @@ export const ROADMAP: Phase[] = [
 
 export type ShortcutGroup = { area: string; keys: [string, string][] };
 
-/** From docs/PLAN.md §3.10 on main. On macOS, Ctrl is Cmd. */
-export const SHORTCUTS: ShortcutGroup[] = [
-  {
-    area: "Files and tabs",
-    keys: [
-      ["Ctrl+O", "Open a file"],
-      ["Ctrl+W", "Close tab"],
-      ["Ctrl+Shift+T", "Reopen closed tab"],
-      ["Ctrl+Tab / Ctrl+Shift+Tab", "Next / previous tab"],
-      ["Ctrl+1 … Ctrl+8, Ctrl+9", "Go to tab n, last tab"],
-      ["Ctrl+Shift+PgUp / PgDn", "Move tab"],
-      ["Ctrl+Shift+H", "Home"],
-      ["Ctrl+N", "New window"],
-      ["Ctrl+P", "Print"],
-      ["Ctrl+S", "Save annotated copy"],
-    ],
-  },
-  {
-    area: "Navigate",
-    keys: [
-      ["← / →, PgUp / PgDn", "Previous / next page"],
-      ["Space / Shift+Space", "Scroll down / up a screen"],
-      ["Home / End", "First / last page"],
-      ["n / p", "Next / previous page"],
-      ["j / k", "Scroll down / up"],
-      ["Ctrl+G", "Go to page"],
-      ["Alt+← / Alt+→", "Back / forward in history"],
-      ["F12", "Show or hide contents"],
-    ],
-  },
-  {
-    area: "Find",
-    keys: [
-      ["Ctrl+F or /", "Find"],
-      ["F3 or Enter", "Next match"],
-      ["Shift+F3 or Shift+Enter", "Previous match"],
-      ["Alt+C", "Match case"],
-      ["Alt+W", "Whole word"],
-      ["Esc", "Close find"],
-    ],
-  },
-  {
-    area: "Zoom and view",
-    keys: [
-      ["Ctrl+= / Ctrl+−", "Zoom in / out"],
-      ["Ctrl+scroll, pinch", "Zoom"],
-      ["Ctrl+0", "Fit page"],
-      ["Ctrl+1", "Actual size"],
-      ["Ctrl+2", "Fit width"],
-      ["Ctrl+6 / Ctrl+7 / Ctrl+8", "Single page / two pages / book view"],
-      ["c", "Continuous scrolling"],
-      ["Ctrl+Shift+− / Ctrl+Shift+=", "Rotate left / right"],
-    ],
-  },
-  {
-    area: "Read",
-    keys: [
-      ["F11", "Focus mode"],
-      ["F5", "Presentation"],
-      ["Ctrl+Shift+L", "Next theme"],
-      ["Ctrl+B", "Show or hide the sidebar"],
-      ["Ctrl+Alt+= / Ctrl+Alt+−", "Larger / smaller text (books)"],
-    ],
-  },
-  {
-    area: "Annotate",
-    keys: [
-      ["h", "Highlight the selection"],
-      ["Ctrl+Alt+N", "Add a note"],
-      ["Ctrl+D", "Bookmark"],
-    ],
-  },
-  {
-    area: "App",
-    keys: [
-      ["Ctrl+K", "Command palette"],
-      ["Ctrl+,", "Settings"],
-      ["?", "Shortcut cheat sheet"],
-      ["Ctrl+Shift+F12", "Performance overlay"],
-    ],
-  },
-];
+/** Every default shortcut, generated from the app's own list (crates/kitab-ui/src/shortcuts.rs,
+ * via `npm run sync` into app-keys.ts). Rows are [keys, action]. */
+export const SHORTCUTS: ShortcutGroup[] = KEY_GROUPS.map((g) => ({ area: g.title, keys: g.rows.map(([what, keys]) => [keys, what]) }));
 
 export type Platform = { os: string; formats: string; when: string };
 
 export const PLATFORMS: Platform[] = [
-  { os: "Windows", formats: "Installer (.exe), MSI and a portable zip, for x64 and Arm64", when: "At release" },
-  { os: "macOS", formats: "DMG for Apple silicon and Intel", when: "At release" },
-  { os: "Linux", formats: "AppImage, deb, rpm and Flatpak", when: "At release" },
-  { os: "Package managers", formats: "brew install --cask t21dev/tap/kitab · scoop install t21dev/kitab · winget install t21dev.Kitab", when: "From the first release" },
+  { os: "Windows 10 and 11", formats: "Installer (.exe) for your account, or a portable zip. x64; Windows on Arm runs the x64 build", when: "Every release" },
+  { os: "macOS", formats: "DMG for Apple silicon and for Intel", when: "Every release" },
+  { os: "Linux", formats: "Flatpak, AppImage, deb, rpm and tar.gz for x86_64; all but the Flatpak also for aarch64", when: "Every release" },
+  { os: "Package managers", formats: "brew install --cask t21dev/tap/kitab · scoop install t21dev/kitab", when: "Every release" },
+  { os: "WinGet and Flathub", formats: "Listings in the WinGet and Flathub catalogues", when: "Planned for 1.0" },
 ];
 
 export type Route = {
@@ -306,6 +258,16 @@ export const ROUTES: Route[] = [
       "Kitab Reader release status and downloads for Windows, macOS and Linux. Installers, portable zip, DMG, AppImage, deb, rpm and Flatpak, from GitHub Releases.",
     changefreq: "weekly",
     priority: 0.8,
+  },
+  {
+    path: "/docs",
+    file: "docs.html",
+    md: "docs.md",
+    title: "Kitab Reader documentation",
+    description:
+      "How to use Kitab Reader: install it, read PDFs, books and Markdown, find, mark up, fill forms, sign, print, page tools, every setting and every keyboard shortcut. Searchable.",
+    changefreq: "weekly",
+    priority: 0.9,
   },
   {
     path: "/shortcuts",

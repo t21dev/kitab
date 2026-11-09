@@ -3,12 +3,15 @@
 // so it gets a short opacity fade only (emil-design-eng: no motion on keyboard actions).
 import { useEffect, useMemo, useRef, useState } from "react";
 import { SITE, STEPS } from "../content";
+import { DOCS } from "../docs-content";
 import { Icon } from "./Icon";
 
 type Item = { title: string; hint: string; href: string };
 
 const ITEMS: Item[] = [
   ...STEPS.map((s) => ({ title: s.title, hint: "Feature", href: `/#${s.id}` })),
+  { title: "Documentation", hint: "Page", href: "/docs" },
+  ...DOCS.map((d) => ({ title: d.title, hint: "Docs", href: `/docs#${d.id}` })),
   { title: "Download and release status", hint: "Page", href: "/download" },
   { title: "Keyboard shortcuts", hint: "Page", href: "/shortcuts" },
   { title: "Changelog", hint: "Page", href: "/changelog" },
