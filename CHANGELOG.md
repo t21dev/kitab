@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.3] - 2026-11-09
+
 ### Changed
 - Dialogs (Print, Password, Sign, Page tools, Save page, Extract, naming a collection, the update notes) leave the way they came, fading and sinking, instead of vanishing. The command palette fades in and out quickly, footnotes, the note writer and a form list's choices open with a short drop, and switching Settings sections or sidebar panes brings the new one in with a gentle rise.
 - Picking a setting from Settings search scrolls to it and makes it glow briefly; each section opens at the top.
@@ -225,7 +227,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fit width and fit page follow a window resize even when no new page has to be drawn.
 - The Settings window shrinks to fit small windows instead of running off the left edge.
 
-[Unreleased]: https://github.com/t21dev/kitab/compare/v0.3.2...HEAD
+[Unreleased]: https://github.com/t21dev/kitab/compare/v0.3.3...HEAD
+[0.3.3]: https://github.com/t21dev/kitab/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/t21dev/kitab/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/t21dev/kitab/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/t21dev/kitab/compare/v0.2.0...v0.3.0
