@@ -9,6 +9,7 @@ mod bookmarks;
 mod dock;
 pub(crate) use dock::note_toggle as note_dock_toggle;
 pub(crate) use dock::set_menu_open;
+pub(crate) use markdown::MONO_FONT;
 mod editor;
 mod find;
 mod footnote;

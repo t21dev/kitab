@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Settings › Reading › Status bar › File path: the status bar can show where the file is (your home folder as ~).
 
 ### Changed
+- The update notes show tables and code blocks properly (the checksums too), each scrolling sideways in its own box instead of breaking the dialog. Numbered lists and quotes read as they should.
 - Right-clicking selected text gives a menu for the selection (Copy, Find, Highlight, Underline, Strike through), without back, forward and zoom.
 
 ### Fixed

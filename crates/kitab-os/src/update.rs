@@ -184,29 +184,80 @@ pub enum NoteBlock {
     Heading(String),
     Bullet(String),
     Text(String),
+    /// A fenced code block, line by line (shown as is, scrolling sideways).
+    Code(Vec<String>),
+    /// A table: the header row first. Cells are plain text.
+    Table(Vec<Vec<String>>),
+}
+
+/// A table row's cells: `| a | b |` → ["a", "b"].
+fn cells(row: &str) -> Vec<String> {
+    let t = row.trim();
+    let t = t.strip_prefix('|').unwrap_or(t);
+    let t = t.strip_suffix('|').unwrap_or(t);
+    t.split('|').map(|c| plain(c.trim())).collect()
+}
+
+/// `|---|:--:|` and the like: the line under a table's header.
+fn is_rule(row: &str) -> bool {
+    let t = row.trim();
+    t.contains('-') && t.chars().all(|c| matches!(c, '|' | '-' | ':' | ' '))
 }
 
 /// The release notes as headings, bullets and paragraphs, with inline
 /// Markdown (links, bold, code) reduced to its text. At most `max` blocks.
 pub fn note_blocks(notes: &str, max: usize) -> Vec<NoteBlock> {
-    let mut out = Vec::new();
+    let mut out: Vec<NoteBlock> = Vec::new();
+    let mut code: Option<Vec<String>> = None;
     for line in notes.lines() {
         let t = line.trim();
-        if t.is_empty() || t.starts_with("<!--") || t.starts_with("```") {
+        // Code fences: the lines between them kept as they are.
+        if t.starts_with("```") {
+            match code.take() {
+                Some(lines) => out.push(NoteBlock::Code(lines)),
+                None => code = Some(Vec::new()),
+            }
+        } else if let Some(lines) = code.as_mut() {
+            if lines.len() < 200 {
+                lines.push(line.trim_end().to_string());
+            }
             continue;
-        }
-        let block = if let Some(h) = t.strip_prefix('#') {
-            NoteBlock::Heading(plain(h.trim_start_matches('#').trim()))
+        } else if t.starts_with('|') {
+            // Table rows join the table just above them.
+            if is_rule(t) {
+                continue;
+            }
+            match out.last_mut() {
+                Some(NoteBlock::Table(rows)) if rows.len() < 200 => rows.push(cells(t)),
+                Some(NoteBlock::Table(_)) => {}
+                _ => out.push(NoteBlock::Table(vec![cells(t)])),
+            }
+            continue;
+        } else if t.is_empty() || t.starts_with("<!--") {
+            continue;
+        } else if let Some(h) = t.strip_prefix('#') {
+            out.push(NoteBlock::Heading(plain(h.trim_start_matches('#').trim())));
         } else if let Some(b) = t.strip_prefix("- ").or_else(|| t.strip_prefix("* ")) {
-            NoteBlock::Bullet(plain(b))
+            out.push(NoteBlock::Bullet(plain(b)));
+        } else if let Some((n, rest)) = t.split_once(". ")
+            && !n.is_empty()
+            && n.chars().all(|c| c.is_ascii_digit())
+        {
+            out.push(NoteBlock::Bullet(plain(rest)));
         } else {
-            NoteBlock::Text(plain(t))
-        };
-        out.push(block);
-        if out.len() == max {
-            break;
+            let t = t.strip_prefix("> ").unwrap_or(t);
+            out.push(NoteBlock::Text(plain(t)));
+        }
+        if out.len() >= max {
+            out.truncate(max);
+            return out;
         }
     }
+    // A fence never closed: what was in it still shows.
+    if let Some(lines) = code.filter(|l| !l.is_empty()) {
+        out.push(NoteBlock::Code(lines));
+    }
+    out.truncate(max);
     out
 }
 
@@ -237,6 +288,26 @@ fn plain(s: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn notes_keep_code_blocks_and_tables() {
+        let notes = "## Added\n- **Forms** [docs](https://x.y)\n1. First\n\n| Key | What |\n|---|:--:|\n| `Ctrl+S` | Save |\n| Esc | Close |\n\n```\nabc123  Kitab.exe\n```\n";
+        let b = note_blocks(notes, 60);
+        assert_eq!(
+            b,
+            vec![
+                NoteBlock::Heading("Added".into()),
+                NoteBlock::Bullet("Forms docs".into()),
+                NoteBlock::Bullet("First".into()),
+                NoteBlock::Table(vec![
+                    vec!["Key".into(), "What".into()],
+                    vec!["Ctrl+S".into(), "Save".into()],
+                    vec!["Esc".into(), "Close".into()],
+                ]),
+                NoteBlock::Code(vec!["abc123  Kitab.exe".into()]),
+            ]
+        );
+    }
 
     #[test]
     fn versions_compare_by_number_and_pre_release() {

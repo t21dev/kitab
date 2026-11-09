@@ -29,7 +29,7 @@ use std::sync::Arc;
 const COLUMN: f32 = 720.0;
 /// Body text size at 100 %.
 const BODY: f32 = 16.0;
-const MONO_FONT: &str = "Consolas";
+pub(crate) const MONO_FONT: &str = "Consolas";
 const MATH_FONT: &str = "Cambria Math";
 /// Nesting drawn before deeper blocks are drawn flat.
 const MAX_DRAW_DEPTH: usize = 12;
