@@ -250,12 +250,12 @@ impl Render for TextField {
         let entity = cx.entity();
         let (fs, lh) = (self.font_size, self.line_h());
         let text_colour = if self.on_paper {
-            gpui::rgb(0x1a1a1a).into()
+            gpui::black().opacity(0.9)
         } else {
             st.c(|c| c.text)
         };
         let faint = if self.on_paper {
-            gpui::rgb(0x8a8a8a).into()
+            gpui::black().opacity(0.45)
         } else {
             st.c(|c| c.faint)
         };
