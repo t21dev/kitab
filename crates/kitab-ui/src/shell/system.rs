@@ -649,7 +649,7 @@ impl Workspace {
             .gap(px(6.0))
             .px(px(14.0))
             .py(px(12.0));
-        for b in blocks.iter() {
+        for (i, b) in blocks.iter().enumerate() {
             notes = notes.child(match b {
                 NoteBlock::Heading(t) => div()
                     .pt(px(4.0))
@@ -670,6 +670,72 @@ impl Workspace {
                     )
                     .child(div().min_w_0().child(t.clone())),
                 NoteBlock::Text(t) => div().child(t.clone()),
+                // Code as written, in the monospace face; long lines scroll
+                // sideways in their own box instead of breaking the dialog.
+                NoteBlock::Code(lines) => div().child(
+                    div()
+                        .id(("update-code", i))
+                        .overflow_x_scroll()
+                        .rounded(px(8.0))
+                        .bg(st.c(|c| c.raised))
+                        .border_1()
+                        .border_color(st.c(|c| c.line))
+                        .child(
+                            div()
+                                .flex()
+                                .flex_col()
+                                .px(px(10.0))
+                                .py(px(8.0))
+                                .font_family(crate::reader::MONO_FONT)
+                                .text_size(px(11.5))
+                                .text_color(st.c(|c| c.text))
+                                .whitespace_nowrap()
+                                .children(lines.iter().map(|l| div().child(l.clone()))),
+                        ),
+                ),
+                NoteBlock::Table(rows) => {
+                    // Each column as wide as its longest cell (within reason).
+                    let cols = rows.iter().map(Vec::len).max().unwrap_or(0);
+                    let widths: Vec<f32> = (0..cols)
+                        .map(|c| {
+                            let chars = rows
+                                .iter()
+                                .filter_map(|r| r.get(c))
+                                .map(|s| s.chars().count())
+                                .max()
+                                .unwrap_or(0);
+                            (chars as f32 * 7.0 + 20.0).clamp(48.0, 360.0)
+                        })
+                        .collect();
+                    let line = st.c(|c| c.line);
+                    let table = rows.iter().enumerate().map(|(r, row)| {
+                        div()
+                            .flex()
+                            .when(r > 0, |d| d.border_t_1().border_color(line))
+                            .when(r == 0, |d| {
+                                d.font_weight(FontWeight::SEMIBOLD)
+                                    .text_color(st.c(|c| c.text))
+                            })
+                            .children((0..cols).map(|c| {
+                                div()
+                                    .flex_none()
+                                    .w(px(widths[c]))
+                                    .px(px(8.0))
+                                    .py(px(5.0))
+                                    .whitespace_nowrap()
+                                    .child(row.get(c).cloned().unwrap_or_default())
+                            }))
+                    });
+                    div().child(
+                        div()
+                            .id(("update-table", i))
+                            .overflow_x_scroll()
+                            .rounded(px(8.0))
+                            .border_1()
+                            .border_color(line)
+                            .child(div().flex().flex_col().children(table)),
+                    )
+                }
             });
         }
         let released = if r.published.is_empty() {
