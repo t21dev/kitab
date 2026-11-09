@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-11-09
+
 ### Added
 - An Open file… button in the title bar, beside More. Settings › Appearance › Toolbar shows or hides it.
 - Settings › Appearance › Tabs › The + button: a new tab shows Home (as before) or opens the Open dialog straight away.
@@ -215,7 +217,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fit width and fit page follow a window resize even when no new page has to be drawn.
 - The Settings window shrinks to fit small windows instead of running off the left edge.
 
-[Unreleased]: https://github.com/t21dev/kitab/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/t21dev/kitab/compare/v0.3.2...HEAD
+[0.3.2]: https://github.com/t21dev/kitab/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/t21dev/kitab/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/t21dev/kitab/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/t21dev/kitab/compare/v0.1.0...v0.2.0
