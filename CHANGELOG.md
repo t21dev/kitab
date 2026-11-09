@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.6] - 2026-11-09
+
 ### Fixed
 - Markdown tables: columns get room by what they hold, text wraps inside its cell instead of running past the table or into the next column, and a short word never breaks. A table too wide even so scrolls sideways.
 - Long text no longer spills out of its box anywhere: text fields (notes, form fields, search, signing) slide to keep the caret in view, menu items and collection names end in "…", long tooltips wrap, a long signer name stays in the status bar, and the update notes' tables wrap.
@@ -257,7 +259,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fit width and fit page follow a window resize even when no new page has to be drawn.
 - The Settings window shrinks to fit small windows instead of running off the left edge.
 
-[Unreleased]: https://github.com/t21dev/kitab/compare/v0.3.5...HEAD
+[Unreleased]: https://github.com/t21dev/kitab/compare/v0.3.6...HEAD
+[0.3.6]: https://github.com/t21dev/kitab/compare/v0.3.5...v0.3.6
 [0.3.5]: https://github.com/t21dev/kitab/compare/v0.3.4...v0.3.5
 [0.3.4]: https://github.com/t21dev/kitab/compare/v0.3.3...v0.3.4
 [0.3.3]: https://github.com/t21dev/kitab/compare/v0.3.2...v0.3.3
