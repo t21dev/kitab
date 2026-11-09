@@ -456,6 +456,30 @@ impl Reader {
                                         }),
                                 ),
                         )
+                        // Or let them go: asks first, the file stays as it is.
+                        .child(
+                            dock_button("dock-discard", "close", false, st)
+                                .tip("Discard unsaved changes")
+                                .when(saving, |b| b.opacity(0.5))
+                                .on_click(cx.listener(move |_, _, window, cx| {
+                                    let answer = window.prompt(
+                                        gpui::PromptLevel::Warning,
+                                        &format!(
+                                            "Discard {n} unsaved change{}?",
+                                            if n == 1 { "" } else { "s" }
+                                        ),
+                                        Some("Marks, deletions and form values not saved yet go. The file stays as it is."),
+                                        &["Discard", "Keep"],
+                                        cx,
+                                    );
+                                    cx.spawn(async move |this, cx| {
+                                        if answer.await.ok() == Some(0) {
+                                            let _ = this.update(cx, |r, cx| r.discard_changes(cx));
+                                        }
+                                    })
+                                    .detach();
+                                })),
+                        )
                     })
                     // Markdown: typeface and text size in a small panel.
                     .when(self.is_markdown(), |g| {

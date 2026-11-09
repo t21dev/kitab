@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Discard, beside Save in the dock: lets go of every unsaved mark, deletion and form value, after asking. The file stays as it is.
+- Filled-in form fields can be undone and redone (Ctrl+Z, Ctrl+Y or Ctrl+Shift+Z), like marks. Undoing a radio button turns the one that was on back on.
+
+### Changed
+- With Select, choosing a colour or a thickness changes the picked mark (one undo step), not only what you draw next.
+
 ## [0.3.4] - 2026-11-09
 
 ### Added

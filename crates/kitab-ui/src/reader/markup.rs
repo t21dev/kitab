@@ -115,8 +115,14 @@ const TEXT_LINE: f32 = 1.3;
 pub(super) enum Edit {
     Added(Mark),
     Removed(Mark),
-    /// Dragged from one place to another.
+    /// Moved or restyled: the mark before, and after.
     Moved(Mark, Mark),
+    /// A form field filled in: what undo puts back, and what redo sets
+    /// again (a radio's two edits are on different buttons).
+    Field {
+        before: kitab_core::FieldEdit,
+        after: kitab_core::FieldEdit,
+    },
 }
 
 #[derive(Default)]
@@ -392,6 +398,10 @@ impl Reader {
                 self.replace_mark(&to, from.clone(), cx);
                 self.markup.redo.push(Edit::Moved(from, to));
             }
+            Edit::Field { before, after } => {
+                self.put_field(before.clone(), cx);
+                self.markup.redo.push(Edit::Field { before, after });
+            }
         }
     }
 
@@ -496,6 +506,100 @@ impl Reader {
         cx.notify();
     }
 
+    /// Select is on with a mark picked: a colour or a thickness chosen in
+    /// the bar changes that mark (one undo step), as well as what comes next.
+    pub(super) fn restyle_selected(
+        &mut self,
+        colour: Option<(u8, u8, u8)>,
+        size: Option<usize>,
+        cx: &mut Context<Self>,
+    ) {
+        if self.markup.tool != Some(Tool::Select) {
+            return;
+        }
+        let Some(local) = self.markup.selected else {
+            return;
+        };
+        let Some(old) = self
+            .markup
+            .marks
+            .iter()
+            .find(|p| p.local == local)
+            .map(|p| p.mark.clone())
+        else {
+            return;
+        };
+        let mut new = old.clone();
+        if let Some(c) = colour {
+            new.color = rgb(c);
+        }
+        if let Some(i) = size {
+            let i = i % 3;
+            match &mut new.shape {
+                MarkShape::Text { size, .. } => *size = TEXT_SIZES[i],
+                // Text markup has no stroke to thicken.
+                MarkShape::Highlight { .. }
+                | MarkShape::Underline { .. }
+                | MarkShape::Strike { .. }
+                | MarkShape::Note { .. }
+                | MarkShape::Cover { .. } => {}
+                // A see-through ink line is the highlighter's.
+                MarkShape::Ink { .. } if old.opacity < 1.0 => {
+                    new.width = ink::HIGHLIGHTER_WIDTHS[i];
+                }
+                _ => new.width = ink::PEN_WIDTHS[i],
+            }
+        }
+        if new == old || !new.is_valid() {
+            return;
+        }
+        self.replace_mark(&old, new.clone(), cx);
+        self.markup.undo.push(Edit::Moved(old, new));
+        self.markup.redo.clear();
+        cx.notify();
+    }
+
+    /// Throw away everything not saved yet: marks, deletions of the file's
+    /// own annotations and form values. The file on disk stays as it is.
+    pub fn discard_changes(&mut self, cx: &mut Context<Self>) {
+        if self.markup.saving {
+            return;
+        }
+        let n = self.unsaved_marks();
+        let locals: Vec<u64> = self.markup.marks.iter().map(|p| p.local).collect();
+        for l in locals {
+            self.unplace(l, cx);
+        }
+        self.markup.deleted.clear();
+        self.markup.undo.clear();
+        self.markup.redo.clear();
+        self.markup.selected = None;
+        self.markup.moving = None;
+        self.markup.writing = None;
+        // Field values live in the open document: open the file afresh.
+        let fields = !self.form.edits.is_empty() || self.form.typing.is_some();
+        self.form.edits.clear();
+        self.form.typing = None;
+        self.form.choosing = None;
+        if fields {
+            if let Some(doc) = self.doc.take() {
+                let engine = self.engine.clone();
+                cx.background_spawn(async move { engine.close(doc) })
+                    .detach();
+            }
+            self.form.fields.clear();
+            self.cache.clear();
+            self.layers = layer::Layers::default();
+            let password = self.unlock.clone();
+            self.open(password, cx);
+        }
+        if n > 0 {
+            let what = if n == 1 { "change" } else { "changes" };
+            self.markup.note = Some(format!("Discarded {n} {what}").into());
+        }
+        cx.notify();
+    }
+
     /// Delete the selected mark (Delete or Backspace with Select).
     pub(super) fn delete_selected_mark(&mut self, cx: &mut Context<Self>) -> bool {
         let Some(local) = self.markup.selected.take() else {
@@ -526,6 +630,10 @@ impl Reader {
             Edit::Moved(from, to) => {
                 self.replace_mark(&from, to.clone(), cx);
                 self.markup.undo.push(Edit::Moved(from, to));
+            }
+            Edit::Field { before, after } => {
+                self.put_field(after.clone(), cx);
+                self.markup.undo.push(Edit::Field { before, after });
             }
         }
     }
@@ -1310,6 +1418,7 @@ impl Reader {
                             .child(div().size(px(dot)).rounded_full().bg(st.c(|c| c.text)))
                             .on_click(cx.listener(move |r, _, _, cx| {
                                 r.markup.size = i;
+                                r.restyle_selected(None, Some(i), cx);
                                 cx.notify();
                             }))
                             .into_any_element()
@@ -1429,6 +1538,8 @@ impl Reader {
                             }
                         }
                         m.picker = false;
+                        let c = r.markup.colour(r.markup.tool == Some(Tool::Highlighter));
+                        r.restyle_selected(Some(c), None, cx);
                         cx.notify();
                     }))
                     .into_any_element()
@@ -1448,7 +1559,8 @@ impl Reader {
     }
 
     /// Use `c` as the custom colour of the pen (or the highlighter).
-    fn use_custom(&mut self, c: (u8, u8, u8)) {
+    fn use_custom(&mut self, c: (u8, u8, u8), cx: &mut Context<Self>) {
+        self.restyle_selected(Some(c), None, cx);
         let m = &mut self.markup;
         if m.tool == Some(Tool::Highlighter) {
             m.custom_highlighter = Some(c);
@@ -1489,7 +1601,7 @@ impl Reader {
             }
             "enter" => {
                 if let Some(c) = parse_hex(text) {
-                    self.use_custom(c);
+                    self.use_custom(c, cx);
                 }
                 self.markup.hex = None;
                 self.markup.picker = false;
@@ -1519,7 +1631,7 @@ impl Reader {
             .filter(|t| t.len() == 6)
             .and_then(parse_hex)
         {
-            self.use_custom(c);
+            self.use_custom(c, cx);
         }
         cx.stop_propagation();
         cx.notify();
@@ -1621,7 +1733,7 @@ impl Reader {
                 .when(c == now, |d| d.border_2().border_color(st.c(|c| c.text)))
                 .hover(|d| d.border_color(st.c(|c| c.text)))
                 .on_click(cx.listener(move |r, _, _, cx| {
-                    r.use_custom(c);
+                    r.use_custom(c, cx);
                     r.markup.picker = false;
                     r.markup.hex = None;
                     cx.notify();

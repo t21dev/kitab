@@ -113,14 +113,58 @@ impl Reader {
         !self.placing && !(self.markup.open && self.markup.tool.is_some())
     }
 
-    /// Fill in a field: into the open document now, the page drawn again.
+    /// Fill in a field (a click or typing): recorded for undo (Ctrl+Z).
     fn set_field(&mut self, field: &FormField, value: FieldValue, cx: &mut Context<Self>) {
-        let Some(doc) = self.doc else { return };
-        let edit = FieldEdit {
+        let before = match &field.kind {
+            FieldKind::Check | FieldKind::Radio => FieldValue::Checked(field.on),
+            FieldKind::Choice { .. } => FieldValue::Choice(field.value.clone()),
+            _ => FieldValue::Text(field.value.clone()),
+        };
+        let after = FieldEdit {
             page: field.page,
             index: field.index,
-            value,
+            value: value.clone(),
         };
+        // A radio turned on: undo turns the one that was on before back on.
+        let before = match (&field.kind, &value) {
+            (FieldKind::Radio, FieldValue::Checked(true)) => self
+                .form
+                .fields
+                .get(&field.page)
+                .and_then(|fs| {
+                    fs.iter()
+                        .find(|f| f.name == field.name && f.on && f.index != field.index)
+                })
+                .map(|was| FieldEdit {
+                    page: was.page,
+                    index: was.index,
+                    value: FieldValue::Checked(true),
+                }),
+            _ => None,
+        }
+        .unwrap_or(FieldEdit {
+            page: field.page,
+            index: field.index,
+            value: before,
+        });
+        if before != after {
+            self.markup
+                .undo
+                .push(super::markup::Edit::Field { before, after });
+            self.markup.redo.clear();
+        }
+        self.write_field(field.page, field.index, value, cx);
+    }
+
+    /// Undo or redo a field: its widget gets `value` back.
+    pub(super) fn put_field(&mut self, e: FieldEdit, cx: &mut Context<Self>) {
+        self.write_field(e.page, e.index, e.value, cx);
+    }
+
+    /// Fill in a field: into the open document now, the page drawn again.
+    fn write_field(&mut self, page: u32, index: u32, value: FieldValue, cx: &mut Context<Self>) {
+        let Some(doc) = self.doc else { return };
+        let edit = FieldEdit { page, index, value };
         if !edit.is_valid() {
             return;
         }
