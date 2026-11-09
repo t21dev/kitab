@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.4] - 2026-11-09
+
 ### Added
 - A Select tool, first on the markup bar: drag a drawing, shape, highlight, text box or note to move it (Shift keeps it level or upright), Delete removes the picked one, Esc lets it go. Ctrl+Z undoes a move.
 - The hidden dock's handle shows how many changes aren't saved yet.
@@ -240,7 +242,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fit width and fit page follow a window resize even when no new page has to be drawn.
 - The Settings window shrinks to fit small windows instead of running off the left edge.
 
-[Unreleased]: https://github.com/t21dev/kitab/compare/v0.3.3...HEAD
+[Unreleased]: https://github.com/t21dev/kitab/compare/v0.3.4...HEAD
+[0.3.4]: https://github.com/t21dev/kitab/compare/v0.3.3...v0.3.4
 [0.3.3]: https://github.com/t21dev/kitab/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/t21dev/kitab/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/t21dev/kitab/compare/v0.3.0...v0.3.1
