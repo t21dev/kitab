@@ -8,6 +8,10 @@ use std::borrow::Cow;
 
 const ICONS: &[(&str, &[u8])] = &[
     (
+        "icons/pointer.svg",
+        include_bytes!("../../../assets/icons/pointer.svg"),
+    ),
+    (
         "icons/typography.svg",
         include_bytes!("../../../assets/icons/typography.svg"),
     ),

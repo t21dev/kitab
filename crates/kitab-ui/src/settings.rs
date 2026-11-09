@@ -445,6 +445,8 @@ pub struct StatusItems {
     /// "Page 3 of 40", or how far through a Markdown file.
     pub position: bool,
     pub zoom: bool,
+    /// Where the file is: its folder and name (your home folder as ~).
+    pub path: bool,
 }
 
 impl Default for StatusItems {
@@ -458,6 +460,7 @@ impl Default for StatusItems {
             paper: true,
             position: true,
             zoom: false,
+            path: false,
         }
     }
 }

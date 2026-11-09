@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- A Select tool, first on the markup bar: drag a drawing, shape, highlight, text box or note to move it (Shift keeps it level or upright), Delete removes the picked one, Esc lets it go. Ctrl+Z undoes a move.
+- The hidden dock's handle shows how many changes aren't saved yet.
+- Settings › Reading › Status bar › File path: the status bar can show where the file is (your home folder as ~).
+
+### Changed
+- Right-clicking selected text gives a menu for the selection (Copy, Find, Highlight, Underline, Strike through), without back, forward and zoom.
+
+### Fixed
+- The dock no longer fades away while a menu it opened (such as Markdown's typography panel) is still showing.
+- Default size in Markdown's typography panel lines up with the rows above it.
+
 ## [0.3.3] - 2026-11-09
 
 ### Changed

@@ -110,7 +110,12 @@ const INDEX: &[(Section, &str, &str)] = &[
     (
         Section::Reading,
         "Status bar",
-        "file size pages word count reading time paper size position zoom",
+        "file size pages word count reading time paper size position zoom path folder location",
+    ),
+    (
+        Section::Reading,
+        "File path",
+        "status bar path folder location where file",
     ),
     (
         Section::Reading,

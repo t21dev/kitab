@@ -3704,8 +3704,15 @@ impl Workspace {
             .key(key)
             .checked(mode == m)
         };
-        let mut items = vec![tool_row, MenuItem::Separator];
-        if !md {
+        // With text selected, the menu is about the selection: copy, find
+        // and mark it. Zoom, pages and the file stay in the plain menu.
+        let selecting = sel_preview.is_some();
+        let mut items = if selecting {
+            Vec::new()
+        } else {
+            vec![tool_row, MenuItem::Separator]
+        };
+        if !md && !selecting {
             items.extend([
                 zoom("Fit width", "Ctrl+2", ZoomMode::FitWidth),
                 zoom("Fit page", "Ctrl+0", ZoomMode::FitPage),
@@ -3721,29 +3728,31 @@ impl Workspace {
                 .key("Ctrl+G"),
             ]);
         }
-        items.extend([
-            {
-                let marked = reader.read(cx).is_bookmarked(page as u32);
-                let label = match (marked, md) {
-                    (true, _) => "Remove bookmark",
-                    (false, true) => "Bookmark this section",
-                    (false, false) => "Bookmark this page",
-                };
-                MenuItem::new(label, {
-                    let reader = reader.clone();
-                    move |_, cx: &mut App| {
-                        reader.update(cx, |r, cx| {
-                            r.jump_to(page as u32, cx);
-                            r.toggle_bookmark(cx)
-                        })
-                    }
-                })
-                .icon("bookmark")
-                .key("Ctrl+D")
-                .disabled(!reader.read(cx).can_bookmark())
-            },
-            MenuItem::Separator,
-        ]);
+        if !selecting {
+            items.extend([
+                {
+                    let marked = reader.read(cx).is_bookmarked(page as u32);
+                    let label = match (marked, md) {
+                        (true, _) => "Remove bookmark",
+                        (false, true) => "Bookmark this section",
+                        (false, false) => "Bookmark this page",
+                    };
+                    MenuItem::new(label, {
+                        let reader = reader.clone();
+                        move |_, cx: &mut App| {
+                            reader.update(cx, |r, cx| {
+                                r.jump_to(page as u32, cx);
+                                r.toggle_bookmark(cx)
+                            })
+                        }
+                    })
+                    .icon("bookmark")
+                    .key("Ctrl+D")
+                    .disabled(!reader.read(cx).can_bookmark())
+                },
+                MenuItem::Separator,
+            ]);
+        }
         if let Some(preview) = sel_preview {
             items.push(
                 MenuItem::new("Copy", {
@@ -3782,7 +3791,8 @@ impl Workspace {
                     });
                 }
             }
-            items.push(MenuItem::Separator);
+            self.open_menu(at, false, 300.0, items, window, cx);
+            return;
         }
         if md {
             items.push(
@@ -3889,6 +3899,8 @@ impl Workspace {
             MenuItem::new("Default size", move |_, cx: &mut App| {
                 reader.update(cx, |r, cx| r.set_zoom_mode(ZoomMode::FitWidth, cx))
             })
+            // An icon like the menu's other rows, so its text lines up.
+            .icon("scale")
             .key("Ctrl+2")
         };
         let items = vec![
@@ -4099,6 +4111,8 @@ impl Workspace {
     ) -> Vec<AnyElement> {
         let mut out = Vec::new();
         let ws = cx.weak_entity();
+        // The dock stays while a menu is up (it may have opened it).
+        crate::reader::set_menu_open(self.menu.is_some() || self.menu_closing.is_some());
         // Toasts go last (see the end): above Settings and every dialog,
         // since what they report often happened there.
         let toast = self.toast_view(st, cx);

@@ -51,6 +51,14 @@ pub(super) struct DockState {
 /// takes the new state as it is when its tab comes forward.
 static TOGGLED: std::sync::Mutex<Option<Instant>> = std::sync::Mutex::new(None);
 
+/// A menu (one the dock opened, or any other) is on screen: the dock
+/// doesn't fade away from under it. Set by the shell each frame.
+static MENU_OPEN: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+pub(crate) fn set_menu_open(on: bool) {
+    MENU_OPEN.store(on, std::sync::atomic::Ordering::Relaxed);
+}
+
 /// The dock was just hidden or shown (the ToggleDock action).
 pub(crate) fn note_toggle() {
     if let Ok(mut t) = TOGGLED.lock() {
@@ -100,6 +108,7 @@ impl Reader {
                 }
                 r.dock.timer = false;
                 let busy = Style::get(cx).dock_hidden
+                    || MENU_OPEN.load(std::sync::atomic::Ordering::Relaxed)
                     || r.dock.hover
                     || r.find.open
                     || r.page_edit.is_some()
@@ -163,7 +172,7 @@ impl Reader {
                 .get()
                 .is_some_and(|t| t.elapsed() < HIDE_FOR);
         if hidden && !hiding {
-            return Some(dock_handle(at, top_inset, bar, st));
+            return Some(dock_handle(at, top_inset, bar, self.unsaved_marks(), st));
         }
         let upright = at.upright();
         let mode = self.zoom;
@@ -651,7 +660,9 @@ fn away_from_edge(at: DockAt) -> &'static str {
 }
 
 /// The hidden dock: a small handle at its edge. A click (or Ctrl+.) shows it.
-fn dock_handle(at: DockAt, top_inset: f32, bar: f32, st: &Style) -> AnyElement {
+/// The hidden dock's handle. `pending` changes not saved yet show as a
+/// badge on it, so they aren't forgotten behind a hidden dock.
+fn dock_handle(at: DockAt, top_inset: f32, bar: f32, pending: usize, st: &Style) -> AnyElement {
     let upright = at.upright();
     let handle = div()
         .id("dock-handle")
@@ -670,9 +681,43 @@ fn dock_handle(at: DockAt, top_inset: f32, bar: f32, st: &Style) -> AnyElement {
         // shadow beneath show as a grey glow. The border and arrow light up.
         .group("dock-handle")
         .hover(|d| d.border_color(st.c(|c| c.ring)))
+        .relative()
         .cursor_pointer()
-        .tip("Show the dock  Ctrl+.")
+        .tip(if pending > 0 {
+            gpui::SharedString::from(format!(
+                "Show the dock  Ctrl+.  ·  {pending} unsaved change{}",
+                if pending == 1 { "" } else { "s" }
+            ))
+        } else {
+            gpui::SharedString::from("Show the dock  Ctrl+.")
+        })
         .on_click(|_, window, cx| window.dispatch_action(Box::new(crate::actions::ToggleDock), cx))
+        .when(pending > 0, |d| {
+            d.child(
+                div()
+                    .absolute()
+                    .top(px(-7.0))
+                    .right(px(-7.0))
+                    .min_w(px(16.0))
+                    .h(px(16.0))
+                    .px(px(4.0))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .rounded_full()
+                    .bg(st.c(|c| c.accent))
+                    .border_2()
+                    .border_color(st.c(|c| c.bg))
+                    .text_size(px(9.5))
+                    .font_weight(gpui::FontWeight::BOLD)
+                    .text_color(st.c(|c| c.bg))
+                    .child(if pending > 9 {
+                        "9+".to_string()
+                    } else {
+                        pending.to_string()
+                    }),
+            )
+        })
         .child(
             svg()
                 .path(icon(away_from_edge(at)))

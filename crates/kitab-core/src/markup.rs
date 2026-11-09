@@ -311,6 +311,54 @@ impl Mark {
         }
     }
 
+    /// The same mark moved by `dx`, `dy` points (Select and drag).
+    pub fn translated(&self, dx: f32, dy: f32) -> Mark {
+        let mv = |p: &PointPt| PointPt {
+            x: p.x + dx,
+            y: p.y + dy,
+        };
+        let mr = |r: &RectPt| RectPt {
+            x: r.x + dx,
+            y: r.y + dy,
+            ..*r
+        };
+        let shape = match &self.shape {
+            MarkShape::Ink { strokes } => MarkShape::Ink {
+                strokes: strokes.iter().map(|s| s.iter().map(mv).collect()).collect(),
+            },
+            MarkShape::Line { from, to, arrow } => MarkShape::Line {
+                from: mv(from),
+                to: mv(to),
+                arrow: *arrow,
+            },
+            MarkShape::Rect { rect } => MarkShape::Rect { rect: mr(rect) },
+            MarkShape::Ellipse { rect } => MarkShape::Ellipse { rect: mr(rect) },
+            MarkShape::Cover { rect } => MarkShape::Cover { rect: mr(rect) },
+            MarkShape::Highlight { rects } => MarkShape::Highlight {
+                rects: rects.iter().map(mr).collect(),
+            },
+            MarkShape::Underline { rects } => MarkShape::Underline {
+                rects: rects.iter().map(mr).collect(),
+            },
+            MarkShape::Strike { rects } => MarkShape::Strike {
+                rects: rects.iter().map(mr).collect(),
+            },
+            MarkShape::Text { rect, text, size } => MarkShape::Text {
+                rect: mr(rect),
+                text: text.clone(),
+                size: *size,
+            },
+            MarkShape::Note { at, text } => MarkShape::Note {
+                at: mv(at),
+                text: text.clone(),
+            },
+        };
+        Mark {
+            shape,
+            ..self.clone()
+        }
+    }
+
     /// A short name for lists and the store: "ink", "line", "arrow", …
     pub fn kind(&self) -> &'static str {
         match &self.shape {
@@ -332,6 +380,27 @@ impl Mark {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_moved_mark_keeps_its_size_and_shifts_its_bounds() {
+        let m = Mark {
+            page: 0,
+            shape: MarkShape::Ink {
+                strokes: vec![vec![
+                    PointPt { x: 10.0, y: 10.0 },
+                    PointPt { x: 30.0, y: 20.0 },
+                ]],
+            },
+            color: Rgb8 { r: 1, g: 2, b: 3 },
+            width: 2.0,
+            opacity: 1.0,
+        };
+        let moved = m.translated(5.0, -4.0);
+        let (a, b) = (m.bounds(), moved.bounds());
+        assert_eq!((b.x - a.x, b.y - a.y), (5.0, -4.0));
+        assert_eq!((b.w, b.h), (a.w, a.h));
+        assert!(moved.is_valid());
+    }
 
     fn pt(x: f32, y: f32) -> PointPt {
         PointPt { x, y }

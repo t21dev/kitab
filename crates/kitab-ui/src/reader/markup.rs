@@ -19,6 +19,8 @@ use lyon_tessellation::{LineCap, LineJoin, StrokeOptions};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Tool {
+    /// Pick a mark to move it (drag) or delete it (Delete).
+    Select,
     Pen,
     Highlighter,
     Line,
@@ -35,7 +37,8 @@ pub enum Tool {
 }
 
 impl Tool {
-    pub const ALL: [Tool; 10] = [
+    pub const ALL: [Tool; 11] = [
+        Tool::Select,
         Tool::Pen,
         Tool::Highlighter,
         Tool::Line,
@@ -50,6 +53,7 @@ impl Tool {
 
     fn icon(self) -> &'static str {
         match self {
+            Tool::Select => "pointer",
             Tool::Pen => "pen",
             Tool::Highlighter => "highlight",
             Tool::Line => "line",
@@ -65,6 +69,7 @@ impl Tool {
 
     fn label(self) -> &'static str {
         match self {
+            Tool::Select => "Select  drag a mark to move it, Delete removes it",
             Tool::Pen => "Pen",
             Tool::Highlighter => "Highlighter",
             Tool::Line => "Line  Shift keeps it at 45°",
@@ -110,6 +115,8 @@ const TEXT_LINE: f32 = 1.3;
 pub(super) enum Edit {
     Added(Mark),
     Removed(Mark),
+    /// Dragged from one place to another.
+    Moved(Mark, Mark),
 }
 
 #[derive(Default)]
@@ -139,6 +146,11 @@ pub(super) struct MarkupState {
     pub picker: bool,
     /// A note or text box being written.
     pub writing: Option<Writing>,
+    /// The mark Select picked (its local id), outlined on the page.
+    pub selected: Option<u64>,
+    /// A mark being dragged: its local id, where the drag started and the
+    /// mark as it was.
+    pub moving: Option<(u64, PointPt, Mark)>,
     /// The hex digits being typed in the picker (without '#'), while editing.
     pub hex: Option<String>,
     pub hex_focus: Option<FocusHandle>,
@@ -376,7 +388,124 @@ impl Reader {
                 self.place(mark.clone(), cx);
                 self.markup.redo.push(Edit::Removed(mark));
             }
+            Edit::Moved(from, to) => {
+                self.replace_mark(&to, from.clone(), cx);
+                self.markup.redo.push(Edit::Moved(from, to));
+            }
         }
+    }
+
+    /// Put `with` where the placed mark equal to `old` is (a move, undone
+    /// or redone), keeping it selected if it was.
+    fn replace_mark(&mut self, old: &Mark, with: Mark, cx: &mut Context<Self>) {
+        let Some(local) = self.find_placed(old) else {
+            return;
+        };
+        let was = self.markup.selected == Some(local);
+        self.unplace(local, cx);
+        let new = self.place(with, cx);
+        if was {
+            self.markup.selected = Some(new);
+        }
+    }
+
+    /// Select: the marks on page `ix` can be grabbed (an open hand over
+    /// them), and the picked one is outlined.
+    pub(super) fn select_layer(
+        &self,
+        ix: usize,
+        ppt: f32,
+        st: &Style,
+        cx: &mut Context<Self>,
+    ) -> Vec<AnyElement> {
+        if !self.markup.open || self.markup.tool != Some(Tool::Select) {
+            return Vec::new();
+        }
+        let page = ix as u32;
+        let size = self.raw_page_size(ix);
+        let accent = st.c(|c| c.accent);
+        let grabbing = self.markup.moving.is_some();
+        // Larger marks first, so a smaller one on top of a bigger one wins.
+        let mut on_page: Vec<&Placed> = self
+            .markup
+            .marks
+            .iter()
+            .filter(|p| p.mark.page == page)
+            .collect();
+        on_page.sort_by(|a, b| {
+            let area = |p: &Placed| {
+                let r = p.mark.bounds();
+                r.w * r.h
+            };
+            area(b).total_cmp(&area(a))
+        });
+        on_page
+            .into_iter()
+            .map(|p| {
+                let r = rect_to_view(p.mark.bounds(), size, self.rotation, ppt);
+                let local = p.local;
+                let selected = self.markup.selected == Some(local);
+                div()
+                    .id(("mark-grab", local as usize))
+                    .absolute()
+                    .left(px(r.x - 4.0))
+                    .top(px(r.y - 4.0))
+                    .w(px(r.w + 8.0))
+                    .h(px(r.h + 8.0))
+                    .rounded(px(4.0))
+                    .cursor(if grabbing {
+                        gpui::CursorStyle::ClosedHand
+                    } else {
+                        gpui::CursorStyle::OpenHand
+                    })
+                    .when(selected, |d| {
+                        d.border_1().border_color(accent).bg(accent.opacity(0.06))
+                    })
+                    .when(!selected, |d| {
+                        d.hover(move |d| d.border_1().border_color(accent.opacity(0.5)))
+                    })
+                    .on_mouse_down(
+                        MouseButton::Left,
+                        cx.listener(move |r, e: &MouseDownEvent, _, cx| {
+                            cx.stop_propagation();
+                            r.grab_mark(ix, local, e.position, cx);
+                        }),
+                    )
+                    .into_any_element()
+            })
+            .collect()
+    }
+
+    /// Pick a mark and start dragging it.
+    fn grab_mark(&mut self, ix: usize, local: u64, at: Point<Pixels>, cx: &mut Context<Self>) {
+        let Some(at) = self.page_point(ix, at) else {
+            return;
+        };
+        let Some(mark) = self
+            .markup
+            .marks
+            .iter()
+            .find(|p| p.local == local)
+            .map(|p| p.mark.clone())
+        else {
+            return;
+        };
+        self.markup.picker = false;
+        self.markup.selected = Some(local);
+        self.markup.moving = Some((local, at, mark));
+        cx.notify();
+    }
+
+    /// Delete the selected mark (Delete or Backspace with Select).
+    pub(super) fn delete_selected_mark(&mut self, cx: &mut Context<Self>) -> bool {
+        let Some(local) = self.markup.selected.take() else {
+            return false;
+        };
+        if let Some(mark) = self.unplace(local, cx) {
+            self.push_removed(mark);
+        }
+        cx.notify();
+        true
     }
 
     pub fn markup_redo(&mut self, cx: &mut Context<Self>) {
@@ -393,6 +522,10 @@ impl Reader {
                     self.unplace(local, cx);
                 }
                 self.markup.undo.push(Edit::Removed(mark));
+            }
+            Edit::Moved(from, to) => {
+                self.replace_mark(&from, to.clone(), cx);
+                self.markup.undo.push(Edit::Moved(from, to));
             }
         }
     }
@@ -433,6 +566,14 @@ impl Reader {
             return true;
         };
         let page = ix as u32;
+        // Select on an empty spot: let go of the selection (a mark's own
+        // grab area takes clicks on it before they get here).
+        if tool == Tool::Select {
+            if self.markup.selected.take().is_some() {
+                cx.notify();
+            }
+            return true;
+        }
         if tool == Tool::Eraser {
             // A few pixels of slack, in points.
             let slack = 5.0 / self.px_per_pt(ix).max(0.01);
@@ -509,7 +650,7 @@ impl Reader {
             Tool::Ellipse => MarkShape::Ellipse {
                 rect: rect_between(at, at),
             },
-            Tool::Eraser | Tool::Text | Tool::Note => return true,
+            Tool::Select | Tool::Eraser | Tool::Text | Tool::Note => return true,
         };
         self.markup.drawing = Some((
             Mark {
@@ -527,6 +668,28 @@ impl Reader {
 
     /// The pointer moved with a mark being drawn.
     pub(super) fn markup_move(&mut self, p: Point<Pixels>, shift: bool, cx: &mut Context<Self>) {
+        // A mark being dragged follows the pointer, on its own page.
+        if let Some((local, start, orig)) = self.markup.moving.clone() {
+            let ix = orig.page as usize;
+            let Some(at) = self.page_point(ix, p) else {
+                return;
+            };
+            let (mut dx, mut dy) = (at.x - start.x, at.y - start.y);
+            // Shift keeps it level or upright.
+            if shift {
+                if dx.abs() > dy.abs() {
+                    dy = 0.0;
+                } else {
+                    dx = 0.0;
+                }
+            }
+            let moved = orig.translated(dx, dy);
+            if let Some(p) = self.markup.marks.iter_mut().find(|p| p.local == local) {
+                p.mark = moved;
+            }
+            cx.notify();
+            return;
+        }
         let Some((mark, start)) = self.markup.drawing.as_ref() else {
             return;
         };
@@ -562,6 +725,26 @@ impl Reader {
 
     /// The button came up: keep the mark if it is worth keeping.
     pub(super) fn markup_up(&mut self, cx: &mut Context<Self>) {
+        if let Some((local, _, orig)) = self.markup.moving.take() {
+            let now = self
+                .markup
+                .marks
+                .iter()
+                .find(|p| p.local == local)
+                .map(|p| p.mark.clone());
+            // Put it back as it was; a real move is then kept as a new place,
+            // in the library and in undo.
+            if let Some(p) = self.markup.marks.iter_mut().find(|p| p.local == local) {
+                p.mark = orig.clone();
+            }
+            if let Some(now) = now.filter(|m| *m != orig && m.is_valid()) {
+                self.replace_mark(&orig, now.clone(), cx);
+                self.markup.undo.push(Edit::Moved(orig, now));
+                self.markup.redo.clear();
+            }
+            cx.notify();
+            return;
+        }
         let Some((mark, _)) = self.markup.drawing.take() else {
             return;
         };

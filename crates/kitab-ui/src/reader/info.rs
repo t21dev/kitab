@@ -35,6 +35,22 @@ pub fn human_size(bytes: u64) -> String {
     }
 }
 
+/// A file's path for the status bar, the home folder shown as ~.
+pub(super) fn short_path(path: &std::path::Path) -> String {
+    let full = path.to_string_lossy().to_string();
+    let full = full.strip_prefix(r"\\?\").unwrap_or(&full).to_string();
+    let home = std::env::var("USERPROFILE")
+        .or_else(|_| std::env::var("HOME"))
+        .unwrap_or_default();
+    if !home.is_empty() && full.to_lowercase().starts_with(&home.to_lowercase()) {
+        let rest = &full[home.len()..];
+        if rest.is_empty() || rest.starts_with(['\\', '/']) {
+            return format!("~{rest}");
+        }
+    }
+    full
+}
+
 /// The paper a page size is, either way round, within 2 pt.
 pub(super) fn paper_name(w: f32, h: f32) -> Option<&'static str> {
     const PAPERS: [(&str, f32, f32); 7] = [
@@ -131,6 +147,10 @@ impl Reader {
         if info.encryption.is_some() {
             parts.push("Encrypted".into());
         }
+        // Last, so a long path is what gets cut short, not the facts.
+        if items.path {
+            parts.push(short_path(&self.path));
+        }
         parts
     }
 
@@ -208,6 +228,22 @@ impl Reader {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_path_under_home_starts_with_a_tilde() {
+        let home = std::env::var("USERPROFILE")
+            .or_else(|_| std::env::var("HOME"))
+            .unwrap_or_default();
+        if home.is_empty() {
+            return;
+        }
+        let p = std::path::Path::new(&home).join("Books").join("a.pdf");
+        let s = short_path(&p);
+        assert!(s.starts_with('~') && s.ends_with("a.pdf"), "{s}");
+        // A folder that only starts like home is shown in full.
+        let other = format!("{home}x");
+        assert!(!short_path(std::path::Path::new(&other)).starts_with('~'));
+    }
 
     #[test]
     fn sizes_read_like_a_file_manager() {

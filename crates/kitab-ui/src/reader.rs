@@ -8,6 +8,7 @@ mod book;
 mod bookmarks;
 mod dock;
 pub(crate) use dock::note_toggle as note_dock_toggle;
+pub(crate) use dock::set_menu_open;
 mod editor;
 mod find;
 mod footnote;
@@ -1422,6 +1423,7 @@ impl Reader {
                     .children(self.selection_marks(ix, ppt, &st))
                     .children(self.find_marks(ix, ppt, &st))
                     .children(self.link_marks(ix, ppt, &st, cx))
+                    .children(self.select_layer(ix, ppt, &st, cx))
                     .children(self.form_layer(ix, ppt, &st, cx)),
             )
             .into_any_element()
@@ -1799,6 +1801,23 @@ impl Render for Reader {
                     cx.stop_propagation();
                     return;
                 }
+                // Select: Delete takes the picked mark away, Esc lets it go.
+                if r.markup.selected.is_some() {
+                    match e.keystroke.key.as_str() {
+                        "delete" | "backspace" => {
+                            r.delete_selected_mark(cx);
+                            cx.stop_propagation();
+                            return;
+                        }
+                        "escape" => {
+                            r.markup.selected = None;
+                            cx.notify();
+                            cx.stop_propagation();
+                            return;
+                        }
+                        _ => {}
+                    }
+                }
                 r.wake_dock(cx)
             }))
             // Middle-click scrolling: the wheel starts (or ends) it, any
@@ -1839,7 +1858,7 @@ impl Render for Reader {
                     a.moved(e.position, e.pressed_button == Some(MouseButton::Middle));
                 }
                 r.wake_dock(cx);
-                if r.markup.drawing.is_some() {
+                if r.markup.drawing.is_some() || r.markup.moving.is_some() {
                     if e.pressed_button == Some(MouseButton::Left) {
                         r.markup_move(e.position, e.modifiers.shift, cx);
                     } else {

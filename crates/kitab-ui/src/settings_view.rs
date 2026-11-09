@@ -1596,6 +1596,13 @@ fn status_rows(ws: &WeakEntity<Workspace>, st: &Style) -> AnyElement {
                 i.position,
                 |s| s.status_items.position = !s.status_items.position,
             ))
+            .child(row(
+                "status-path",
+                "File path",
+                "Where the file is, after the other facts. Your home folder shows as ~.",
+                i.path,
+                |s| s.status_items.path = !s.status_items.path,
+            ))
             .child(row("status-zoom", "Zoom", "On the right.", i.zoom, |s| {
                 s.status_items.zoom = !s.status_items.zoom
             }));
