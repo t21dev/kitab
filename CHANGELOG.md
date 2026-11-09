@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.5] - 2026-11-09
+
 ### Added
 - Discard, beside Save in the dock: lets go of every unsaved mark, deletion and form value, after asking. The file stays as it is.
 - Filled-in form fields can be undone and redone (Ctrl+Z, Ctrl+Y or Ctrl+Shift+Z), like marks. Undoing a radio button turns the one that was on back on.
@@ -249,7 +251,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fit width and fit page follow a window resize even when no new page has to be drawn.
 - The Settings window shrinks to fit small windows instead of running off the left edge.
 
-[Unreleased]: https://github.com/t21dev/kitab/compare/v0.3.4...HEAD
+[Unreleased]: https://github.com/t21dev/kitab/compare/v0.3.5...HEAD
+[0.3.5]: https://github.com/t21dev/kitab/compare/v0.3.4...v0.3.5
 [0.3.4]: https://github.com/t21dev/kitab/compare/v0.3.3...v0.3.4
 [0.3.3]: https://github.com/t21dev/kitab/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/t21dev/kitab/compare/v0.3.1...v0.3.2
