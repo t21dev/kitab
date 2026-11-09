@@ -207,6 +207,17 @@ pub trait DocEngine: Send + Sync + 'static {
         let _ = (doc, pages, out);
         Err("this engine can't write PDFs".into())
     }
+    /// A page's form fields (PDF only), in file order.
+    fn form_fields(&self, doc: DocHandle, page: u32) -> Vec<kitab_core::FormField> {
+        let _ = (doc, page);
+        Vec::new()
+    }
+    /// Fill in a field in the open document (Save writes it into the file).
+    /// Returns the pages to draw again.
+    fn set_field(&self, doc: DocHandle, edit: kitab_core::FieldEdit) -> Result<Vec<u32>, String> {
+        let _ = (doc, edit);
+        Err("this engine can't fill in forms".into())
+    }
     /// The annotations already in the file (PDF only).
     fn annotations(&self, doc: DocHandle) -> Vec<kitab_core::FileAnnot> {
         let _ = doc;

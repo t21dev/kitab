@@ -43,6 +43,27 @@ pub(super) struct DockState {
     pub seen_hidden: std::cell::Cell<Option<bool>>,
     pub hid_at: std::cell::Cell<Option<Instant>>,
     pub shown: std::cell::Cell<u64>,
+    pub shown_at: std::cell::Cell<Option<Instant>>,
+}
+
+/// When Ctrl+. (or the dock's arrow) last hid or showed the dock. Only a
+/// reader on screen at that moment animates: one that was in a background tab
+/// takes the new state as it is when its tab comes forward.
+static TOGGLED: std::sync::Mutex<Option<Instant>> = std::sync::Mutex::new(None);
+
+/// The dock was just hidden or shown (the ToggleDock action).
+pub(crate) fn note_toggle() {
+    if let Ok(mut t) = TOGGLED.lock() {
+        *t = Some(Instant::now());
+    }
+}
+
+fn just_toggled() -> bool {
+    TOGGLED
+        .lock()
+        .ok()
+        .and_then(|t| *t)
+        .is_some_and(|t| t.elapsed() < Duration::from_millis(250))
 }
 
 /// How long the dock takes to slide out when it's hidden (Ctrl+. or its arrow).
@@ -51,7 +72,7 @@ const HIDE_FOR: Duration = Duration::from_millis(220);
 impl Reader {
     /// The pointer moved or a key was pressed: show a faded dock and restart
     /// the quiet timer. One timer at a time, so moving the mouse costs nothing.
-    pub(super) fn wake_dock(&mut self, cx: &mut Context<Self>) {
+    pub(crate) fn wake_dock(&mut self, cx: &mut Context<Self>) {
         if !Style::get(cx).dock_fade {
             return;
         }
@@ -78,7 +99,11 @@ impl Reader {
                     return;
                 }
                 r.dock.timer = false;
-                let busy = r.dock.hover || r.find.open || r.page_edit.is_some() || r.dragging;
+                let busy = Style::get(cx).dock_hidden
+                    || r.dock.hover
+                    || r.find.open
+                    || r.page_edit.is_some()
+                    || r.dragging;
                 if !busy && Style::get(cx).dock_fade {
                     r.dock.idle = true;
                     cx.notify();
@@ -109,7 +134,8 @@ impl Reader {
         // Hidden or shown again since the last frame: slide out, or in.
         let hidden = st.dock_hidden;
         if self.dock.seen_hidden.get() != Some(hidden) {
-            let first = self.dock.seen_hidden.get().is_none();
+            // First frame, or a tab coming forward after the change: no motion.
+            let first = self.dock.seen_hidden.get().is_none() || !just_toggled();
             self.dock.seen_hidden.set(Some(hidden));
             if !first && hidden && st.animations {
                 self.dock.hid_at.set(Some(Instant::now()));
@@ -120,9 +146,14 @@ impl Reader {
                     let _ = this.update(cx, |_, cx| cx.notify());
                 })
                 .detach();
-            } else if !first && !hidden {
+            } else if !hidden {
                 self.dock.hid_at.set(None);
-                self.dock.shown.set(self.dock.shown.get() + 1);
+                if !first {
+                    self.dock.shown.set(self.dock.shown.get() + 1);
+                    self.dock.shown_at.set(Some(Instant::now()));
+                }
+            } else {
+                self.dock.hid_at.set(None);
             }
         }
         let hiding = hidden
@@ -500,6 +531,13 @@ impl Reader {
                 self.dock.serial * 1000 + self.dock.shown.get(),
             )
         };
+        // Shown again (Ctrl+. or the handle): back the way it left, as far and
+        // as long, so the return reads as clearly as the exit.
+        let back = self
+            .dock
+            .shown_at
+            .get()
+            .is_some_and(|t| t.elapsed() < HIDE_FOR * 2);
         let dock = if hiding {
             motion::exit(dock, id("dock-hide"), toward, HIDE_FOR)
         } else if faded {
@@ -509,8 +547,12 @@ impl Reader {
                 dock,
                 id("dock-in"),
                 st.animations,
-                from,
-                motion::BASE,
+                if back { toward } else { from },
+                if back {
+                    HIDE_FOR + Duration::from_millis(60)
+                } else {
+                    motion::BASE
+                },
                 Duration::ZERO,
             )
         };

@@ -105,3 +105,111 @@ fn a_wrong_password_says_so() {
     let e = load_pfx(&p12, "nope").unwrap_err();
     assert!(e.contains("password"), "{e}");
 }
+
+/// Sign the two-page form, the box clear of its fields.
+fn signed_form(tmp: &Path) -> PathBuf {
+    let out = tmp.join("signed-form.pdf");
+    sign(
+        &dir().join("11-form-two-pages.pdf"),
+        &out,
+        "landlord.p12",
+        "Kitab1",
+        [72.0, 300.0, 272.0, 360.0],
+    );
+    out
+}
+
+fn tmp_dir(name: &str) -> PathBuf {
+    let tmp = std::env::temp_dir().join(format!("kitab-{name}-{}", std::process::id()));
+    std::fs::create_dir_all(&tmp).unwrap();
+    tmp
+}
+
+fn check(path: &Path) -> kitab_core::SignatureCheck {
+    let bytes = std::fs::read(path).unwrap();
+    let fields = signed_fields(path, None).unwrap();
+    assert_eq!(fields.len(), 1);
+    verify(&bytes, &fields[0], &trust(), NOW)
+}
+
+fn fill_in(index: u32, text: &str) -> kitab_core::AnnotEdit {
+    kitab_core::AnnotEdit::Field(kitab_core::FieldEdit {
+        page: 0,
+        index,
+        value: kitab_core::FieldValue::Text(text.into()),
+    })
+}
+
+#[test]
+fn filling_in_a_signed_form_keeps_the_signature_valid() {
+    let tmp = tmp_dir("form-signed");
+    let signed = signed_form(&tmp);
+    assert_eq!(check(&signed).modification, SigModification::None);
+
+    // Filled in and saved the way Ctrl+S does: an incremental update.
+    let filled = tmp.join("filled.pdf");
+    let edits = [
+        fill_in(0, "1 Main St"),
+        fill_in(1, "Keys with the landlord"),
+    ];
+    assert_eq!(
+        kitab_mupdf::marks::write_marks(&signed, None, &[], &edits, &filled).unwrap(),
+        2
+    );
+    let before = std::fs::read(&signed).unwrap();
+    assert!(std::fs::read(&filled).unwrap().starts_with(&before));
+
+    let c = check(&filled);
+    assert_eq!(c.problem, None);
+    assert!(c.intact && c.valid && c.trusted, "{c:?}");
+    assert_eq!(c.coverage, SigCoverage::EntireRevision);
+    assert_eq!(c.modification, SigModification::FormFilling, "{c:?}");
+    assert_eq!(c.status(), SigStatus::Valid);
+    let _ = std::fs::remove_dir_all(&tmp);
+}
+
+#[test]
+fn markup_after_signing_is_told_apart_from_filling_in() {
+    let tmp = tmp_dir("form-marked");
+    let signed = signed_form(&tmp);
+    let marked = tmp.join("marked.pdf");
+    let note = kitab_core::Mark {
+        page: 0,
+        shape: kitab_core::MarkShape::Note {
+            at: kitab_core::PointPt { x: 500.0, y: 100.0 },
+            text: "Check this".into(),
+        },
+        color: kitab_core::Rgb8 {
+            r: 200,
+            g: 40,
+            b: 40,
+        },
+        width: 1.0,
+        opacity: 1.0,
+    };
+    kitab_mupdf::marks::write_marks(&signed, None, &[note], &[fill_in(0, "1 Main St")], &marked)
+        .unwrap();
+    let c = check(&marked);
+    // Still intact: the signed bytes are untouched. What changed is said.
+    assert!(c.intact && c.valid, "{c:?}");
+    assert_eq!(c.modification, SigModification::Annotations, "{c:?}");
+    let _ = std::fs::remove_dir_all(&tmp);
+}
+
+#[test]
+fn a_signature_field_is_not_typed_into() {
+    let tmp = tmp_dir("form-sigfield");
+    let signed = signed_form(&tmp);
+    // The signature is the page's last widget; filling it is refused and
+    // the file is left as it was.
+    let out = tmp.join("out.pdf");
+    let edit = kitab_core::AnnotEdit::Field(kitab_core::FieldEdit {
+        page: 0,
+        index: 3,
+        value: kitab_core::FieldValue::Text("forged".into()),
+    });
+    assert!(kitab_mupdf::marks::write_marks(&signed, None, &[], &[edit], &out).is_err());
+    assert!(!out.exists());
+    assert_eq!(check(&signed).status(), SigStatus::Valid);
+    let _ = std::fs::remove_dir_all(&tmp);
+}

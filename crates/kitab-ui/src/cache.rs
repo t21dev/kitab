@@ -22,6 +22,9 @@ pub fn scale_key(scale: f32) -> u32 {
 
 pub struct PageCache {
     map: HashMap<PageKey, (Arc<RenderImage>, usize)>,
+    /// Pages whose look changed (a form field filled in): their pictures
+    /// still show until new ones come, but count as missing.
+    stale: std::collections::HashSet<PageKey>,
     order: VecDeque<PageKey>,
     bytes: usize,
     budget: usize,
@@ -32,6 +35,7 @@ impl PageCache {
     pub fn new(budget_bytes: usize) -> Self {
         Self {
             map: HashMap::new(),
+            stale: std::collections::HashSet::new(),
             order: VecDeque::new(),
             bytes: 0,
             budget: budget_bytes,
@@ -40,6 +44,9 @@ impl PageCache {
     }
 
     pub fn get(&mut self, key: &PageKey) -> Option<Arc<RenderImage>> {
+        if self.stale.contains(key) {
+            return None;
+        }
         let image = self.map.get(key).map(|(i, _)| i.clone())?;
         // Most recently used goes to the back.
         if let Some(pos) = self.order.iter().position(|k| k == key) {
@@ -51,7 +58,14 @@ impl PageCache {
 
     /// Whether this exact rendering is cached (no effect on eviction order).
     pub fn contains(&self, key: &PageKey) -> bool {
-        self.map.contains_key(key)
+        self.map.contains_key(key) && !self.stale.contains(key)
+    }
+
+    /// Every picture of `page` is out of date: shown until replaced, but
+    /// [`PageCache::get`] and [`PageCache::contains`] miss, so it is drawn again.
+    pub fn mark_stale(&mut self, page: u32) {
+        self.stale
+            .extend(self.map.keys().filter(|k| k.page == page).copied());
     }
 
     /// Any cached rendering of this page (another zoom), to show while the sharp one renders.
@@ -65,6 +79,7 @@ impl PageCache {
     }
 
     pub fn insert(&mut self, key: PageKey, image: Arc<RenderImage>, bytes: usize) {
+        self.stale.remove(&key);
         if let Some((old, old_bytes)) = self.map.insert(key, (image, bytes)) {
             self.bytes -= old_bytes;
             self.evicted.push(old);
@@ -78,6 +93,7 @@ impl PageCache {
             let Some(oldest) = self.order.pop_front() else {
                 break;
             };
+            self.stale.remove(&oldest);
             if let Some((img, b)) = self.map.remove(&oldest) {
                 self.bytes -= b;
                 self.evicted.push(img);
@@ -103,6 +119,7 @@ impl PageCache {
 
     pub fn clear(&mut self) {
         self.order.clear();
+        self.stale.clear();
         self.bytes = 0;
         self.evicted.extend(self.map.drain().map(|(_, (i, _))| i));
     }
@@ -153,6 +170,28 @@ mod tests {
             })
             .is_none()
         );
+    }
+
+    #[test]
+    fn a_stale_page_still_shows_until_it_is_drawn_again() {
+        let mut c = PageCache::new(1_000);
+        let k = PageKey {
+            page: 3,
+            scale_key: 64,
+            rotation: 0,
+        };
+        c.insert(k, img(), 40);
+        c.mark_stale(3);
+        assert!(
+            c.get(&k).is_none() && !c.contains(&k),
+            "asks for a new picture"
+        );
+        assert!(
+            c.any_for_page(3, 0).is_some(),
+            "the old one shows meanwhile"
+        );
+        c.insert(k, img(), 40);
+        assert!(c.get(&k).is_some());
     }
 
     #[test]

@@ -242,6 +242,12 @@ fn non_empty(s: Result<String, mupdf::Error>) -> Option<String> {
     (!s.is_empty()).then(|| s.to_string())
 }
 
+/// Whether the owner lets the form be filled in (an owner password
+/// unlock allows everything). Allowed when it can't be told.
+pub(crate) fn can_fill_forms(pdf: &PdfDocument) -> bool {
+    ffi::permissions(pdf).is_none_or(|p| p.fill_forms)
+}
+
 fn describe(handle: &Handle, format: Format, page_count: u32, reflowable: bool) -> DocInfo {
     let page_sizes = (0..page_count).map(|i| page_size(handle, i)).collect();
     let (outline, permissions, encryption, repaired) = match handle {

@@ -131,6 +131,8 @@ pub struct Workspace {
     /// The previous session's tabs are still loading: Home isn't the first
     /// thing to show, so it doesn't reveal the window.
     restoring: bool,
+    /// The window may close now: unsaved changes were saved or let go.
+    close_anyway: bool,
     /// The window has the user's focus (for background trimming).
     window_active: bool,
     /// The window is too narrow for the title-bar buttons: only More shows.
@@ -237,6 +239,7 @@ impl Workspace {
             sidebar_w: crate::layout::SIDEBAR_W,
             born: std::time::Instant::now(),
             restoring: false,
+            close_anyway: false,
             window_active: true,
             title_squeezed: false,
             print: None,
@@ -299,9 +302,64 @@ impl Workspace {
         // resizing, and once more as it closes.
         let moved = cx.observe_window_bounds(window, |ws, window, cx| ws.window_moved(window, cx));
         this.subs.push(moved);
-        window.on_window_should_close(cx, |window, cx| {
+        let me = cx.entity().downgrade();
+        window.on_window_should_close(cx, move |window, cx| {
             save_window_place(crate::window_place(window), true, cx);
-            true
+            // Unsaved Markdown edits or a form filled in: ask before they go.
+            let Some(ws) = me.upgrade() else { return true };
+            let dirty: Vec<Entity<Reader>> = ws
+                .read(cx)
+                .tabs
+                .iter()
+                .filter(|t| t.read(cx).has_unsaved_edits())
+                .cloned()
+                .collect();
+            if dirty.is_empty() || ws.read(cx).close_anyway {
+                return true;
+            }
+            let names: Vec<String> = dirty
+                .iter()
+                .map(|r| r.read(cx).title().to_string())
+                .collect();
+            let answer = window.prompt(
+                gpui::PromptLevel::Warning,
+                "Save your changes before closing?",
+                Some(&format!(
+                    "Not saved yet: {}. They will be lost if you don't save them.",
+                    names.join(", ")
+                )),
+                &["Save", "Don't save", "Cancel"],
+                cx,
+            );
+            let handle = window.window_handle();
+            cx.spawn(async move |cx| {
+                let choice = answer.await.ok();
+                if !matches!(choice, Some(0) | Some(1)) {
+                    return;
+                }
+                if choice == Some(0) {
+                    for r in &dirty {
+                        let _ = r.update(cx, |r, cx| r.save_changes(cx));
+                    }
+                    // Saving a PDF runs off the UI thread: wait for it (at
+                    // most half a minute) before the window goes.
+                    for _ in 0..300 {
+                        let busy = dirty
+                            .iter()
+                            .any(|r| r.read_with(cx, |r, _| r.markup_saving()).unwrap_or(false));
+                        if !busy {
+                            break;
+                        }
+                        cx.background_executor()
+                            .timer(std::time::Duration::from_millis(100))
+                            .await;
+                    }
+                }
+                let _ = ws.update(cx, |ws, _| ws.close_anyway = true);
+                let _ = handle.update(cx, |_, window, _| window.remove_window());
+            })
+            .detach();
+            false
         });
         this
     }
@@ -483,7 +541,7 @@ impl Workspace {
         if ix >= self.tabs.len() {
             return;
         }
-        // Unsaved Markdown edits: ask first.
+        // Unsaved Markdown edits or a form filled in: ask first.
         if self.tabs[ix].read(cx).has_unsaved_edits() {
             let reader = self.tabs[ix].clone();
             let name = reader.read(cx).title();
@@ -502,7 +560,7 @@ impl Workspace {
                     };
                     match choice {
                         Some(0) => {
-                            reader.update(cx, |r, cx| r.save_markdown(cx));
+                            reader.update(cx, |r, cx| r.save_changes(cx));
                             ws.force_close_tab(ix, window, cx);
                         }
                         Some(1) => ws.force_close_tab(ix, window, cx),
@@ -2741,6 +2799,11 @@ impl Render for Workspace {
             .on_action(cx.listener(|ws, _: &ToggleDock, _, cx| {
                 // Remembered across launches (settings.json `dock_hidden`).
                 ws.change_style(&|st: &mut Style| st.dock_hidden = !st.dock_hidden, cx);
+                crate::reader::note_dock_toggle();
+                // Coming back, it slides in whole: not in its faded, idle state.
+                if let Some(r) = ws.active_reader().cloned() {
+                    r.update(cx, |r, cx| r.wake_dock(cx));
+                }
             }))
             .on_action(cx.listener(|ws, _: &OpenSettings, window, cx| ws.open_settings(window, cx)))
             .on_action(

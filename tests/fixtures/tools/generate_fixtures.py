@@ -197,6 +197,57 @@ def pdf_forms(path: Path) -> None:
     c.save()
 
 
+def pdf_form_two_pages(path: Path) -> None:
+    """A field shown on two pages (one parent, two widgets), a multi-line box
+    and a read-only box. Written by hand so the shared field is a real parent
+    with kids, as forms made in Acrobat have."""
+    W, H = 595, 842
+
+    def label(lines):
+        ops = ["BT /F1 11 Tf"]
+        for x, y, text in lines:
+            ops.append(f"1 0 0 1 {x} {y} Tm ({text}) Tj")
+        ops.append("ET")
+        return "\n".join(ops).encode("latin-1")
+
+    c0 = label([(72, 770, "Two-page form"), (72, 724, "Address"), (72, 674, "Notes"), (72, 574, "Locked")])
+    c1 = label([(72, 770, "Page two"), (72, 724, "Address (same field)")])
+    objs = {
+        1: b"<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields [10 0 R 11 0 R 12 0 R] "
+           b"/DA (/Helv 0 Tf 0 g) /DR << /Font << /Helv 20 0 R >> >> >> >>",
+        2: b"<< /Type /Pages /Kids [3 0 R 4 0 R] /Count 2 >>",
+        3: f"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {W} {H}] /Contents 5 0 R "
+           f"/Resources << /Font << /F1 21 0 R >> >> /Annots [30 0 R 11 0 R 12 0 R] >>".encode(),
+        4: f"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {W} {H}] /Contents 6 0 R "
+           f"/Resources << /Font << /F1 21 0 R >> >> /Annots [31 0 R] >>".encode(),
+        5: b"<< /Length %d >>\nstream\n" % len(c0) + c0 + b"\nendstream",
+        6: b"<< /Length %d >>\nstream\n" % len(c1) + c1 + b"\nendstream",
+        10: b"<< /FT /Tx /T (address) /Kids [30 0 R 31 0 R] /DA (/Helv 10 Tf 0 g) >>",
+        30: b"<< /Type /Annot /Subtype /Widget /Parent 10 0 R /P 3 0 R /F 4 /Rect [180 716 480 736] >>",
+        31: b"<< /Type /Annot /Subtype /Widget /Parent 10 0 R /P 4 0 R /F 4 /Rect [200 716 480 736] >>",
+        11: b"<< /Type /Annot /Subtype /Widget /FT /Tx /Ff 4096 /T (notes) /P 3 0 R /F 4 "
+            b"/Rect [180 610 480 686] /DA (/Helv 10 Tf 0 g) >>",
+        12: b"<< /Type /Annot /Subtype /Widget /FT /Tx /Ff 1 /T (locked) /V (Fixed) /P 3 0 R /F 4 "
+            b"/Rect [180 566 480 586] /DA (/Helv 10 Tf 0 g) >>",
+        20: b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>",
+        21: b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>",
+    }
+    out = bytearray(b"%PDF-1.7\n%\xe2\xe3\xcf\xd3\n")
+    offsets = {}
+    for num in sorted(objs):
+        offsets[num] = len(out)
+        out += b"%d 0 obj\n" % num + objs[num] + b"\nendobj\n"
+    size = max(objs) + 1
+    xref = len(out)
+    out += b"xref\n0 %d\n" % size
+    for num in range(size):
+        if num in offsets:
+            out += b"%010d 00000 n \n" % offsets[num]
+        else:
+            out += b"0000000000 65535 f \n"
+    out += b"trailer\n<< /Size %d /Root 1 0 R >>\nstartxref\n%d\n%%%%EOF\n" % (size, xref)
+    path.write_bytes(bytes(out))
+
 def pdf_encrypted(src: Path, out_user: Path, out_owner: Path) -> None:
     from pypdf import PdfReader, PdfWriter
     from pypdf.constants import UserAccessPermissions as P
@@ -704,6 +755,7 @@ def main() -> int:
     pdf_text_outline(PDF / "01-text-outline.pdf")
     pdf_mixed_sizes(PDF / "02-mixed-page-sizes.pdf")
     pdf_forms(PDF / "03-forms.pdf")
+    pdf_form_two_pages(PDF / "11-form-two-pages.pdf")
     pdf_encrypted(PDF / "01-text-outline.pdf", PDF / "04a-encrypted-password-kitab.pdf", PDF / "04b-owner-restricted.pdf")
     pdf_damaged(PDF / "01-text-outline.pdf", PDF / "05a-damaged-truncated.pdf", PDF / "05b-damaged-bad-xref.pdf", PDF / "05c-not-a-pdf.pdf")
     if args.large:

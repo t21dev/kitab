@@ -20,6 +20,9 @@ use std::ops::Range;
 
 /// The key context; app-wide keys are unbound inside it (actions.rs).
 pub const TEXT_FIELD: &str = "TextField";
+/// A field whose Tab moves to the next one (a PDF form's text box): Tab
+/// isn't the window's "next control" here.
+pub const TAB_OUT: &str = "TabOut";
 
 const FONT_SIZE: f32 = 13.0;
 const LINE_H: f32 = 19.0;
@@ -38,9 +41,22 @@ pub struct TextField {
     placeholder: SharedString,
     /// A password: shown as dots, and never copied or cut.
     secret: bool,
+    /// Text size in pixels (a form field matches its box at the zoom).
+    font_size: f32,
+    /// Tab leaves the field ([`TabOut`]) instead of doing nothing.
+    tab_out: bool,
+    /// Typed straight onto a page: dark text whatever the theme.
+    on_paper: bool,
+}
+
+/// Tab (or Shift+Tab, `back`) in a field that hands focus on: the next field.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TabOut {
+    pub back: bool,
 }
 
 impl EventEmitter<FieldEvent> for TextField {}
+impl EventEmitter<TabOut> for TextField {}
 
 impl Focusable for TextField {
     fn focus_handle(&self, _: &App) -> FocusHandle {
@@ -88,7 +104,31 @@ impl TextField {
             multiline,
             placeholder: placeholder.to_string().into(),
             secret: false,
+            font_size: FONT_SIZE,
+            tab_out: false,
+            on_paper: false,
         }
+    }
+
+    /// Type at `px` pixels (the line height follows).
+    pub fn set_font_size(&mut self, px: f32) {
+        if px.is_finite() {
+            self.font_size = px.clamp(6.0, 96.0);
+        }
+    }
+
+    /// Tab and Shift+Tab leave the field, as [`TabOut`].
+    pub fn set_tab_out(&mut self, on: bool) {
+        self.tab_out = on;
+    }
+
+    /// Dark text and no placeholder tint from the theme: it sits on a page.
+    pub fn set_on_paper(&mut self, on: bool) {
+        self.on_paper = on;
+    }
+
+    fn line_h(&self) -> f32 {
+        (self.font_size * LINE_H / FONT_SIZE).round()
     }
 
     /// Show dots instead of the text, and refuse copy and cut (passwords).
@@ -123,6 +163,7 @@ impl TextField {
             }
             "enter" => cx.emit(FieldEvent::Submit),
             "escape" => cx.emit(FieldEvent::Cancel),
+            "tab" if self.tab_out => cx.emit(TabOut { back: shift }),
             "backspace" => {
                 b.backspace(ctrl);
                 self.changed(cx);
@@ -192,7 +233,7 @@ impl TextField {
         let (text, col) = shown(text, col, self.secret);
         let shaped = window.text_system().shape_line(
             text.clone(),
-            px(FONT_SIZE),
+            px(self.font_size),
             &[run(text.len(), gpui::black(), &font)],
             None,
         );
@@ -207,8 +248,17 @@ impl Render for TextField {
         let focused = self.focus.is_focused(window);
         let empty = self.buf.text().is_empty();
         let entity = cx.entity();
-        let text_colour = st.c(|c| c.text);
-        let faint = st.c(|c| c.faint);
+        let (fs, lh) = (self.font_size, self.line_h());
+        let text_colour = if self.on_paper {
+            gpui::rgb(0x1a1a1a).into()
+        } else {
+            st.c(|c| c.text)
+        };
+        let faint = if self.on_paper {
+            gpui::rgb(0x8a8a8a).into()
+        } else {
+            st.c(|c| c.faint)
+        };
         let accent = st.c(|c| c.accent);
         let select_bg = st.c(|c| c.highlight);
         let rows: Vec<SharedString> = (0..lines)
@@ -236,11 +286,16 @@ impl Render for TextField {
                 .collect()
         };
         div()
-            .key_context(TEXT_FIELD)
+            .key_context(if self.tab_out {
+                const BOTH: &str = "TextField TabOut";
+                BOTH
+            } else {
+                TEXT_FIELD
+            })
             .track_focus(&self.focus)
             .on_key_down(cx.listener(|f, e: &KeyDownEvent, window, cx| f.on_key(e, window, cx)))
             .w_full()
-            .h(px(lines as f32 * LINE_H + 4.0))
+            .h(px(lines as f32 * lh + 4.0))
             .cursor_text()
             .child(
                 canvas(
@@ -255,8 +310,8 @@ impl Render for TextField {
                         for (i, x0, x1) in &sel_spans {
                             window.paint_quad(gpui::fill(
                                 Bounds::new(
-                                    origin + point(px(*x0), px(*i as f32 * LINE_H)),
-                                    size(px((x1 - x0).max(4.0)), px(LINE_H)),
+                                    origin + point(px(*x0), px(*i as f32 * lh)),
+                                    size(px((x1 - x0).max(4.0)), px(lh)),
                                 ),
                                 select_bg,
                             ));
@@ -264,11 +319,11 @@ impl Render for TextField {
                         if empty {
                             let shaped = window.text_system().shape_line(
                                 placeholder.clone(),
-                                px(FONT_SIZE),
+                                px(fs),
                                 &[run(placeholder.len(), faint, &font)],
                                 None,
                             );
-                            let _ = shaped.paint(origin, px(LINE_H), window, cx);
+                            let _ = shaped.paint(origin, px(lh), window, cx);
                         }
                         for (i, row) in rows.iter().enumerate() {
                             if row.is_empty() {
@@ -276,13 +331,13 @@ impl Render for TextField {
                             }
                             let shaped = window.text_system().shape_line(
                                 row.clone(),
-                                px(FONT_SIZE),
+                                px(fs),
                                 &[run(row.len(), text_colour, &font)],
                                 None,
                             );
                             let _ = shaped.paint(
-                                origin + point(px(0.0), px(i as f32 * LINE_H)),
-                                px(LINE_H),
+                                origin + point(px(0.0), px(i as f32 * lh)),
+                                px(lh),
                                 window,
                                 cx,
                             );
@@ -290,9 +345,8 @@ impl Render for TextField {
                         if focused {
                             window.paint_quad(gpui::fill(
                                 Bounds::new(
-                                    origin
-                                        + point(px(caret_x), px(head_line as f32 * LINE_H + 2.0)),
-                                    size(px(1.0), px(LINE_H - 4.0)),
+                                    origin + point(px(caret_x), px(head_line as f32 * lh + 2.0)),
+                                    size(px(1.0), px(lh - 4.0)),
                                 ),
                                 accent,
                             ));
@@ -398,9 +452,9 @@ impl EntityInputHandler for TextField {
         Some(Bounds::new(
             point(
                 element_bounds.origin.x + px(x),
-                element_bounds.origin.y + px(2.0 + line as f32 * LINE_H),
+                element_bounds.origin.y + px(2.0 + line as f32 * self.line_h()),
             ),
-            size(px(2.0), px(LINE_H)),
+            size(px(2.0), px(self.line_h())),
         ))
     }
 

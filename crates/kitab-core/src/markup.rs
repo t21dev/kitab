@@ -102,12 +102,15 @@ pub struct FileAnnot {
 pub enum AnnotEdit {
     /// Take the page's `index`th annotation out of the file.
     Delete { page: u32, index: u32 },
+    /// Fill in a form field (its widget is the page's `index`th widget).
+    Field(crate::FieldEdit),
 }
 
 impl AnnotEdit {
     pub fn page(&self) -> u32 {
         match self {
             AnnotEdit::Delete { page, .. } => *page,
+            AnnotEdit::Field(f) => f.page,
         }
     }
 }

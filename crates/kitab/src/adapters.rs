@@ -96,6 +96,17 @@ impl DocEngine for MupdfEngine {
             .unwrap_or_default()
     }
 
+    fn form_fields(&self, doc: DocHandle, page: u32) -> Vec<kitab_core::FormField> {
+        self.id(doc)
+            .and_then(|id| self.engine.form_fields(id, page).ok())
+            .unwrap_or_default()
+    }
+
+    fn set_field(&self, doc: DocHandle, edit: kitab_core::FieldEdit) -> Result<Vec<u32>, String> {
+        let id = self.id(doc).ok_or("the document is not open")?;
+        self.engine.set_field(id, edit)
+    }
+
     fn write_marks(
         &self,
         src: &Path,

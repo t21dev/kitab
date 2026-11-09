@@ -157,12 +157,30 @@ fn annotate(
         return Err("an annotation is on a page the PDF doesn't have".into());
     }
     let mut written = 0;
-    // Deletions first, page by page, highest index first so the others keep
+    // Form fields first, the newest value of each, by widget (deleting
+    // annotations below doesn't move a widget among the page's widgets).
+    let fields: Vec<kitab_core::FieldEdit> = edits
+        .iter()
+        .filter_map(|e| match e {
+            kitab_core::AnnotEdit::Field(f) => Some(f.clone()),
+            kitab_core::AnnotEdit::Delete { .. } => None,
+        })
+        .collect();
+    if !fields.is_empty() && !crate::doc::can_fill_forms(&doc) {
+        return Err("this PDF doesn't allow filling in its form".into());
+    }
+    for f in kitab_core::latest_edits(&fields) {
+        crate::forms::apply(&mut doc, u32::try_from(pages).unwrap_or(0), &f)
+            .map_err(|e| format!("could not fill in a field: {e}"))?;
+        written += 1;
+    }
+    // Deletions next, page by page, highest index first so the others keep
     // their places (new marks are appended after).
     let mut gone: Vec<(u32, u32)> = edits
         .iter()
-        .map(|e| match e {
-            kitab_core::AnnotEdit::Delete { page, index } => (*page, *index),
+        .filter_map(|e| match e {
+            kitab_core::AnnotEdit::Delete { page, index } => Some((*page, *index)),
+            kitab_core::AnnotEdit::Field(_) => None,
         })
         .collect();
     gone.sort_unstable();
@@ -376,6 +394,42 @@ mod tests {
         std::fs::copy(fixture("01-text-outline.pdf"), &copy).expect("copy");
         write_marks(&copy, None, &every_shape(2)[..3], &[], &copy).expect("writes in place");
         assert_eq!(annots(&copy, None, 2).len(), 3);
+        let _ = std::fs::remove_file(&copy);
+    }
+
+    #[test]
+    fn form_fields_are_saved_into_the_file_after_the_original_bytes() {
+        use kitab_core::{AnnotEdit, FieldEdit, FieldValue};
+        let copy = temp("form.pdf");
+        std::fs::copy(fixture("11-form-two-pages.pdf"), &copy).expect("copy");
+        let fill = |index, value| {
+            AnnotEdit::Field(FieldEdit {
+                page: 0,
+                index,
+                value,
+            })
+        };
+        let edits = [
+            fill(0, FieldValue::Text("first".into())),
+            fill(1, FieldValue::Text("line one\nline two".into())),
+            // A later value of the same field wins.
+            fill(0, FieldValue::Text("1 Main St".into())),
+        ];
+        assert_eq!(
+            write_marks(&copy, None, &[], &edits, &copy).expect("saves"),
+            2
+        );
+        let before = std::fs::read(fixture("11-form-two-pages.pdf")).expect("src");
+        let after = std::fs::read(&copy).expect("out");
+        assert!(after.starts_with(&before), "saved incrementally");
+        let doc = PdfDocument::open(copy.to_str().expect("utf-8")).expect("opens");
+        let f = crate::forms::fields(&doc, 1).expect("fields");
+        assert_eq!(f[0].value, "1 Main St", "the shared field, on page two");
+        let f = crate::forms::fields(&doc, 0).expect("fields");
+        assert_eq!(f[1].value, "line one\nline two");
+        // A read-only field is refused, and nothing is written.
+        let locked = [fill(2, FieldValue::Text("x".into()))];
+        assert!(write_marks(&copy, None, &[], &locked, &copy).is_err());
         let _ = std::fs::remove_file(&copy);
     }
 

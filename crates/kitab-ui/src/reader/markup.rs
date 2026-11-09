@@ -899,11 +899,11 @@ impl Reader {
         self.markup.saving
     }
 
-    /// Unsaved marks in a PDF (they are kept in the library meanwhile), and
-    /// deletions of its own annotations.
+    /// Unsaved marks in a PDF (they are kept in the library meanwhile),
+    /// deletions of its own annotations and form fields filled in.
     pub fn unsaved_marks(&self) -> usize {
         if self.is_pdf() {
-            self.markup.marks.len() + self.markup.deleted.len()
+            self.markup.marks.len() + self.markup.deleted.len() + self.unsaved_fields()
         } else {
             0
         }
@@ -959,9 +959,13 @@ impl Reader {
     /// document is closed while the file is replaced (Windows can't rename
     /// over an open file), then opened again at the same place.
     pub fn save_marks(&mut self, cx: &mut Context<Self>) {
+        // A field still being typed in is part of what's saved.
+        self.finish_typing(cx);
         if !self.is_pdf()
             || self.markup.saving
-            || (self.markup.marks.is_empty() && self.markup.deleted.is_empty())
+            || (self.markup.marks.is_empty()
+                && self.markup.deleted.is_empty()
+                && self.form.edits.is_empty())
         {
             return;
         }
@@ -970,11 +974,15 @@ impl Reader {
         self.markup.note = Some("Saving…".into());
         self.save_now(cx);
         let marks: Vec<Mark> = self.markup.marks.iter().map(|p| p.mark.clone()).collect();
-        let edits: Vec<kitab_core::AnnotEdit> = self
-            .markup
-            .deleted
-            .iter()
-            .map(|&(page, index)| kitab_core::AnnotEdit::Delete { page, index })
+        let edits: Vec<kitab_core::AnnotEdit> = kitab_core::latest_edits(&self.form.edits)
+            .into_iter()
+            .map(kitab_core::AnnotEdit::Field)
+            .chain(
+                self.markup
+                    .deleted
+                    .iter()
+                    .map(|&(page, index)| kitab_core::AnnotEdit::Delete { page, index }),
+            )
             .collect();
         let (engine, library, path) =
             (self.engine.clone(), self.library.clone(), self.path.clone());
@@ -1004,6 +1012,7 @@ impl Reader {
                 // The file draws them now, and lists them.
                 self.markup.marks.clear();
                 self.markup.deleted.clear();
+                self.form.edits.clear();
                 self.file_annots = None;
                 self.markup.undo.clear();
                 self.markup.redo.clear();
@@ -1017,6 +1026,9 @@ impl Reader {
             }
         }
         // Open the file again (it was closed for the save), at the same place.
+        self.form.fields.clear();
+        self.form.typing = None;
+        self.form.choosing = None;
         self.doc = None;
         self.cache.clear();
         self.layers = layer::Layers::default();

@@ -80,11 +80,25 @@ impl Reader {
         self.md.as_ref().is_some_and(|m| m.edit.is_some())
     }
 
+    /// Unsaved Markdown edits, or form fields filled in and not saved (they
+    /// live only in the open document until Save).
     pub fn has_unsaved_edits(&self) -> bool {
         self.md
             .as_ref()
             .and_then(|m| m.edit.as_ref())
             .is_some_and(|e| e.buf.dirty)
+            || self.unsaved_fields() > 0
+            || self.form.typing.is_some()
+    }
+
+    /// Save what the close prompt asked about: the Markdown, or the PDF's
+    /// marks and form.
+    pub fn save_changes(&mut self, cx: &mut Context<Self>) {
+        if self.is_pdf() {
+            self.save_marks(cx);
+        } else {
+            self.save_markdown(cx);
+        }
     }
 
     /// Ctrl+E: open the editor beside the preview, or close it.

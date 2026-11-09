@@ -42,6 +42,7 @@ pub mod epub;
 mod ffi;
 mod find;
 pub mod fonts;
+mod forms;
 pub mod marks;
 pub mod pages;
 pub mod sigs;
@@ -116,6 +117,10 @@ struct DocEntry {
     layout: BookLayout,
     /// The newest generation the caller set; older render requests are dropped.
     generation: Arc<AtomicU64>,
+    /// Form fields filled in since it opened, in order: a render helper
+    /// that opens the file later fills them in too, so every page it draws
+    /// shows them (they reach the file itself on Save).
+    form: Vec<kitab_core::FieldEdit>,
 }
 
 /// The document engine: a pool of MuPDF workers. Cheap to create; threads
@@ -304,6 +309,7 @@ impl Engine {
                 page_count: info.page_count,
                 layout,
                 generation: Arc::new(AtomicU64::new(0)),
+                form: Vec::new(),
             },
         );
         Ok((id, info))
@@ -324,7 +330,17 @@ impl Engine {
     fn render_worker(
         &self,
         doc: DocId,
-    ) -> Result<(usize, bool, PathBuf, Option<String>, BookLayout), String> {
+    ) -> Result<
+        (
+            usize,
+            bool,
+            PathBuf,
+            Option<String>,
+            BookLayout,
+            Vec<kitab_core::FieldEdit>,
+        ),
+        String,
+    > {
         let docs = lock(&self.docs);
         let e = docs
             .get(&doc)
@@ -340,12 +356,15 @@ impl Engine {
                 best = h;
             }
         }
+        let helper = best != e.worker;
         Ok((
             best,
-            best != e.worker,
+            helper,
             e.path.clone(),
             e.password.clone(),
             e.layout,
+            // Only a helper might open the file afresh and need them.
+            if helper { e.form.clone() } else { Vec::new() },
         ))
     }
 
@@ -383,7 +402,7 @@ impl Engine {
         if stale() {
             return Ok(None);
         }
-        let (worker, helper, path, password, layout) = self.render_worker(doc)?;
+        let (worker, helper, path, password, layout, form) = self.render_worker(doc)?;
         let stale_on_worker = stale.clone();
         let counter = &self.inflight[worker];
         counter.fetch_add(1, Ordering::Relaxed);
@@ -392,8 +411,15 @@ impl Engine {
                 return Ok::<_, String>(None);
             }
             if helper && !state.docs.contains_key(&doc) {
-                let (opened, _) = doc::open(&path, password.as_deref(), layout)
+                let (mut opened, _) = doc::open(&path, password.as_deref(), layout)
                     .map_err(|e| format!("a render helper could not open the file: {e:?}"))?;
+                // The form as the reader has filled it in so far.
+                let pages = opened.page_count;
+                if let doc::Handle::Pdf(pdf) = &mut opened.pdf {
+                    for e in &form {
+                        let _ = forms::apply(pdf, pages, e);
+                    }
+                }
                 state.docs.insert(
                     doc,
                     DocSlot {
@@ -479,6 +505,68 @@ impl Engine {
     /// The annotations already in a PDF (for the Marks panel); empty for other formats.
     pub fn annotations(&self, doc: DocId) -> Result<Vec<kitab_core::FileAnnot>, String> {
         self.with_doc(doc, doc::annotations)
+    }
+
+    /// The form fields on a page (0-based), in file order; none for other formats.
+    pub fn form_fields(&self, doc: DocId, page: u32) -> Result<Vec<kitab_core::FormField>, String> {
+        self.with_doc(doc, move |d| match &d.pdf {
+            doc::Handle::Pdf(pdf) => forms::fields(pdf, page),
+            doc::Handle::Other(_) => Ok(Vec::new()),
+        })
+    }
+
+    /// Fill in a form field in the open document (not the file: Save writes
+    /// it). Returns the pages whose look changed; set a new generation and
+    /// render them again. Render helpers fill it in too, in order, before
+    /// any page they draw after this.
+    pub fn set_field(&self, doc: DocId, edit: kitab_core::FieldEdit) -> Result<Vec<u32>, String> {
+        let (worker, _, _) = self.entry(doc)?;
+        let mine = edit.clone();
+        let changed = self.call(worker, Some(doc), move |state| {
+            let slot = state
+                .docs
+                .get_mut(&doc)
+                .ok_or_else(|| "the document was closed".to_string())?;
+            let pages = slot.doc.page_count;
+            match &mut slot.doc.pdf {
+                doc::Handle::Pdf(pdf) => {
+                    if !doc::can_fill_forms(pdf) {
+                        return Err("this PDF doesn't allow filling in its form".to_string());
+                    }
+                    forms::apply(pdf, pages, &mine)
+                }
+                doc::Handle::Other(_) => Err("only a PDF has form fields".to_string()),
+            }
+        })??;
+        let helpers = {
+            let mut docs = lock(&self.docs);
+            let Some(e) = docs.get_mut(&doc) else {
+                return Ok(changed);
+            };
+            e.form.push(edit.clone());
+            e.helpers.clone()
+        };
+        let started: Vec<bool> = lock(&self.workers).iter().map(Option::is_some).collect();
+        for h in helpers {
+            if !started.get(h).copied().unwrap_or(false) {
+                continue;
+            }
+            let edit = edit.clone();
+            if let Ok(tx) = self.worker(h) {
+                let _ = tx.send(Job {
+                    doc: Some(doc),
+                    run: Box::new(move |state| {
+                        if let Some(slot) = state.docs.get_mut(&doc) {
+                            let pages = slot.doc.page_count;
+                            if let doc::Handle::Pdf(pdf) = &mut slot.doc.pdf {
+                                let _ = forms::apply(pdf, pages, &edit);
+                            }
+                        }
+                    }),
+                });
+            }
+        }
+        Ok(changed)
     }
 
     /// The links on a page (0-based), with rectangles in page points.

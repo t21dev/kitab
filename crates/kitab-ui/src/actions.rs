@@ -301,6 +301,9 @@ pub fn bind_default_keys(cx: &mut App) {
     // A text field (notes, text boxes) takes every key it types with.
     let field = Some(crate::text_field::TEXT_FIELD);
     cx.bind_keys(keys.iter().map(|k| KeyBinding::new(k, NoAction, field)));
+    // A form's text box: Tab goes to the form's next field, not the next control.
+    let form = Some(crate::text_field::TAB_OUT);
+    cx.bind_keys(["tab", "shift-tab"].map(|k| KeyBinding::new(k, NoAction, form)));
     // The password prompt too: plain letters are reader shortcuts (j, k, n,
     // p, h), which ate them. Enter and Escape keep their prompt actions.
     cx.bind_keys(

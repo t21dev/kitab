@@ -7,9 +7,11 @@
 mod book;
 mod bookmarks;
 mod dock;
+pub(crate) use dock::note_toggle as note_dock_toggle;
 mod editor;
 mod find;
 mod footnote;
+mod form;
 pub use bookmarks::BookmarkRow;
 pub use dock::TOP_INSET;
 pub use info::human_size;
@@ -230,6 +232,8 @@ pub struct Reader {
     book: Option<book::BookState>,
     /// Drawing and markup on the pages.
     markup: markup::MarkupState,
+    /// The PDF's form, as it is being filled in.
+    form: form::FormState,
     /// The file's size in bytes, for the info chip (read off the UI thread).
     file_size: Option<u64>,
     /// The PDF's signatures, verified off the UI thread after opening.
@@ -335,6 +339,7 @@ impl Reader {
             md: None,
             book: None,
             markup: markup::MarkupState::default(),
+            form: form::FormState::default(),
             file_size: None,
             signatures: None,
             placing: false,
@@ -534,6 +539,8 @@ impl Reader {
                 self.load_bookmarks(cx);
                 self.check_signatures(cx);
                 self.index_text_later(cx);
+                // Opened again after a save that failed: the fields as filled in.
+                self.reapply_fields(cx);
                 cx.emit(ReaderEvent::Opened);
             }
             Err(OpenError::NeedsPassword) => {
@@ -1300,6 +1307,7 @@ impl Reader {
             Some(i) => {
                 crate::fire_first_paint(window, cx);
                 self.ensure_links(ix as u32, cx);
+                self.ensure_fields(ix as u32, cx);
                 Some(i)
             }
             None => {
@@ -1384,6 +1392,10 @@ impl Reader {
                     .on_mouse_down(
                         MouseButton::Left,
                         cx.listener(move |r, e: &MouseDownEvent, window, cx| {
+                            // A click on the page (not a field) keeps what was
+                            // typed in a field and closes a list's choices.
+                            r.finish_typing(cx);
+                            r.form.choosing = None;
                             // Placing a signature takes the click; a markup
                             // tool draws; otherwise the click selects text.
                             if r.placing {
@@ -1409,7 +1421,8 @@ impl Reader {
                     .children(self.bookmark_ribbon(ix, &st))
                     .children(self.selection_marks(ix, ppt, &st))
                     .children(self.find_marks(ix, ppt, &st))
-                    .children(self.link_marks(ix, ppt, &st, cx)),
+                    .children(self.link_marks(ix, ppt, &st, cx))
+                    .children(self.form_layer(ix, ppt, &st, cx)),
             )
             .into_any_element()
     }
