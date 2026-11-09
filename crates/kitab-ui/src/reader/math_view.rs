@@ -8,7 +8,8 @@
 
 use crate::style::Style;
 use gpui::{
-    AnyElement, FontWeight, IntoElement, ParentElement, Styled, div, prelude::FluentBuilder, px,
+    AnyElement, FontWeight, InteractiveElement, IntoElement, ParentElement,
+    StatefulInteractiveElement, Styled, div, prelude::FluentBuilder, px,
 };
 use kitab_md::math::Node;
 
@@ -79,12 +80,25 @@ fn glyph(st: &Style, text: String, size: f32, italic: bool, bold: bool) -> AnyEl
 
 /// A display formula, centred, at `size` px.
 pub(super) fn display(st: &Style, node: &Node, size: f32) -> AnyElement {
+    // A formula wider than the column scrolls sideways in its own box
+    // instead of spilling out of both sides.
     div()
+        .id(gpui::ElementId::Name(format!("math-{:p}", node).into()))
         .w_full()
-        .flex()
-        .justify_center()
-        .py(px(size * 0.4))
-        .child(el(st, node, size, false))
+        .overflow_x_scroll()
+        // The wheel scrolls the page; Shift+wheel or a sideways swipe this box.
+        .map(|mut el| {
+            el.style().restrict_scroll_to_axis = Some(true);
+            el
+        })
+        .child(
+            div()
+                .min_w_full()
+                .flex()
+                .justify_center()
+                .py(px(size * 0.4))
+                .child(el(st, node, size, false)),
+        )
         .into_any_element()
 }
 

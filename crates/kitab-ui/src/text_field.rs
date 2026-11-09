@@ -47,6 +47,9 @@ pub struct TextField {
     tab_out: bool,
     /// Typed straight onto a page: dark text whatever the theme.
     on_paper: bool,
+    /// How far the text is slid left so the caret stays in view (a line
+    /// longer than the box), as painted last.
+    shift: std::rc::Rc<std::cell::Cell<f32>>,
 }
 
 /// Tab (or Shift+Tab, `back`) in a field that hands focus on: the next field.
@@ -107,6 +110,7 @@ impl TextField {
             font_size: FONT_SIZE,
             tab_out: false,
             on_paper: false,
+            shift: std::rc::Rc::new(std::cell::Cell::new(0.0)),
         }
     }
 
@@ -272,6 +276,7 @@ impl Render for TextField {
         // The app's own UI font, as the window's text style has it.
         let font = window.text_style().font();
         let caret_x = self.caret_x(head_line, head, window);
+        let shift = self.shift.clone();
         // Selection: x from and to on each line it touches.
         let sel_spans: Vec<(usize, f32, f32)> = if sel.is_empty() {
             Vec::new()
@@ -296,6 +301,8 @@ impl Render for TextField {
             .on_key_down(cx.listener(|f, e: &KeyDownEvent, window, cx| f.on_key(e, window, cx)))
             .w_full()
             .h(px(lines as f32 * lh + 4.0))
+            // Text longer than the box slides, it never paints outside it.
+            .overflow_hidden()
             .cursor_text()
             .child(
                 canvas(
@@ -306,7 +313,12 @@ impl Render for TextField {
                             ElementInputHandler::new(bounds, entity.clone()),
                             cx,
                         );
-                        let origin = bounds.origin + point(px(0.0), px(2.0));
+                        // Keep the caret in view: slide the text left by as much
+                        // as the caret is past the box's right edge.
+                        let room = f32::from(bounds.size.width) - 6.0;
+                        let slide = (caret_x - room).max(0.0);
+                        shift.set(slide);
+                        let origin = bounds.origin + point(px(-slide), px(2.0));
                         for (i, x0, x1) in &sel_spans {
                             window.paint_quad(gpui::fill(
                                 Bounds::new(
@@ -451,7 +463,7 @@ impl EntityInputHandler for TextField {
         let x = self.caret_x(line, start, window);
         Some(Bounds::new(
             point(
-                element_bounds.origin.x + px(x),
+                element_bounds.origin.x + px(x - self.shift.get()),
                 element_bounds.origin.y + px(2.0 + line as f32 * self.line_h()),
             ),
             size(px(2.0), px(self.line_h())),

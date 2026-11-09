@@ -685,11 +685,11 @@ fn code_el(
                 .border_color(st.c(|c| c.line))
                 .text_size(d.px(12.0))
                 .text_color(st.c(|c| c.faint))
-                .child(if lang.is_empty() {
+                .child(div().min_w_0().truncate().child(if lang.is_empty() {
                     "text".to_string()
                 } else {
                     lang.to_string()
-                })
+                }))
                 .child({
                     let key = copy_key(&copy_text);
                     let done = copied_recently(key);
@@ -947,6 +947,53 @@ fn source_box(d: &Draw, title: &'static str, note: &str, src: &str) -> AnyElemen
         .into_any_element()
 }
 
+/// How a table's columns share the reading column. `longest` is each
+/// column's longest cell and `word` its longest unbreakable run (a URL, a
+/// path), both in characters; `avail` is how many characters fit across.
+/// Columns get room by how much they hold, and never less than their
+/// longest word. `None` when even that doesn't fit: the table scrolls.
+/// The least room a column takes, in characters: its longest word (a long
+/// URL or path may still break, so only up to 16 count), a little padding.
+fn col_need(word: usize) -> f32 {
+    word.clamp(6, 16) as f32 + 4.0
+}
+
+fn column_shares(longest: &[usize], word: &[usize], avail: f32) -> Option<Vec<f32>> {
+    let n = longest.len();
+    if n == 0 || avail <= 0.0 {
+        return None;
+    }
+    // Room each column needs at least (its longest word, a few characters
+    // at minimum) and what it would like (its longest cell, within reason).
+    let pad = 4.0;
+    let need: Vec<f32> = word.iter().map(|&w| col_need(w)).collect();
+    let want: Vec<f32> = longest
+        .iter()
+        .zip(&need)
+        .map(|(&l, &m)| ((l.min(70) as f32) + pad).max(m))
+        .collect();
+    let need_sum: f32 = need.iter().sum();
+    if need_sum > avail {
+        return None;
+    }
+    let want_sum: f32 = want.iter().sum();
+    let widths: Vec<f32> = if want_sum <= avail {
+        // Everything fits on one line: spread the spare room by size.
+        want.iter().map(|w| w / want_sum * avail).collect()
+    } else {
+        // Each column gets what it needs, and the rest goes by how much
+        // more it would like.
+        let spare = avail - need_sum;
+        let extra: Vec<f32> = want.iter().zip(&need).map(|(w, m)| w - m).collect();
+        let extra_sum: f32 = extra.iter().sum::<f32>().max(0.001);
+        need.iter()
+            .zip(&extra)
+            .map(|(m, e)| m + spare * e / extra_sum)
+            .collect()
+    };
+    Some(widths.iter().map(|w| w / avail).collect())
+}
+
 fn table_el(
     d: &Draw,
     aligns: &[Align],
@@ -973,10 +1020,12 @@ fn table_el(
             .border_b_1()
             .border_color(st.c(|c| c.line))
             .when(header, |c| c.bg(st.c(|c| c.panel)))
+            // Text wraps inside its cell; nothing spills into the next one.
+            .overflow_hidden()
             .flex()
             .when(align == Align::Center, |c| c.justify_center())
             .when(align == Align::Right, |c| c.justify_end())
-            .child(inline_el(
+            .child(div().min_w_0().max_w_full().child(inline_el(
                 d,
                 content,
                 Base {
@@ -984,36 +1033,78 @@ fn table_el(
                     ..base
                 },
                 cx,
-            ))
+            )))
     };
-    // Columns share the reading column; a table too wide for it gets fixed
-    // 160 px columns and scrolls sideways in its own box.
-    let wide = cols as f32 * 140.0 > COLUMN * d.scale;
-    let sized = |c: gpui::Div| {
-        if wide {
-            c.w(d.px(160.0)).flex_none()
-        } else {
-            c.flex_1().min_w_0()
+    // How much each column holds, in characters: its longest cell and its
+    // longest word (which can't wrap).
+    let mut longest = vec![0usize; cols];
+    let mut word = vec![0usize; cols];
+    for row in std::iter::once(head).chain(rows.iter().map(Vec::as_slice)) {
+        for (i, c) in row.iter().enumerate().take(cols) {
+            let text = kitab_md::inline_text(c);
+            longest[i] = longest[i].max(text.chars().count());
+            let w = text
+                .split_whitespace()
+                .map(|w| w.chars().count())
+                .max()
+                .unwrap_or(0);
+            word[i] = word[i].max(w);
         }
+    }
+    // About how many characters fit across the reading column.
+    // Bold header text and wide letters run wider than the average: err
+    // on the generous side, so a short word never breaks mid-word.
+    let char_w = BODY * 0.92 * 0.62 * d.scale;
+    let avail = (COLUMN * d.scale - cols as f32 * 20.0 * d.scale) / char_w;
+    let shares = column_shares(&longest, &word, avail);
+    // Too wide even so: columns as wide as their text (within reason), and
+    // the table scrolls sideways in its own box.
+    let fixed: Vec<f32> = longest
+        .iter()
+        .zip(&word)
+        .map(|(&l, &w)| {
+            let chars = l.min(48).max(w.min(60)) as f32;
+            (chars * char_w + 20.0 * d.scale).clamp(90.0 * d.scale, 440.0 * d.scale)
+        })
+        .collect();
+    let wide = shares.is_none();
+    // Each column's least width in pixels: a narrower window scrolls the
+    // table rather than breaking short words.
+    let mins: Vec<f32> = word
+        .iter()
+        .map(|&w| col_need(w) * char_w + 20.0 * d.scale)
+        .collect();
+    let min_total: f32 = mins.iter().sum();
+    let sized = |c: gpui::Div, i: usize| match &shares {
+        // Its share of the row to start from; it gives way when the row is
+        // tight, but never below what its longest word needs.
+        Some(s) => c
+            .flex_basis(gpui::relative(s.get(i).copied().unwrap_or(0.0)))
+            .flex_grow()
+            .flex_shrink()
+            .min_w(px(mins.get(i).copied().unwrap_or(60.0))),
+        None => c.w(px(fixed.get(i).copied().unwrap_or(160.0))).flex_none(),
     };
     let mut table = div()
         .flex()
         .flex_col()
-        .when(wide, |t| t.w(d.px(cols as f32 * 160.0)));
-    let mut head_row = div().flex();
+        .when(wide, |t| t.w(px(fixed.iter().sum::<f32>())))
+        .when(!wide, |t| t.w_full().min_w(px(min_total)));
+    let mut head_row = div().flex().w_full();
     for i in 0..cols {
         let empty = Vec::new();
-        head_row = head_row.child(sized(cell(head.get(i).unwrap_or(&empty), i, true, cx)));
+        head_row = head_row.child(sized(cell(head.get(i).unwrap_or(&empty), i, true, cx), i));
     }
     table = table.child(head_row);
     for (r, row) in rows.iter().enumerate() {
-        let mut line = div().flex();
+        let mut line = div().flex().w_full();
         for i in 0..cols {
             let empty = Vec::new();
             let c = cell(row.get(i).unwrap_or(&empty), i, false, cx);
             // Alternate rows get a faint tint (md-viewer-pwa).
             line = line.child(sized(
                 c.when(r % 2 == 1, |c| c.bg(st.c(|c| c.hover).opacity(0.5))),
+                i,
             ));
         }
         table = table.child(line);
@@ -1026,6 +1117,11 @@ fn table_el(
         .border_1()
         .border_color(st.c(|c| c.line))
         .overflow_x_scroll()
+        // The wheel scrolls the page; Shift+wheel or a sideways swipe this box.
+        .map(|mut el| {
+            el.style().restrict_scroll_to_axis = Some(true);
+            el
+        })
         .child(grid)
         .into_any_element()
 }
@@ -1082,7 +1178,13 @@ fn details_el(
                         .size(d.px(14.0))
                         .text_color(st.c(|c| c.muted)),
                 )
-                .child(inline_el(d, summary, base, cx)),
+                // A long summary wraps beside its arrow.
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .child(inline_el(d, summary, base, cx)),
+                ),
         )
         .when(open, |el| {
             el.child(div().px(d.px(14.0)).pt(d.px(6.0)).children(blocks_el(
@@ -1181,10 +1283,17 @@ fn image_el(d: &Draw, src: &str, alt: &str) -> AnyElement {
             .border_color(st.c(|c| c.line))
             .text_size(d.px(13.0))
             .text_color(st.c(|c| c.muted))
-            .child(format!("{kind}: {name}"))
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .truncate()
+                    .child(format!("{kind}: {name}")),
+            )
             .when(exists, |el| {
                 el.child(
                     div()
+                        .flex_none()
                         .text_color(st.c(|c| c.accent))
                         .cursor_pointer()
                         .child("Open")
@@ -1488,4 +1597,24 @@ fn copied_recently(key: u64) -> bool {
         .ok()
         .and_then(|c| *c)
         .is_some_and(|(k, at)| k == key && at.elapsed() < COPIED_FOR)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn table_columns_get_room_by_what_they_hold() {
+        // A short label column and a long text column: the text gets most.
+        let s = column_shares(&[14, 120], &[10, 18], 90.0).expect("fits");
+        assert!((s.iter().sum::<f32>() - 1.0).abs() < 0.001);
+        assert!(s[1] > 0.7, "{s:?}");
+        // The label column still fits its longest word.
+        assert!(s[0] * 90.0 >= 13.0, "{s:?}");
+        // Short cells that fit share the width by size.
+        let s = column_shares(&[5, 10], &[5, 10], 90.0).expect("fits");
+        assert!(s[1] > s[0]);
+        // Long unbreakable words in many columns: it scrolls instead.
+        assert!(column_shares(&[60; 5], &[40; 5], 90.0).is_none());
+    }
 }

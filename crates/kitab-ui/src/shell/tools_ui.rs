@@ -457,9 +457,13 @@ impl Workspace {
             })
             .text_size(st.px(|m| m.ui_text))
             .text_color(st.c(|c| c.text))
-            .child(d.text.clone())
+            // Long ranges stay inside the box, the end (and the caret) in view.
+            .overflow_hidden()
+            .when(d.text.chars().count() > 40, |f| f.justify_end())
+            .child(div().flex_none().whitespace_nowrap().child(d.text.clone()))
             .child(
                 div()
+                    .flex_none()
                     .ml(px(1.0))
                     .w(px(1.0))
                     .h(px(15.0))

@@ -88,7 +88,10 @@ impl Reader {
             div()
                 .id("status-signature")
                 .flex()
-                .flex_none()
+                // A long signer name ends in "…", not past the page number.
+                .flex_shrink()
+                .min_w_0()
+                .max_w(px(280.0))
                 .items_center()
                 .gap(px(5.0))
                 .px(px(6.0))
@@ -99,8 +102,14 @@ impl Reader {
                 .hover(|d| d.bg(st.hover_bg()))
                 .tip("Show signatures")
                 .on_click(cx.listener(|_, _, _, cx| cx.emit(ReaderEvent::ShowSignatures)))
-                .child(svg().path(icon("shield")).size(px(12.0)).text_color(colour))
-                .child(label)
+                .child(
+                    svg()
+                        .path(icon("shield"))
+                        .flex_none()
+                        .size(px(12.0))
+                        .text_color(colour),
+                )
+                .child(div().min_w_0().truncate().child(label))
                 .into_any_element(),
         )
     }

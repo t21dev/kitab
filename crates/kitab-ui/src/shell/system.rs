@@ -676,6 +676,11 @@ impl Workspace {
                     div()
                         .id(("update-code", i))
                         .overflow_x_scroll()
+                        // The wheel scrolls the page; Shift+wheel or a sideways swipe this box.
+                        .map(|mut el| {
+                            el.style().restrict_scroll_to_axis = Some(true);
+                            el
+                        })
                         .rounded(px(8.0))
                         .bg(st.c(|c| c.raised))
                         .border_1()
@@ -722,7 +727,9 @@ impl Workspace {
                                     .w(px(widths[c]))
                                     .px(px(8.0))
                                     .py(px(5.0))
-                                    .whitespace_nowrap()
+                                    // Long cells wrap inside their column.
+                                    .min_w_0()
+                                    .overflow_hidden()
                                     .child(row.get(c).cloned().unwrap_or_default())
                             }))
                     });
@@ -730,6 +737,11 @@ impl Workspace {
                         div()
                             .id(("update-table", i))
                             .overflow_x_scroll()
+                            // The wheel scrolls the page; Shift+wheel or a sideways swipe this box.
+                            .map(|mut el| {
+                                el.style().restrict_scroll_to_axis = Some(true);
+                                el
+                            })
                             .rounded(px(8.0))
                             .border_1()
                             .border_color(line)

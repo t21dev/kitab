@@ -43,6 +43,9 @@ pub(super) struct Editor {
     dragging: bool,
     /// "Saved" shows for a moment after Ctrl+S.
     pub saved_note: Option<SharedString>,
+    /// Where the caret was when the view last followed it sideways: it
+    /// follows again only when the caret moves, not while you scroll.
+    followed: Rc<Cell<usize>>,
 }
 
 impl Editor {
@@ -55,6 +58,7 @@ impl Editor {
             generation: 0,
             dragging: false,
             saved_note: None,
+            followed: Rc::new(Cell::new(usize::MAX)),
         }
     }
 }
@@ -412,7 +416,9 @@ impl Reader {
         let scroll_y = f32::from(edit.scroll.0.borrow().base_handle.offset().y);
         let y = f32::from(p.y - area.origin.y) - scroll_y;
         let line = ((y / LINE_H).floor().max(0.0) as usize).min(edit.buf.line_count() - 1);
-        let x = f32::from(p.x - area.origin.x) - GUTTER - PAD;
+        // Long lines scroll sideways: count the scroll in.
+        let scroll_x = f32::from(edit.scroll.0.borrow().base_handle.offset().x);
+        let x = f32::from(p.x - area.origin.x) - scroll_x - GUTTER - PAD;
         let text = edit.buf.line(line);
         let shaped = window.text_system().shape_line(
             display(text),
@@ -521,6 +527,39 @@ impl Reader {
                     });
                 let caret = (ix == caret_line && focused).then(|| {
                     let x = x_of(edit.buf.head - r.start);
+                    // The view follows the caret sideways when it moves
+                    // past either edge (a long line), once per move.
+                    let (handle, followed, head) = (
+                        edit.scroll.0.borrow().base_handle.clone(),
+                        edit.followed.clone(),
+                        edit.buf.head,
+                    );
+                    let follow = gpui::canvas(
+                        |_, _, _| (),
+                        move |b: Bounds<Pixels>, _, window, _| {
+                            if followed.get() == head {
+                                return;
+                            }
+                            followed.set(head);
+                            let view = handle.bounds();
+                            let off = handle.offset();
+                            let (left, right) = (
+                                view.origin.x + px(GUTTER + PAD),
+                                view.origin.x + view.size.width - px(24.0),
+                            );
+                            let shift = if b.origin.x > right {
+                                b.origin.x - right
+                            } else if b.origin.x < left {
+                                b.origin.x - left
+                            } else {
+                                return;
+                            };
+                            let x = (off.x - shift).min(px(0.0));
+                            handle.set_offset(gpui::point(x, off.y));
+                            window.refresh();
+                        },
+                    )
+                    .size_full();
                     div()
                         .absolute()
                         .top(px(3.0))
@@ -528,6 +567,7 @@ impl Reader {
                         .w(px(2.0))
                         .h(px(LINE_H - 6.0))
                         .bg(st.c(|c| c.accent))
+                        .child(follow)
                 });
                 let marked = edit
                     .buf
@@ -679,9 +719,15 @@ impl Reader {
                     .tip("Back to reading  Ctrl+E")
                     .on_click(cx.listener(|r, _, window, cx| r.done_editing(window, cx))),
             );
+        // Long lines scroll sideways, as wide as the longest one.
+        let longest = (0..count)
+            .max_by_key(|&i| edit.buf.line(i).len())
+            .unwrap_or(0);
         let lines = uniform_list("md-editor-lines", count, move |range, window, cx| {
             list_this.read(cx).editor_rows(range, window, cx)
         })
+        .with_horizontal_sizing_behavior(gpui::ListHorizontalSizingBehavior::Unconstrained)
+        .with_width_from_item(Some(longest))
         .track_scroll(edit.scroll.clone())
         .size_full();
         let input_this = this.clone();

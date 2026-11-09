@@ -536,6 +536,8 @@ impl Reader {
                     .overflow_hidden()
                     .text_size(st.px(|m| m.ui_text))
                     .whitespace_nowrap()
+                    // A long query shows its end, where the caret is.
+                    .when(f.query.chars().count() > 28, |d| d.justify_end())
                     .map(|d| {
                         if empty {
                             d.when(focused, |d| d.child(caret)).child(
@@ -553,8 +555,13 @@ impl Reader {
                                     .child(f.query.clone()),
                             )
                         } else {
-                            d.child(div().text_color(st.c(|c| c.text)).child(f.query.clone()))
-                                .when(focused, |d| d.child(caret))
+                            d.child(
+                                div()
+                                    .flex_none()
+                                    .text_color(st.c(|c| c.text))
+                                    .child(f.query.clone()),
+                            )
+                            .when(focused, |d| d.child(caret))
                         }
                     }),
             )

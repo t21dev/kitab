@@ -5,7 +5,7 @@
 use crate::style::Style;
 use gpui::{
     AnyView, App, AppContext, Context, Div, IntoElement, ParentElement, Render, SharedString,
-    Stateful, StatefulInteractiveElement, Styled, Window, div, px,
+    Stateful, StatefulInteractiveElement, Styled, Window, div, prelude::FluentBuilder, px,
 };
 
 pub struct TooltipView {
@@ -15,7 +15,12 @@ pub struct TooltipView {
 impl Render for TooltipView {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let st = Style::get(cx).clone();
+        // Tooltips are laid out at their smallest size, where text doesn't
+        // wrap: a long one (a link, a path, a note) gets a set width to wrap in.
+        let long = self.text.chars().count() > 60;
         div()
+            .max_w(px(420.0))
+            .when(long, |d| d.w(px(420.0)))
             .px(px(8.0))
             .py(px(4.0))
             .rounded(px(7.0))

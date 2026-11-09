@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Markdown tables: columns get room by what they hold, text wraps inside its cell instead of running past the table or into the next column, and a short word never breaks. A table too wide even so scrolls sideways.
+- Long text no longer spills out of its box anywhere: text fields (notes, form fields, search, signing) slide to keep the caret in view, menu items and collection names end in "…", long tooltips wrap, a long signer name stays in the status bar, and the update notes' tables wrap.
+- The Markdown editor scrolls sideways for long lines and follows the caret, so nothing is cut off at the edge.
+- Wide formulas and a details block's long summary stay inside the reading column; many printers scroll in the Print sheet; very deep contents lists stop indenting past the sidebar.
+
 ## [0.3.5] - 2026-11-09
 
 ### Added

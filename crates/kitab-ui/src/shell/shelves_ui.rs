@@ -175,6 +175,9 @@ impl Workspace {
                 .id(("shelf", i))
                 .h(px(28.0))
                 .px(px(12.0))
+                // A long collection name ends in "…" inside its chip.
+                .max_w(px(240.0))
+                .min_w_0()
                 .flex()
                 .items_center()
                 .rounded_full()
@@ -190,7 +193,7 @@ impl Workspace {
                         .hover(|d| d.bg(st.hover_bg()))
                 })
                 .on_click(cx.listener(move |ws, _, _, cx| ws.show_shelf(kind, cx)))
-                .child(label);
+                .child(div().min_w_0().truncate().child(label));
             if let ShelfKind::Collection(id) = kind {
                 chip = chip.on_mouse_down(
                     MouseButton::Right,

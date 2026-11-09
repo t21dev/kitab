@@ -906,7 +906,16 @@ impl Workspace {
                     .items_start()
                     .gap(px(12.0))
                     .child(label("Printer"))
-                    .child(div().max_h(px(150.0)).flex_1().min_w_0().child(list)),
+                    .child(
+                        // Many printers scroll in their box.
+                        div()
+                            .id("print-printers")
+                            .max_h(px(150.0))
+                            .flex_1()
+                            .min_w_0()
+                            .overflow_y_scroll()
+                            .child(list),
+                    ),
             )
             .child(
                 div()

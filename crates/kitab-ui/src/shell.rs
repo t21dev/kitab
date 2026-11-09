@@ -1128,7 +1128,7 @@ impl Workspace {
                 .items_center()
                 .gap(px(8.0))
                 .h(st.px(|m| m.list_row))
-                .pl(px(8.0 + depth as f32 * 14.0))
+                .pl(px(8.0 + depth.min(8) as f32 * 14.0))
                 .pr(px(8.0))
                 .rounded(st.px(|m| m.control_radius))
                 .text_size(st.px(|m| m.ui_text))

@@ -1561,10 +1561,13 @@ impl Reader {
                             })
                             .text_color(st.c(|c| c.text))
                             .text_size(st.px(|m| m.ui_text))
+                            // A long password's dots stay in the box, the newest in view.
+                            .overflow_hidden()
+                            .when(dots.chars().count() > 30, |d| d.justify_end())
                             .child(if dots.is_empty() {
                                 div().text_color(st.c(|c| c.faint)).child("Password")
                             } else {
-                                div().child(dots)
+                                div().flex_none().whitespace_nowrap().child(dots)
                             }),
                     )
                     .child(

@@ -325,7 +325,9 @@ pub fn panel(
                                 }),
                             ),
                         )
-                        .child(div().flex_1().whitespace_nowrap().child(label.clone()))
+                        // A long label (a document title, a collection name)
+                        // ends in "…" rather than pushing the key off the menu.
+                        .child(div().flex_1().min_w_0().truncate().child(label.clone()))
                         .when(*checked && ic.is_some(), |d| {
                             d.child(
                                 svg()
@@ -336,6 +338,7 @@ pub fn panel(
                         })
                         .children(shortcut.map(|k| {
                             div()
+                                .flex_none()
                                 .text_size(px(11.0))
                                 .text_color(st.c(|c| c.faint))
                                 .child(k)
