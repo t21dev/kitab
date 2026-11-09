@@ -84,6 +84,87 @@ impl Section {
     }
 }
 
+/// A setting picked from search: its title, and the panel's scroll handle.
+/// The row with that title scrolls into view once it's laid out, and glows
+/// briefly so the eye finds it.
+#[derive(Clone)]
+pub struct Found {
+    pub title: &'static str,
+    /// Bumped per pick, so the glow plays again.
+    pub serial: u64,
+    pub scroll: gpui::ScrollHandle,
+    /// Still to scroll to it (set by the pick, cleared once there).
+    pub pending: std::rc::Rc<std::cell::Cell<bool>>,
+}
+
+thread_local! {
+    /// The setting being found, while the panel draws (see [`Found`]).
+    static FOUND: std::cell::RefCell<Option<Found>> = const { std::cell::RefCell::new(None) };
+}
+
+/// How long a found setting glows.
+const GLOW: std::time::Duration = std::time::Duration::from_millis(1600);
+
+/// If `title` is the setting being found: a glow over the row (inset by
+/// `outset` pixels around it) that also scrolls the panel to it.
+fn found_marker(title: &str, outset: f32, radius: f32, st: &Style) -> Option<AnyElement> {
+    let f = FOUND.with(|f| f.borrow().clone())?;
+    if f.title != title {
+        return None;
+    }
+    use gpui::{Animation, AnimationExt};
+    let accent = st.c(|c| c.accent);
+    let scroll = f.scroll.clone();
+    let pending = f.pending.clone();
+    // Puts the row near the top of the panel, once, after layout.
+    let mover = gpui::canvas(
+        |_, _, _| (),
+        move |b: gpui::Bounds<gpui::Pixels>, _, window, _| {
+            if !pending.get() {
+                return;
+            }
+            pending.set(false);
+            let view = scroll.bounds();
+            let off = scroll.offset();
+            let max = scroll.max_offset();
+            let delta = b.origin.y - (view.origin.y + px(20.0));
+            let y = (off.y - delta).clamp(-max.height, px(0.0));
+            scroll.set_offset(point(off.x, y));
+            window.refresh();
+        },
+    )
+    .absolute()
+    .inset_0();
+    Some(
+        div()
+            .absolute()
+            .top(px(-outset))
+            .left(px(-outset))
+            .right(px(-outset))
+            .bottom(px(-outset))
+            .rounded(px(radius))
+            .border_1()
+            .border_color(accent)
+            .bg(accent.opacity(0.10))
+            .child(mover)
+            .with_animation(
+                ElementId::NamedInteger("found-glow".into(), f.serial),
+                Animation::new(GLOW),
+                // Holds, then fades out slowly.
+                |el, t| {
+                    let v = if t < 0.45 {
+                        1.0
+                    } else {
+                        let u = (t - 0.45) / 0.55;
+                        1.0 - u * u * (3.0 - 2.0 * u)
+                    };
+                    el.opacity(v)
+                },
+            )
+            .into_any_element(),
+    )
+}
+
 /// The first setting matching a search (Enter in the search field).
 pub fn first_match(query: &str) -> Option<(Section, &'static str)> {
     search::matches(query).into_iter().next()
@@ -100,9 +181,12 @@ pub fn panel(
     sys: &SystemInfo,
     search: Option<&gpui::Entity<crate::text_field::TextField>>,
     query: &str,
+    scroll: &gpui::ScrollHandle,
+    found: Option<Found>,
     window: &Window,
 ) -> AnyElement {
     let searching = !query.trim().is_empty();
+    FOUND.with(|f| *f.borrow_mut() = found.filter(|_| !searching));
     let rail = {
         let mut rail = div()
             .w(px(208.0))
@@ -259,6 +343,7 @@ pub fn panel(
                 .id("settings-body")
                 .flex_1()
                 .overflow_y_scroll()
+                .track_scroll(scroll)
                 .child(
                     div()
                         .flex()
@@ -1028,6 +1113,8 @@ fn change(ws: &WeakEntity<Workspace>, f: impl Fn(&mut Style) + 'static) -> Click
 
 fn group(title: &str, note: Option<&str>, content: impl IntoElement, st: &Style) -> AnyElement {
     div()
+        .relative()
+        .children(found_marker(title, 8.0, 14.0, st))
         .flex()
         .flex_col()
         .gap(px(10.0))
@@ -1136,6 +1223,8 @@ fn icon_row(
     st: &Style,
 ) -> AnyElement {
     div()
+        .relative()
+        .children(found_marker(title, 0.0, 12.0, st))
         .flex()
         .items_center()
         .gap(px(16.0))

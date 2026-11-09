@@ -131,6 +131,10 @@ pub struct Workspace {
     /// The previous session's tabs are still loading: Home isn't the first
     /// thing to show, so it doesn't reveal the window.
     restoring: bool,
+    /// A setting picked from search: scrolled to and glowing.
+    settings_found: Option<crate::settings_view::Found>,
+    /// Where the Settings body is scrolled; each section starts at the top.
+    settings_scroll: gpui::ScrollHandle,
     /// The window may close now: unsaved changes were saved or let go.
     close_anyway: bool,
     /// The window has the user's focus (for background trimming).
@@ -239,6 +243,8 @@ impl Workspace {
             sidebar_w: crate::layout::SIDEBAR_W,
             born: std::time::Instant::now(),
             restoring: false,
+            settings_found: None,
+            settings_scroll: gpui::ScrollHandle::new(),
             close_anyway: false,
             window_active: true,
             title_squeezed: false,
@@ -3105,8 +3111,8 @@ impl Workspace {
                 match e {
                     FieldEvent::Changed => cx.notify(),
                     FieldEvent::Submit => {
-                        if let Some((s, _)) = crate::settings_view::first_match(&text) {
-                            ws.pick_setting(s, window, cx);
+                        if let Some((s, title)) = crate::settings_view::first_match(&text) {
+                            ws.pick_setting(s, title, window, cx);
                         }
                     }
                     FieldEvent::Cancel => {
@@ -3128,12 +3134,31 @@ impl Workspace {
     pub(crate) fn pick_setting(
         &mut self,
         section: Section,
+        title: &'static str,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         self.new_settings_search(window, cx);
         window.focus(&self.overlay_focus);
         self.set_settings_section(section, cx);
+        // Scroll to it and make it glow; the glow ends on its own.
+        let serial = self.settings_found.as_ref().map_or(0, |f| f.serial) + 1;
+        self.settings_found = Some(crate::settings_view::Found {
+            title,
+            serial,
+            scroll: self.settings_scroll.clone(),
+            pending: std::rc::Rc::new(std::cell::Cell::new(true)),
+        });
+        self.after(std::time::Duration::from_millis(1700), cx, move |ws, cx| {
+            if ws
+                .settings_found
+                .as_ref()
+                .is_some_and(|f| f.serial == serial)
+            {
+                ws.settings_found = None;
+                cx.notify();
+            }
+        });
     }
 
     pub(crate) fn close_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -3204,6 +3229,10 @@ impl Workspace {
     }
 
     pub(crate) fn set_settings_section(&mut self, section: Section, cx: &mut Context<Self>) {
+        if section != self.settings_section {
+            self.settings_scroll
+                .set_offset(gpui::point(px(0.0), px(0.0)));
+        }
         self.settings_section = section;
         if self.settings.is_some() {
             self.settings = Some(section);
@@ -4062,7 +4091,6 @@ impl Workspace {
         let toast = self.toast_view(st, cx);
         out.extend(self.extract_view(st, window, cx));
         out.extend(self.save_page_view(st, window, cx));
-        out.extend(self.update_dialog(st, cx));
         out.extend(self.palette_view(st, cx));
         out.extend(self.print_view(st, cx));
         out.extend(self.password_view(st, cx));
@@ -4088,6 +4116,8 @@ impl Workspace {
                     .as_ref()
                     .map(|(f, _)| f.read(cx).text())
                     .unwrap_or_default(),
+                &self.settings_scroll,
+                self.settings_found.clone(),
                 window,
             ));
             let (scrim, panel) = if closing {
@@ -4225,6 +4255,8 @@ impl Workspace {
             }
             out.push(layer.child(positioned).into_any_element());
         }
+        // Above Settings: About's View update opens it from there.
+        out.extend(self.update_dialog(st, cx));
         out.extend(toast);
         out
     }

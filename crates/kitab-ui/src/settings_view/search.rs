@@ -243,7 +243,7 @@ pub(super) fn results(ws: &WeakEntity<Workspace>, query: &str, st: &Style) -> An
                 .cursor_pointer()
                 .hover(|d| d.bg(st.raised_hover()))
                 .on_click(move |_, window, cx| {
-                    let _ = ws.update(cx, |ws, cx| ws.pick_setting(section, window, cx));
+                    let _ = ws.update(cx, |ws, cx| ws.pick_setting(section, title, window, cx));
                 })
                 .child(
                     svg()

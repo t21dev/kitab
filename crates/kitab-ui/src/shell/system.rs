@@ -672,7 +672,7 @@ impl Workspace {
         let released = if r.published.is_empty() {
             String::new()
         } else {
-            format!(", released {}", r.published)
+            format!("Released {}. ", r.published)
         };
         let panel = div()
             .id("update-dialog")
@@ -699,7 +699,7 @@ impl Workspace {
                     .text_size(px(12.5))
                     .text_color(st.c(|c| c.muted))
                     .child(format!(
-                        "You have {VERSION}{released}. Download the new installer to update; your library, marks and settings are kept."
+                        "{released}You have {VERSION}. Install the new version over it: your library, marks and settings stay."
                     )),
             )
             .when(!blocks.is_empty(), |d| {
