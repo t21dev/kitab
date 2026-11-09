@@ -123,10 +123,15 @@ impl Workspace {
     }
 
     pub(super) fn close_sign(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.sign.sheet.take().is_some() {
-            self.refocus(window, cx);
-            cx.notify();
+        if self.sign.sheet.is_none() {
+            return;
         }
+        self.exit_modal("sign", window, cx, |ws, window, cx| {
+            if ws.sign.sheet.take().is_some() {
+                ws.refocus(window, cx);
+                cx.notify();
+            }
+        });
     }
 
     fn choose_sign_key(&mut self, cx: &mut Context<Self>) {
@@ -253,10 +258,15 @@ impl Workspace {
     }
 
     pub(super) fn close_sign_confirm(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.sign.confirm.take().is_some() {
-            self.refocus(window, cx);
-            cx.notify();
+        if self.sign.confirm.is_none() {
+            return;
         }
+        self.exit_modal("sign-confirm", window, cx, |ws, window, cx| {
+            if ws.sign.confirm.take().is_some() {
+                ws.refocus(window, cx);
+                cx.notify();
+            }
+        });
     }
 
     /// Sign: write the signed copy, off the UI thread.

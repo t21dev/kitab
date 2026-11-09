@@ -445,10 +445,15 @@ impl Workspace {
     }
 
     pub(super) fn close_naming(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.shelves.naming.take().is_some() {
-            self.refocus(window, cx);
-            cx.notify();
+        if self.shelves.naming.is_none() {
+            return;
         }
+        self.exit_modal("name", window, cx, |ws, window, cx| {
+            if ws.shelves.naming.take().is_some() {
+                ws.refocus(window, cx);
+                cx.notify();
+            }
+        });
     }
 
     fn finish_naming(&mut self, window: &mut Window, cx: &mut Context<Self>) {

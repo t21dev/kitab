@@ -329,10 +329,15 @@ impl Workspace {
     }
 
     pub(super) fn close_extract(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.tools.extract.take().is_some() {
-            self.refocus(window, cx);
-            cx.notify();
+        if self.tools.extract.is_none() {
+            return;
         }
+        self.exit_modal("extract", window, cx, |ws, window, cx| {
+            if ws.tools.extract.take().is_some() {
+                ws.refocus(window, cx);
+                cx.notify();
+            }
+        });
     }
 
     fn extract_key(&mut self, e: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
@@ -528,6 +533,37 @@ impl Workspace {
         ))
     }
 
+    /// Close dialog `id` the way it came: it fades and sinks for
+    /// [`motion::EXIT_BASE`], then `finish` drops it. At once with animations
+    /// off, or when it's already leaving (a second Esc).
+    pub(super) fn exit_modal(
+        &mut self,
+        id: &'static str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+        finish: impl FnOnce(&mut Self, &mut Window, &mut Context<Self>) + 'static,
+    ) {
+        let serial = self.modal_serials.get(id).copied();
+        let leaving = self.modal_exit.is_some_and(|(i, _)| i == id);
+        let Some(serial) = serial.filter(|_| Style::get(cx).animations && !leaving) else {
+            self.modal_exit = None;
+            finish(self, window, cx);
+            return;
+        };
+        self.modal_exit = Some((id, serial));
+        cx.notify();
+        cx.spawn_in(window, async move |this, cx| {
+            cx.background_executor().timer(motion::EXIT_BASE).await;
+            let _ = this.update_in(cx, |ws, window, cx| {
+                if ws.modal_exit == Some((id, serial)) {
+                    ws.modal_exit = None;
+                    finish(ws, window, cx);
+                }
+            });
+        })
+        .detach();
+    }
+
     /// A centred modal over a scrim: both fade, the panel rises 10 px. Esc or a
     /// click on the scrim runs `close`.
     pub(super) fn modal_layer(
@@ -539,22 +575,48 @@ impl Workspace {
         close: fn(&mut Self, &mut Window, &mut Context<Self>),
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let panel = motion::enter(
-            div().child(panel),
-            ElementId::NamedInteger(format!("{id}-in").into(), serial),
-            st.animations,
-            motion::From::Below(10.0),
-            motion::BASE,
-            Duration::ZERO,
-        );
-        let scrim = motion::enter(
-            div().absolute().inset_0().bg(st.c(|c| c.scrim)),
-            ElementId::NamedInteger(format!("{id}-scrim").into(), serial),
-            st.animations,
-            motion::From::Fade,
-            motion::BASE,
-            Duration::ZERO,
-        );
+        // Drawn again (reopened) while an earlier one was leaving: that one is gone.
+        if self.modal_serials.insert(id, serial) != Some(serial)
+            && self.modal_exit.is_some_and(|(i, _)| i == id)
+        {
+            self.modal_exit = None;
+        }
+        let leaving = self.modal_exit == Some((id, serial));
+        let (panel, scrim) = if leaving {
+            (
+                motion::exit(
+                    div().child(panel),
+                    ElementId::NamedInteger(format!("{id}-out").into(), serial),
+                    motion::From::Below(10.0),
+                    motion::EXIT_BASE,
+                ),
+                motion::exit(
+                    div().absolute().inset_0().bg(st.c(|c| c.scrim)),
+                    ElementId::NamedInteger(format!("{id}-scrim-out").into(), serial),
+                    motion::From::Fade,
+                    motion::EXIT_BASE,
+                ),
+            )
+        } else {
+            (
+                motion::enter(
+                    div().child(panel),
+                    ElementId::NamedInteger(format!("{id}-in").into(), serial),
+                    st.animations,
+                    motion::From::Below(10.0),
+                    motion::BASE,
+                    Duration::ZERO,
+                ),
+                motion::enter(
+                    div().absolute().inset_0().bg(st.c(|c| c.scrim)),
+                    ElementId::NamedInteger(format!("{id}-scrim").into(), serial),
+                    st.animations,
+                    motion::From::Fade,
+                    motion::BASE,
+                    Duration::ZERO,
+                ),
+            )
+        };
         div()
             .id(SharedString::from(format!("{id}-layer")))
             .absolute()

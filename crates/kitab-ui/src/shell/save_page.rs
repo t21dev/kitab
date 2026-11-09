@@ -68,10 +68,15 @@ impl Workspace {
     }
 
     pub(super) fn close_save_page(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.tools.save.take().is_some() {
-            self.refocus(window, cx);
-            cx.notify();
+        if self.tools.save.is_none() {
+            return;
         }
+        self.exit_modal("save-page", window, cx, |ws, window, cx| {
+            if ws.tools.save.take().is_some() {
+                ws.refocus(window, cx);
+                cx.notify();
+            }
+        });
     }
 
     fn set_save_kind(&mut self, kind: PageExport, cx: &mut Context<Self>) {

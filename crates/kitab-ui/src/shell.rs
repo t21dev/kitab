@@ -133,6 +133,10 @@ pub struct Workspace {
     restoring: bool,
     /// A setting picked from search: scrolled to and glowing.
     settings_found: Option<crate::settings_view::Found>,
+    /// A dialog playing its exit (its id and serial) before it's dropped.
+    modal_exit: Option<(&'static str, u64)>,
+    /// Each dialog's serial as last drawn, to tell a reopened one from one leaving.
+    modal_serials: std::collections::HashMap<&'static str, u64>,
     /// Where the Settings body is scrolled; each section starts at the top.
     settings_scroll: gpui::ScrollHandle,
     /// The window may close now: unsaved changes were saved or let go.
@@ -244,6 +248,8 @@ impl Workspace {
             born: std::time::Instant::now(),
             restoring: false,
             settings_found: None,
+            modal_exit: None,
+            modal_serials: std::collections::HashMap::new(),
             settings_scroll: gpui::ScrollHandle::new(),
             close_anyway: false,
             window_active: true,
@@ -1658,13 +1664,20 @@ impl Workspace {
                                 .on_click(cx.listener(|ws, _, _, cx| ws.toggle_sidebar(cx))),
                         )
                     });
-                d.child(contents_head).child(
+                // Switching panes: the new one rises in, as Settings sections do.
+                d.child(contents_head).child(motion::enter(
                     div()
                         .id("toc-scroll")
+                        .relative()
                         .flex_1()
                         .overflow_y_scroll()
                         .child(col),
-                )
+                    ElementId::NamedInteger("side-pane".into(), pane as u64),
+                    st.animations,
+                    motion::From::Below(6.0),
+                    motion::BASE,
+                    Duration::ZERO,
+                ))
             })
             .into_any_element()
     }

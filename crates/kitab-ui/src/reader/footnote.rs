@@ -6,6 +6,7 @@
 //! the pages' characters off the UI thread (`kitab_core::notes`).
 
 use super::*;
+use gpui::ElementId;
 use kitab_core::notes::{is_note_mark, note_text, text_in};
 use kitab_core::{Link, LinkTarget};
 
@@ -88,7 +89,7 @@ impl Reader {
                 gpui::anchored()
                     .position(n.at + gpui::point(px(-12.0), px(14.0)))
                     .snap_to_window_with_margin(px(12.0))
-                    .child(
+                    .child(crate::motion::enter(
                         div()
                             .id("footnote")
                             .occlude()
@@ -139,7 +140,16 @@ impl Reader {
                                     .text_color(st.c(|c| c.text))
                                     .child(n.text.clone()),
                             ),
-                    ),
+                        // Each note opens with a short drop from its mark.
+                        ElementId::NamedInteger(
+                            "footnote-in".into(),
+                            (f32::from(n.at.x) as u64) << 20 ^ f32::from(n.at.y) as u64,
+                        ),
+                        st.animations,
+                        crate::motion::From::Above(4.0),
+                        crate::motion::FAST,
+                        std::time::Duration::ZERO,
+                    )),
             )
             .with_priority(1)
             .into_any_element(),

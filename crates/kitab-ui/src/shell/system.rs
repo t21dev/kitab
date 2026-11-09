@@ -561,29 +561,32 @@ impl Workspace {
         cx.notify();
     }
 
-    fn close_update(&mut self, _: &mut Window, cx: &mut Context<Self>) {
-        self.system.update_open = false;
-        cx.notify();
+    fn close_update(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.system.update_open {
+            return;
+        }
+        self.exit_modal("update", window, cx, |ws, _, cx| {
+            ws.system.update_open = false;
+            cx.notify();
+        });
     }
 
     /// Later: hide this version's pill until a newer one comes out.
-    fn skip_update(&mut self, cx: &mut Context<Self>) {
+    fn skip_update(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if let UpdateState::Available(r) = &self.system.update {
             let v = r.version.clone();
             self.change_style(&move |s: &mut Style| s.skipped_update = v.clone(), cx);
         }
-        self.system.update_open = false;
-        cx.notify();
+        self.close_update(window, cx);
     }
 
     /// Download: the release page in the browser. Kitab never installs
     /// anything by itself.
-    fn download_update(&mut self, cx: &mut Context<Self>) {
+    fn download_update(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if let UpdateState::Available(r) = &self.system.update {
             cx.open_url(&r.url);
         }
-        self.system.update_open = false;
-        cx.notify();
+        self.close_update(window, cx);
     }
 
     /// The title bar's "Update" pill, when a newer release is out and wasn't
@@ -724,12 +727,12 @@ impl Workspace {
                     .child(
                         dialog_button(st, "update-later", "Skip this version", false)
                             .tip("Hide the Update button until a newer version")
-                            .on_click(cx.listener(|ws, _, _, cx| ws.skip_update(cx))),
+                            .on_click(cx.listener(|ws, _, window, cx| ws.skip_update(window, cx))),
                     )
                     .child(
                         dialog_button(st, "update-download", "Download", true)
                             .tip("Open the release page in your browser")
-                            .on_click(cx.listener(|ws, _, _, cx| ws.download_update(cx))),
+                            .on_click(cx.listener(|ws, _, window, cx| ws.download_update(window, cx))),
                     ),
             );
         let serial = self.system.update_serial;

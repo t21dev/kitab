@@ -412,7 +412,18 @@ impl Reader {
             && let FieldKind::Choice { options, .. } = &c.kind
         {
             let r = rect_to_view(c.rect, size, self.rotation, ppt);
-            out.push(self.choices(c, options, r, st, cx));
+            let list = self.choices(c, options, r, st, cx);
+            out.push(crate::motion::enter(
+                div().absolute().size_full().child(list),
+                gpui::ElementId::NamedInteger(
+                    "form-choices-in".into(),
+                    u64::from(c.page) << 32 | u64::from(c.index),
+                ),
+                st.animations,
+                crate::motion::From::Above(4.0),
+                crate::motion::FAST,
+                std::time::Duration::ZERO,
+            ));
         }
         out
     }

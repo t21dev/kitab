@@ -22,12 +22,24 @@ pub(super) struct Palette {
     hits: Vec<usize>,
     selected: usize,
     scroll: ScrollHandle,
+    /// Per opening, so its entrance plays each time.
+    serial: u64,
     _sub: Subscription,
 }
 
+/// Openings of the palette so far.
+static OPENED: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
 impl Workspace {
     pub(super) fn open_palette(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.palette.is_some() {
+        if let Some(p) = self.palette.as_ref() {
+            // Asked for again while it was leaving: it stays.
+            if self.modal_exit == Some(("palette", p.serial)) {
+                self.modal_exit = None;
+                p.field.read(cx).focus(window);
+                cx.notify();
+                return;
+            }
             return self.close_palette(window, cx);
         }
         self.menu = None;
@@ -56,16 +68,22 @@ impl Workspace {
             hits: matches("", self.active.is_some()),
             selected: 0,
             scroll: ScrollHandle::new(),
+            serial: OPENED.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
             _sub: sub,
         });
         cx.notify();
     }
 
     pub(super) fn close_palette(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.palette.take().is_some() {
-            self.refocus(window, cx);
-            cx.notify();
+        if self.palette.is_none() {
+            return;
         }
+        self.exit_modal("palette", window, cx, |ws, window, cx| {
+            if ws.palette.take().is_some() {
+                ws.refocus(window, cx);
+                cx.notify();
+            }
+        });
     }
 
     /// Run the chosen command (or `pick`), on whatever had focus before.
@@ -240,7 +258,46 @@ impl Workspace {
                     .font_weight(FontWeight::NORMAL)
                     .child("↑ ↓ to choose · Enter to run · Esc to close"),
             );
-        // No motion: the palette opens from a key, often many times a day.
+        // It opens from a key, often many times a day: a quick fade and a
+        // 4 px drop, short enough never to be in the way.
+        let serial = self.palette.as_ref().map_or(0, |p| p.serial);
+        self.modal_serials.insert("palette", serial);
+        let leaving = self.modal_exit == Some(("palette", serial));
+        let (panel, scrim) = if leaving {
+            (
+                crate::motion::exit(
+                    div().child(panel),
+                    ElementId::NamedInteger("palette-out".into(), serial),
+                    crate::motion::From::Above(4.0),
+                    crate::motion::EXIT_FAST,
+                ),
+                crate::motion::exit(
+                    div().absolute().inset_0().bg(st.c(|c| c.scrim)),
+                    ElementId::NamedInteger("palette-scrim-out".into(), serial),
+                    crate::motion::From::Fade,
+                    crate::motion::EXIT_FAST,
+                ),
+            )
+        } else {
+            (
+                crate::motion::enter(
+                    div().child(panel),
+                    ElementId::NamedInteger("palette-in".into(), serial),
+                    st.animations,
+                    crate::motion::From::Above(4.0),
+                    crate::motion::FAST,
+                    std::time::Duration::ZERO,
+                ),
+                crate::motion::enter(
+                    div().absolute().inset_0().bg(st.c(|c| c.scrim)),
+                    ElementId::NamedInteger("palette-scrim".into(), serial),
+                    st.animations,
+                    crate::motion::From::Fade,
+                    crate::motion::FAST,
+                    std::time::Duration::ZERO,
+                ),
+            )
+        };
         Some(
             div()
                 .id("palette-layer")
@@ -259,7 +316,7 @@ impl Workspace {
                     MouseButton::Left,
                     cx.listener(|ws, _, window, cx| ws.close_palette(window, cx)),
                 )
-                .child(div().absolute().inset_0().bg(st.c(|c| c.scrim)))
+                .child(scrim)
                 .child(panel)
                 .into_any_element(),
         )

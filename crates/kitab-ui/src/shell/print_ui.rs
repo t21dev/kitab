@@ -267,11 +267,16 @@ impl Workspace {
     }
 
     pub(super) fn close_print(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.print.take().is_some() {
-            self.finish_md_print();
-            self.refocus(window, cx);
-            cx.notify();
+        if self.print.is_none() {
+            return;
         }
+        self.exit_modal("print", window, cx, |ws, window, cx| {
+            if ws.print.take().is_some() {
+                ws.finish_md_print();
+                ws.refocus(window, cx);
+                cx.notify();
+            }
+        });
     }
 
     /// The pages the sheet asks for (0-based), or why it can't.

@@ -344,15 +344,25 @@ pub fn panel(
                 .flex_1()
                 .overflow_y_scroll()
                 .track_scroll(scroll)
-                .child(
+                // Each section (and the search results) rises in when shown.
+                .child(crate::motion::enter(
                     div()
+                        .relative()
                         .flex()
                         .flex_col()
                         .gap(px(28.0))
                         .px(px(24.0))
                         .py(px(22.0))
                         .child(body),
-                ),
+                    ElementId::NamedInteger(
+                        "settings-section".into(),
+                        section as u64 + if searching { 100 } else { 0 },
+                    ),
+                    st.animations,
+                    crate::motion::From::Below(6.0),
+                    crate::motion::BASE,
+                    std::time::Duration::ZERO,
+                )),
         );
 
     // Sized from the window: the panel sits in auto-sized wrappers (motion),

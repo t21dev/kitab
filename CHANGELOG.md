@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Dialogs (Print, Password, Sign, Page tools, Save page, Extract, naming a collection, the update notes) leave the way they came, fading and sinking, instead of vanishing. The command palette fades in and out quickly, footnotes, the note writer and a form list's choices open with a short drop, and switching Settings sections or sidebar panes brings the new one in with a gentle rise.
+- Picking a setting from Settings search scrolls to it and makes it glow briefly; each section opens at the top.
+
+### Fixed
+- Settings › About › View update did nothing: the update notes opened under the Settings window.
+- The update notes no longer give the new version's release date to the one you have.
+
 ## [0.3.2] - 2026-11-09
 
 ### Added

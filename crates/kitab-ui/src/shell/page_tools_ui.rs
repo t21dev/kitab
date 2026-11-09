@@ -149,10 +149,15 @@ impl Workspace {
     }
 
     pub(super) fn close_page_tools(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.page_tools.take().is_some() {
-            self.refocus(window, cx);
-            cx.notify();
+        if self.page_tools.is_none() {
+            return;
         }
+        self.exit_modal("page-tools", window, cx, |ws, window, cx| {
+            if ws.page_tools.take().is_some() {
+                ws.refocus(window, cx);
+                cx.notify();
+            }
+        });
     }
 
     /// The operation the sheet describes, or why it can't run yet.

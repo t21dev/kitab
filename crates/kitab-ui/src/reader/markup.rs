@@ -811,7 +811,7 @@ impl Reader {
         };
         Some(
             gpui::deferred(
-                gpui::anchored().position(at).child(
+                gpui::anchored().position(at).child(crate::motion::enter(
                     div()
                         .id("markup-writer")
                         .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
@@ -854,7 +854,15 @@ impl Reader {
                                         .on_click(cx.listener(|r, _, _, cx| r.finish_writing(cx))),
                                 ),
                         ),
-                ),
+                    gpui::ElementId::NamedInteger(
+                        "writer-in".into(),
+                        u64::from(w.page) << 32 ^ (w.at.x as u64) << 16 ^ w.at.y as u64,
+                    ),
+                    st.animations,
+                    crate::motion::From::Above(4.0),
+                    crate::motion::FAST,
+                    std::time::Duration::ZERO,
+                )),
             )
             .into_any_element(),
         )

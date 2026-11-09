@@ -100,10 +100,15 @@ impl Workspace {
     }
 
     pub(super) fn close_password(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.password.take().is_some() {
-            self.refocus(window, cx);
-            cx.notify();
+        if self.password.is_none() {
+            return;
         }
+        self.exit_modal("password", window, cx, |ws, window, cx| {
+            if ws.password.take().is_some() {
+                ws.refocus(window, cx);
+                cx.notify();
+            }
+        });
     }
 
     /// The new password, or why the sheet can't go on yet (an empty reason
