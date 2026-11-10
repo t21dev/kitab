@@ -127,6 +127,94 @@ impl PageCache {
     pub fn bytes(&self) -> usize {
         self.bytes
     }
+
+    /// The most recently used rendering of `page` (any zoom), if there is one.
+    pub fn newest_key_for_page(&self, page: u32, rotation: u16) -> Option<PageKey> {
+        self.order
+            .iter()
+            .rev()
+            .find(|k| k.page == page && k.rotation == rotation && !self.stale.contains(k))
+            .copied()
+    }
+
+    /// The image for `key` without touching the eviction order.
+    pub fn peek(&self, key: &PageKey) -> Option<Arc<RenderImage>> {
+        self.map.get(key).map(|(i, _)| i.clone())
+    }
+
+    /// Keep only `keep`; everything else is evicted (a hidden tab keeps
+    /// what it shows and nothing more).
+    pub fn retain_only(&mut self, keep: &[PageKey]) {
+        let gone: Vec<PageKey> = self
+            .map
+            .keys()
+            .filter(|k| !keep.contains(k))
+            .copied()
+            .collect();
+        for key in gone {
+            self.remove(&key);
+        }
+    }
+
+    /// Evict one rendering, if it is there.
+    pub fn remove(&mut self, key: &PageKey) {
+        if let Some((img, b)) = self.map.remove(key) {
+            self.bytes -= b;
+            self.evicted.push(img);
+            self.stale.remove(key);
+            if let Some(pos) = self.order.iter().position(|k| k == key) {
+                self.order.remove(pos);
+            }
+        }
+    }
+}
+
+/// A smaller copy of `image` with at most `max_pixels` pixels (box filter,
+/// whole-number factor), with its size in bytes and the factor used. `None`
+/// when it is already that small. The channel order is kept as it is.
+pub fn shrink(image: &RenderImage, max_pixels: u64) -> Option<(Arc<RenderImage>, usize, u32)> {
+    let size = image.size(0);
+    let (w, h) = (size.width.0.max(0) as u32, size.height.0.max(0) as u32);
+    let pixels = u64::from(w) * u64::from(h);
+    if pixels <= max_pixels || w == 0 || h == 0 {
+        return None;
+    }
+    let f = ((pixels as f64 / max_pixels as f64).sqrt().ceil() as u32).max(2);
+    let (nw, nh) = (w.div_ceil(f), h.div_ceil(f));
+    let src = image.as_bytes(0)?;
+    if src.len() < (w as usize) * (h as usize) * 4 {
+        return None;
+    }
+    let mut out = vec![0u8; nw as usize * nh as usize * 4];
+    for ny in 0..nh {
+        let y0 = ny * f;
+        let y1 = (y0 + f).min(h);
+        for nx in 0..nw {
+            let x0 = nx * f;
+            let x1 = (x0 + f).min(w);
+            let mut sum = [0u32; 4];
+            for y in y0..y1 {
+                let row = (y as usize * w as usize + x0 as usize) * 4;
+                for px in src[row..row + (x1 - x0) as usize * 4].chunks_exact(4) {
+                    for c in 0..4 {
+                        sum[c] += u32::from(px[c]);
+                    }
+                }
+            }
+            let n = (y1 - y0) * (x1 - x0);
+            let at = (ny as usize * nw as usize + nx as usize) * 4;
+            for c in 0..4 {
+                out[at + c] = (sum[c] / n) as u8;
+            }
+        }
+    }
+    let bytes = out.len();
+    let buffer = image::RgbaImage::from_raw(nw, nh, out)?;
+    Some((
+        Arc::new(RenderImage::new([image::Frame::new(buffer)])),
+        bytes,
+        f,
+    ))
 }
 
 #[cfg(test)]
@@ -192,6 +280,42 @@ mod tests {
         );
         c.insert(k, img(), 40);
         assert!(c.get(&k).is_some());
+    }
+
+    #[test]
+    fn retain_only_keeps_what_shows() {
+        let mut c = PageCache::new(1_000);
+        let k = |page| PageKey {
+            page,
+            scale_key: 64,
+            rotation: 0,
+        };
+        for p in 0..4 {
+            c.insert(k(p), img(), 40);
+        }
+        c.retain_only(&[k(2)]);
+        assert_eq!(c.bytes(), 40);
+        assert_eq!(c.take_evicted().len(), 3, "evicted ones are handed back");
+        assert!(c.contains(&k(2)));
+        assert_eq!(c.newest_key_for_page(2, 0), Some(k(2)));
+        assert_eq!(c.newest_key_for_page(1, 0), None);
+    }
+
+    #[test]
+    fn shrink_averages_and_bounds_pixels() {
+        let mut buf = RgbaImage::new(40, 30);
+        for (x, _, p) in buf.enumerate_pixels_mut() {
+            *p = image::Rgba(if x % 2 == 0 { [0, 0, 0, 255] } else { [200, 100, 50, 255] });
+        }
+        let big = RenderImage::new([Frame::new(buf)]);
+        let (small, bytes, f) = shrink(&big, 300).expect("shrinks");
+        let s = small.size(0);
+        assert!(u64::from(s.width.0 as u32) * u64::from(s.height.0 as u32) <= 300);
+        assert_eq!(bytes, (s.width.0 * s.height.0 * 4) as usize);
+        assert!(f >= 2);
+        let px = &small.as_bytes(0).unwrap()[..4];
+        assert_eq!(px, &[100, 50, 25, 255], "a box average of the two colours");
+        assert!(shrink(&big, 10_000).is_none(), "already small enough");
     }
 
     #[test]

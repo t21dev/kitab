@@ -110,6 +110,14 @@ pub struct Workspace {
     tab_scroll: gpui::ScrollHandle,
     /// Scroll the active tab into view on the next frame (it may not be laid out yet).
     reveal_tab: bool,
+    /// The tab showing, and the one that showed before it: out of sight,
+    /// the one left last keeps its pages sharp (reader/park.rs).
+    shown_tab: Option<gpui::EntityId>,
+    left_tab: Option<gpui::EntityId>,
+    /// The width the tabs got last frame (crowded tabs fill the strip).
+    tab_w: f32,
+    /// The strip's lined-up scroll offset, held for up to this many frames.
+    tab_snap: Option<(f32, u32)>,
     /// Minimal mode: the pointer is at the top edge, so the window buttons show.
     peek: bool,
     /// What the sidebar shows for the document: contents or marks.
@@ -239,6 +247,10 @@ impl Workspace {
             tools: ToolsState::new(cx),
             tab_scroll: gpui::ScrollHandle::new(),
             reveal_tab: false,
+            shown_tab: None,
+            left_tab: None,
+            tab_w: 0.0,
+            tab_snap: None,
             peek: false,
             system: SystemInfo::default(),
             palette: None,
@@ -481,6 +493,11 @@ impl Workspace {
                     ReaderEvent::Password => this.open_password(window, cx),
                     ReaderEvent::SignaturePlaced(spot) => this.signature_placed(*spot, cx),
                     ReaderEvent::Signatures => cx.notify(),
+                    ReaderEvent::Released => {
+                        for image in reader.update(cx, |r, _| r.take_released()) {
+                            let _ = window.drop_image(image);
+                        }
+                    }
                     ReaderEvent::ShowSignatures => {
                         this.side_pane = SidePane::Signatures;
                         if !this.sidebar {
@@ -525,13 +542,43 @@ impl Workspace {
     }
 
     /// Only the tab showing looks at its file for changes (Markdown live
-    /// reload); the split view's other pane shows too.
+    /// reload); the split view's other pane shows too. Tabs out of sight let
+    /// go of their rendered pages but those they show (reader/park.rs).
     fn watch_active(&mut self, cx: &mut Context<Self>) {
         let active = self.active;
         let split = self.tools.split.clone();
+        let shown = active.and_then(|i| self.tabs.get(i)).map(|t| t.entity_id());
+        if shown != self.shown_tab {
+            if let Some(left) = self.shown_tab {
+                self.left_tab = Some(left);
+                // Sharp for going straight back; a minute out of sight,
+                // it keeps a stand-in like the others.
+                self.after(Duration::from_secs(60), cx, move |ws, cx| {
+                    if ws.left_tab != Some(left) || ws.shown_tab == Some(left) {
+                        return;
+                    }
+                    let split = ws.tools.split.clone();
+                    if let Some(t) = ws.tabs.iter().find(|t| t.entity_id() == left).cloned()
+                        && split.as_ref() != Some(&t)
+                    {
+                        t.update(cx, |r, cx| r.park(false, cx));
+                    }
+                });
+            }
+            self.shown_tab = shown;
+        }
+        let left = self.left_tab;
         for (i, t) in self.tabs.clone().into_iter().enumerate() {
             let on = Some(i) == active || split.as_ref() == Some(&t);
-            t.update(cx, |r, cx| r.set_watched(on, cx));
+            let keep_sharp = left == Some(t.entity_id());
+            t.update(cx, |r, cx| {
+                r.set_watched(on, cx);
+                if on {
+                    r.unpark(cx);
+                } else {
+                    r.park(keep_sharp, cx);
+                }
+            });
         }
     }
 
@@ -616,6 +663,10 @@ impl Workspace {
             self.tools.split = None;
         }
         closing.update(cx, |r, cx| r.save_now(cx));
+        // Its pages' GPU memory goes with it.
+        for image in closing.update(cx, |r, _| r.release_all()) {
+            let _ = window.drop_image(image);
+        }
         self.remember_closed(closing.read(cx).path.clone());
         if self.tabs.is_empty() {
             self.show_home(window, cx);
@@ -755,6 +806,10 @@ fn flatten(items: &[OutlineItem], depth: usize, out: &mut Vec<(usize, OutlineIte
     }
 }
 
+/// The title bar's empty stretch that is always kept to drag the window by,
+/// however many tabs are open.
+const DRAG_MIN: f32 = 56.0;
+
 impl Workspace {
     fn title_bar(&mut self, st: &Style, window: &Window, cx: &mut Context<Self>) -> AnyElement {
         let home_on = self.active.is_none();
@@ -785,11 +840,22 @@ impl Workspace {
                 )
             });
 
-        // Room for tabs: the bar minus Home, the divider, the "All tabs"
-        // button, a 96 px drag area and the three window buttons. Tabs share it
-        // down to 120 px each; past that the strip scrolls.
+        // Room for tabs, roughly: the bar minus Home, the divider, the "All
+        // tabs" button, the drag area, the tab count and the three window
+        // buttons. It only sizes the tabs (they share it down to 120 px each)
+        // and decides when the title-bar buttons give way. The strip's own
+        // width comes from the layout: it takes whatever the other items
+        // leave and scrolls past that, so the bar has no gap when this is a
+        // little off, and the window buttons never leave the screen.
         let n = self.tabs.len().max(1) as f32;
-        let base = 8.0 + 2.0 * st.m().icon_button + 17.0 + 40.0 + 96.0 + 3.0 * 46.0 + 12.0;
+        let count_w = if st.tab_count && !self.tabs.is_empty() {
+            // The chip (two digits), its margin and the bar's gap.
+            12.0 + 7.0 * self.tabs.len().to_string().len() as f32 + 6.0 + 4.0
+        } else {
+            0.0
+        };
+        let base =
+            8.0 + 2.0 * st.m().icon_button + 17.0 + 40.0 + DRAG_MIN + 3.0 * 46.0 + 12.0 + count_w;
         let win_w = f32::from(window.viewport_size().width);
         // The title-bar buttons give way (to More alone) before the tabs do.
         let squeezed = win_w - base - self.title_actions_width(st, false) < 140.0;
@@ -797,9 +863,61 @@ impl Workspace {
         cx.set_global(TitleSqueezed(squeezed));
         let fixed = base + self.title_actions_width(st, squeezed);
         let room = (win_w - fixed).max(0.0);
-        let tab_w = ((room - 4.0 * n) / n).clamp(120.0, 220.0);
         let crowded = n * 224.0 > room;
-        if self.reveal_tab {
+        // Crowded: a whole number of tabs fills the strip as the layout made
+        // it last frame, so the strip never ends on half a tab (whose empty
+        // end looked like a gap after Home). Scrolling to the active tab then
+        // lands on a tab's edge too.
+        let strip_w = f32::from(self.tab_scroll.bounds().size.width);
+        let tab_w = if crowded && strip_w > 0.0 {
+            let k = ((strip_w + 4.0) / 124.0).floor().max(1.0);
+            ((strip_w + 4.0) / k - 4.0).max(120.0)
+        } else {
+            ((room - 4.0 * n) / n).clamp(120.0, 220.0)
+        };
+        let resized = (tab_w - self.tab_w).abs() > 0.5;
+        if resized {
+            // The strip's width settles after a resize: draw once more with
+            // it, and line the strip up again on that frame.
+            self.tab_w = tab_w;
+            self.reveal_tab = true;
+            cx.notify();
+        }
+        if self.reveal_tab && !resized && crowded && strip_w > 0.0 {
+            // Snap so the strip starts on a tab's edge with the active tab in
+            // view (GPUI's scroll_to_item does nothing for a tab already in
+            // view, which left half a tab showing after a resize). Only here,
+            // on a switch or a resize: the wheel scrolls freely.
+            if let Some(a) = self.active {
+                let step = tab_w + 4.0;
+                let k = (((strip_w + 4.0) / step).floor() as usize).max(1);
+                let off = -f32::from(self.tab_scroll.offset().x);
+                let mut first = (off / step).round().max(0.0) as usize;
+                if a < first {
+                    first = a;
+                } else if a >= first + k {
+                    first = a + 1 - k;
+                }
+                // From the tabs there are now (last frame's may be one short).
+                let max = (n * step - 4.0 - strip_w).max(0.0);
+                let x = (first as f32 * step).min(max);
+                self.tab_scroll.set_offset(gpui::point(px(-x), px(0.0)));
+                // A tab sliding in is narrower for a few frames and GPUI
+                // clamps the offset to that: hold it until it sticks.
+                self.tab_snap = Some((x, 30));
+            }
+            self.reveal_tab = false;
+            cx.notify();
+        } else if let Some((x, frames)) = self.tab_snap {
+            let off = -f32::from(self.tab_scroll.offset().x);
+            if (off - x).abs() < 0.5 || frames == 0 {
+                self.tab_snap = None;
+            } else {
+                self.tab_scroll.set_offset(gpui::point(px(-x), px(0.0)));
+                self.tab_snap = Some((x, frames - 1));
+                cx.notify();
+            }
+        } else if self.reveal_tab && !resized {
             if let Some(a) = self.active {
                 self.tab_scroll.scroll_to_item(a);
                 // GPUI applies it once the tab has been laid out; until then
@@ -815,8 +933,9 @@ impl Workspace {
         }
         let mut strip = div()
             .id("tab-strip")
-            .flex_none()
-            .max_w(px(room))
+            // As wide as its tabs, at most what the bar has left (the drag
+            // area keeps DRAG_MIN): it gives way first, then scrolls.
+            .flex_shrink()
             .flex()
             .items_center()
             .gap(px(4.0))
@@ -887,9 +1006,10 @@ impl Workspace {
                 .pl(px(10.0))
                 .pr(px(6.0))
                 .flex_none()
-                .max_w(px(220.0))
-                // Crowded: every tab gets an equal share, at least 120 px.
+                // Crowded: every tab gets an equal share, at least 120 px,
+                // exactly (they tile the strip); otherwise up to 220 px.
                 .when(crowded, |d| d.w(px(tab_w)))
+                .when(!crowded, |d| d.max_w(px(220.0)))
                 .rounded(st.px(|m| m.control_radius))
                 .text_size(st.px(|m| m.ui_text))
                 .text_color(if on {
@@ -1017,7 +1137,7 @@ impl Workspace {
                 .id("drag")
                 .flex_1()
                 // Always leave room to drag the window.
-                .min_w(px(96.0))
+                .min_w(px(DRAG_MIN))
                 .h_full()
                 .window_control_area(WindowControlArea::Drag),
         )

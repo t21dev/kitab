@@ -370,6 +370,13 @@ impl DocEngine for MupdfEngine {
         kitab_mupdf::tools::merge(inputs, out)
     }
 
+    fn release_extra(&self, doc: DocHandle) {
+        let id = self.ids.lock().ok().and_then(|ids| ids.get(&doc).copied());
+        if let Some(id) = id {
+            self.engine.release_helpers(id);
+        }
+    }
+
     fn close(&self, doc: DocHandle) {
         let id = self.ids.lock().ok().and_then(|mut ids| ids.remove(&doc));
         if let Some(id) = id {

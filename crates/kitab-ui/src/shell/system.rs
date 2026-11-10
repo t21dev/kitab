@@ -304,15 +304,25 @@ impl Workspace {
 
     /// The window went to the background: if it's still there in a little
     /// while, MuPDF trims its cache (decoded fonts and images), which costs
-    /// nothing you can see. Rendered pages stay, so no tab redraws later.
+    /// nothing you can see, and hidden tabs keep only small stand-ins of
+    /// their pages. The tabs showing keep theirs, so nothing redraws later.
     pub(crate) fn release_when_idle(&mut self, cx: &mut Context<Self>) {
         const AFTER: std::time::Duration = std::time::Duration::from_secs(20);
         self.after(AFTER, cx, |ws, cx| {
             if ws.window_active {
                 return;
             }
-            // Only MuPDF's own store: tabs keep their rendered pages, so
-            // coming back to one never redraws it (that showed as flicker).
+            // MuPDF's store, and the sharp pages of the tab left last (it
+            // keeps a small stand-in of them). The tabs showing keep their
+            // rendered pages, so coming back to the window never redraws
+            // them (that showed as flicker).
+            let shown = ws.shown_tab;
+            let split = ws.tools.split.clone();
+            for t in ws.tabs.clone() {
+                if Some(t.entity_id()) != shown && split.as_ref() != Some(&t) {
+                    t.update(cx, |r, cx| r.park(false, cx));
+                }
+            }
             let engine = ws.engine.clone();
             cx.background_spawn(async move { engine.shrink_caches() })
                 .detach();

@@ -232,5 +232,8 @@ pub trait DocEngine: Send + Sync + 'static {
     /// Drop cached engine data (decoded fonts and images, parsed pages) that
     /// no open page is using (Settings › Advanced › Clear cached pages).
     fn shrink_caches(&self) {}
+    /// The document's tab went out of sight: close any extra handles kept
+    /// to render it faster (they open again on the next render).
+    fn release_extra(&self, _doc: DocHandle) {}
     fn close(&self, doc: DocHandle);
 }

@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Kitab Reader is on the Microsoft Store. The Store version sets up its file types and File Explorer thumbnails when it installs, and leaves updates to the Store, so it doesn't check GitHub for them. Settings › File types and Settings › About say so.
+
+### Fixed
+- Memory no longer grows with every tab. A tab out of sight keeps only the pages it showed: the one you just left stays sharp for a minute, so going back and forth is instant, and older ones keep a small soft copy that shows at once and sharpens as the page draws again. Nineteen open PDFs, most of them large scans, went from about 2 GB to about 230 MB in a maximised window (850 MB to 165 MB at 1400×900).
+- MuPDF's cache of decoded images and fonts is trimmed after every piece of work, not only after drawing a page, so a big artbook left in a background tab no longer holds hundreds of megabytes.
+- Closing a tab frees its pages' graphics memory too.
+- With many tabs open, the window's close button no longer slides off the edge of the title bar. The tabs fill the room the bar has left, show whole tabs only (no half-hidden tab after Home), and the gap kept for dragging the window is smaller.
+
 ## [0.3.6] - 2026-11-09
 
 ### Fixed

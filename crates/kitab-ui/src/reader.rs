@@ -38,6 +38,7 @@ pub(crate) struct HDrag {
 }
 mod mermaid;
 mod pages;
+mod park;
 mod place_sig;
 mod present;
 mod scrollbar;
@@ -123,6 +124,9 @@ pub enum ReaderEvent {
     Password,
     /// The signatures were verified (or verified again).
     Signatures,
+    /// Out of sight, it let go of rendered pages: the workspace frees
+    /// their GPU memory (`Reader::take_released`).
+    Released,
     /// The status bar's signature badge: show the Signatures pane.
     ShowSignatures,
     /// Sign…: the page and box (page points from the top-left) the user
@@ -263,6 +267,13 @@ pub struct Reader {
     note: Option<footnote::NotePop>,
     /// Bumped to end a live-reload loop.
     watch_gen: u64,
+    /// Out of sight (another tab shows): it keeps only what it showed, and
+    /// renders still arriving are let go (see `park`).
+    parked: bool,
+    /// Smaller stand-ins of its pages are being made (`park`).
+    shrinking: bool,
+    /// The window's scale factor at the last frame.
+    scale_factor: f32,
 }
 
 /// What a page render is for: the reading view (a quick preview or the sharp
@@ -355,6 +366,9 @@ impl Reader {
             watched: false,
             note: None,
             watch_gen: 0,
+            parked: false,
+            shrinking: false,
+            scale_factor: window.scale_factor(),
         };
         this.load_file_size(cx);
         this.open(None, cx);
@@ -1256,7 +1270,10 @@ impl Reader {
                             eprintln!("blank page={page} ms={}", since.elapsed().as_millis());
                         }
                         let bytes = bmp.byte_size();
-                        if let Some(buffer) = RgbaImage::from_raw(bmp.width, bmp.height, bmp.bgra) {
+                        if this.parked {
+                            // The tab went out of sight meanwhile: it keeps
+                            // only what it showed (it renders again on return).
+                        } else if let Some(buffer) = RgbaImage::from_raw(bmp.width, bmp.height, bmp.bgra) {
                             let image = Arc::new(RenderImage::new([Frame::new(buffer)]));
                             this.cache.insert(key, image, bytes);
                             cx.notify();
@@ -1617,6 +1634,7 @@ impl Focusable for Reader {
 impl Render for Reader {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let st = Style::get(cx).clone();
+        self.scale_factor = window.scale_factor();
         // Free GPU atlas space of pages the cache let go of.
         for image in self.cache.take_evicted() {
             let _ = window.drop_image(image);

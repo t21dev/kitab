@@ -64,7 +64,7 @@ pub use doc::{MAX_PAGES, MAX_PIXELS, MAX_SIDE_PX, REFLOW_EM, REFLOW_H, REFLOW_W,
 /// MuPDF's resource store limit (`FZ_STORE_DEFAULT`), shared by all workers.
 pub const STORE_LIMIT_BYTES: usize = 256 << 20;
 
-/// What MuPDF's store is trimmed back to after each render, as a share of
+/// What MuPDF's store is trimmed back to after each job, as a share of
 /// its limit: 48 MiB of fonts, images and decoded objects. Plenty for the
 /// pages around the reader; its 256 MiB default made a long read grow by
 /// tens of megabytes that were never needed again.
@@ -144,6 +144,10 @@ fn worker_loop(rx: Receiver<Job>) {
     while let Ok(job) = rx.recv() {
         let Job { doc, run } = job;
         let outcome = catch_unwind(AssertUnwindSafe(|| run(&mut state)));
+        // Every job, not only renders (text, links, forms, find, closing a
+        // handle), can leave decoded images and fonts in the shared store:
+        // keep it near STORE_KEEP_PERCENT. Nearly free when it's under.
+        ffi::shrink_store(STORE_KEEP_PERCENT);
         if outcome.is_err()
             && let Some(id) = doc
             && let Some(slot) = state.docs.get_mut(&id)
@@ -432,11 +436,8 @@ impl Engine {
                 .docs
                 .get(&doc)
                 .ok_or_else(|| "the document was closed".to_string())?;
+            // The store is trimmed as the job ends (`worker_loop`).
             let bitmap = doc::render(&slot.doc, &req)?;
-            // Keep MuPDF's shared store near STORE_KEEP_BYTES: least
-            // recently used fonts and images go first, and only those no
-            // render holds. Nearly free when it's already under.
-            ffi::shrink_store(STORE_KEEP_PERCENT);
             Ok((!stale_on_worker()).then_some(bitmap))
         });
         counter.fetch_sub(1, Ordering::Relaxed);
@@ -673,6 +674,34 @@ impl Engine {
                 let _ = tx.send(Job {
                     doc: None,
                     run: Box::new(move |state| {
+                        // What the handle held goes back to the shared
+                        // store, trimmed as this job ends (`worker_loop`).
+                        state.docs.remove(&doc);
+                    }),
+                });
+            }
+        }
+    }
+
+    /// Close the extra handles `doc`'s render helpers opened (its tab went
+    /// out of sight). The document stays open on its own worker; a helper
+    /// opens it again on its next render, as after a relayout.
+    pub fn release_helpers(&self, doc: DocId) {
+        let helpers = match lock(&self.docs).get(&doc) {
+            Some(e) => e.helpers.clone(),
+            None => return,
+        };
+        let started: Vec<bool> = lock(&self.workers).iter().map(Option::is_some).collect();
+        for h in helpers {
+            if !started.get(h).copied().unwrap_or(false) {
+                continue; // never started: nothing open there
+            }
+            if let Ok(tx) = self.worker(h) {
+                let _ = tx.send(Job {
+                    doc: None,
+                    run: Box::new(move |state| {
+                        // What the handle held goes back to the shared
+                        // store, trimmed as this job ends (`worker_loop`).
                         state.docs.remove(&doc);
                     }),
                 });
