@@ -760,6 +760,17 @@ mod imp {
 }
 
 pub use imp::{DEFAULTS_PAGE, register, register_one, status, unregister};
+
+/// The system page where the user picks Kitab as the default app, or "".
+/// The Store build has no `RegisteredApplications` entry to point at (its
+/// manifest declares the types), so it opens the page itself.
+pub fn defaults_page() -> &'static str {
+    if cfg!(windows) && crate::packaged() {
+        "ms-settings:defaultapps"
+    } else {
+        DEFAULTS_PAGE
+    }
+}
 #[cfg(windows)]
 pub use imp::{register_thumbnails, unregister_thumbnails};
 

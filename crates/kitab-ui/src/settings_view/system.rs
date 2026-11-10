@@ -143,21 +143,39 @@ pub(super) fn keymap_row(ws: &WeakEntity<Workspace>, st: &Style) -> AnyElement {
 // ── File types ───────────────────────────────────────────────────────────
 
 pub(super) fn file_types(ws: &WeakEntity<Workspace>, info: &SystemInfo, st: &Style) -> AnyElement {
-    // Flatpak registers Kitab's file types itself when it installs.
-    if kitab_os::update::managed_by().is_some() {
+    // Flatpak and the Microsoft Store register Kitab's file types (and, on
+    // Windows, its thumbnails) themselves when they install it.
+    if let Some(by) = kitab_os::update::managed_by() {
+        let store = by != "Flatpak";
+        let (title, about) = if store {
+            (
+                "The Microsoft Store set up Kitab's file types",
+                "Explorer shows page thumbnails drawn by Kitab. To open PDFs and ebooks in Kitab by default, pick it in Default apps, or with Open with in File Explorer.",
+            )
+        } else {
+            (
+                "Flatpak set up Kitab's file types",
+                "To open PDFs and ebooks in Kitab by default, choose it in your system's Default Applications settings, or with Open With in your file manager.",
+            )
+        };
+        let control = if store {
+            button(
+                "assoc-apps",
+                "Open Default apps",
+                false,
+                st,
+                act(ws, |ws, cx| ws.open_default_apps(cx)),
+            )
+        } else {
+            div().into_any_element()
+        };
         return div()
             .flex()
             .flex_col()
             .child(group(
                 "Default app",
                 None,
-                rows(vec![icon_row(
-                    Some("file"),
-                    "Flatpak set up Kitab's file types",
-                    "To open PDFs and ebooks in Kitab by default, choose it in your system's Default Applications settings, or with Open With in your file manager.",
-                    div().into_any_element(),
-                    st,
-                )]),
+                rows(vec![icon_row(Some("file"), title, about, control, st)]),
                 st,
             ))
             .into_any_element();
@@ -747,7 +765,7 @@ pub(super) fn about(ws: &WeakEntity<Workspace>, info: &SystemInfo, st: &Style) -
                 rows(vec![icon_row(
                     Some("download"),
                     &format!("Updates come through {by}"),
-                    "Your software centre installs new versions, or run: flatpak update",
+                    kitab_os::update::managed_hint(by),
                     div().into_any_element(),
                     st,
                 )]),

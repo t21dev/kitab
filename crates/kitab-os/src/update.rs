@@ -11,10 +11,24 @@
 
 use std::cmp::Ordering;
 
-/// The package manager that updates Kitab, when it isn't Kitab's own
-/// business: Flatpak (whose sandbox gives Kitab no network either).
+/// The package manager that updates Kitab and sets up its file types, when
+/// it isn't Kitab's own business: Flatpak (whose sandbox gives Kitab no
+/// network either), or the Microsoft Store (an MSIX package, whose manifest
+/// declares the file types and which installs new versions itself).
 pub fn managed_by() -> Option<&'static str> {
+    if crate::packaged() {
+        return Some("the Microsoft Store");
+    }
     std::env::var_os("FLATPAK_ID").map(|_| "Flatpak")
+}
+
+/// How to get a new version from `managed_by`, for Settings › About.
+pub fn managed_hint(by: &str) -> &'static str {
+    if by == "Flatpak" {
+        "Your software centre installs new versions, or run: flatpak update"
+    } else {
+        "The Store installs new versions by itself. To check now, open the Microsoft Store and go to Downloads."
+    }
 }
 
 /// The project on GitHub.

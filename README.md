@@ -18,13 +18,21 @@ A **[t21 dev](https://github.com/t21dev)** project, by **[TriptoAfsin](https://g
 [![Latest release](https://img.shields.io/github/v/release/t21dev/kitab?style=flat-square)](https://github.com/t21dev/kitab/releases/latest)
 ![Built with Rust and GPUI](https://img.shields.io/badge/built%20with-Rust%20%2B%20GPUI-b7410e?style=flat-square)
 
+<br />
+
+<a href="https://apps.microsoft.com/detail/9P530F6TRMQ1"><img src="https://get.microsoft.com/images/en-us%20dark.svg" width="200" alt="Get it from Microsoft" /></a>
+
 </div>
 
 ---
 
 ## Download
 
-Get the latest version from [Releases](https://github.com/t21dev/kitab/releases/latest).
+**Windows:** the easiest way is the [Microsoft Store](https://apps.microsoft.com/detail/9P530F6TRMQ1). The Store build is signed, sets up file types and Explorer thumbnails, and updates itself.
+
+<a href="https://apps.microsoft.com/detail/9P530F6TRMQ1"><img src="https://get.microsoft.com/images/en-us%20dark.svg" width="200" alt="Get it from Microsoft" /></a>
+
+For every other system, or to install without the Store, get the latest version from [Releases](https://github.com/t21dev/kitab/releases/latest).
 
 | System | Download |
 |---|---|
@@ -37,6 +45,9 @@ Get the latest version from [Releases](https://github.com/t21dev/kitab/releases/
 Or install with a package manager:
 
 ```bash
+# Windows, winget (installs the Microsoft Store build)
+winget install 9P530F6TRMQ1 -s msstore
+
 # macOS, Homebrew
 brew install --cask t21dev/tap/kitab
 
@@ -45,7 +56,7 @@ scoop bucket add t21dev https://github.com/t21dev/scoop-bucket
 scoop install t21dev/kitab
 ```
 
-**Unsigned builds.** The downloads aren't code-signed yet. On Windows, SmartScreen may say "Windows protected your PC": choose More info, then Run anyway. On macOS, the first time, right-click Kitab in Applications and choose Open. Every release lists the SHA-256 checksum of each file.
+**Unsigned builds.** The downloads on Releases aren't code-signed yet (the Microsoft Store build is). On Windows, SmartScreen may say "Windows protected your PC": choose More info, then Run anyway. On macOS, the first time, right-click Kitab in Applications and choose Open. Every release lists the SHA-256 checksum of each file.
 
 **Flatpak.** Install the bundle with `flatpak install --user Kitab_*_x86_64.flatpak`; Flatpak fetches the Freedesktop runtime from [Flathub](https://flathub.org/setup). Kitab can read and save files in your home folder and on external drives, and has no network access: Flatpak brings the updates. To make it the default app for PDFs, use your system's Default Applications settings.
 

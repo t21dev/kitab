@@ -17,3 +17,12 @@ Every system uses `kitab --thumbnail` (crate `kitab-thumb`): page 1 of a documen
 ## Linux packages and Flatpak
 
 `tools/package.py` lays the Linux files out once (`/usr/bin`, `/usr/share/...`, with `linux/dev.t21.kitab.metainfo.xml` for software centres) and builds the `.tar.gz`, `.deb`, `.rpm` and `.AppImage` from them. `flatpak/dev.t21.kitab.yml` builds the Flatpak from source, offline; `flatpak/generate-sources.sh` writes the crate list it needs.
+
+## Microsoft Store (MSIX)
+
+`tools/package_msix.py <version>` builds `dist/Kitab_<version>_x64.msix`, the file uploaded in Partner Center. The release workflow builds it too and keeps it as the `kitab-msstore` workflow artifact, not as a release download. The package is unsigned because the Store signs it after certification.
+
+- `windows/msix/AppxManifest.xml` is the template. Its `Identity` (`TriptoAfsin.KitabReader`, `CN=83EC5113-…`) and `PublisherDisplayName` are the values Partner Center reserved (Product management › Product identity), and they must match exactly. The script fills in the version (`x.y.z.0`; the Store keeps the fourth number) and writes one file type association per entry of `FILE_TYPES` in `kitab-os/src/assoc.rs`, each with its document icon, Print (where `assoc.rs` adds it) and `kitab_shell.dll` as the thumbnail handler. Packaged apps can't write these to the registry.
+- The tile and Store icons are drawn from `assets/brand/kitab-1024.png` at every scale and target size, and indexed in `resources.pri` by `makepri`. Both `makepri` and `makeappx` come from the Windows SDK.
+- When packaged, `kitab_os::packaged()` is true. `update::managed_by()` then says the Microsoft Store, so Kitab doesn't ask GitHub for updates, and Settings › File types points to Default apps instead of writing the registry.
+- To try it without signing, turn on Developer Mode, then run `Add-AppxPackage -Register dist\msix\AppxManifest.xml`. `Get-AppxPackage *KitabReader* | Remove-AppxPackage` removes it.

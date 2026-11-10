@@ -16,6 +16,31 @@ pub mod input;
 
 use std::path::PathBuf;
 
+/// Whether Kitab runs from an MSIX package (the Microsoft Store build,
+/// packaging/windows/msix). Its manifest then declares the file types and
+/// thumbnails, and the Store installs updates.
+pub fn packaged() -> bool {
+    #[cfg(windows)]
+    {
+        use std::sync::OnceLock;
+        use windows::Win32::Foundation::APPMODEL_ERROR_NO_PACKAGE;
+        use windows::Win32::Storage::Packaging::Appx::GetCurrentPackageFullName;
+        static PACKAGED: OnceLock<bool> = OnceLock::new();
+        *PACKAGED.get_or_init(|| {
+            let mut len = 0u32;
+            // SAFETY: asks only for the name's length (no buffer); a packaged
+            // process answers ERROR_INSUFFICIENT_BUFFER, any other one
+            // APPMODEL_ERROR_NO_PACKAGE.
+            let r = unsafe { GetCurrentPackageFullName(&mut len, None) };
+            r != APPMODEL_ERROR_NO_PACKAGE
+        })
+    }
+    #[cfg(not(windows))]
+    {
+        false
+    }
+}
+
 /// Today's date on this computer's clock and time zone, "YYYY-MM-DD"
 /// (reading streaks count the user's own days).
 pub fn local_today() -> String {

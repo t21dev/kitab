@@ -125,6 +125,22 @@ jobs:
           $arch = if ("${{ runner.arch }}" -eq "ARM64") { "arm64" } else { "x64" }
           & $iscc "/DAppVersion=${{ steps.v.outputs.version }}" "/DArch=$arch" "/DSourceDir=..\..\dist\Kitab" packaging\windows\kitab.iss
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      # The Microsoft Store package: uploaded in Partner Center by hand (the
+      # Store signs it), so it's a workflow artifact, not a release download.
+      - name: Store package (Windows)
+        if: runner.os == 'Windows'
+        # The GitHub downloads above never wait on the Store package.
+        continue-on-error: true
+        run: |
+          python -m pip install --quiet pillow
+          python tools/package_msix.py ${{ steps.v.outputs.version }}
+      - name: Store package artifact (Windows)
+        if: runner.os == 'Windows'
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: kitab-msstore
+          path: dist/*.msix
       - name: Collect downloads
         shell: bash
         run: |

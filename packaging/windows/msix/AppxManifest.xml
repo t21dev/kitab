@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  SPDX-License-Identifier: AGPL-3.0-or-later
+  Kitab Reader's MSIX manifest, for the Microsoft Store. tools/package_msix.py
+  fills in the version (x.y.z.0: the Store keeps the fourth part for itself)
+  and the architecture, and writes the file types from kitab-os's FILE_TYPES
+  into Extensions.
+
+  The Identity and PublisherDisplayName are the values Partner Center reserved
+  for the product (Product management > Product identity). The Store re-signs
+  the package with that publisher, so they must match exactly.
+
+  kitab.exe is a full-trust desktop app. The manifest replaces what Kitab
+  writes to the registry when it isn't packaged (kitab-os assoc.rs): the file
+  types, Print, and kitab_shell.dll as Explorer's thumbnail provider.
+-->
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:uap2="http://schemas.microsoft.com/appx/manifest/uap/windows10/2"
+  xmlns:uap3="http://schemas.microsoft.com/appx/manifest/uap/windows10/3"
+  xmlns:desktop="http://schemas.microsoft.com/appx/manifest/desktop/windows10"
+  xmlns:desktop2="http://schemas.microsoft.com/appx/manifest/desktop/windows10/2"
+  xmlns:com="http://schemas.microsoft.com/appx/manifest/com/windows10"
+  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+  IgnorableNamespaces="uap uap2 uap3 desktop desktop2 com rescap">
+
+  <Identity
+    Name="TriptoAfsin.KitabReader"
+    Publisher="CN=83EC5113-24EF-4718-9965-289BB530FA30"
+    Version="@VERSION@"
+    ProcessorArchitecture="@ARCH@" />
+
+  <Properties>
+    <DisplayName>Kitab Reader</DisplayName>
+    <PublisherDisplayName>TriptoAfsin</PublisherDisplayName>
+    <Logo>Assets\StoreLogo.png</Logo>
+    <Description>A fast, native reader for PDF, ebooks and Markdown.</Description>
+  </Properties>
+
+  <Dependencies>
+    <!-- Windows 10 1809: the oldest that loads packaged thumbnail handlers. -->
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.17763.0" MaxVersionTested="10.0.26100.0" />
+  </Dependencies>
+
+  <Resources>
+    <Resource Language="en-us" />
+  </Resources>
+
+  <Applications>
+    <Application Id="Kitab" Executable="kitab.exe" EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements
+        DisplayName="Kitab Reader"
+        Description="A fast, native reader for PDF, ebooks and Markdown."
+        BackgroundColor="transparent"
+        Square150x150Logo="Assets\Square150x150Logo.png"
+        Square44x44Logo="Assets\Square44x44Logo.png">
+        <uap:DefaultTile Wide310x150Logo="Assets\Wide310x150Logo.png" ShortName="Kitab" />
+      </uap:VisualElements>
+
+      <Extensions>
+        <!-- kitab_shell.dll (crate kitab-shell): IThumbnailProvider. -->
+        <com:Extension Category="windows.comServer">
+          <com:ComServer>
+            <com:SurrogateServer DisplayName="Kitab Reader thumbnails">
+              <com:Class Id="7080945F-C214-4A8A-B62B-FC5E2E3D047E" Path="kitab_shell.dll" ThreadingModel="STA" />
+            </com:SurrogateServer>
+          </com:ComServer>
+        </com:Extension>
+@FILE_TYPES@
+      </Extensions>
+    </Application>
+  </Applications>
+
+  <Capabilities>
+    <rescap:Capability Name="runFullTrust" />
+  </Capabilities>
+</Package>

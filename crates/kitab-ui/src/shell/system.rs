@@ -296,7 +296,7 @@ impl Workspace {
 
     /// File types › Default apps: the system's page.
     pub(crate) fn open_default_apps(&mut self, cx: &mut Context<Self>) {
-        let page = kitab_os::assoc::DEFAULTS_PAGE;
+        let page = kitab_os::assoc::defaults_page();
         if !page.is_empty() {
             cx.open_url(page);
         }
