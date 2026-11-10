@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.7] - 2026-11-11
+
 ### Added
 - Kitab Reader is on the Microsoft Store. The Store version sets up its file types and File Explorer thumbnails when it installs, and leaves updates to the Store, so it doesn't check GitHub for them. Settings › File types and Settings › About say so.
 
@@ -268,7 +270,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fit width and fit page follow a window resize even when no new page has to be drawn.
 - The Settings window shrinks to fit small windows instead of running off the left edge.
 
-[Unreleased]: https://github.com/t21dev/kitab/compare/v0.3.6...HEAD
+[Unreleased]: https://github.com/t21dev/kitab/compare/v0.3.7...HEAD
+[0.3.7]: https://github.com/t21dev/kitab/compare/v0.3.6...v0.3.7
 [0.3.6]: https://github.com/t21dev/kitab/compare/v0.3.5...v0.3.6
 [0.3.5]: https://github.com/t21dev/kitab/compare/v0.3.4...v0.3.5
 [0.3.4]: https://github.com/t21dev/kitab/compare/v0.3.3...v0.3.4
