@@ -60,6 +60,8 @@ impl gpui::Global for SettingsSink {}
 const CLOSED_MAX: usize = 20;
 
 pub struct Workspace {
+    /// `KITAB_TRACE_UI=1`: log the time between frames to stderr (perf work on menus, dialogs, Settings).
+    ui_trace: Option<std::cell::Cell<std::time::Instant>>,
     engine: Arc<dyn DocEngine>,
     library: Arc<dyn Library>,
     recent: Vec<RecentItem>,
@@ -227,6 +229,8 @@ impl Workspace {
             settings_section: Section::default(),
             settings_serial: 0,
             overlay_focus: cx.focus_handle(),
+            ui_trace: std::env::var_os("KITAB_TRACE_UI")
+                .map(|_| std::cell::Cell::new(std::time::Instant::now())),
             focus_check: false,
             focus_sidebar: false,
             home: home_ui::HomeView::new(),
@@ -2689,6 +2693,13 @@ impl Render for Workspace {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let st = Style::get(cx).clone();
         kitab_os::trace::mark("frame");
+        if let Some(last) = &self.ui_trace {
+            let now = std::time::Instant::now();
+            eprintln!(
+                "ui gap us={}",
+                now.duration_since(last.replace(now)).as_micros()
+            );
+        }
         // Home has nothing to wait for; and no tab keeps the splash up for
         // more than a few seconds.
         if (self.active.is_none() && !self.restoring)

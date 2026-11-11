@@ -1575,7 +1575,10 @@ impl Reader {
                             move |_, _, window, cx| {
                                 if husk {
                                     if gpui::kitab_image_misses() != seen {
-                                        window.refresh();
+                                        // After this frame: a refresh
+                                        // asked for while drawing is
+                                        // dropped.
+                                        window.defer(cx, |window, _| window.refresh());
                                     }
                                 } else if shown {
                                     let first = painted.borrow().is_empty();
