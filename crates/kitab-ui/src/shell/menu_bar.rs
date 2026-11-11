@@ -6,16 +6,34 @@
 //! Each title opens an ordinary menu (`menu.rs`) whose rows run the same
 //! actions as the keys and the command palette. Alt and a title's first
 //! letter opens it; Left and Right move between the menus.
+//!
+//! On macOS the same menus are also the system's menu bar at the top of the
+//! screen (`set_native`), always there, with a Kitab menu before them and a
+//! Window menu before Help.
 
 use super::Workspace;
 use crate::actions::*;
 use crate::menu::MenuItem;
 use crate::style::Style;
 use gpui::{
-    Action, AnyElement, Bounds, Context, InteractiveElement, IntoElement, KeyDownEvent,
-    ParentElement, Pixels, Point, StatefulInteractiveElement, Styled, Window, canvas, div, point,
+    Action, AnyElement, App, Bounds, Context, InteractiveElement, IntoElement, KeyBinding,
+    KeyDownEvent, Menu, MenuItem as OsItem, ParentElement, Pixels, Point,
+    StatefulInteractiveElement, Styled, SystemMenuType, Window, actions, canvas, div, point,
     prelude::FluentBuilder, px,
 };
+
+actions!(
+    kitab,
+    [
+        // The system's menu bar on macOS.
+        Quit,
+        HideApp,
+        HideOtherApps,
+        ShowAllApps,
+        MinimizeWindow,
+        ZoomWindow,
+    ]
+);
 
 /// What a row needs to make sense.
 #[derive(Clone, Copy, PartialEq)]
@@ -164,6 +182,117 @@ const MENUS: &[BarMenu] = &[
             row!("Check for updates", "", Nothing, CheckForUpdates),
         ],
     },
+];
+
+/// macOS: the keys and commands only its menu bar has, and the bar itself.
+/// Elsewhere this does nothing.
+pub(crate) fn init_native(cx: &mut App) {
+    if !cfg!(target_os = "macos") {
+        return;
+    }
+    cx.bind_keys([
+        KeyBinding::new("cmd-q", Quit, None),
+        KeyBinding::new("cmd-h", HideApp, None),
+        KeyBinding::new("cmd-alt-h", HideOtherApps, None),
+        KeyBinding::new("cmd-m", MinimizeWindow, None),
+    ]);
+    // With a window open its own Quit runs first (it asks about unsaved
+    // changes); this one is for when there is none.
+    cx.on_action(|_: &Quit, cx| cx.quit());
+    cx.on_action(|_: &HideApp, cx| cx.hide());
+    cx.on_action(|_: &HideOtherApps, cx| cx.hide_other_apps());
+    cx.on_action(|_: &ShowAllApps, cx| cx.unhide_other_apps());
+    cx.on_action(|_: &MinimizeWindow, cx| {
+        if let Some(window) = cx.active_window() {
+            let _ = window.update(cx, |_, window, _| window.minimize_window());
+        }
+    });
+    cx.on_action(|_: &ZoomWindow, cx| {
+        if let Some(window) = cx.active_window() {
+            let _ = window.update(cx, |_, window, _| window.zoom_window());
+        }
+    });
+    set_native(cx);
+}
+
+/// macOS: hand the menus to the system's menu bar. It shows each command's
+/// key as bound right now, so this runs again when keymap.json changes them.
+pub(crate) fn set_native(cx: &mut App) {
+    if cfg!(target_os = "macos") {
+        cx.set_menus(native_menus());
+    }
+}
+
+/// The system menu bar's menus: Kitab, the in-window bar's six, and Window
+/// before Help. Settings and the update check live in the Kitab menu, as
+/// they do in every Mac program, so they are left out of File and Help.
+fn native_menus() -> Vec<Menu> {
+    let in_app_menu = [OpenSettings.name(), CheckForUpdates.name()];
+    let mut menus = vec![Menu {
+        name: "Kitab".into(),
+        items: vec![
+            OsItem::action("Settings…", OpenSettings),
+            OsItem::action("Check for Updates", CheckForUpdates),
+            OsItem::separator(),
+            OsItem::os_submenu("Services", SystemMenuType::Services),
+            OsItem::separator(),
+            OsItem::action("Hide Kitab", HideApp),
+            OsItem::action("Hide Others", HideOtherApps),
+            OsItem::action("Show All", ShowAllApps),
+            OsItem::separator(),
+            OsItem::action("Quit Kitab", Quit),
+        ],
+    }];
+    for menu in MENUS {
+        if menu.title == "Help" {
+            menus.push(Menu {
+                name: "Window".into(),
+                items: vec![
+                    OsItem::action("Minimize", MinimizeWindow),
+                    OsItem::action("Zoom", ZoomWindow),
+                ],
+            });
+        }
+        let mut items: Vec<OsItem> = Vec::new();
+        for row in menu.rows {
+            match row {
+                // No separator first, and never two together.
+                None => {
+                    if matches!(items.last(), Some(OsItem::Action { .. })) {
+                        items.push(OsItem::separator());
+                    }
+                }
+                Some(e) => {
+                    let action = (e.action)();
+                    if !in_app_menu.contains(&action.name()) {
+                        items.push(OsItem::Action {
+                            name: e.label.into(),
+                            action,
+                            os_action: None,
+                        });
+                    }
+                }
+            }
+        }
+        if matches!(items.last(), Some(OsItem::Separator)) {
+            items.pop();
+        }
+        menus.push(Menu {
+            name: menu.title.into(),
+            items,
+        });
+    }
+    menus
+}
+
+/// Contexts where keys are typed. The reader's keys are unbound in them.
+const TYPING: &[&str] = &[
+    FIND_BAR,
+    MD_EDITOR,
+    MARKUP_HEX,
+    PROMPT,
+    PAGE_FIELD,
+    crate::text_field::TEXT_FIELD,
 ];
 
 /// How many menus the bar has.
@@ -364,6 +493,30 @@ impl Workspace {
         true
     }
 
+    /// macOS: a key nothing in the window took is offered to the system's
+    /// menu bar next, which would run the command that key has elsewhere:
+    /// Ctrl+F in a note's text box would open Find, though the key is
+    /// unbound there. So in a place where keys are typed, a Ctrl key that
+    /// got this far ends here.
+    pub(super) fn keep_from_os_menu(
+        &mut self,
+        e: &KeyDownEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let m = &e.keystroke.modifiers;
+        if !cfg!(target_os = "macos") || !m.control || m.platform {
+            return;
+        }
+        let typing = window
+            .context_stack()
+            .iter()
+            .any(|c| TYPING.iter().any(|name| c.contains(name)));
+        if typing {
+            cx.stop_propagation();
+        }
+    }
+
     /// Alt and a title's first letter opens that menu.
     pub(super) fn bar_key(
         &mut self,
@@ -421,6 +574,42 @@ mod tests {
                 assert!(!(row.action)().name().is_empty(), "{}", row.label);
             }
         }
+    }
+
+    #[test]
+    fn the_system_menu_bar_has_every_command_once() {
+        let menus = native_menus();
+        let titles: Vec<String> = menus.iter().map(|m| m.name.to_string()).collect();
+        assert_eq!(
+            titles,
+            [
+                "Kitab", "File", "Edit", "View", "Go", "Tools", "Window", "Help"
+            ]
+        );
+        let mut names = Vec::new();
+        for menu in &menus {
+            assert!(!menu.items.is_empty(), "{}", menu.name);
+            for (ix, item) in menu.items.iter().enumerate() {
+                match item {
+                    OsItem::Action { action, .. } => names.push(action.name()),
+                    OsItem::Separator => {
+                        let first_or_last = ix == 0 || ix + 1 == menu.items.len();
+                        assert!(!first_or_last, "{}: a separator at an end", menu.name);
+                        assert!(
+                            !matches!(menu.items[ix - 1], OsItem::Separator),
+                            "{}: two separators together",
+                            menu.name
+                        );
+                    }
+                    _ => {}
+                }
+            }
+        }
+        let rows = MENUS.iter().flat_map(|m| m.rows.iter().flatten()).count();
+        // The Kitab menu's four of its own and Window's two.
+        assert_eq!(names.len(), rows + 6);
+        let unique: std::collections::HashSet<_> = names.iter().collect();
+        assert_eq!(unique.len(), names.len(), "a command is in two menus");
     }
 
     /// The keys shown beside a row are the ones the cheat sheet lists for it

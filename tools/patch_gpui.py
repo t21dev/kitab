@@ -34,6 +34,9 @@ an environment switch to turn it off so it can still be benchmarked:
           as fine scroll steps; a pinch (GID_ZOOM) arrives as a scroll with Ctrl
           held whose y is 200 x ln(ratio), which the app reads as a zoom factor.
           A wheel message that says Ctrl is down (a touchpad pinch) is believed.
+  MenuKey macOS's menu bar shows a command's key only when it has Ctrl or Cmd
+          in it. A key equivalent there is live: with a plain one (N for the
+          next page) the menu could take the letter while it is being typed.
   Pixels  RenderImage::kitab_husk: an image that is only on the GPU. Once a page
           has been uploaded its pixels in RAM are let go and a husk (same id and
           size, no bytes) stands in for it. Painting a husk whose texture is
@@ -590,6 +593,7 @@ struct WindowInvalidatorInner {"""),
     husk_patch()
     path_patch()
     touch_patch()
+    menu_key_patch()
     print(f"patched gpui copy: {DEST}")
 
 
@@ -791,6 +795,22 @@ def path_patch() -> None:
         self.resources
             .kitab_fit_path_textures(&self.devices, !scene.paths.is_empty())?;
         self.pre_draw()?;
+"""),
+    ])
+
+
+def menu_key_patch() -> None:
+    """15. MenuKey: no plain keys as key equivalents in macOS's menu bar."""
+    edit("src/platform/mac/platform.rs", [
+        ("""                    if let Some(keystrokes) = keystrokes {
+                        if keystrokes.len() == 1 {
+""",
+         """                    if let Some(keystrokes) = keystrokes {
+                        // Kitab patch: only a key with Ctrl or Cmd in it.
+                        if keystrokes.len() == 1
+                            && (keystrokes[0].modifiers().control
+                                || keystrokes[0].modifiers().platform)
+                        {
 """),
     ])
 

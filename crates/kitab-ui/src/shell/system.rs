@@ -469,6 +469,8 @@ impl Workspace {
                 match parsed {
                     Ok(user) => {
                         let errors = crate::keymap::apply(cx, &user);
+                        // macOS's menu bar shows the keys: they may have changed.
+                        super::menu_bar::set_native(cx);
                         if let Some(first) = errors.first() {
                             let more = match errors.len() {
                                 1 => String::new(),

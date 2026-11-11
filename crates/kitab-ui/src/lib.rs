@@ -205,6 +205,7 @@ pub fn open_main_window(
     cx.set_global(Style::from_settings(theme, &settings));
     cx.set_global(shell::SettingsSink(save_settings));
     actions::bind_default_keys(cx);
+    shell::init_native_menu(cx);
     // Where the window was when Kitab last closed, if that place is still on
     // a screen; otherwise the default size, centred.
     let (bounds, display_id) = settings

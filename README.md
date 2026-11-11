@@ -160,7 +160,7 @@ Kitab is a document reader, so it leaves image files to your image viewer.
 - SumatraPDF's shortcuts where it has one, a command palette (Ctrl+K), and a `keymap.json` for your own
 - Ten themes (Dark, Gray, Light, Paper, Sand, Linen, Ink, Nord, Noctua, Vampire), any accent colour, three densities
 - A quick dock you can move to any edge, choose the buttons of, or tuck away
-- An optional menu bar (File, Edit, View, Go, Tools, Help) with Alt-key access, off until you turn it on
+- An optional menu bar (File, Edit, View, Go, Tools, Help) with Alt-key access, off until you turn it on; on macOS the same menus are in the system menu bar
 
 **Windows**
 - One window: double-clicking another file opens it as a tab

@@ -31,6 +31,7 @@ use std::time::Duration;
 mod home_ui;
 mod library_ui;
 mod menu_bar;
+pub(crate) use menu_bar::init_native as init_native_menu;
 mod page_tools_ui;
 mod palette_ui;
 mod password_ui;
@@ -158,6 +159,9 @@ pub struct Workspace {
     settings_scroll: gpui::ScrollHandle,
     /// The window may close now: unsaved changes were saved or let go.
     close_anyway: bool,
+    /// Quit was asked for: once the question about unsaved changes is
+    /// answered and the window has gone, the app goes too.
+    quit_after: bool,
     /// The window has the user's focus (for background trimming).
     window_active: bool,
     /// The window is too narrow for the title-bar buttons: only More shows.
@@ -278,6 +282,7 @@ impl Workspace {
             modal_serials: std::collections::HashMap::new(),
             settings_scroll: gpui::ScrollHandle::new(),
             close_anyway: false,
+            quit_after: false,
             window_active: true,
             title_squeezed: false,
             print: None,
@@ -341,67 +346,95 @@ impl Workspace {
         let moved = cx.observe_window_bounds(window, |ws, window, cx| ws.window_moved(window, cx));
         this.subs.push(moved);
         let me = cx.entity().downgrade();
-        window.on_window_should_close(cx, move |window, cx| {
-            save_window_place(crate::window_place(window), true, cx);
-            // Unsaved Markdown edits or a form filled in: ask before they go.
-            let Some(ws) = me.upgrade() else { return true };
-            let dirty: Vec<Entity<Reader>> = ws
-                .read(cx)
-                .tabs
-                .iter()
-                .filter(|t| t.read(cx).has_unsaved_edits())
-                .cloned()
-                .collect();
-            if dirty.is_empty() || ws.read(cx).close_anyway {
-                return true;
-            }
-            let names: Vec<String> = dirty
-                .iter()
-                .map(|r| r.read(cx).title().to_string())
-                .collect();
-            let answer = window.prompt(
-                gpui::PromptLevel::Warning,
-                "Save your changes before closing?",
-                Some(&format!(
-                    "Not saved yet: {}. They will be lost if you don't save them.",
-                    names.join(", ")
-                )),
-                &["Save", "Don't save", "Cancel"],
-                cx,
-            );
-            let handle = window.window_handle();
-            cx.spawn(async move |cx| {
-                let choice = answer.await.ok();
-                if !matches!(choice, Some(0) | Some(1)) {
-                    return;
-                }
-                if choice == Some(0) {
-                    for r in &dirty {
-                        let _ = r.update(cx, |r, cx| r.save_changes(cx));
-                    }
-                    // Saving a PDF runs off the UI thread: wait for it (at
-                    // most half a minute) before the window goes.
-                    for _ in 0..300 {
-                        let busy = dirty
-                            .iter()
-                            .any(|r| r.read_with(cx, |r, _| r.markup_saving()).unwrap_or(false));
-                        if !busy {
-                            break;
-                        }
-                        cx.background_executor()
-                            .timer(std::time::Duration::from_millis(100))
-                            .await;
-                    }
-                }
-                let _ = ws.update(cx, |ws, _| ws.close_anyway = true);
-                let _ = handle.update(cx, |_, window, _| window.remove_window());
-            })
-            .detach();
-            false
-        });
+        window.on_window_should_close(cx, move |window, cx| confirm_close(&me, window, cx));
         this
     }
 
+    /// Quit (macOS's menu and Cmd+Q): as closing the window does, asking
+    /// about unsaved changes first.
+    fn quit(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.quit_after = true;
+        let me = cx.entity().downgrade();
+        window.defer(cx, move |window, cx| {
+            if confirm_close(&me, window, cx) {
+                cx.quit();
+            }
+        });
+    }
+}
+
+/// The window is about to close (or the app to quit). True when it may go
+/// now; false when unsaved changes are being asked about first, and the
+/// window is removed once that is answered.
+fn confirm_close(me: &gpui::WeakEntity<Workspace>, window: &mut Window, cx: &mut App) -> bool {
+    save_window_place(crate::window_place(window), true, cx);
+    // Unsaved Markdown edits or a form filled in: ask before they go.
+    let Some(ws) = me.upgrade() else { return true };
+    let dirty: Vec<Entity<Reader>> = ws
+        .read(cx)
+        .tabs
+        .iter()
+        .filter(|t| t.read(cx).has_unsaved_edits())
+        .cloned()
+        .collect();
+    if dirty.is_empty() || ws.read(cx).close_anyway {
+        return true;
+    }
+    let names: Vec<String> = dirty
+        .iter()
+        .map(|r| r.read(cx).title().to_string())
+        .collect();
+    let answer = window.prompt(
+        gpui::PromptLevel::Warning,
+        "Save your changes before closing?",
+        Some(&format!(
+            "Not saved yet: {}. They will be lost if you don't save them.",
+            names.join(", ")
+        )),
+        &["Save", "Don't save", "Cancel"],
+        cx,
+    );
+    let handle = window.window_handle();
+    cx.spawn(async move |cx| {
+        let choice = answer.await.ok();
+        if !matches!(choice, Some(0) | Some(1)) {
+            let _ = ws.update(cx, |ws, _| ws.quit_after = false);
+            return;
+        }
+        if choice == Some(0) {
+            for r in &dirty {
+                let _ = r.update(cx, |r, cx| r.save_changes(cx));
+            }
+            // Saving a PDF runs off the UI thread: wait for it (at
+            // most half a minute) before the window goes.
+            for _ in 0..300 {
+                let busy = dirty
+                    .iter()
+                    .any(|r| r.read_with(cx, |r, _| r.markup_saving()).unwrap_or(false));
+                if !busy {
+                    break;
+                }
+                cx.background_executor()
+                    .timer(std::time::Duration::from_millis(100))
+                    .await;
+            }
+        }
+        let quit = ws
+            .update(cx, |ws, _| {
+                ws.close_anyway = true;
+                ws.quit_after
+            })
+            .unwrap_or(false);
+        let _ = handle.update(cx, |_, window, _| window.remove_window());
+        if quit {
+            let _ = cx.update(|cx| cx.quit());
+        }
+    })
+    .detach();
+    false
+}
+
+impl Workspace {
     fn window_moved(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         // Minimised, Windows reports the normal bounds anyway; a window
         // that isn't shown yet hasn't been placed by the user.
@@ -2925,6 +2958,8 @@ impl Render for Workspace {
             // The menu bar: Alt and a letter opens a menu, and the letters
             // show while Alt is held.
             .on_key_down(cx.listener(Self::bar_key))
+            .on_key_down(cx.listener(Self::keep_from_os_menu))
+            .on_action(cx.listener(|ws, _: &menu_bar::Quit, window, cx| ws.quit(window, cx)))
             .on_modifiers_changed(cx.listener(|ws, e: &gpui::ModifiersChangedEvent, _, cx| {
                 let alt = e.modifiers.alt && !e.modifiers.control;
                 if alt != ws.alt_down {

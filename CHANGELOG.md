@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- macOS: Kitab's commands are in the menu bar at the top of the screen: Kitab, File, Edit, View, Go, Tools, Window and Help, each command with its key, and greyed out when it does not apply. The Kitab menu has Settings, Check for Updates, Services, Hide and Quit, and Cmd+Q, Cmd+H, Cmd+Option+H and Cmd+M work as they do in every Mac program. Quit asks about unsaved changes first, as closing the window does.
+
 ## [0.3.9] - 2026-11-11
 
 ### Added
