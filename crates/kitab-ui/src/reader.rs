@@ -224,6 +224,8 @@ pub struct Reader {
     /// The reader has scrolled since opening: from then on the next page is
     /// rendered ahead. Opening renders only what shows (memory, CPU).
     scrolled: bool,
+    /// Smooth scrolling under way: how far is left to go.
+    glide: Option<Glide>,
     last_frame: Option<std::time::Instant>,
     /// The password that opened this document, if it needed one (memory only).
     unlock: Option<String>,
@@ -280,6 +282,17 @@ pub struct Reader {
     /// The window's scale factor at the last frame.
     scale_factor: f32,
 }
+
+/// Smooth scrolling under way.
+struct Glide {
+    /// Pixels still to scroll (down is positive).
+    left: f32,
+    /// When the last step was taken.
+    at: std::time::Instant,
+}
+
+/// Smooth scrolling covers 63 % of what is left in this many seconds.
+const GLIDE_TIME: f32 = 0.045;
 
 /// What a page render is for: the reading view (a quick preview or the sharp
 /// page) or a thumbnail in the Pages pane, with its own test for whether it
@@ -347,6 +360,7 @@ impl Reader {
             scroll_dir: 1,
             last_top: 0,
             scrolled: false,
+            glide: None,
             last_frame: None,
             unlock: None,
             find: find::FindState::new(cx.focus_handle()),
@@ -552,6 +566,12 @@ impl Reader {
                 if let Some(state) = self.restore {
                     self.zoom = state.zoom;
                     self.rotation = state.rotation;
+                } else if matches!(
+                    info.format,
+                    kitab_core::Format::Pdf | kitab_core::Format::Xps | kitab_core::Format::Cbz
+                ) {
+                    // Opened for the first time: sized as Settings › Reading says.
+                    self.zoom = Style::get(cx).open_zoom.mode();
                 }
                 self.list.reset(info.page_count as usize);
                 self.doc = Some(doc);
@@ -966,6 +986,50 @@ impl Reader {
         let w = f32::from(b.size.width).max(1.0);
         let f = (f32::from(x - b.origin.x) / w).clamp(0.0, 1.0);
         self.scroll_to_fraction(f, cx);
+    }
+
+    /// Scroll by `dy` pixels (down is positive): gliding there over a few
+    /// frames when Settings › Reading › Smooth scrolling is on, at once
+    /// otherwise. More turns of the wheel while it glides add up.
+    fn glide_by(&mut self, dy: f32, cx: &mut Context<Self>) {
+        let st = Style::get(cx);
+        if st.smooth_scroll && st.animations {
+            let glide = self.glide.get_or_insert(Glide {
+                left: 0.0,
+                // As if a frame had just gone by, so it moves on the very
+                // next frame.
+                at: std::time::Instant::now() - Duration::from_millis(16),
+            });
+            glide.left += dy;
+        } else {
+            self.list.scroll_by(px(dy));
+        }
+        self.scrolled = true;
+        cx.notify();
+    }
+
+    /// One frame of smooth scrolling: cover a share of what is left that
+    /// depends only on the time gone by (the same glide at 60 and 144 Hz),
+    /// fast at first and easing out; about 150 ms in all.
+    fn glide_step(&mut self, window: &mut Window) {
+        let Some(glide) = self.glide.as_mut() else {
+            return;
+        };
+        let now = std::time::Instant::now();
+        let dt = (now - glide.at).as_secs_f32().min(0.05);
+        glide.at = now;
+        let mut step = glide.left * (1.0 - (-dt / GLIDE_TIME).exp());
+        if step.abs() < 1.0 {
+            step = glide.left.signum() * glide.left.abs().min(1.0);
+        }
+        glide.left -= step;
+        let done = glide.left.abs() < 0.5;
+        self.list.scroll_by(px(step));
+        if done {
+            self.glide = None;
+        } else {
+            window.request_animation_frame();
+        }
     }
 
     /// Start middle-click scrolling at `at`, or end it.
@@ -1706,8 +1770,10 @@ impl Render for Reader {
             let _ = window.drop_image(image);
         }
         if self.present.is_some() {
+            self.glide = None;
             return self.present_view(window, cx);
         }
+        self.glide_step(window);
         // Markdown's text units are collected afresh as the blocks draw.
         if self.md.is_some() {
             self.md_sel.units.borrow_mut().clear();
@@ -2014,22 +2080,10 @@ impl Render for Reader {
                     r.editor_mouse_up(cx);
                 }),
             )
-            .on_action(cx.listener(|r, _: &ScrollDown, _, cx| {
-                r.list.scroll_by(px(64.0));
-                cx.notify()
-            }))
-            .on_action(cx.listener(|r, _: &ScrollUp, _, cx| {
-                r.list.scroll_by(px(-64.0));
-                cx.notify()
-            }))
-            .on_action(cx.listener(|r, _: &ScreenDown, _, cx| {
-                r.list.scroll_by(px(r.viewport.1 * 0.9));
-                cx.notify()
-            }))
-            .on_action(cx.listener(|r, _: &ScreenUp, _, cx| {
-                r.list.scroll_by(px(-r.viewport.1 * 0.9));
-                cx.notify()
-            }))
+            .on_action(cx.listener(|r, _: &ScrollDown, _, cx| r.glide_by(64.0, cx)))
+            .on_action(cx.listener(|r, _: &ScrollUp, _, cx| r.glide_by(-64.0, cx)))
+            .on_action(cx.listener(|r, _: &ScreenDown, _, cx| r.glide_by(r.viewport.1 * 0.9, cx)))
+            .on_action(cx.listener(|r, _: &ScreenUp, _, cx| r.glide_by(-r.viewport.1 * 0.9, cx)))
             .on_action(cx.listener(|r, _: &ZoomIn, _, cx| r.step_zoom(true, cx)))
             .on_action(cx.listener(|r, _: &ZoomOut, _, cx| r.step_zoom(false, cx)))
             .on_action(cx.listener(|r, _: &FitPage, _, cx| r.set_zoom(ZoomMode::FitPage, cx)))
@@ -2077,7 +2131,26 @@ impl Render for Reader {
                                 r.step_zoom(dy > 0.0, cx);
                             }
                             cx.stop_propagation();
+                            return;
                         }
+                        // A mouse wheel turns in notches: glide to where it
+                        // scrolls instead of jumping there. A touchpad sends
+                        // its own fine steps, which go to the list as they are.
+                        let gpui::ScrollDelta::Lines(lines) = e.delta else {
+                            return;
+                        };
+                        let st = Style::get(cx);
+                        if !(st.smooth_scroll && st.animations)
+                            || lines.x != 0.0
+                            || lines.y == 0.0
+                            || r.present.is_some()
+                            || !r.list.viewport_bounds().contains(&e.position)
+                        {
+                            return;
+                        }
+                        // The list's own step: 20 px a line.
+                        r.glide_by(-lines.y * 20.0, cx);
+                        cx.stop_propagation();
                     })),
             )
             .children(self.page_nav(&st, window, cx))

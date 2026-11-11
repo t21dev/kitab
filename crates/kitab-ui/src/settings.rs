@@ -14,6 +14,40 @@ pub const SETTINGS_VERSION: u32 = 1;
 /// The interface sizes on offer (Settings › Appearance), in percent.
 pub const UI_SCALES: [u16; 7] = [90, 100, 110, 125, 150, 175, 200];
 
+/// How a PDF, comic or XPS file is sized the first time it is opened
+/// (Settings › Reading). A document opened before comes back as it was left.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum OpenZoom {
+    /// The page as wide as the window.
+    #[default]
+    FitWidth,
+    /// The whole page in the window.
+    FitPage,
+    /// 100 %.
+    ActualSize,
+}
+
+impl OpenZoom {
+    pub const ALL: [OpenZoom; 3] = [Self::FitWidth, Self::FitPage, Self::ActualSize];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::FitWidth => "Fit width",
+            Self::FitPage => "Fit page",
+            Self::ActualSize => "Actual size",
+        }
+    }
+
+    pub fn mode(self) -> kitab_core::ZoomMode {
+        match self {
+            Self::FitWidth => kitab_core::ZoomMode::FitWidth,
+            Self::FitPage => kitab_core::ZoomMode::FitPage,
+            Self::ActualSize => kitab_core::ZoomMode::ActualSize,
+        }
+    }
+}
+
 /// The typeface Markdown is read in (the dock's Aa button, Settings › Reading).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -622,6 +656,9 @@ pub struct Settings {
     pub skipped_update: String,
     /// The scroll bar along the right of the pages (Settings › Reading).
     pub scroll_bar: bool,
+    /// The mouse wheel and the keys glide to where they scroll, instead of
+    /// jumping there (Settings › Reading).
+    pub smooth_scroll: bool,
     /// How many tabs are open, as a small number in the title bar.
     pub tab_count: bool,
     /// Home: covers or a list, the covers' size, and what's above them.
@@ -635,6 +672,8 @@ pub struct Settings {
     pub toast_at: ToastAt,
     /// Markdown's typeface.
     pub md_face: MdFace,
+    /// How a document is sized the first time it is opened.
+    pub open_zoom: OpenZoom,
     /// What the tab bar's + does.
     pub new_tab: NewTab,
     /// The main window's last place (none before the first close).
@@ -716,6 +755,7 @@ impl Default for Settings {
             update_check: true,
             skipped_update: String::new(),
             scroll_bar: true,
+            smooth_scroll: true,
             tab_count: false,
             home_layout: HomeLayout::Covers,
             cover_size: CoverSize::Medium,
@@ -724,6 +764,7 @@ impl Default for Settings {
             ui_scale: 100,
             toast_at: ToastAt::TopCenter,
             md_face: MdFace::System,
+            open_zoom: OpenZoom::FitWidth,
             new_tab: NewTab::Home,
             window: None,
         }
@@ -769,6 +810,7 @@ struct File {
     check_for_updates: bool,
     skipped_update: String,
     scroll_bar: bool,
+    smooth_scroll: bool,
     tab_count: bool,
     home_layout: HomeLayout,
     cover_size: CoverSize,
@@ -777,6 +819,7 @@ struct File {
     ui_scale: u16,
     toast_at: ToastAt,
     md_face: MdFace,
+    open_zoom: OpenZoom,
     new_tab: NewTab,
     window: Option<WindowPlace>,
 }
@@ -863,6 +906,7 @@ impl From<Settings> for File {
             check_for_updates: s.update_check,
             skipped_update: s.skipped_update,
             scroll_bar: s.scroll_bar,
+            smooth_scroll: s.smooth_scroll,
             tab_count: s.tab_count,
             home_layout: s.home_layout,
             cover_size: s.cover_size,
@@ -871,6 +915,7 @@ impl From<Settings> for File {
             ui_scale: s.ui_scale,
             toast_at: s.toast_at,
             md_face: s.md_face,
+            open_zoom: s.open_zoom,
             new_tab: s.new_tab,
             window: s.window,
         }
@@ -917,6 +962,7 @@ impl Settings {
             update_check: f.check_for_updates,
             skipped_update: f.skipped_update.chars().take(32).collect(),
             scroll_bar: f.scroll_bar,
+            smooth_scroll: f.smooth_scroll,
             tab_count: f.tab_count,
             home_layout: f.home_layout,
             cover_size: f.cover_size,
@@ -929,6 +975,7 @@ impl Settings {
             },
             toast_at: f.toast_at,
             md_face: f.md_face,
+            open_zoom: f.open_zoom,
             new_tab: f.new_tab,
             window: f.window,
         })
@@ -994,6 +1041,7 @@ mod tests {
             update_check: false,
             skipped_update: "0.2.0".into(),
             scroll_bar: false,
+            smooth_scroll: false,
             tab_count: true,
             home_layout: HomeLayout::List,
             cover_size: CoverSize::Large,
@@ -1002,6 +1050,7 @@ mod tests {
             ui_scale: 125,
             toast_at: ToastAt::BottomRight,
             md_face: MdFace::Mono,
+            open_zoom: OpenZoom::FitPage,
             new_tab: NewTab::OpenFile,
             window: Some(WindowPlace {
                 x: 40.0,

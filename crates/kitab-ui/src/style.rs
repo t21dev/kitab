@@ -52,6 +52,7 @@ pub struct Style {
     pub skipped_update: String,
     /// The scroll bar on the right of the pages.
     pub scroll_bar: bool,
+    pub smooth_scroll: bool,
     /// The open-tab count in the title bar.
     pub tab_count: bool,
     /// Home's layout (Settings › Home).
@@ -63,6 +64,7 @@ pub struct Style {
     pub ui_scale: u16,
     pub toast_at: crate::settings::ToastAt,
     pub md_face: crate::settings::MdFace,
+    pub open_zoom: crate::settings::OpenZoom,
     pub new_tab: crate::settings::NewTab,
     /// The main window's last place, saved with the settings.
     pub window: Option<crate::settings::WindowPlace>,
@@ -106,6 +108,7 @@ impl Style {
             update_check: s.update_check,
             skipped_update: s.skipped_update.clone(),
             scroll_bar: s.scroll_bar,
+            smooth_scroll: s.smooth_scroll,
             tab_count: s.tab_count,
             home_layout: s.home_layout,
             cover_size: s.cover_size,
@@ -114,6 +117,7 @@ impl Style {
             ui_scale: s.ui_scale,
             toast_at: s.toast_at,
             md_face: s.md_face,
+            open_zoom: s.open_zoom,
             new_tab: s.new_tab,
             window: s.window,
         };
@@ -185,6 +189,7 @@ impl Style {
             update_check: self.update_check,
             skipped_update: self.skipped_update.clone(),
             scroll_bar: self.scroll_bar,
+            smooth_scroll: self.smooth_scroll,
             tab_count: self.tab_count,
             home_layout: self.home_layout,
             cover_size: self.cover_size,
@@ -193,6 +198,7 @@ impl Style {
             ui_scale: self.ui_scale,
             toast_at: self.toast_at,
             md_face: self.md_face,
+            open_zoom: self.open_zoom,
             new_tab: self.new_tab,
             window: self.window,
         }

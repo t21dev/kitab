@@ -91,6 +91,16 @@ const INDEX: &[(Section, &str, &str)] = &[
     ),
     (
         Section::Reading,
+        "Smooth scrolling",
+        "glide wheel mouse animation scroll inertia fluid",
+    ),
+    (
+        Section::Reading,
+        "New documents open at",
+        "zoom fit width fit page actual size default open maximized whole page size",
+    ),
+    (
+        Section::Reading,
         "Markdown typeface",
         "font face serif sans mono system markdown text",
     ),

@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Smooth scrolling: the mouse wheel and the arrow, Page Up and Page Down keys glide to where they scroll instead of jumping there. Settings › Reading › Smooth scrolling turns it off; a touchpad scrolls as before.
+- Settings › Reading › New documents open at: Fit width, Fit page or Actual size, for a PDF, comic or XPS file opened for the first time. One you have read before still comes back the way you left it.
+
+### Changed
+- Less memory, most of all in a large window. A page that has been drawn is kept once, on the graphics card, not also as pixels in memory, and the two window-sized surfaces used only for ink and drawn shapes exist only while there is something to draw. In a 2400×1500 window with a 300-page image PDF: 231 → 190 MB after opening, 330 → 219 MB at the most while scrolling, 255 → 163 MB once settled.
+- Printing many pages shows one message with a bar that fills, then "Sent … to the printer", instead of a new message for every page.
+- Settings › About › View update opens the release page in your browser, instead of a second dialog on top of Settings.
+
+### Fixed
+- Markdown editor: a click lands on the line under the pointer at every interface size. At 110 % (and other sizes where a line is not a whole number of pixels) clicks drifted further off the further down the file you were: 12 lines by line 1,400.
+
 ## [0.3.8] - 2026-11-11
 
 ### Fixed

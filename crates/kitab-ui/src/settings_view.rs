@@ -745,6 +745,44 @@ fn reading(ws: &WeakEntity<Workspace>, st: &Style) -> AnyElement {
             st,
         ))
         .child(group(
+            "Smooth scrolling",
+            Some("The mouse wheel and the arrow, Page Up and Page Down keys glide to where they scroll. A touchpad scrolls as it always does."),
+            well_row(
+                "Glide when scrolling",
+                "",
+                switch(
+                    "smooth-scroll",
+                    st.smooth_scroll,
+                    st,
+                    change(ws, |s: &mut Style| s.smooth_scroll = !s.smooth_scroll),
+                ),
+                st,
+            ),
+            st,
+        ))
+        .child(group(
+            "New documents open at",
+            Some("How a PDF, comic or XPS file is sized the first time you open it. One you\u{2019}ve read before comes back the way you left it."),
+            div()
+                .id("open-zoom")
+                .flex()
+                .child(segmented(
+                    crate::settings::OpenZoom::ALL
+                        .into_iter()
+                        .map(|v| {
+                            (
+                                SharedString::from(v.label()),
+                                st.open_zoom == v,
+                                change(ws, move |s: &mut Style| s.open_zoom = v),
+                            )
+                        })
+                        .collect(),
+                    st,
+                ))
+                .into_any_element(),
+            st,
+        ))
+        .child(group(
             "Markdown typeface",
             Some("The font Markdown is read in. The Aa button in the dock switches it too."),
             div()
