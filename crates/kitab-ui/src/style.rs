@@ -55,6 +55,7 @@ pub struct Style {
     pub smooth_scroll: bool,
     /// The open-tab count in the title bar.
     pub tab_count: bool,
+    pub menu_bar: bool,
     /// Home's layout (Settings › Home).
     pub home_layout: crate::settings::HomeLayout,
     pub cover_size: crate::settings::CoverSize,
@@ -110,6 +111,7 @@ impl Style {
             scroll_bar: s.scroll_bar,
             smooth_scroll: s.smooth_scroll,
             tab_count: s.tab_count,
+            menu_bar: s.menu_bar,
             home_layout: s.home_layout,
             cover_size: s.cover_size,
             home_stats: s.home_stats,
@@ -191,6 +193,7 @@ impl Style {
             scroll_bar: self.scroll_bar,
             smooth_scroll: self.smooth_scroll,
             tab_count: self.tab_count,
+            menu_bar: self.menu_bar,
             home_layout: self.home_layout,
             cover_size: self.cover_size,
             home_stats: self.home_stats,

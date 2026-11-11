@@ -661,6 +661,9 @@ pub struct Settings {
     pub smooth_scroll: bool,
     /// How many tabs are open, as a small number in the title bar.
     pub tab_count: bool,
+    /// File, Edit, View, Go, Tools and Help under the title bar
+    /// (Settings › Appearance). Off unless asked for.
+    pub menu_bar: bool,
     /// Home: covers or a list, the covers' size, and what's above them.
     pub home_layout: HomeLayout,
     pub cover_size: CoverSize,
@@ -757,6 +760,7 @@ impl Default for Settings {
             scroll_bar: true,
             smooth_scroll: true,
             tab_count: false,
+            menu_bar: false,
             home_layout: HomeLayout::Covers,
             cover_size: CoverSize::Medium,
             home_stats: true,
@@ -812,6 +816,7 @@ struct File {
     scroll_bar: bool,
     smooth_scroll: bool,
     tab_count: bool,
+    menu_bar: bool,
     home_layout: HomeLayout,
     cover_size: CoverSize,
     home_stats: bool,
@@ -908,6 +913,7 @@ impl From<Settings> for File {
             scroll_bar: s.scroll_bar,
             smooth_scroll: s.smooth_scroll,
             tab_count: s.tab_count,
+            menu_bar: s.menu_bar,
             home_layout: s.home_layout,
             cover_size: s.cover_size,
             home_stats: s.home_stats,
@@ -964,6 +970,7 @@ impl Settings {
             scroll_bar: f.scroll_bar,
             smooth_scroll: f.smooth_scroll,
             tab_count: f.tab_count,
+            menu_bar: f.menu_bar,
             home_layout: f.home_layout,
             cover_size: f.cover_size,
             home_stats: f.home_stats,
@@ -1043,6 +1050,7 @@ mod tests {
             scroll_bar: false,
             smooth_scroll: false,
             tab_count: true,
+            menu_bar: true,
             home_layout: HomeLayout::List,
             cover_size: CoverSize::Large,
             home_stats: false,

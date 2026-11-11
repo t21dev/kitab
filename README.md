@@ -156,7 +156,7 @@ Kitab is a document reader, so it leaves image files to your image viewer.
 
 **Keyboard and look**
 - SumatraPDF's shortcuts where it has one, a command palette (Ctrl+K), and a `keymap.json` for your own
-- Seven themes (Dark, Light, Paper, Ink, Nord, Noctua, Vampire), any accent colour, three densities
+- Ten themes (Dark, Gray, Light, Paper, Sand, Linen, Ink, Nord, Noctua, Vampire), any accent colour, three densities
 - A quick dock you can move to any edge, choose the buttons of, or tuck away
 
 **Windows**

@@ -606,6 +606,22 @@ fn appearance(
             st,
         ))
         .child(group(
+            "Menu bar",
+            Some("File, Edit, View, Go, Tools and Help in a row under the title bar. Alt and a menu\u{2019}s first letter opens it."),
+            well_row(
+                "Show the menu bar",
+                "",
+                switch(
+                    "menu-bar",
+                    st.menu_bar,
+                    st,
+                    change(ws, |s: &mut Style| s.menu_bar = !s.menu_bar),
+                ),
+                st,
+            ),
+            st,
+        ))
+        .child(group(
             "Quick dock",
             Some("Zoom, fit, find, rotate and more, floating over the page. At the bottom it also holds the page navigator."),
             div()

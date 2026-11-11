@@ -58,6 +58,11 @@ const INDEX: &[(Section, &str, &str)] = &[
     ),
     (
         Section::Appearance,
+        "Menu bar",
+        "menubar file edit view go tools help classic alt menus",
+    ),
+    (
+        Section::Appearance,
         "Quick dock",
         "dock toolbar bottom top left right position",
     ),

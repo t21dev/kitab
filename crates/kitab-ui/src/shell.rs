@@ -30,6 +30,7 @@ use std::time::Duration;
 
 mod home_ui;
 mod library_ui;
+mod menu_bar;
 mod page_tools_ui;
 mod palette_ui;
 mod password_ui;
@@ -60,6 +61,12 @@ impl gpui::Global for SettingsSink {}
 const CLOSED_MAX: usize = 20;
 
 pub struct Workspace {
+    /// The menu bar's menu that is open (see `menu_bar.rs`).
+    bar_open: Option<usize>,
+    /// Where the menu bar's titles are on screen, from the last frame.
+    bar_bounds: Rc<std::cell::Cell<[gpui::Bounds<Pixels>; menu_bar::COUNT]>>,
+    /// Alt is held: the menu bar underlines the letters that open its menus.
+    alt_down: bool,
     /// `KITAB_TRACE_UI=1`: log the time between frames to stderr (perf work on menus, dialogs, Settings).
     ui_trace: Option<std::cell::Cell<std::time::Instant>>,
     engine: Arc<dyn DocEngine>,
@@ -231,6 +238,9 @@ impl Workspace {
             overlay_focus: cx.focus_handle(),
             ui_trace: std::env::var_os("KITAB_TRACE_UI")
                 .map(|_| std::cell::Cell::new(std::time::Instant::now())),
+            bar_open: None,
+            bar_bounds: Rc::default(),
+            alt_down: false,
             focus_check: false,
             focus_sidebar: false,
             home: home_ui::HomeView::new(),
@@ -2735,6 +2745,8 @@ impl Render for Workspace {
         }
         let side_tabs = st.tabs == TabsAt::Sidebar;
         let title_bar = (!side_tabs && st.shows_tabs()).then(|| self.title_bar(&st, window, cx));
+        // Under the title bar, and away with it in focus mode.
+        let menu_bar = title_bar.as_ref().and_then(|_| self.menu_bar(&st, cx));
         let show_sidebar =
             (self.sidebar && st.shows_sidebar()) || (st.minimal && self.focus_sidebar);
         let body = match self.active_reader().cloned() {
@@ -2910,6 +2922,18 @@ impl Render for Workspace {
                 }
             }))
             .on_mouse_move(cx.listener(|ws, _: &gpui::MouseMoveEvent, _, _| ws.note_input()))
+            // The menu bar: Alt and a letter opens a menu, and the letters
+            // show while Alt is held.
+            .on_key_down(cx.listener(Self::bar_key))
+            .on_modifiers_changed(cx.listener(|ws, e: &gpui::ModifiersChangedEvent, _, cx| {
+                let alt = e.modifiers.alt && !e.modifiers.control;
+                if alt != ws.alt_down {
+                    ws.alt_down = alt;
+                    if Style::get(cx).menu_bar {
+                        cx.notify();
+                    }
+                }
+            }))
             .relative()
             .size_full()
             .flex()
@@ -3006,6 +3030,7 @@ impl Render for Workspace {
                 }
             }))
             .children(title_bar)
+            .children(menu_bar)
             .child(body)
             .children(overlays)
             .into_any_element()
@@ -3421,6 +3446,12 @@ impl Workspace {
                 cx.stop_propagation();
                 cx.notify();
             }
+            // In a menu of the menu bar: the menu beside it.
+            "left" | "right" => {
+                if self.bar_step(key == "right", window, cx) {
+                    cx.stop_propagation();
+                }
+            }
             "enter" | "space" => {
                 if let Some(run) = m.picked() {
                     cx.stop_propagation();
@@ -3464,6 +3495,7 @@ impl Workspace {
     }
 
     pub(crate) fn close_menu(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.bar_open = None;
         if let Some(m) = self.menu.take() {
             if Style::get(cx).animations {
                 let serial = m.serial;
@@ -3524,7 +3556,13 @@ impl Workspace {
         let theme_row = {
             let ws = ws.clone();
             MenuItem::Custom(Rc::new(move |st: &Style, _cx: &mut App| {
-                let mut row = div().flex().gap(px(6.0)).px(px(10.0)).py(px(6.0));
+                // Ten themes don't fit one row of the menu: they wrap.
+                let mut row = div()
+                    .flex()
+                    .flex_wrap()
+                    .gap(px(6.0))
+                    .px(px(10.0))
+                    .py(px(6.0));
                 for t in &themes {
                     let selected = t.id == st.theme.id;
                     let theme = t.clone();
@@ -4396,7 +4434,9 @@ impl Workspace {
                             ws.menu_key(&e.keystroke.key, window, cx)
                         }))
                         // The pointer takes over from the arrow keys.
-                        .on_mouse_move(cx.listener(|ws, _: &gpui::MouseMoveEvent, _, cx| {
+                        .on_mouse_move(cx.listener(|ws, e: &gpui::MouseMoveEvent, window, cx| {
+                            // Along the menu bar, the menu under the pointer opens.
+                            ws.bar_hover(e.position, window, cx);
                             if let Some(m) = ws.menu.as_mut().filter(|m| m.hi.is_some()) {
                                 m.hi = None;
                                 cx.notify();
@@ -4404,7 +4444,11 @@ impl Workspace {
                         }))
                         .on_mouse_down(
                             MouseButton::Left,
-                            cx.listener(|ws, _, window, cx| ws.close_menu(window, cx)),
+                            cx.listener(|ws, e: &MouseDownEvent, window, cx| {
+                                if !ws.bar_press(e.position, window, cx) {
+                                    ws.close_menu(window, cx)
+                                }
+                            }),
                         )
                         .on_mouse_down(
                             MouseButton::Right,

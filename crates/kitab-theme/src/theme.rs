@@ -7,15 +7,17 @@ use serde::Deserialize;
 use std::fmt;
 
 /// Ids of the built-in themes, in the order Settings shows them.
-pub const BUILTIN_IDS: [&str; 8] = [
-    "dark", "gray", "light", "paper", "nord", "noctua", "vampire", "ink",
+pub const BUILTIN_IDS: [&str; 10] = [
+    "dark", "gray", "light", "paper", "sand", "linen", "nord", "noctua", "vampire", "ink",
 ];
 
-const BUILTIN_JSON: [(&str, &str); 8] = [
+const BUILTIN_JSON: [(&str, &str); 10] = [
     ("dark", include_str!("../../../assets/themes/dark.json")),
     ("gray", include_str!("../../../assets/themes/gray.json")),
     ("light", include_str!("../../../assets/themes/light.json")),
     ("paper", include_str!("../../../assets/themes/paper.json")),
+    ("sand", include_str!("../../../assets/themes/sand.json")),
+    ("linen", include_str!("../../../assets/themes/linen.json")),
     ("nord", include_str!("../../../assets/themes/nord.json")),
     ("noctua", include_str!("../../../assets/themes/noctua.json")),
     (
