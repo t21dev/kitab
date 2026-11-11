@@ -31,6 +31,9 @@ pub(super) struct Toast {
     /// "Open" for a new PDF (opens a tab), "Show" for other files.
     pub open: Option<PathBuf>,
     pub serial: u64,
+    /// A job under way, 0 to 1: the toast stays, with a bar that fills, and
+    /// its text changes in place (see `Workspace::progress_toast`).
+    pub progress: Option<f32>,
 }
 
 /// "Save pages as a new PDF".
@@ -122,12 +125,59 @@ impl Workspace {
             bad,
             open,
             serial,
+            progress: None,
         });
         // Errors stay until closed (DESIGN.md › Toasts); the rest go by.
         if !bad {
             self.after(TOAST_FOR, cx, move |ws, cx| ws.dismiss_toast(serial, cx));
         }
         cx.notify();
+    }
+
+    /// A long job's progress (printing many pages): one toast that stays
+    /// where it is while its text and bar change, instead of a new toast
+    /// for every step. The job's outcome replaces it with [`Self::toast`];
+    /// a job that ends without one calls [`Self::end_progress`].
+    pub(super) fn progress_toast(
+        &mut self,
+        text: impl Into<SharedString>,
+        done: usize,
+        total: usize,
+        cx: &mut Context<Self>,
+    ) {
+        let progress = Some((done as f32 / total.max(1) as f32).clamp(0.0, 1.0));
+        match self.tools.toast.as_mut().filter(|t| t.progress.is_some()) {
+            Some(t) => {
+                t.text = text.into();
+                t.progress = progress;
+            }
+            None => {
+                self.tools.toast_serial += 1;
+                self.tools.toast_closing = None;
+                self.tools.toast = Some(Toast {
+                    text: text.into(),
+                    bad: false,
+                    open: None,
+                    serial: self.tools.toast_serial,
+                    progress,
+                });
+            }
+        }
+        cx.notify();
+    }
+
+    /// The job behind a progress toast ended with nothing to say (it was
+    /// cancelled): the toast goes.
+    pub(super) fn end_progress(&mut self, cx: &mut Context<Self>) {
+        if let Some(serial) = self
+            .tools
+            .toast
+            .as_ref()
+            .filter(|t| t.progress.is_some())
+            .map(|t| t.serial)
+        {
+            self.dismiss_toast(serial, cx);
+        }
     }
 
     fn dismiss_toast(&mut self, serial: u64, cx: &mut Context<Self>) {
@@ -224,14 +274,40 @@ impl Workspace {
             .text_color(st.c(|c| c.text))
             .child(
                 svg()
-                    .path(icon(if t.bad { "alert" } else { "check" }))
+                    .path(icon(if t.bad {
+                        "alert"
+                    } else if t.progress.is_some() {
+                        "print"
+                    } else {
+                        "check"
+                    }))
                     .size(px(16.0))
                     .text_color(if t.bad {
                         st.c(|c| c.bad)
+                    } else if t.progress.is_some() {
+                        st.c(|c| c.muted)
                     } else {
                         st.c(|c| c.ok)
                     }),
             )
+            // A job under way: a thin bar along the bottom that fills.
+            .children(t.progress.map(|done| {
+                div()
+                    .absolute()
+                    .left(px(16.0))
+                    .right(px(16.0))
+                    .bottom(px(5.0))
+                    .h(px(2.0))
+                    .rounded_full()
+                    .bg(st.c(|c| c.line))
+                    .child(
+                        div()
+                            .h_full()
+                            .w(gpui::relative(done))
+                            .rounded_full()
+                            .bg(st.c(|c| c.accent)),
+                    )
+            }))
             .child(
                 div()
                     .max_w(px(520.0))

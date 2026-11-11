@@ -26,6 +26,15 @@ an environment switch to turn it off so it can still be benchmarked:
   Select  TextLayout::kitab_bounds: bounds without the panic, for hit-testing.
   RTL     Right-to-left glyph runs (Arabic, Hebrew) are placed at DirectWrite's
           origin and advance leftwards, instead of left to right.
+  Paths   The two window-sized textures paths are drawn through are 1x1 until
+          a frame has a path to draw (ink, a drawn shape), and go back after 30
+          frames without one. They were 8 bytes per window pixel, always: 29 MB
+          in a 2400x1500 window, 66 MB at 4K.
+  Pixels  RenderImage::kitab_husk: an image that is only on the GPU. Once a page
+          has been uploaded its pixels in RAM are let go and a husk (same id and
+          size, no bytes) stands in for it. Painting a husk whose texture is
+          gone (device lost) paints nothing and counts in gpui::kitab_image_misses,
+          so the app renders the page again.
 
 Run `python tools/patch_gpui.py` once after cloning (and after a gpui version bump).
 
@@ -574,7 +583,211 @@ struct WindowInvalidatorInner {"""),
     /// The bounds of this layout.
     pub fn bounds(&self) -> Bounds<Pixels> {"""),
     ])
+    husk_patch()
+    path_patch()
     print(f"patched gpui copy: {DEST}")
+
+
+def husk_patch() -> None:
+    """12. Pixels: images that live only on the GPU (see the module docs)."""
+    edit("src/assets.rs", [
+        ("""    pub(crate) scale_factor: f32,
+    data: SmallVec<[Frame; 1]>,
+}
+""",
+         """    pub(crate) scale_factor: f32,
+    data: SmallVec<[Frame; 1]>,
+    /// Kitab patch: set on a husk, an image whose pixels are only on the GPU.
+    kitab_husk: Option<Size<DevicePixels>>,
+}
+
+static KITAB_IMAGE_MISSES: AtomicUsize = AtomicUsize::new(0);
+
+/// Kitab patch: how many times a husk was painted after its texture had gone
+/// (a lost device, an atlas that was cleared). It only ever grows.
+pub fn kitab_image_misses() -> usize {
+    KITAB_IMAGE_MISSES.load(SeqCst)
+}
+
+pub(crate) fn kitab_note_image_miss() {
+    KITAB_IMAGE_MISSES.fetch_add(1, SeqCst);
+}
+"""),
+        ("""            scale_factor: 1.0,
+            data: data.into(),
+        }
+    }
+""",
+         """            scale_factor: 1.0,
+            data: data.into(),
+            kitab_husk: None,
+        }
+    }
+
+    /// Kitab patch: stands in for `of` once its pixels are on the GPU: the
+    /// same id and size and no bytes, so `of` (and its memory) can be dropped.
+    pub fn kitab_husk(of: &RenderImage) -> Self {
+        Self {
+            id: of.id,
+            scale_factor: of.scale_factor,
+            data: SmallVec::new(),
+            kitab_husk: Some(of.size(0)),
+        }
+    }
+
+    /// Kitab patch: whether this is a husk (no pixels in memory).
+    pub fn kitab_is_husk(&self) -> bool {
+        self.kitab_husk.is_some()
+    }
+"""),
+        ("""    pub fn size(&self, frame_index: usize) -> Size<DevicePixels> {
+""",
+         """    pub fn size(&self, frame_index: usize) -> Size<DevicePixels> {
+        if let Some(size) = self.kitab_husk {
+            return size;
+        }
+"""),
+        ("""    pub fn delay(&self, frame_index: usize) -> Delay {
+""",
+         """    pub fn delay(&self, frame_index: usize) -> Delay {
+        if self.kitab_husk.is_some() {
+            return Delay::from_numer_denom_ms(0, 1);
+        }
+"""),
+        ("""    pub fn frame_count(&self) -> usize {
+""",
+         """    pub fn frame_count(&self) -> usize {
+        if self.kitab_husk.is_some() {
+            return 1;
+        }
+"""),
+    ])
+    edit("src/window.rs", [
+        ("""        let tile = self
+            .sprite_atlas
+            .get_or_insert_with(&params.into(), &mut || {
+                Ok(Some((
+                    data.size(frame_index),
+                    Cow::Borrowed(
+                        data.as_bytes(frame_index)
+                            .expect("It's the caller's job to pass a valid frame index"),
+                    ),
+                )))
+            })?
+            .expect("Callback above only returns Some");
+""",
+         """        // Kitab patch: a husk has no bytes. Its texture is normally in the
+        // atlas already; if it is gone, paint nothing and say so.
+        let Some(tile) = self
+            .sprite_atlas
+            .get_or_insert_with(&params.into(), &mut || {
+                Ok(data
+                    .as_bytes(frame_index)
+                    .map(|bytes| (data.size(frame_index), Cow::Borrowed(bytes))))
+            })?
+        else {
+            crate::kitab_note_image_miss();
+            return Ok(());
+        };
+"""),
+    ])
+
+
+def path_patch() -> None:
+    """13. Paths: the path textures exist at window size only while paths are drawn."""
+    edit("src/platform/windows/directx_renderer.rs", [
+        ("""    path_intermediate_msaa_view: [Option<ID3D11RenderTargetView>; 1],
+
+    // Cached window size and viewport
+""",
+         """    path_intermediate_msaa_view: [Option<ID3D11RenderTargetView>; 1],
+    // Kitab patch: the path textures are 1x1 until a frame draws a path.
+    kitab_path_full: bool,
+    kitab_pathless_frames: u32,
+
+    // Cached window size and viewport
+"""),
+        ("""            path_intermediate_srv,
+            viewport,
+            width,
+            height,
+        }))
+""",
+         """            path_intermediate_srv,
+            kitab_path_full: false,
+            kitab_pathless_frames: 0,
+            viewport,
+            width,
+            height,
+        }))
+"""),
+        ("""        self.path_intermediate_srv = path_intermediate_srv;
+        self.viewport = viewport;
+        Ok(())
+    }
+""",
+         """        self.path_intermediate_srv = path_intermediate_srv;
+        self.kitab_path_full = false;
+        self.kitab_pathless_frames = 0;
+        self.viewport = viewport;
+        Ok(())
+    }
+
+    /// Kitab patch: the path textures at window size while frames draw
+    /// paths, 1x1 otherwise (they cost 8 bytes per window pixel).
+    fn kitab_fit_path_textures(
+        &mut self,
+        devices: &DirectXRendererDevices,
+        has_paths: bool,
+    ) -> Result<()> {
+        let (width, height) = if has_paths {
+            self.kitab_pathless_frames = 0;
+            if self.kitab_path_full {
+                return Ok(());
+            }
+            (self.width, self.height)
+        } else {
+            if !self.kitab_path_full {
+                return Ok(());
+            }
+            self.kitab_pathless_frames += 1;
+            if self.kitab_pathless_frames < 30 {
+                return Ok(());
+            }
+            (1, 1)
+        };
+        let (texture, srv) = create_path_intermediate_texture(&devices.device, width, height)?;
+        let (msaa_texture, msaa_view) =
+            create_path_intermediate_msaa_texture_and_view(&devices.device, width, height)?;
+        self.path_intermediate_texture = texture;
+        self.path_intermediate_srv = srv;
+        self.path_intermediate_msaa_texture = msaa_texture;
+        self.path_intermediate_msaa_view = msaa_view;
+        self.kitab_path_full = has_paths;
+        Ok(())
+    }
+"""),
+        ("""    let (path_intermediate_texture, path_intermediate_srv) =
+        create_path_intermediate_texture(&devices.device, width, height)?;
+    let (path_intermediate_msaa_texture, path_intermediate_msaa_view) =
+        create_path_intermediate_msaa_texture_and_view(&devices.device, width, height)?;
+""",
+         """    // Kitab patch: 1x1 until a frame draws a path (kitab_fit_path_textures).
+    let (path_intermediate_texture, path_intermediate_srv) =
+        create_path_intermediate_texture(&devices.device, 1, 1)?;
+    let (path_intermediate_msaa_texture, path_intermediate_msaa_view) =
+        create_path_intermediate_msaa_texture_and_view(&devices.device, 1, 1)?;
+"""),
+        ("""    pub(crate) fn draw(&mut self, scene: &Scene) -> Result<()> {
+        self.pre_draw()?;
+""",
+         """    pub(crate) fn draw(&mut self, scene: &Scene) -> Result<()> {
+        // Kitab patch: path textures only while there are paths to draw.
+        self.resources
+            .kitab_fit_path_textures(&self.devices, !scene.paths.is_empty())?;
+        self.pre_draw()?;
+"""),
+    ])
 
 
 if __name__ == "__main__":

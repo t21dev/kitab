@@ -142,6 +142,32 @@ impl PageCache {
         self.map.get(key).map(|(i, _)| i.clone())
     }
 
+    /// The page `key` has been painted, so its pixels are on the GPU: let
+    /// the copy in memory go and keep a husk (same id and size, no bytes).
+    /// It still counts its full size here: the texture is as big as it was.
+    pub fn slim(&mut self, key: &PageKey) {
+        if let Some((image, _)) = self.map.get_mut(key)
+            && !image.kitab_is_husk()
+        {
+            *image = Arc::new(RenderImage::kitab_husk(image));
+        }
+    }
+
+    /// The GPU lost its textures: husks have nothing to show any more. Drop
+    /// them, so those pages are drawn again. Whether any were dropped.
+    pub fn drop_husks(&mut self) -> bool {
+        let gone: Vec<PageKey> = self
+            .map
+            .iter()
+            .filter(|(_, (i, _))| i.kitab_is_husk())
+            .map(|(k, _)| *k)
+            .collect();
+        for key in &gone {
+            self.remove(key);
+        }
+        !gone.is_empty()
+    }
+
     /// Keep only `keep`; everything else is evicted (a hidden tab keeps
     /// what it shows and nothing more).
     pub fn retain_only(&mut self, keep: &[PageKey]) {
@@ -224,6 +250,35 @@ mod tests {
 
     fn img() -> Arc<RenderImage> {
         Arc::new(RenderImage::new([Frame::new(RgbaImage::new(1, 1))]))
+    }
+
+    #[test]
+    fn a_painted_page_keeps_only_a_husk() {
+        let key = |page| PageKey {
+            page,
+            scale_key: 64,
+            rotation: 0,
+        };
+        let mut c = PageCache::new(1000);
+        let full = Arc::new(RenderImage::new([Frame::new(RgbaImage::new(3, 2))]));
+        let id = full.id;
+        c.insert(key(0), full, 24);
+        c.insert(key(1), img(), 4);
+        c.slim(&key(0));
+        let husk = c.get(&key(0)).unwrap();
+        // The same picture to the GPU (id, size), with no bytes in memory.
+        assert!(husk.kitab_is_husk());
+        assert_eq!(husk.id, id);
+        assert_eq!((husk.size(0).width.0, husk.size(0).height.0), (3, 2));
+        assert!(husk.as_bytes(0).is_none());
+        assert_eq!(husk.frame_count(), 1, "drop_image still frees its texture");
+        assert_eq!(c.bytes(), 28, "the texture is as big as it was");
+        assert!(c.take_evicted().is_empty(), "its texture stays");
+        // The GPU lost its textures: husks go (drawn again), full pages stay.
+        assert!(c.drop_husks());
+        assert!(!c.contains(&key(0)));
+        assert!(c.contains(&key(1)));
+        assert!(!c.drop_husks());
     }
 
     #[test]

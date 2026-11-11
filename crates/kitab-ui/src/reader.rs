@@ -171,6 +171,11 @@ pub struct Reader {
     rotation: u16,
     list: ListState,
     cache: PageCache,
+    /// Pages painted from pixels in memory during the last frame: their
+    /// textures are on the GPU now, so the copies in memory can go.
+    painted: Rc<std::cell::RefCell<Vec<PageKey>>>,
+    /// `gpui::kitab_image_misses` when this tab last looked.
+    seen_misses: usize,
     pending: HashSet<PageKey>,
     generation: u64,
     focus: FocusHandle,
@@ -311,6 +316,8 @@ impl Reader {
             rotation: 0,
             list: ListState::new(0, ListAlignment::Top, px(800.0)),
             cache: PageCache::new(CACHE_BUDGET),
+            painted: Rc::default(),
+            seen_misses: gpui::kitab_image_misses(),
             pending: HashSet::new(),
             generation: 1,
             focus,
@@ -1289,6 +1296,15 @@ impl Reader {
         .detach();
     }
 
+    /// Pages painted from pixels in memory are on the GPU now: let the
+    /// copies in memory go (see the `painted` field).
+    fn slim_painted(&mut self) {
+        let keys: Vec<PageKey> = self.painted.borrow_mut().drain(..).collect();
+        for key in keys {
+            self.cache.slim(&key);
+        }
+    }
+
     fn page_element(
         &mut self,
         ix: usize,
@@ -1430,11 +1446,46 @@ impl Reader {
                     .on_mouse_move(cx.listener(move |r, _: &MouseMoveEvent, _, cx| {
                         r.ensure_chars(ix as u32, cx)
                     }))
-                    .children(image.map(|i| {
-                        img(ImageSource::Render(i))
+                    .children(image.as_ref().map(|i| {
+                        img(ImageSource::Render(i.clone()))
                             .w(px(w))
                             .h(px(h))
                             .rounded(radius)
+                    }))
+                    // Painted right after the picture, so by then its
+                    // texture is on the GPU (see `painted`). A husk whose
+                    // texture has gone asks for another frame, which
+                    // draws the page again.
+                    .children(image.as_ref().map(|i| {
+                        let (husk, painted) = (i.kitab_is_husk(), self.painted.clone());
+                        let shown = self.cache.peek(&key).is_some_and(|k| k.id == i.id);
+                        let seen = self.seen_misses;
+                        let this = cx.weak_entity();
+                        gpui::canvas(
+                            |_, _, _| (),
+                            move |_, _, window, cx| {
+                                if husk {
+                                    if gpui::kitab_image_misses() != seen {
+                                        window.refresh();
+                                    }
+                                } else if shown {
+                                    let first = painted.borrow().is_empty();
+                                    painted.borrow_mut().push(key);
+                                    // Once the frame is done, not at the
+                                    // next one: a window left alone draws
+                                    // no next frame.
+                                    if first {
+                                        window.defer(cx, move |_, cx| {
+                                            let _ = this.update(cx, |r, _| r.slim_painted());
+                                        });
+                                    }
+                                }
+                            },
+                        )
+                        .absolute()
+                        .top_0()
+                        .left_0()
+                        .size_0()
                     }))
                     .children(self.markup_overlay(ix, ppt))
                     .children(self.note_pins(ix, ppt, &st, cx))
@@ -1637,6 +1688,19 @@ impl Render for Reader {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let st = Style::get(cx).clone();
         self.scale_factor = window.scale_factor();
+        // Pages painted last frame are on the GPU: one copy is enough, so
+        // the pixels in memory go (a page at fit width on a large screen is
+        // tens of megabytes).
+        self.slim_painted();
+        // The GPU lost its textures (a driver reset, a lost device): pages
+        // kept only there are drawn again.
+        let misses = gpui::kitab_image_misses();
+        if misses != self.seen_misses {
+            self.seen_misses = misses;
+            if self.cache.drop_husks() {
+                cx.notify();
+            }
+        }
         // Free GPU atlas space of pages the cache let go of.
         for image in self.cache.take_evicted() {
             let _ = window.drop_image(image);
@@ -1724,7 +1788,11 @@ impl Render for Reader {
             let s = self.page_size(lo as usize);
             let dev = ppt * window.scale_factor();
             let page_bytes = (s.w * dev) * (s.h * dev) * 4.0;
-            let need = (page_bytes as usize).saturating_mul(on_screen as usize + 3);
+            // On screen, the one drawn ahead, and the one just left (so
+            // turning back never redraws). Each is a texture of tens of
+            // megabytes on a large screen; a third spare one was rarely
+            // shown again before it was drawn anyway.
+            let need = (page_bytes as usize).saturating_mul(on_screen as usize + 2);
             self.cache.set_budget(CACHE_BUDGET.max(need));
         }
         let page = self.current_page();

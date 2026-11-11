@@ -408,7 +408,12 @@ impl Workspace {
             cx.spawn(async move |cx| {
                 while let Ok(Ok(done)) = rx.recv().await {
                     let _ = watcher.update(cx, |ws, cx| {
-                        ws.toast(format!("Printing page {done} of {total}…"), false, None, cx)
+                        ws.progress_toast(
+                            format!("Printing page {done} of {total}…"),
+                            done,
+                            total,
+                            cx,
+                        )
                     });
                 }
             })
@@ -425,7 +430,7 @@ impl Workspace {
                         cx,
                     )
                 }
-                Ok(false) => {}
+                Ok(false) => ws.end_progress(cx),
                 Err(e) => ws.toast(format!("Couldn't print: {e}"), true, None, cx),
             });
         })
@@ -597,7 +602,12 @@ impl Workspace {
             cx.spawn(async move |cx| {
                 while let Ok((done, total)) = rx.recv().await {
                     let _ = watcher.update(cx, |ws, cx| {
-                        ws.toast(format!("Printing page {done} of {total}…"), false, None, cx)
+                        ws.progress_toast(
+                            format!("Printing page {done} of {total}…"),
+                            done,
+                            total,
+                            cx,
+                        )
                     });
                 }
             })
@@ -609,7 +619,7 @@ impl Workspace {
                     let what = if n == 1 { "page" } else { "pages" };
                     ws.toast(format!("Sent {n} {what} to the printer."), false, None, cx)
                 }
-                Ok(None) => {}
+                Ok(None) => ws.end_progress(cx),
                 Err(e) => ws.toast(format!("Couldn't print: {e}"), true, None, cx),
             });
         })

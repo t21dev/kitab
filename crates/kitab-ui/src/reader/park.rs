@@ -93,15 +93,51 @@ impl Reader {
             return;
         }
         self.shrinking = true;
+        let (engine, doc, generation) = (self.engine.clone(), self.doc, self.generation);
         cx.spawn(async move |this, cx| {
             let small = cx
                 .background_spawn(async move {
-                    big.into_iter()
+                    let small = big
+                        .into_iter()
                         .filter_map(|(key, image)| {
-                            let (small, bytes, f) = crate::cache::shrink(&image, STAND_IN_PIXELS)?;
-                            Some((key, small, bytes, f))
+                            if !image.kitab_is_husk() {
+                                let (small, bytes, f) =
+                                    crate::cache::shrink(&image, STAND_IN_PIXELS)?;
+                                return Some((key, small, bytes, f));
+                            }
+                            // Only on the GPU (its pixels in memory were let
+                            // go once it was painted): draw the small copy.
+                            let size = image.size(0);
+                            let pixels = u64::from(size.width.0.max(0) as u32)
+                                * u64::from(size.height.0.max(0) as u32);
+                            if pixels <= STAND_IN_PIXELS {
+                                return None;
+                            }
+                            let f = ((pixels as f64 / STAND_IN_PIXELS as f64).sqrt().ceil() as u32)
+                                .max(2);
+                            let req = RenderRequest {
+                                page: key.page,
+                                scale: key.scale_key as f32 / 64.0 / f as f32,
+                                rotation: key.rotation,
+                                tile: None,
+                                generation,
+                            };
+                            let bmp = engine.render(doc?, req).ok().flatten()?;
+                            let bytes = bmp.byte_size();
+                            let buffer = RgbaImage::from_raw(bmp.width, bmp.height, bmp.bgra)?;
+                            Some((
+                                key,
+                                Arc::new(RenderImage::new([Frame::new(buffer)])),
+                                bytes,
+                                f,
+                            ))
                         })
-                        .collect::<Vec<_>>()
+                        .collect::<Vec<_>>();
+                    // Drawing the small copies filled MuPDF's caches again.
+                    if let Some(doc) = doc {
+                        engine.release_extra(doc);
+                    }
+                    small
                 })
                 .await;
             let _ = this.update(cx, |r, cx| {

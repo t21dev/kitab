@@ -13,7 +13,8 @@ kitab-bench input steps posted to its own window:
 
     open        4 s after start, the first page shown
     idle_10s    10 s later, untouched
-    scrolled    after 60 wheel notches down (about 3 s of reading)
+    scrolled    after the wheel notches down (60 by default, about 3 s of reading)
+    peak        the most held at any moment during the scrolling
     settled     15 s after the scrolling stopped
 
 At each mark: working set, private bytes, and the CPU time used since the
@@ -70,7 +71,7 @@ def child(parent, name, timeout=20):
     raise SystemExit(f"{name} didn't start")
 
 
-def run(app, exe, doc, work):
+def run(app, exe, doc, work, size=(1200, 800), notches=60):
     env = dict(os.environ)
     args = [str(exe)]
     if app == "kitab":
@@ -83,8 +84,9 @@ def run(app, exe, doc, work):
         args += ["-appdata", str(ad)]
     args.append(str(doc))
     bench = ROOT / "target" / "release" / "kitab-bench.exe"
-    scroll = ";".join(["wheel:700,450,-1;wait:50"] * 60)
-    steps = f"size:1200,800;wait:14000;{scroll};wait:22000"
+    w, h = size
+    scroll = ";".join([f"wheel:{w // 2},{h // 2},-1;wait:50"] * notches)
+    steps = f"size:{w},{h};wait:14000;{scroll};wait:22000"
     b = subprocess.Popen([str(bench), "shot", "--out", str(work / f"{app}.png"), "--wait", "4000",
                           "--do", steps, "--", *args], env=env,
                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -107,8 +109,17 @@ def run(app, exe, doc, work):
     # 60 × (wheel + 50 ms); wheel and wait steps add no pause of their own.
     mark("open", 4.5)
     mark("idle_10s", 14.5)
-    scroll_end = 4.0 + 0.15 + 14.0 + 60 * 0.05
+    scroll_start = 4.0 + 0.15 + 14.0
+    scroll_end = scroll_start + notches * 0.05
+    # The most memory held at any moment while scrolling (sampled 10 times a second).
+    peak_ws = peak_pv = 0.0
+    time.sleep(max(0.0, scroll_start - (time.time() - t0)))
+    while time.time() - t0 < scroll_end + 0.3:
+        ws, pv, _ = sample(pid)
+        peak_ws, peak_pv = max(peak_ws, ws), max(peak_pv, pv)
+        time.sleep(0.1)
     mark("scrolled", scroll_end + 0.5)
+    rows.append(("peak", peak_ws, peak_pv, 0.0, float("nan")))
     mark("settled", scroll_end + 15.5)
     try:
         b.wait(timeout=40)
@@ -125,14 +136,17 @@ def main():
     ap.add_argument("--sumatra", default=r"C:\Program Files\SumatraPDF\SumatraPDF.exe")
     ap.add_argument("--only", choices=["kitab", "sumatra"])
     ap.add_argument("--json")
+    ap.add_argument("--size", default="1200x800", help="window size, e.g. 2400x1500")
+    ap.add_argument("--notches", type=int, default=60, help="wheel notches scrolled down")
     a = ap.parse_args()
+    size = tuple(int(v) for v in a.size.lower().split("x"))
     work = pathlib.Path(tempfile.mkdtemp(prefix="kitab-read-"))
     out = {}
     try:
         for app, exe in [("kitab", a.kitab), ("sumatra", a.sumatra)]:
             if a.only and a.only != app:
                 continue
-            out[app] = run(app, exe, pathlib.Path(a.file).resolve(), work)
+            out[app] = run(app, exe, pathlib.Path(a.file).resolve(), work, size, a.notches)
             time.sleep(2)
     finally:
         shutil.rmtree(work, ignore_errors=True)
