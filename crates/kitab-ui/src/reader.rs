@@ -1273,7 +1273,9 @@ impl Reader {
                         if this.parked {
                             // The tab went out of sight meanwhile: it keeps
                             // only what it showed (it renders again on return).
-                        } else if let Some(buffer) = RgbaImage::from_raw(bmp.width, bmp.height, bmp.bgra) {
+                        } else if let Some(buffer) =
+                            RgbaImage::from_raw(bmp.width, bmp.height, bmp.bgra)
+                        {
                             let image = Arc::new(RenderImage::new([Frame::new(buffer)]));
                             this.cache.insert(key, image, bytes);
                             cx.notify();
@@ -1875,7 +1877,10 @@ impl Render for Reader {
                     .as_ref()
                     .map(|a| crate::autoscroll::mark(a.anchor, &st)),
             )
-            .on_mouse_move(cx.listener(|r, e: &MouseMoveEvent, _, cx| {
+            .on_mouse_move(cx.listener(|r, e: &MouseMoveEvent, window, cx| {
+                // Markdown editing: a drag selection or a scroll bar thumb,
+                // followed even when the pointer leaves the editor.
+                r.editor_mouse_move(e, window, cx);
                 if let Some(a) = r.autoscroll.as_mut() {
                     a.moved(e.position, e.pressed_button == Some(MouseButton::Middle));
                 }
@@ -1938,6 +1943,7 @@ impl Render for Reader {
                         cx.notify();
                     }
                     r.markup_up(cx);
+                    r.editor_mouse_up(cx);
                 }),
             )
             .on_action(cx.listener(|r, _: &ScrollDown, _, cx| {
@@ -2151,7 +2157,12 @@ impl Reader {
             if corner {
                 place.right(px(22.0)).child(body)
             } else {
-                place.left_0().right_0().flex().justify_center().child(body)
+                // Editing Markdown: centred on the preview, off the source.
+                dock::over_preview(place, self.is_editing())
+                    .right_0()
+                    .flex()
+                    .justify_center()
+                    .child(body)
             }
             .into_any_element(),
         )
@@ -2253,6 +2264,8 @@ impl Reader {
             .child(
                 canvas(move |bounds, _, _| cell.set(Some(bounds)), |_, _, _, _| {})
                     .absolute()
+                    .top_0()
+                    .left_0()
                     .size_full(),
             )
             .child(

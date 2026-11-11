@@ -172,7 +172,14 @@ impl Reader {
                 .get()
                 .is_some_and(|t| t.elapsed() < HIDE_FOR);
         if hidden && !hiding {
-            return Some(dock_handle(at, top_inset, bar, self.unsaved_marks(), st));
+            return Some(dock_handle(
+                at,
+                top_inset,
+                bar,
+                self.unsaved_marks(),
+                self.is_editing(),
+                st,
+            ));
         }
         let upright = at.upright();
         let mode = self.zoom;
@@ -590,21 +597,21 @@ impl Reader {
             )
         };
         let place = div().absolute();
+        // Editing Markdown: the dock floats over the preview, not the source.
+        let editing = self.is_editing();
         let placed = match at {
-            DockAt::Top => place
+            DockAt::Top => over_preview(place, editing)
                 .top(px(10.0 + top_inset))
-                .left_0()
                 .right_0()
                 .flex()
                 .justify_center(),
-            DockAt::Bottom => place
+            DockAt::Bottom => over_preview(place, editing)
                 .bottom(px(16.0 + bar))
-                .left_0()
                 .right_0()
                 .flex()
                 .justify_center(),
-            DockAt::Left => place
-                .left(px(14.0))
+            DockAt::Left => over_preview(place, editing)
+                .ml(px(14.0))
                 .top_0()
                 .bottom(px(bar))
                 .flex()
@@ -686,7 +693,14 @@ fn away_from_edge(at: DockAt) -> &'static str {
 /// The hidden dock: a small handle at its edge. A click (or Ctrl+.) shows it.
 /// The hidden dock's handle. `pending` changes not saved yet show as a
 /// badge on it, so they aren't forgotten behind a hidden dock.
-fn dock_handle(at: DockAt, top_inset: f32, bar: f32, pending: usize, st: &Style) -> AnyElement {
+fn dock_handle(
+    at: DockAt,
+    top_inset: f32,
+    bar: f32,
+    pending: usize,
+    editing: bool,
+    st: &Style,
+) -> AnyElement {
     let upright = at.upright();
     let handle = div()
         .id("dock-handle")
@@ -751,19 +765,22 @@ fn dock_handle(at: DockAt, top_inset: f32, bar: f32, pending: usize, st: &Style)
         );
     let place = div().absolute();
     match at {
-        DockAt::Bottom => place
+        DockAt::Bottom => over_preview(place, editing)
             .bottom(px(6.0 + bar))
-            .left_0()
             .right_0()
             .flex()
             .justify_center(),
-        DockAt::Top => place
+        DockAt::Top => over_preview(place, editing)
             .top(px(6.0 + top_inset))
-            .left_0()
             .right_0()
             .flex()
             .justify_center(),
-        DockAt::Left => place.left(px(6.0)).top_0().bottom_0().flex().items_center(),
+        DockAt::Left => over_preview(place, editing)
+            .ml(px(6.0))
+            .top_0()
+            .bottom_0()
+            .flex()
+            .items_center(),
         DockAt::Right => place
             .right(px(6.0))
             .top_0()
@@ -773,4 +790,14 @@ fn dock_handle(at: DockAt, top_inset: f32, bar: f32, pending: usize, st: &Style)
     }
     .child(handle)
     .into_any_element()
+}
+
+/// A floating box's left edge: the tab's, or, while Markdown is being
+/// edited, the preview's (the right half), so it never covers the source.
+pub(super) fn over_preview(place: gpui::Div, editing: bool) -> gpui::Div {
+    if editing {
+        place.left(gpui::relative(0.5))
+    } else {
+        place.left_0()
+    }
 }
