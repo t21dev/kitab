@@ -56,6 +56,15 @@ scoop bucket add t21dev https://github.com/t21dev/scoop-bucket
 scoop install t21dev/kitab
 ```
 
+Or build and run it from the source with Cargo (see [Build from source](#build-from-source) for what you need first):
+
+```bash
+git clone https://github.com/t21dev/kitab
+cd kitab
+python tools/patch_gpui.py
+cargo run --release -p kitab
+```
+
 **Unsigned builds.** The downloads on Releases aren't code-signed yet (the Microsoft Store build is). On Windows, SmartScreen may say "Windows protected your PC": choose More info, then Run anyway. On macOS, the first time, right-click Kitab in Applications and choose Open. Every release lists the SHA-256 checksum of each file.
 
 **Flatpak.** Install the bundle with `flatpak install --user Kitab_*_x86_64.flatpak`; Flatpak fetches the Freedesktop runtime from [Flathub](https://flathub.org/setup). Kitab can read and save files in your home folder and on external drives, and has no network access: Flatpak brings the updates. To make it the default app for PDFs, use your system's Default Applications settings.
@@ -149,9 +158,12 @@ Your files stay on your computer, and there is no account, no analytics and no t
 
 ## Build from source
 
-You need Rust stable (see `rust-toolchain.toml`) and libclang for the MuPDF bindings.
+You need Rust stable (see `rust-toolchain.toml`), Python 3, and libclang for the MuPDF bindings (install LLVM and, if the build can't find it, set `LIBCLANG_PATH` to the folder that holds `libclang`). On Windows you also need the Visual Studio C++ build tools.
 
 ```powershell
+git clone https://github.com/t21dev/kitab
+cd kitab
+python tools/patch_gpui.py       # once: makes vendor/gpui-0.2.2, the patched GPUI the workspace builds against
 cargo run -p kitab -- tests\fixtures\pdf\01-text-outline.pdf
 cargo test --workspace
 cargo clippy --workspace --all-targets -- -D warnings

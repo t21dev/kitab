@@ -30,6 +30,10 @@ an environment switch to turn it off so it can still be benchmarked:
           a frame has a path to draw (ink, a drawn shape), and go back after 30
           frames without one. They were 8 bytes per window pixel, always: 29 MB
           in a 2400x1500 window, 66 MB at 4K.
+  Touch   Windows touch screens. A finger pans (WM_GESTURE GID_PAN, with inertia)
+          as fine scroll steps; a pinch (GID_ZOOM) arrives as a scroll with Ctrl
+          held whose y is 200 x ln(ratio), which the app reads as a zoom factor.
+          A wheel message that says Ctrl is down (a touchpad pinch) is believed.
   Pixels  RenderImage::kitab_husk: an image that is only on the GPU. Once a page
           has been uploaded its pixels in RAM are let go and a husk (same id and
           size, no bytes) stands in for it. Painting a husk whose texture is
@@ -585,6 +589,7 @@ struct WindowInvalidatorInner {"""),
     ])
     husk_patch()
     path_patch()
+    touch_patch()
     print(f"patched gpui copy: {DEST}")
 
 
@@ -788,6 +793,211 @@ def path_patch() -> None:
         self.pre_draw()?;
 """),
     ])
+
+
+def touch_patch() -> None:
+    """14. Touch: pan and pinch on Windows touch screens."""
+    edit("src/platform/windows/events.rs", [
+        ("""            WM_MOUSEWHEEL => self.handle_mouse_wheel_msg(handle, wparam, lparam),
+""",
+         """            // Kitab patch: touch screens.
+            KITAB_WM_GESTURENOTIFY => self.kitab_gesture_notify(handle),
+            KITAB_WM_GESTURE => self.kitab_gesture(handle, lparam),
+            WM_MOUSEWHEEL => self.handle_mouse_wheel_msg(handle, wparam, lparam),
+"""),
+        ("""    ) -> Option<isize> {
+        let modifiers = current_modifiers();
+        let mut lock = self.state.borrow_mut();
+        let Some(mut func) = lock.callbacks.input.take() else {
+            return Some(1);
+        };
+        let scale_factor = lock.scale_factor;
+        let wheel_scroll_amount = match modifiers.shift {
+""",
+         """    ) -> Option<isize> {
+        let mut modifiers = current_modifiers();
+        // Kitab patch: a pinch on a touchpad is a wheel message that says
+        // Ctrl is down (MK_CONTROL) while the key itself is not.
+        if wparam.0 & 0x0008 != 0 {
+            modifiers.control = true;
+        }
+        let mut lock = self.state.borrow_mut();
+        let Some(mut func) = lock.callbacks.input.take() else {
+            return Some(1);
+        };
+        let scale_factor = lock.scale_factor;
+        let wheel_scroll_amount = match modifiers.shift {
+"""),
+        ("""    fn handle_mouse_wheel_msg(
+""",
+         """    /// Kitab patch: ask for every pan direction with inertia, and pinch.
+    fn kitab_gesture_notify(&self, handle: HWND) -> Option<isize> {
+        let config = [
+            KitabGestureConfig {
+                id: KITAB_GID_PAN,
+                // GC_PAN, with one finger up and down and sideways, with inertia.
+                want: 0x01 | 0x02 | 0x04 | 0x10,
+                // GC_PAN_WITH_GUTTER: off, so a pan can go diagonally.
+                block: 0x08,
+            },
+            KitabGestureConfig {
+                id: KITAB_GID_ZOOM,
+                want: 0x01,
+                block: 0,
+            },
+        ];
+        unsafe {
+            SetGestureConfig(
+                handle,
+                0,
+                config.len() as u32,
+                config.as_ptr(),
+                std::mem::size_of::<KitabGestureConfig>() as u32,
+            );
+        }
+        // The system still has to see the message.
+        None
+    }
+
+    /// Kitab patch: a finger pans, two fingers pinch.
+    fn kitab_gesture(&self, handle: HWND, lparam: LPARAM) -> Option<isize> {
+        let mut info: KitabGestureInfo = unsafe { std::mem::zeroed() };
+        info.cb_size = std::mem::size_of::<KitabGestureInfo>() as u32;
+        if unsafe { GetGestureInfo(lparam.0, &mut info) } == 0 {
+            return None;
+        }
+        let (x, y) = (info.location_x as i32, info.location_y as i32);
+        let (begin, end) = (info.flags & 0x1 != 0, info.flags & 0x4 != 0);
+        let phase = if begin {
+            TouchPhase::Started
+        } else if end {
+            TouchPhase::Ended
+        } else {
+            TouchPhase::Moved
+        };
+        let handled = match info.id {
+            KITAB_GID_PAN => {
+                let last = KITAB_GESTURE.with(|g| g.replace((x, y, 0)));
+                if begin {
+                    Some(0)
+                } else {
+                    // The page follows the finger.
+                    let by = ((x - last.0) as f32, (y - last.1) as f32);
+                    self.kitab_send_scroll(handle, (x, y), by, false, phase)
+                }
+            }
+            KITAB_GID_ZOOM => {
+                // The distance between the two fingers.
+                let apart = info.arguments & 0xFFFF_FFFF;
+                let last = KITAB_GESTURE.with(|g| g.replace((x, y, apart)));
+                if begin || last.2 == 0 || apart == 0 {
+                    Some(0)
+                } else {
+                    let ratio = apart as f32 / last.2 as f32;
+                    self.kitab_send_scroll(handle, (x, y), (0.0, ratio.ln() * 200.0), true, phase)
+                }
+            }
+            _ => None,
+        };
+        if handled.is_some() {
+            unsafe { CloseGestureInfoHandle(lparam.0) };
+        }
+        handled
+    }
+
+    /// Kitab patch: a touch gesture as a scroll event at screen point `at`.
+    /// A pan is in device pixels; a pinch (`pinch`) is 200 x ln(ratio) with
+    /// Ctrl held, as it is.
+    fn kitab_send_scroll(
+        &self,
+        handle: HWND,
+        at: (i32, i32),
+        by: (f32, f32),
+        pinch: bool,
+        phase: TouchPhase,
+    ) -> Option<isize> {
+        let mut modifiers = current_modifiers();
+        if pinch {
+            modifiers.control = true;
+        }
+        let mut lock = self.state.borrow_mut();
+        let Some(mut func) = lock.callbacks.input.take() else {
+            return Some(0);
+        };
+        let scale_factor = lock.scale_factor;
+        drop(lock);
+        let mut point = POINT { x: at.0, y: at.1 };
+        unsafe { ScreenToClient(handle, &mut point).ok().log_err() };
+        let scale = if pinch { 1.0 } else { scale_factor };
+        let input = PlatformInput::ScrollWheel(ScrollWheelEvent {
+            position: logical_point(point.x as f32, point.y as f32, scale_factor),
+            delta: ScrollDelta::Pixels(Point {
+                x: px(by.0 / scale),
+                y: px(by.1 / scale),
+            }),
+            modifiers,
+            touch_phase: phase,
+        });
+        func(input);
+        self.state.borrow_mut().callbacks.input = Some(func);
+        Some(0)
+    }
+
+    fn handle_mouse_wheel_msg(
+"""),
+    ])
+    p = DEST / "src/platform/windows/events.rs"
+    p.write_text(p.read_text(encoding="utf8").rstrip("\n") + """
+
+// Kitab patch: touch gestures (WM_GESTURE). Declared here so the `windows`
+// crate needs no further features.
+const KITAB_WM_GESTURE: u32 = 0x0119;
+const KITAB_WM_GESTURENOTIFY: u32 = 0x011A;
+const KITAB_GID_ZOOM: u32 = 3;
+const KITAB_GID_PAN: u32 = 4;
+
+/// Win32 `GESTUREINFO`.
+#[repr(C)]
+struct KitabGestureInfo {
+    cb_size: u32,
+    flags: u32,
+    id: u32,
+    hwnd_target: *mut std::ffi::c_void,
+    location_x: i16,
+    location_y: i16,
+    instance_id: u32,
+    sequence_id: u32,
+    arguments: u64,
+    cb_extra_args: u32,
+}
+
+/// Win32 `GESTURECONFIG`.
+#[repr(C)]
+struct KitabGestureConfig {
+    id: u32,
+    want: u32,
+    block: u32,
+}
+
+#[link(name = "user32")]
+unsafe extern "system" {
+    fn GetGestureInfo(gesture: isize, info: *mut KitabGestureInfo) -> i32;
+    fn CloseGestureInfoHandle(gesture: isize) -> i32;
+    fn SetGestureConfig(
+        hwnd: HWND,
+        reserved: u32,
+        count: u32,
+        config: *const KitabGestureConfig,
+        size: u32,
+    ) -> i32;
+}
+
+thread_local! {
+    /// Where the gesture under way last was (screen x and y) and, for a
+    /// pinch, how far apart the fingers were.
+    static KITAB_GESTURE: std::cell::Cell<(i32, i32, u64)> = const { std::cell::Cell::new((0, 0, 0)) };
+}
+""", encoding="utf8")
 
 
 if __name__ == "__main__":

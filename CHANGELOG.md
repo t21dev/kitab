@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Touch screens on Windows: drag a finger to scroll (it keeps gliding when you let go), and pinch with two fingers to zoom. A pinch on a touchpad zooms too. While you pinch the page stretches with your fingers, and it is drawn sharp as soon as they stop.
 - Smooth scrolling: the mouse wheel and the arrow, Page Up and Page Down keys glide to where they scroll instead of jumping there. Settings › Reading › Smooth scrolling turns it off; a touchpad scrolls as before.
 - Settings › Reading › New documents open at: Fit width, Fit page or Actual size, for a PDF, comic or XPS file opened for the first time. One you have read before still comes back the way you left it.
 

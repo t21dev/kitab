@@ -226,6 +226,10 @@ pub struct Reader {
     scrolled: bool,
     /// Smooth scrolling under way: how far is left to go.
     glide: Option<Glide>,
+    /// A pinch is under way until then: pages stretch to the new size and
+    /// are drawn sharp once it settles, not at every step of the pinch.
+    pinch_until: Option<std::time::Instant>,
+    pinch_serial: u64,
     last_frame: Option<std::time::Instant>,
     /// The password that opened this document, if it needed one (memory only).
     unlock: Option<String>,
@@ -290,6 +294,9 @@ struct Glide {
     /// When the last step was taken.
     at: std::time::Instant,
 }
+
+/// A pinch counts as over when the fingers have been still this long.
+const PINCH_SETTLE: Duration = Duration::from_millis(140);
 
 /// Smooth scrolling covers 63 % of what is left in this many seconds.
 const GLIDE_TIME: f32 = 0.045;
@@ -361,6 +368,8 @@ impl Reader {
             last_top: 0,
             scrolled: false,
             glide: None,
+            pinch_until: None,
+            pinch_serial: 0,
             last_frame: None,
             unlock: None,
             find: find::FindState::new(cx.focus_handle()),
@@ -768,6 +777,35 @@ impl Reader {
         }
         self.zoom = zoom;
         self.relayout(cx);
+    }
+
+    /// A pinch (touch screen or touchpad): zoom by `factor`, continuously.
+    /// The pages on screen stretch as the fingers move; the sharp ones are
+    /// drawn once the pinch has been still for a moment.
+    fn pinch_zoom(&mut self, factor: f32, cx: &mut Context<Self>) {
+        // A book's page always fits the window (its zoom is the text size).
+        if self.is_book() || !factor.is_finite() || factor <= 0.0 {
+            return;
+        }
+        let current = self.px_per_pt(self.current_page()) / PX_PER_PT_AT_100;
+        let next = (current * factor).clamp(ZOOM_STEPS[0], ZOOM_STEPS[ZOOM_STEPS.len() - 1]);
+        if (next - current).abs() < 0.0005 {
+            return;
+        }
+        self.pinch_until = Some(std::time::Instant::now() + PINCH_SETTLE);
+        self.pinch_serial += 1;
+        let serial = self.pinch_serial;
+        self.set_zoom(ZoomMode::Custom(next), cx);
+        cx.spawn(async move |this, cx| {
+            cx.background_executor().timer(PINCH_SETTLE).await;
+            let _ = this.update(cx, |r, cx| {
+                if r.pinch_serial == serial {
+                    r.pinch_until = None;
+                    cx.notify();
+                }
+            });
+        })
+        .detach();
     }
 
     fn step_zoom(&mut self, up: bool, cx: &mut Context<Self>) {
@@ -1404,6 +1442,9 @@ impl Reader {
         // Corners scale with the page so they look the same at every zoom.
         let zoom = (ppt / PX_PER_PT_AT_100).clamp(0.5, 2.0);
         let radius = px(st.page_corners.radius() * zoom);
+        let pinching = self
+            .pinch_until
+            .is_some_and(|t| std::time::Instant::now() < t);
         let image = match self.cache.get(&key) {
             Some(i) => {
                 crate::fire_first_paint(window, cx);
@@ -1436,7 +1477,11 @@ impl Reader {
                         .entry(ix as u32)
                         .or_insert_with(std::time::Instant::now);
                 }
-                self.request(ix, key, device_scale, cx);
+                // Mid-pinch the size changes every frame: what there is
+                // stretches, and the sharp page is drawn once it settles.
+                if !pinching || any.is_none() {
+                    self.request(ix, key, device_scale, cx);
+                }
                 any
             }
         };
@@ -1449,7 +1494,7 @@ impl Reader {
         };
         // The next page is always ready before it scrolls in: rendering it
         // only once scrolling began showed it soft, then sharp (flicker).
-        if ahead < self.page_count() {
+        if ahead < self.page_count() && !pinching {
             let s = self.px_per_pt(ahead) * window.scale_factor();
             let k = PageKey {
                 page: ahead as u32,
@@ -2126,6 +2171,13 @@ impl Render for Reader {
                     .on_scroll_wheel(cx.listener(|r, e: &ScrollWheelEvent, _, cx| {
                         r.scrolled = true;
                         if e.modifiers.control || e.modifiers.platform {
+                            // A pinch (touch screen, touchpad): fine steps,
+                            // 200 px for each e-fold of the zoom.
+                            if let gpui::ScrollDelta::Pixels(by) = e.delta {
+                                r.pinch_zoom((f32::from(by.y) / 200.0).exp(), cx);
+                                cx.stop_propagation();
+                                return;
+                            }
                             let dy = f32::from(e.delta.pixel_delta(px(20.0)).y);
                             if dy.abs() > 0.5 {
                                 r.step_zoom(dy > 0.0, cx);
