@@ -98,8 +98,7 @@ impl Reader {
                 .background_spawn(async move {
                     big.into_iter()
                         .filter_map(|(key, image)| {
-                            let (small, bytes, f) =
-                                crate::cache::shrink(&image, STAND_IN_PIXELS)?;
+                            let (small, bytes, f) = crate::cache::shrink(&image, STAND_IN_PIXELS)?;
                             Some((key, small, bytes, f))
                         })
                         .collect::<Vec<_>>()

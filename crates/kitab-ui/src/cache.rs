@@ -305,7 +305,11 @@ mod tests {
     fn shrink_averages_and_bounds_pixels() {
         let mut buf = RgbaImage::new(40, 30);
         for (x, _, p) in buf.enumerate_pixels_mut() {
-            *p = image::Rgba(if x % 2 == 0 { [0, 0, 0, 255] } else { [200, 100, 50, 255] });
+            *p = image::Rgba(if x % 2 == 0 {
+                [0, 0, 0, 255]
+            } else {
+                [200, 100, 50, 255]
+            });
         }
         let big = RenderImage::new([Frame::new(buf)]);
         let (small, bytes, f) = shrink(&big, 300).expect("shrinks");
