@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.8] - 2026-11-11
+
+### Fixed
+- Markdown editor: a click puts the caret where you click, and dragging selects text again. Since 0.3.6 every click landed near the top of the file.
+- Markdown editor: long lines have a scroll bar along the bottom (drag it, or click the track), and the file has one down the right edge. Shift+wheel and sideways swipes scroll sideways. The line numbers stay put while the text scrolls, and a drag selection keeps going when the pointer leaves the editor.
+- While you edit Markdown, the dock and the page navigator sit over the preview, so they no longer cover the source.
+
 ## [0.3.7] - 2026-11-11
 
 ### Added
