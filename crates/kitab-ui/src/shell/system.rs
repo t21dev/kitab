@@ -565,10 +565,24 @@ impl Workspace {
         .detach();
     }
 
+    /// The title bar's Update pill: the update's notes, in a dialog. From
+    /// inside Settings (About › View update) the release page opens in the
+    /// browser instead: a dialog never opens on top of another one.
     pub(crate) fn open_update(&mut self, cx: &mut Context<Self>) {
+        if self.settings.is_some() {
+            self.open_release_page(cx);
+            return;
+        }
         self.system.update_open = true;
         self.system.update_serial += 1;
         cx.notify();
+    }
+
+    /// The newest release's page on GitHub, in the browser.
+    pub(crate) fn open_release_page(&mut self, cx: &mut Context<Self>) {
+        if let UpdateState::Available(r) = &self.system.update {
+            cx.open_url(&r.url);
+        }
     }
 
     fn close_update(&mut self, window: &mut Window, cx: &mut Context<Self>) {

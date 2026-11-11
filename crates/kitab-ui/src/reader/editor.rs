@@ -95,6 +95,21 @@ impl Editor {
             .max(0.0)
     }
 
+    /// A line's height as the list lays it out. It can differ from
+    /// [`LINE_H`] by a fraction of a pixel (rows snap to whole screen
+    /// pixels), which adds up over hundreds of lines; clicks use this so
+    /// they land on the line under the pointer all the way down the file.
+    fn line_h(&self) -> f32 {
+        let count = self.buf.line_count().max(1) as f32;
+        self.scroll
+            .0
+            .borrow()
+            .last_item_size
+            .map(|s| f32::from(s.contents.height) / count)
+            .filter(|h| *h > 1.0)
+            .unwrap_or(LINE_H)
+    }
+
     /// Up and down: (how far scrolled, the furthest it goes, the view's
     /// height), in pixels.
     fn v_extent(&self) -> (f32, f32, f32) {
@@ -387,8 +402,8 @@ impl Reader {
         let k = &e.keystroke;
         let m = &k.modifiers;
         let (shift, word) = (m.shift, m.control || m.alt);
-        let page =
-            (f32::from(edit.area.get().map_or(px(600.0), |b| b.size.height)) / LINE_H) as isize;
+        let page = (f32::from(edit.area.get().map_or(px(600.0), |b| b.size.height)) / edit.line_h())
+            as isize;
         let b = &mut edit.buf;
         let mut changed = false;
         let handled = match k.key.as_str() {
@@ -523,7 +538,7 @@ impl Reader {
         let area = edit.area.get()?;
         let scroll_y = f32::from(edit.scroll.0.borrow().base_handle.offset().y);
         let y = f32::from(p.y - area.origin.y) - scroll_y;
-        let line = ((y / LINE_H).floor().max(0.0) as usize).min(edit.buf.line_count() - 1);
+        let line = ((y / edit.line_h()).floor().max(0.0) as usize).min(edit.buf.line_count() - 1);
         // Long lines scroll sideways: count the scroll in.
         let x = f32::from(p.x - area.origin.x) - GUTTER - PAD + edit.hscroll.get();
         let text = edit.buf.line(line);
@@ -1149,7 +1164,7 @@ impl EntityInputHandler for Reader {
         Some(Bounds::new(
             point(
                 element_bounds.origin.x + px(GUTTER + PAD + x),
-                element_bounds.origin.y + px(line as f32 * LINE_H + scroll_y),
+                element_bounds.origin.y + px(line as f32 * e.line_h() + scroll_y),
             ),
             size(px(2.0), px(LINE_H)),
         ))

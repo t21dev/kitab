@@ -686,7 +686,8 @@ pub(super) fn about(ws: &WeakEntity<Workspace>, info: &SystemInfo, st: &Style) -
                 "View update",
                 false,
                 st,
-                act(ws, |ws, cx| ws.open_update(cx)),
+                // The release page in the browser: no dialog over Settings.
+                act(ws, |ws, cx| ws.open_release_page(cx)),
             ),
         ),
         UpdateState::Failed(e) => (
