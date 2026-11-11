@@ -126,7 +126,9 @@ Kitab is a document reader, so it leaves image files to your image viewer.
 
 **Reading**
 - Each page keeps its own size and shape, so mixed portrait and landscape PDFs look right
-- Fit width, fit page, actual size, Ctrl+wheel zoom and rotation
+- Fit width, fit page, actual size, Ctrl+wheel zoom and rotation; choose how new documents open
+- Smooth scrolling with the mouse wheel and the keys (it can be turned off)
+- Touch screens on Windows: drag to scroll, pinch to zoom
 - Remembers the page, zoom and layout of every file, and reopens your tabs after a restart
 - Find (Ctrl+F) with match case and whole word, hits highlighted on the page
 - Contents, page thumbnails, bookmarks (Ctrl+D) and your marks, all in the sidebar
@@ -158,6 +160,7 @@ Kitab is a document reader, so it leaves image files to your image viewer.
 - SumatraPDF's shortcuts where it has one, a command palette (Ctrl+K), and a `keymap.json` for your own
 - Ten themes (Dark, Gray, Light, Paper, Sand, Linen, Ink, Nord, Noctua, Vampire), any accent colour, three densities
 - A quick dock you can move to any edge, choose the buttons of, or tuck away
+- An optional menu bar (File, Edit, View, Go, Tools, Help) with Alt-key access, off until you turn it on
 
 **Windows**
 - One window: double-clicking another file opens it as a tab

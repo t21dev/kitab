@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.9] - 2026-11-11
+
 ### Added
 - A menu bar, for those who prefer one: File, Edit, View, Go, Tools and Help under the title bar, each command with its shortcut. Alt and a menu's first letter opens it (Alt+F for File), Left and Right move between the menus, and the pointer moves along the bar once one is open. It is off until you turn it on in Settings › Appearance › Menu bar.
 - Two more themes for bright rooms, beside Paper: Sand, a little darker and more golden with an ochre accent, and Linen, a cooler, greyer beige with a muted teal accent.
