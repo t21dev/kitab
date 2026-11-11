@@ -56,7 +56,7 @@ jobs:
           Or with a package manager: \`brew install --cask t21dev/tap/kitab\` on macOS; \`scoop bucket add t21dev https://github.com/t21dev/scoop-bucket\` and then \`scoop install t21dev/kitab\` on Windows.
 
           ## Unsigned builds
-          These downloads aren't code-signed yet. On Windows, SmartScreen may say "Windows protected your PC": choose More info, then Run anyway. On macOS, the first time, right-click Kitab in Applications and choose Open, or run \`xattr -cr /Applications/Kitab.app\`. Check any download against the SHA-256 checksums at the end of these notes.
+          These downloads aren't code-signed yet. On Windows, SmartScreen may say "Windows protected your PC": choose More info, then Run anyway. On macOS, if the first launch says Kitab is damaged or can't be verified, run \`xattr -cr /Applications/Kitab.app\` in Terminal once; or try to open it, then choose Open Anyway in System Settings › Privacy & Security (macOS 15 and later; on macOS 14 and earlier, right-click Kitab in Applications and choose Open). Check any download against the SHA-256 checksums at the end of these notes.
           EOF
           ID=$(gh api -X POST "repos/${{ github.repository }}/releases" \
             -f tag_name="$TAG" -f name="Kitab Reader $VERSION" \

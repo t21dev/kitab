@@ -65,7 +65,20 @@ python tools/patch_gpui.py
 cargo run --release -p kitab
 ```
 
-**Unsigned builds.** The downloads on Releases aren't code-signed yet (the Microsoft Store build is). On Windows, SmartScreen may say "Windows protected your PC": choose More info, then Run anyway. On macOS, the first time, right-click Kitab in Applications and choose Open. Every release lists the SHA-256 checksum of each file.
+**Unsigned builds.** The downloads on Releases aren't code-signed yet (the Microsoft Store build is). Every release lists the SHA-256 checksum of each file.
+
+On Windows, SmartScreen may say "Windows protected your PC": choose More info, then Run anyway.
+
+On macOS, the first launch may say Kitab "is damaged and can't be opened" or "cannot be verified". It isn't damaged: macOS says this about any app that isn't signed. After dragging Kitab to Applications, either:
+
+- run this once in Terminal, then open Kitab as usual:
+
+  ```bash
+  xattr -cr /Applications/Kitab.app
+  ```
+
+- or, on macOS 15 (Sequoia) and later: try to open Kitab once, then go to System Settings › Privacy & Security, scroll to Security and click Open Anyway.
+- or, on macOS 14 and earlier: right-click Kitab in Applications and choose Open, then Open again.
 
 **Flatpak.** Install the bundle with `flatpak install --user Kitab_*_x86_64.flatpak`; Flatpak fetches the Freedesktop runtime from [Flathub](https://flathub.org/setup). Kitab can read and save files in your home folder and on external drives, and has no network access: Flatpak brings the updates. To make it the default app for PDFs, use your system's Default Applications settings.
 
