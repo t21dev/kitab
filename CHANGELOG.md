@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-11-14
+
 ### Added
 - Settings › Home › Reading progress: hide the bar under each book on Home (Covers and List, with the list's percent). On by default; Continue reading keeps its bars.
 
@@ -323,7 +325,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fit width and fit page follow a window resize even when no new page has to be drawn.
 - The Settings window shrinks to fit small windows instead of running off the left edge.
 
-[Unreleased]: https://github.com/t21dev/kitab/compare/v0.4.1...HEAD
+[Unreleased]: https://github.com/t21dev/kitab/compare/v0.4.2...HEAD
+[0.4.2]: https://github.com/t21dev/kitab/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/t21dev/kitab/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/t21dev/kitab/compare/v0.3.10...v0.4.0
 [0.3.10]: https://github.com/t21dev/kitab/compare/v0.3.9...v0.3.10
