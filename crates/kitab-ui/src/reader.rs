@@ -442,11 +442,44 @@ impl Reader {
         self.info.as_ref().map_or(0, |i| i.page_count as usize)
     }
 
+    /// The page you are reading: the one taking up most of the view, or the
+    /// last page once the scroll reaches the end (it may never fill the view).
+    /// Not the page whose top is in view: a thin strip of the previous page
+    /// at the top would otherwise count.
     pub fn current_page(&self) -> usize {
-        self.list
-            .logical_scroll_top()
-            .item_ix
-            .min(self.page_count().saturating_sub(1))
+        let last = self.page_count().saturating_sub(1);
+        let top = self.list.logical_scroll_top().item_ix.min(last);
+        let view = self.list.viewport_bounds();
+        if view.size.height <= px(0.0) {
+            return top;
+        }
+        let (lo, hi) = (view.top() + px(self.top_inset), view.bottom());
+        let whole = |ix: usize| {
+            self.list
+                .bounds_for_item(ix)
+                .is_some_and(|b| b.top() >= lo - px(1.0) && b.bottom() <= hi + px(1.0))
+        };
+        // Scrolled to the end with the whole last page in view (and not the
+        // whole page before it too, or Previous could never leave it).
+        let max = self.list.max_offset_for_scrollbar().height;
+        let at = -self.list.scroll_px_offset_for_scrollbar().y;
+        if last > 0 && max > px(1.0) && at >= max - px(1.0) && whole(last) && !whole(last - 1) {
+            return last;
+        }
+        let mut best = (top, px(0.0));
+        for ix in top..=last {
+            let Some(b) = self.list.bounds_for_item(ix) else {
+                break;
+            };
+            if b.top() >= hi {
+                break;
+            }
+            let seen = b.bottom().min(hi) - b.top().max(lo);
+            if seen > best.1 {
+                best = (ix, seen);
+            }
+        }
+        best.0
     }
 
     /// The zoom shown in the header, as a percentage of actual size, for the current page.
