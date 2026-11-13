@@ -72,6 +72,9 @@ pub(crate) struct OpenDoc {
     /// A book's page colour (the theme's), instead of white.
     pub paper: Option<[u8; 3]>,
     pub right_to_left: bool,
+    /// A comic in RAR or 7z, or a DjVu file, that Kitab reads itself (its
+    /// pages draw through MuPDF; a DjVu text layer is read from here).
+    pub source: Option<std::sync::Arc<crate::source::Source>>,
 }
 
 fn failed(e: impl std::fmt::Display) -> OpenError {
@@ -152,10 +155,31 @@ pub(crate) fn open(
     } else {
         None
     };
-    let mut doc = match Document::open(file) {
-        Ok(doc) => doc,
-        Err(_) if format != Format::Pdf => return Err(OpenError::Unsupported),
-        Err(e) => return Err(failed(e)),
+    // Comics in RAR and 7z (whatever the extension says) and DjVu draw
+    // through Kitab's own page source; ZIP and TAR comics stay with MuPDF's.
+    let own_source = match format {
+        Format::Djvu => Some(true),
+        Format::Cbz | Format::Cbr | Format::Cb7 => match crate::comic::sniff_file(path) {
+            crate::comic::Kind::Rar | crate::comic::Kind::SevenZ => Some(false),
+            crate::comic::Kind::Mupdf => None,
+            crate::comic::Kind::Unknown => return Err(OpenError::Unsupported),
+        },
+        _ => None,
+    };
+    let mut source = None;
+    let mut doc = match own_source {
+        Some(djvu) => match crate::source::open(path, djvu) {
+            Ok((doc, s)) => {
+                source = Some(s);
+                doc
+            }
+            Err(e) => return Err(failed(e)),
+        },
+        None => match Document::open(file) {
+            Ok(doc) => doc,
+            Err(_) if format != Format::Pdf => return Err(OpenError::Unsupported),
+            Err(e) => return Err(failed(e)),
+        },
     };
 
     let mut reflowable = false;
@@ -202,6 +226,9 @@ pub(crate) fn open(
     };
     let mut info = describe(&handle, format, page_count, reflowable);
     info.right_to_left = right_to_left;
+    if let Some(crate::source::Source::Djvu(d)) = source.as_deref() {
+        info.outline = crate::djvu::outline(d, page_count);
+    }
     Ok((
         OpenDoc {
             pdf: handle,
@@ -210,6 +237,7 @@ pub(crate) fn open(
             reflowable,
             right_to_left,
             paper: if flows { layout.style.paper } else { None },
+            source,
         },
         info,
     ))
@@ -664,6 +692,10 @@ fn quad_rect(q: &Quad) -> RectPt {
 
 /// The page's text in reading order, with a box per character. Runs on a worker.
 pub(crate) fn page_text(doc: &OpenDoc, page: u32) -> Result<PageText, String> {
+    if let Some(crate::source::Source::Djvu(d)) = doc.source.as_deref() {
+        page_index(doc, page)?;
+        return Ok(crate::djvu::page_text(d, page as usize));
+    }
     let page = doc
         .pdf
         .load_page(page_index(doc, page)?)

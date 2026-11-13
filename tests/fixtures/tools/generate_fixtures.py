@@ -733,6 +733,99 @@ def other_formats() -> None:
 
     (OTHER / "05-not-a-zip.cbz").write_bytes(b"This is not a comic archive.\n")
     (OTHER / "06-broken.fb2").write_text("<FictionBook><body><section><p>never closed", encoding="utf-8")
+    comic_archives()
+
+
+def comic_pages(n: int, base: int) -> list[tuple[str, bytes]]:
+    """`n` 800 x 1200 PNG pages (600 x 900 pt at 96 dpi), plus a ComicInfo.xml
+    that is not a page."""
+    pages = [(f"page-{i:02d}.png", png_bytes(800, 1200, ((base + i * 47) % 255, 90, 140), f"Comic page {i}"))
+             for i in range(1, n + 1)]
+    return pages + [("ComicInfo.xml", b"<ComicInfo><Title>Kitab fixture</Title></ComicInfo>")]
+
+
+def rar5_stored(files: list[tuple[str, bytes]]) -> bytes:
+    """A RAR 5 archive with every file stored (no compression), written from
+    RARLAB's public format technote. Kitab only reads RAR; storing is not the
+    RAR compression algorithm, which nothing here writes."""
+    import struct, zlib
+
+    def vint(n: int) -> bytes:
+        out = bytearray()
+        while True:
+            b, n = n & 0x7F, n >> 7
+            out.append(b | (0x80 if n else 0))
+            if not n:
+                return bytes(out)
+
+    def block(kind: int, body: bytes, data: bytes = b"") -> bytes:
+        flags = 0x02 if data else 0
+        fields = vint(kind) + vint(flags) + (vint(len(data)) if data else b"") + body
+        size = vint(len(fields))
+        return struct.pack("<I", zlib.crc32(size + fields)) + size + fields + data
+
+    out = b"Rar!\x1a\x07\x01\x00" + block(1, vint(0))
+    for name, data in files:
+        raw = name.encode()
+        # File flags 0x04: CRC32 present. Compression info 0: version 0, stored.
+        body = (vint(0x04) + vint(len(data)) + vint(0x20) + struct.pack("<I", zlib.crc32(data))
+                + vint(0) + vint(0) + vint(len(raw)) + raw)
+        out += block(2, body, data)
+    return out + block(5, vint(0))
+
+
+def rar4_stored(files: list[tuple[str, bytes]]) -> bytes:
+    """A RAR 2.9 (RAR 4) archive with every file stored, from the same technote."""
+    import struct, zlib
+
+    def head(kind: int, flags: int, fields: bytes) -> bytes:
+        rest = struct.pack("<BHH", kind, flags, 7 + len(fields)) + fields
+        return struct.pack("<H", zlib.crc32(rest) & 0xFFFF) + rest
+
+    out = b"Rar!\x1a\x07\x00" + head(0x73, 0, struct.pack("<HI", 0, 0))
+    dos_time = (46 << 25) | (11 << 21) | (6 << 16) | (9 << 11)  # 2026-11-06 09:00
+    for name, data in files:
+        raw = name.encode("ascii")
+        fields = struct.pack("<IIBIIBBHI", len(data), len(data), 2, zlib.crc32(data), dos_time, 29, 0x30, len(raw), 0x20) + raw
+        out += head(0x74, 0x8000, fields) + data
+    return out + head(0x7B, 0x4000, b"")
+
+
+def comic_archives() -> None:
+    """CBR, CB7 and DjVu (Kitab's own page source) and the comics that only
+    look like them. The CB7 needs a 7-Zip compatible `7z` on PATH (7-Zip,
+    p7zip or NanaZip); without one the committed file is kept."""
+    (OTHER / "08-stored-rar5.cbr").write_bytes(rar5_stored(comic_pages(3, 10)))
+    (OTHER / "09-stored-rar4.cbr").write_bytes(rar4_stored(comic_pages(3, 60)))
+    # A ZIP comic named .cbr (common): MuPDF reads it by its content.
+    with zipfile.ZipFile(OTHER / "10-zip-named.cbr", "w") as z:
+        for name, data in comic_pages(2, 110):
+            zi = zipfile.ZipInfo(name, date_time=(2026, 11, 6, 9, 0, 0))
+            z.writestr(zi, data, compress_type=zipfile.ZIP_STORED)
+    # Not a comic of any kind, and not a DjVu file.
+    (OTHER / "12-not-an-archive.cbr").write_bytes(b"Rar!\x1a\x07\x01\x00 but nothing after it is a header.\n")
+    (OTHER / "13-not-a-djvu.djvu").write_bytes(b"AT&TFORM\x00\x00\x00\x10DJVUthis is not\n")
+
+    seven = shutil.which("7z")
+    if seven:
+        import subprocess
+        from PIL import Image, ImageDraw
+        with tempfile.TemporaryDirectory() as tmp:
+            names = []
+            for name, data in comic_pages(4, 160):
+                (Path(tmp) / name).write_bytes(data)
+                names.append(name)
+            # One page as WebP, which MuPDF can't decode (Kitab does).
+            im = Image.new("RGB", (800, 1200), (30, 140, 90))
+            ImageDraw.Draw(im).text((12, 12), "Comic page 5 (WebP)", fill=(255, 255, 255))
+            im.save(Path(tmp) / "page-05.webp", "WEBP", quality=80)
+            names.append("page-05.webp")
+            out = OTHER / "07-comic.cb7"
+            out.unlink(missing_ok=True)
+            subprocess.run([seven, "a", "-t7z", "-m0=LZMA2", "-ms=on", "-bd", str(out), *names],
+                           cwd=tmp, check=True, stdout=subprocess.DEVNULL)
+    else:
+        print("7z not found: kept the committed other/07-comic.cb7", file=sys.stderr)
 
 
 # ------------------------------------------------------------------------- main

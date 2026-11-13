@@ -37,7 +37,11 @@
 //! values, panics in a job are caught on the worker and reported as errors, and
 //! a document whose jobs panic twice is closed (quarantined).
 
+mod comic;
+mod djvu;
 mod doc;
+mod source;
+pub use source::{open_first_page, reads_itself, register as register_handlers};
 pub mod epub;
 mod ffi;
 mod find;
@@ -45,6 +49,7 @@ pub mod fonts;
 mod forms;
 pub mod marks;
 pub mod pages;
+pub mod rar;
 pub mod sigs;
 pub mod tools;
 
@@ -167,6 +172,9 @@ impl Engine {
         let threads = threads.max(1);
         // Books in non-Latin scripts need the system's fonts (fonts.rs).
         fonts::install();
+        // CBR, CB7 and DjVu draw through a handler of Kitab's own: added
+        // before any worker opens a document (MuPDF's list isn't locked).
+        source::register();
         Engine {
             workers: Mutex::new(vec![None; threads]),
             inflight: (0..threads).map(|_| AtomicU64::new(0)).collect(),

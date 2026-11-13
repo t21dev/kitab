@@ -85,6 +85,16 @@ Built by `generate_fixtures.py --only-other`. Reflowable files are counted at th
 | `04-vector.xps` | Two fixed pages of vector paths: Letter portrait, then landscape (no fonts) | Two pages with their own sizes. |
 | `05-not-a-zip.cbz` | Not a zip | "Can't open this file". |
 | `06-broken.fb2` | Truncated XML | Opens with what MuPDF can read (one blank page); never a crash. |
+| `07-comic.cb7` | 7z (LZMA2, solid): four PNG pages and one WebP page, plus `ComicInfo.xml` | Five pages (the XML isn't one), the WebP page drawn by Kitab. Needs `7z` to rebuild. |
+| `08-stored-rar5.cbr` | RAR 5, files stored: three PNG pages and `ComicInfo.xml` | Three pages. |
+| `09-stored-rar4.cbr` | RAR 4, files stored: three PNG pages and `ComicInfo.xml` | Three pages. |
+| `10-zip-named.cbr` | A ZIP comic named `.cbr` (common in the wild) | Two pages: MuPDF reads it by its content. |
+| `11-scan-cyrillic.djvu` | Public-domain 12-page scan (Simonovich, 1905) with a text layer; not generated (see NOTICE) | 12 pages at 129 dpi (426 × 621 pt); "углекислота" found 21 times. |
+| `12-not-an-archive.cbr` | A RAR signature and nothing after it | "Can't open this file". |
+| `13-not-a-djvu.djvu` | A DjVu header with no pages | "Can't open this file". |
+| `14-password.cbr` | libarchive's encrypted RAR 4 (BSD-2-Clause) | Refused: password-protected archives aren't supported. |
+
+Compressed RAR (LZ, PPMd, solid, filters, Unicode names) is covered by libarchive's archives in `rar/` (`rar/README.md`).
 
 ## Real world (`real/`, fetched)
 

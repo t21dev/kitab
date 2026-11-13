@@ -629,7 +629,12 @@ impl Reader {
                     self.rotation = state.rotation;
                 } else if matches!(
                     info.format,
-                    kitab_core::Format::Pdf | kitab_core::Format::Xps | kitab_core::Format::Cbz
+                    kitab_core::Format::Pdf
+                        | kitab_core::Format::Xps
+                        | kitab_core::Format::Cbz
+                        | kitab_core::Format::Cbr
+                        | kitab_core::Format::Cb7
+                        | kitab_core::Format::Djvu
                 ) {
                     // Opened for the first time: sized as Settings › Reading says.
                     self.zoom = Style::get(cx).open_zoom.mode();

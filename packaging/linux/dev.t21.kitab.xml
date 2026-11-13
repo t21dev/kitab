@@ -27,6 +27,21 @@
   <mime-type type="application/vnd.comicbook+zip">
     <icon name="dev.t21.kitab-cbz"/>
   </mime-type>
+  <mime-type type="application/vnd.comicbook-rar">
+    <icon name="dev.t21.kitab-cbr"/>
+  </mime-type>
+  <!-- Missing from older shared-mime-info. -->
+  <mime-type type="application/x-cb7">
+    <comment>Comic book archive (7z)</comment>
+    <icon name="dev.t21.kitab-cb7"/>
+    <glob pattern="*.cb7"/>
+  </mime-type>
+  <mime-type type="image/vnd.djvu">
+    <icon name="dev.t21.kitab-djvu"/>
+  </mime-type>
+  <mime-type type="image/vnd.djvu+multipage">
+    <icon name="dev.t21.kitab-djvu"/>
+  </mime-type>
   <mime-type type="application/oxps">
     <icon name="dev.t21.kitab-xps"/>
   </mime-type>

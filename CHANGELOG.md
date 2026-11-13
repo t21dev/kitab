@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Comics in RAR and 7z (.cbr, .cb7), page by page like CBZ. Kitab goes by what the file really is, so a .cbr that is really a ZIP (common) or a .cbz that is really a RAR opens too. WebP pages draw as well. Password-protected and split (multi-part) archives are refused with a plain message. RAR is read with compcol's clean-room decoders: no RARLAB code, decode only.
+- DjVu (.djvu, .djv): scanned books at their own page size, sharp at every zoom (each page is drawn at the size it's shown). When the scan has a text layer, search, selection, copy and read aloud work; the bookmarks are the contents. Read with djvu-rs, written from the public DjVu specification.
+- Thumbnails for the new types on Home, in Explorer and in Linux file managers; a comic's cover is unpacked without the rest of the archive.
+- File types: CBR, CB7 and DjVu in Settings › File types, the Windows installer and Store package, Linux and macOS, each with its own icon.
+
 ## [0.4.2] - 2026-11-14
 
 ### Added

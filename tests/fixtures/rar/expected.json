@@ -1,0 +1,110 @@
+{
+  "libarchive-rar.rar": {
+    "opens": true,
+    "files": 3
+  },
+  "libarchive-rar3_lowdist_reset.rar": {
+    "opens": true,
+    "files": 1
+  },
+  "libarchive-rar4_encrypted.rar": {
+    "opens": false,
+    "refused": "password"
+  },
+  "libarchive-rar5_bad_tables.rar": {
+    "opens": false,
+    "refused": "damaged"
+  },
+  "libarchive-rar5_compressed.rar": {
+    "opens": true,
+    "files": 1
+  },
+  "libarchive-rar5_distance_overflow.rar": {
+    "opens": false,
+    "refused": "damaged"
+  },
+  "libarchive-rar5_encrypted.rar": {
+    "opens": false,
+    "refused": "password"
+  },
+  "libarchive-rar5_encrypted_filenames.rar": {
+    "opens": false,
+    "refused": "password"
+  },
+  "libarchive-rar5_hardlink.rar": {
+    "opens": true,
+    "files": 1
+  },
+  "libarchive-rar5_loop_bug.rar": {
+    "opens": false,
+    "refused": "damaged"
+  },
+  "libarchive-rar5_multiarchive.part01.rar": {
+    "opens": false,
+    "refused": "split"
+  },
+  "libarchive-rar5_multiple_files_solid.rar": {
+    "opens": true,
+    "files": 4
+  },
+  "libarchive-rar5_solid.rar": {
+    "opens": true,
+    "files": 7
+  },
+  "libarchive-rar5_stored.rar": {
+    "opens": true,
+    "files": 1
+  },
+  "libarchive-rar5_symlink.rar": {
+    "opens": true,
+    "files": 1
+  },
+  "libarchive-rar5_truncated_huff.rar": {
+    "opens": false,
+    "refused": "damaged"
+  },
+  "libarchive-rar5_unicode.rar": {
+    "opens": true,
+    "files": 1
+  },
+  "libarchive-rar5_win32.rar": {
+    "opens": true,
+    "files": 7
+  },
+  "libarchive-rar_compress_best.rar": {
+    "opens": true,
+    "files": 4
+  },
+  "libarchive-rar_compress_normal.rar": {
+    "opens": true,
+    "files": 4
+  },
+  "libarchive-rar_encryption_header.rar": {
+    "opens": false,
+    "refused": "password"
+  },
+  "libarchive-rar_invalid1.rar": {
+    "opens": false,
+    "refused": "damaged"
+  },
+  "libarchive-rar_overflow.rar": {
+    "opens": false,
+    "refused": "damaged"
+  },
+  "libarchive-rar_ppmd_use_after_free.rar": {
+    "opens": false,
+    "refused": "damaged"
+  },
+  "libarchive-rar_unbound_staticdata.rar": {
+    "opens": false,
+    "refused": "damaged"
+  },
+  "libarchive-rar_unicode.rar": {
+    "opens": true,
+    "files": 4
+  },
+  "libarchive-rar_windows.rar": {
+    "opens": true,
+    "files": 3
+  }
+}

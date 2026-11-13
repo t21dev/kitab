@@ -41,6 +41,9 @@ DOCS = {
     "mobi": ("MOBI", "#8B5A2B"),
     "fb2": ("FB2", "#C2702A"),
     "cbz": ("CBZ", "#7B4FD6"),
+    "cbr": ("CBR", "#7B4FD6"),
+    "cb7": ("CB7", "#7B4FD6"),
+    "djvu": ("DJVU", "#4F6D8F"),
     "xps": ("XPS", "#1F8A99"),
     "txt": ("TXT", "#5F6670"),
 }

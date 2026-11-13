@@ -4722,9 +4722,9 @@ fn tab_icon_for(path: &std::path::Path) -> &'static str {
         Some(Format::Pdf) => "pdf",
         Some(Format::Markdown) => "markdown",
         Some(Format::Epub | Format::Mobi | Format::Fb2) => "book",
-        Some(Format::Cbz) => "image",
+        Some(Format::Cbz | Format::Cbr | Format::Cb7) => "image",
         Some(Format::Txt) => "text",
-        Some(Format::Xps) => "pages",
+        Some(Format::Xps | Format::Djvu) => "pages",
         _ => "file",
     }
 }
@@ -4741,6 +4741,9 @@ mod tab_icon_tests {
         assert_eq!(icon("a.fb2"), "book");
         assert_eq!(icon("a.mobi"), "book");
         assert_eq!(icon("a.cbz"), "image");
+        assert_eq!(icon("a.cbr"), "image");
+        assert_eq!(icon("a.cb7"), "image");
+        assert_eq!(icon("a.djvu"), "pages");
         assert_eq!(icon("a.txt"), "text");
         assert_eq!(icon("a.xps"), "pages");
     }

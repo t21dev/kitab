@@ -1049,6 +1049,121 @@
       "title": null,
       "needle": "kitab-fb2-needle-",
       "needle_hits": 0
+    },
+    "07-comic.cb7": {
+      "opens": true,
+      "pages": 5,
+      "reflowable": false,
+      "page_sizes_pt": [
+        [
+          600,
+          900
+        ],
+        [
+          600,
+          900
+        ],
+        [
+          600,
+          900
+        ],
+        [
+          600,
+          900
+        ],
+        [
+          600,
+          900
+        ]
+      ],
+      "outline": 0,
+      "title": null
+    },
+    "08-stored-rar5.cbr": {
+      "opens": true,
+      "pages": 3,
+      "reflowable": false,
+      "page_sizes_pt": [
+        [
+          600,
+          900
+        ],
+        [
+          600,
+          900
+        ],
+        [
+          600,
+          900
+        ]
+      ],
+      "outline": 0,
+      "title": null
+    },
+    "09-stored-rar4.cbr": {
+      "opens": true,
+      "pages": 3,
+      "reflowable": false,
+      "page_sizes_pt": [
+        [
+          600,
+          900
+        ],
+        [
+          600,
+          900
+        ],
+        [
+          600,
+          900
+        ]
+      ],
+      "outline": 0,
+      "title": null
+    },
+    "10-zip-named.cbr": {
+      "opens": true,
+      "pages": 2,
+      "reflowable": false,
+      "page_sizes_pt": [
+        [
+          600,
+          900
+        ],
+        [
+          600,
+          900
+        ]
+      ],
+      "outline": 0,
+      "title": null
+    },
+    "11-scan-cyrillic.djvu": {
+      "opens": true,
+      "pages": 12,
+      "reflowable": false,
+      "page_sizes_pt": [
+        [
+          426.4,
+          620.7
+        ]
+      ],
+      "outline": 0,
+      "title": null,
+      "needle": "углекислота",
+      "needle_hits": 21
+    },
+    "12-not-an-archive.cbr": {
+      "opens": false,
+      "error": "damaged RAR headers"
+    },
+    "13-not-a-djvu.djvu": {
+      "opens": false,
+      "error": "not a DjVu document"
+    },
+    "14-password.cbr": {
+      "opens": false,
+      "error": "password-protected RAR"
     }
   }
 }

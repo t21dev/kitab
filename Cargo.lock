@@ -1126,6 +1126,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "compcol"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f4be160df80e77bdf4902bb026c6a0f6c700ec7793379c26305d45e293e17b8c"
+
+[[package]]
 name = "compression-codecs"
 version = "0.4.47"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1696,6 +1702,88 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 3.0.9",
+]
+
+[[package]]
+name = "djvu-bitmap"
+version = "0.45.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3ce31e1f40539fa8b8daab443e57006153c353f060413aeb18ad3dd4f8d6fd64"
+
+[[package]]
+name = "djvu-bzz"
+version = "0.45.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8b4970e5d623d963c84a2c52e3bb95898144bd013e368c625fbbc77cfa1492c0"
+dependencies = [
+ "djvu-zp",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "djvu-iff"
+version = "0.45.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7b4bca9d51f779a609e900cba2838f9c2e8d2d737022ced88b0e1273551e054b"
+dependencies = [
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "djvu-iw44"
+version = "0.45.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "aaa3eabe5fc41be02bdb113444b0a53535059047dc0aff02d57d3dea18cc265e"
+dependencies = [
+ "djvu-pixmap",
+ "djvu-zp",
+ "thiserror 2.0.21",
+ "wide",
+]
+
+[[package]]
+name = "djvu-jb2"
+version = "0.45.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "86aa0a99eeba7904fe86b431b6e96af8b1fbe05facbfc20cd9b8bd3965fac628"
+dependencies = [
+ "djvu-bitmap",
+ "djvu-zp",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "djvu-pixmap"
+version = "0.45.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "08ea141007ba50d115539cd40bff066447c49f93f9ed0680a76ad7e669a5dbba"
+
+[[package]]
+name = "djvu-rs"
+version = "0.45.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "28f07b40a346c1f1a8220cd7be77bc7ddcbf13498c9eebad3d6d8a38f643ba84"
+dependencies = [
+ "djvu-bitmap",
+ "djvu-bzz",
+ "djvu-iff",
+ "djvu-iw44",
+ "djvu-jb2",
+ "djvu-pixmap",
+ "djvu-zp",
+ "png 0.18.1",
+ "thiserror 2.0.21",
+ "wide",
+ "zune-jpeg 0.5.15",
+]
+
+[[package]]
+name = "djvu-zp"
+version = "0.45.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8320ea950e16079676a8d5371a5f2e9f3bc3391e9a650d6beaa858f4f0404a49"
+dependencies = [
+ "thiserror 2.0.21",
 ]
 
 [[package]]
@@ -3470,12 +3558,16 @@ dependencies = [
 name = "kitab-mupdf"
 version = "0.4.2"
 dependencies = [
+ "compcol",
+ "djvu-rs",
  "flate2",
+ "image-webp",
  "kitab-core",
  "mupdf",
  "mupdf-sys",
  "roxmltree",
  "serde_json",
+ "sevenz-rust2",
  "sha2 0.10.9",
  "unicode-normalization",
 ]
@@ -3854,6 +3946,12 @@ dependencies = [
  "lyon_path",
  "num-traits",
 ]
+
+[[package]]
+name = "lzma-rust2"
+version = "0.25.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ef1d73c59a56771343712b22ea5615092c612c16ba291c0979e3105dfeec4890"
 
 [[package]]
 name = "mac"
@@ -5060,6 +5158,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4a6394b9e965e73d0a289ee54f589087e2c676aedf60885baf52c76b771e4958"
 
 [[package]]
+name = "ppmd-rust"
+version = "1.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cd4acc8d264ea385db64ccfdcdfd5909ee9eda0975666723d59f3bfec80b3611"
+
+[[package]]
 name = "ppv-lite86"
 version = "0.2.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5884,6 +5988,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9774ba4a74de5f7b1c1451ed6cd5285a32eddb5cccb8cc655a4e50009e06477f"
 
 [[package]]
+name = "safe_arch"
+version = "1.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "42c6efa15875e6ecb39ca61fb0b0c1a40b84fac5a5ffe71eef7d1000c8eb3f5f"
+dependencies = [
+ "bytemuck",
+]
+
+[[package]]
 name = "salsa20"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6156,6 +6269,20 @@ dependencies = [
  "itoa",
  "ryu",
  "serde",
+]
+
+[[package]]
+name = "sevenz-rust2"
+version = "0.25.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e5e465701779cbc6d0d10cf907f175035cfdd50b8d3cb628d7f1f435ef02972f"
+dependencies = [
+ "crc32fast",
+ "flate2",
+ "js-sys",
+ "lzma-rust2",
+ "ppmd-rust",
+ "wasm-bindgen",
 ]
 
 [[package]]
@@ -7754,6 +7881,16 @@ dependencies = [
  "home",
  "rustix 0.38.44",
  "winsafe",
+]
+
+[[package]]
+name = "wide"
+version = "1.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d920ac99c3c8edce110cb8d07dbb324d6d026011dce85b1e9355b70f0adacc4f"
+dependencies = [
+ "bytemuck",
+ "safe_arch",
 ]
 
 [[package]]

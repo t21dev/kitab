@@ -217,7 +217,8 @@ def deb(v: str, root: pathlib.Path) -> None:
         + "Section: text\nPriority: optional\n"
         "Homepage: https://github.com/t21dev/kitab\n"
         "Description: Fast, native reader for PDF, ebooks, comics and Markdown\n"
-        " Kitab Reader opens PDF, EPUB, MOBI, FB2, CBZ, XPS, Markdown and text.\n"
+        " Kitab Reader opens PDF, EPUB, MOBI, FB2, comics (CBZ, CBR, CB7), DjVu,\n"
+        " XPS, Markdown and text.\n"
         " Mark up, fill forms, sign and print, with a library that remembers\n"
         " where you stopped. No telemetry.\n",
         encoding="utf8",
@@ -238,7 +239,8 @@ BuildArch: {arch}
 Recommends: speech-dispatcher
 
 %description
-Kitab Reader opens PDF, EPUB, MOBI, FB2, CBZ, XPS, Markdown and text.
+Kitab Reader opens PDF, EPUB, MOBI, FB2, comics (CBZ, CBR, CB7), DjVu,
+XPS, Markdown and text.
 Mark up, fill forms, sign and print, with a library that remembers where
 you stopped. No telemetry.
 

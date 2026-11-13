@@ -21,6 +21,19 @@ unicode-normalization = "0.1"
 # read. Both are already in kitab.exe through GPUI, so they add no size.
 flate2 = "1"
 roxmltree = "0.20"
+# Comic books in RAR (.cbr): compcol's clean-room RAR 2/3/5 decoders (decode
+# only; no RARLAB unRAR code, whose licence doesn't fit the AGPL). Pure Rust,
+# no dependencies. MIT.
+compcol = { version = "0.8", default-features = false, features = ["rar2", "rar3", "rar5", "checksum"] }
+# Comic books in 7z (.cb7): pure Rust. LZMA/LZMA2 always; PPMd and Deflate for
+# the rarer archives. No AES (password-protected comics aren't opened). Apache-2.0.
+sevenz-rust2 = { version = "0.25", default-features = false, features = ["ppmd", "deflate"] }
+# DjVu: a pure-Rust decoder written from the public DjVu v3 specification
+# (no DjVuLibre code). Pages render at the size they're drawn. MIT.
+djvu-rs = { version = "0.45", default-features = false, features = ["std"] }
+# WebP pages in comics, which MuPDF can't decode. Already in kitab.exe through
+# GPUI's image crate, so it adds no size. MIT/Apache-2.0.
+image-webp = "0.2"
 
 [dev-dependencies]
 serde_json = { workspace = true }

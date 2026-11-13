@@ -91,7 +91,7 @@ fn extension(stream: &IStream, head: &[u8]) -> String {
     // Formats Kitab reads; any other name (a renamed file) is sniffed.
     const KNOWN: &[&str] = &[
         "pdf", "md", "markdown", "mdown", "mkd", "txt", "epub", "mobi", "azw", "azw3", "fb2",
-        "cbz", "xps", "oxps",
+        "cbz", "cbr", "cb7", "djvu", "djv", "xps", "oxps",
     ];
     match name.rsplit_once('.').map(|(_, e)| e.to_ascii_lowercase()) {
         Some(ext) if KNOWN.contains(&ext.as_str()) => ext,

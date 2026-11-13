@@ -116,7 +116,8 @@ The speed comes from a few rules the code is held to ([AGENTS.md](AGENTS.md)):
 | PDF | Password-protected files too. Links, contents, text selection, annotations already in the file |
 | EPUB | Flowing and fixed-layout, right-to-left books, every script your system has fonts for |
 | MOBI, FB2, TXT | Flow like EPUB, in your typeface and text size |
-| CBZ | Comics, page by page |
+| CBZ, CBR, CB7 | Comics, page by page, whatever archive they're really in (WebP pages too) |
+| DjVu | Scanned books at their own page size; search, select and read aloud when the scan has a text layer; contents from its bookmarks |
 | XPS | Pages at their own size |
 | Markdown | Tables, task lists, footnotes, code with syntax colours, math, Mermaid diagrams, frontmatter |
 

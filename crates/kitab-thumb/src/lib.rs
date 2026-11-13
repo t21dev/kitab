@@ -127,12 +127,34 @@ fn text_head(source: &Source<'_>) -> Result<String, String> {
 
 fn first_page(source: &Source<'_>, ext: &str, size: u32) -> Result<Thumb, String> {
     let err = |e: mupdf::Error| e.to_string();
-    let doc = match source {
+    // Comics in RAR or 7z and DjVu: Kitab's own reader, unpacking only the
+    // first page.
+    let head: Vec<u8> = match source {
+        Source::Bytes(b) => b[..b.len().min(512)].to_vec(),
         Source::Path(p) => {
-            let p = p.to_str().ok_or("path is not valid Unicode")?;
-            Document::open(p).map_err(err)?
+            let mut head = Vec::new();
+            std::fs::File::open(p)
+                .and_then(|f| f.take(512).read_to_end(&mut head))
+                .map_err(|e| e.to_string())?;
+            head
         }
-        Source::Bytes(b) => Document::from_bytes(b, &format!("file.{ext}")).map_err(err)?,
+    };
+    let doc = if kitab_mupdf::reads_itself(ext, &head) {
+        let bytes = match source {
+            Source::Bytes(b) => std::borrow::Cow::Borrowed(*b),
+            Source::Path(p) => {
+                std::borrow::Cow::Owned(std::fs::read(p).map_err(|e| e.to_string())?)
+            }
+        };
+        kitab_mupdf::open_first_page(&bytes, ext)?
+    } else {
+        match source {
+            Source::Path(p) => {
+                let p = p.to_str().ok_or("path is not valid Unicode")?;
+                Document::open(p).map_err(err)?
+            }
+            Source::Bytes(b) => Document::from_bytes(b, &format!("file.{ext}")).map_err(err)?,
+        }
     };
     // A locked document shows its file icon: never guess or prompt.
     if doc.needs_password().map_err(err)? {

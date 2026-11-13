@@ -219,7 +219,7 @@ fn plain_text_opens_as_a_book() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-/// TXT, FB2, CBZ and XPS in `other/` against expected.json: opens or not,
+/// TXT, FB2, comics, XPS and DjVu in `other/` against expected.json: opens or not,
 /// page count, page sizes of fixed pages, title, contents and needle hits.
 #[test]
 fn every_other_format_matches_expected_json() {
@@ -246,6 +246,9 @@ fn every_other_format_matches_expected_json() {
             Some("txt") => Format::Txt,
             Some("fb2") => Format::Fb2,
             Some("cbz") => Format::Cbz,
+            Some("cbr") => Format::Cbr,
+            Some("cb7") => Format::Cb7,
+            Some("djvu") => Format::Djvu,
             Some("xps") => Format::Xps,
             other => panic!("unexpected fixture extension {other:?}"),
         };
@@ -543,4 +546,80 @@ fn other_html_files_stay_unsupported() {
         Err(OpenError::Unsupported)
     ));
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+fn render(
+    id: kitab_mupdf::DocId,
+    page: u32,
+    scale: f32,
+    tile: Option<kitab_core::TilePx>,
+) -> kitab_core::Bitmap {
+    engine()
+        .render(
+            id,
+            RenderRequest {
+                page,
+                scale,
+                rotation: 0,
+                tile,
+                generation: 0,
+            },
+        )
+        .unwrap()
+        .unwrap()
+}
+
+/// Comics in RAR and 7z and DjVu draw through Kitab's own page source: every
+/// page draws (WebP too, which MuPDF can't decode), at any zoom and in tiles;
+/// DjVu text reads; pages save to a PDF; two opens of a file share it.
+#[test]
+fn comics_and_djvu_draw_through_kitabs_page_source() {
+    let other = fixtures_dir().join("other");
+    let (cb7, info) = engine().open(&other.join("07-comic.cb7"), None).unwrap();
+    for page in 0..info.page_count {
+        assert!(
+            ink_ratio(&render(cb7, page, 0.5, None)) > 0.001,
+            "cb7 page {}",
+            page + 1
+        );
+    }
+    engine().close(cb7);
+    for name in ["08-stored-rar5.cbr", "09-stored-rar4.cbr"] {
+        let (id, info) = engine().open(&other.join(name), None).unwrap();
+        let last = render(id, info.page_count - 1, 0.5, None);
+        assert!(ink_ratio(&last) > 0.001, "{name}");
+        engine().close(id);
+    }
+
+    let djvu = other.join("11-scan-cyrillic.djvu");
+    let (a, info) = engine().open(&djvu, None).unwrap();
+    let (b, _) = engine().open(&djvu, None).unwrap();
+    // A thumbnail, the page, and a tile at 300 %.
+    let small = render(a, 5, 0.2, None);
+    let page = render(a, 5, 1.5, None);
+    assert!(ink_ratio(&small) > 0.001 && ink_ratio(&page) > 0.001);
+    let size = info.page_sizes[5];
+    assert_eq!(page.width, (size.w * 1.5).round() as u32);
+    let tile = kitab_core::TilePx {
+        x: 256,
+        y: 256,
+        w: 256,
+        h: 256,
+    };
+    assert_eq!(render(a, 5, 3.0, Some(tile)).width, 256);
+    assert!(engine().page_has_text(a, 5).unwrap());
+    assert!(!engine().page_chars(a, 5).unwrap().is_empty());
+    // The second open still draws once the first is closed.
+    engine().close(a);
+    assert!(ink_ratio(&render(b, 0, 1.0, None)) > 0.001);
+
+    // Save two pages as a PDF: they draw there at full size.
+    let out = std::env::temp_dir().join(format!("kitab-djvu-pages-{}.pdf", std::process::id()));
+    assert_eq!(engine().write_pdf(b, vec![0, 5], out.clone()).unwrap(), 2);
+    engine().close(b);
+    let (pdf, pdf_info) = engine().open(&out, None).unwrap();
+    assert_eq!(pdf_info.page_count, 2);
+    assert!(ink_ratio(&page_one(pdf)) > 0.001);
+    engine().close(pdf);
+    let _ = std::fs::remove_file(&out);
 }

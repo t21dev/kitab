@@ -32,7 +32,7 @@ fn parse_inner(debug: &str, name: &str) -> Option<usize> {
 }
 
 /// This thread's MuPDF context (the crate's thread-local clone of the base context).
-fn context_ptr() -> Option<*mut fz_context> {
+pub(crate) fn context_ptr() -> Option<*mut fz_context> {
     let ctx = Context::get();
     parse_inner(&format!("{ctx:?}"), "Context").map(|p| p as *mut fz_context)
 }

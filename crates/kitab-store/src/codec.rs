@@ -19,6 +19,9 @@ pub(crate) fn format_to_str(f: Format) -> &'static str {
         Format::Mobi => "mobi",
         Format::Fb2 => "fb2",
         Format::Cbz => "cbz",
+        Format::Cbr => "cbr",
+        Format::Cb7 => "cb7",
+        Format::Djvu => "djvu",
         Format::Image => "image",
         Format::Txt => "txt",
         Format::Markdown => "markdown",
@@ -33,6 +36,9 @@ pub(crate) fn format_from_str(s: &str) -> Result<Format> {
         "mobi" => Format::Mobi,
         "fb2" => Format::Fb2,
         "cbz" => Format::Cbz,
+        "cbr" => Format::Cbr,
+        "cb7" => Format::Cb7,
+        "djvu" => Format::Djvu,
         "image" => Format::Image,
         "txt" => Format::Txt,
         "markdown" => Format::Markdown,
@@ -162,13 +168,16 @@ pub(crate) fn decode_state(s: &str) -> Result<ReadingState> {
 mod tests {
     use super::*;
 
-    const ALL_FORMATS: [Format; 9] = [
+    const ALL_FORMATS: [Format; 12] = [
         Format::Pdf,
         Format::Xps,
         Format::Epub,
         Format::Mobi,
         Format::Fb2,
         Format::Cbz,
+        Format::Cbr,
+        Format::Cb7,
+        Format::Djvu,
         Format::Image,
         Format::Txt,
         Format::Markdown,

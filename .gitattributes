@@ -5,3 +5,8 @@
 *.p12 binary
 *.png binary
 *.jpg binary
+*.cbz binary
+*.cbr binary
+*.cb7 binary
+*.rar binary
+*.djvu binary

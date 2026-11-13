@@ -11,8 +11,8 @@
   </developer>
   <description>
     <p>
-      Kitab Reader opens PDF, EPUB, MOBI, FB2, CBZ, XPS, Markdown and plain
-      text in one native window. Pages are drawn by MuPDF on the GPU, so big
+      Kitab Reader opens PDF, EPUB, MOBI, FB2, comics (CBZ, CBR, CB7), DjVu,
+      XPS, Markdown and plain text in one native window. Pages are drawn by MuPDF on the GPU, so big
       files open quickly and scroll smoothly.
     </p>
     <ul>

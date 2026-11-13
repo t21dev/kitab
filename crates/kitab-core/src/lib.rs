@@ -30,6 +30,12 @@ pub enum Format {
     Mobi,
     Fb2,
     Cbz,
+    /// A comic book in a RAR archive (`.cbr`).
+    Cbr,
+    /// A comic book in a 7z archive (`.cb7`).
+    Cb7,
+    /// A scanned book or document (`.djvu`, `.djv`).
+    Djvu,
     Image,
     Txt,
     Markdown,
@@ -38,7 +44,7 @@ pub enum Format {
 /// How a format is laid out on screen.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum LayoutKind {
-    /// Pages with their own fixed size (PDF, CBZ, fixed-layout EPUB).
+    /// Pages with their own fixed size (PDF, comics, DjVu, fixed-layout EPUB).
     Fixed,
     /// Text reflowed into pages for the window size (EPUB, MOBI, FB2, TXT).
     Reflow,
@@ -51,7 +57,13 @@ impl Format {
     /// document, not here.
     pub fn default_layout(self) -> LayoutKind {
         match self {
-            Format::Pdf | Format::Xps | Format::Cbz | Format::Image => LayoutKind::Fixed,
+            Format::Pdf
+            | Format::Xps
+            | Format::Cbz
+            | Format::Cbr
+            | Format::Cb7
+            | Format::Djvu
+            | Format::Image => LayoutKind::Fixed,
             Format::Epub | Format::Mobi | Format::Fb2 | Format::Txt => LayoutKind::Reflow,
             Format::Markdown => LayoutKind::Flow,
         }
@@ -68,6 +80,9 @@ impl Format {
             "mobi" | "azw" | "azw3" => Format::Mobi,
             "fb2" => Format::Fb2,
             "cbz" => Format::Cbz,
+            "cbr" => Format::Cbr,
+            "cb7" => Format::Cb7,
+            "djvu" | "djv" => Format::Djvu,
             "png" | "jpg" | "jpeg" | "gif" | "bmp" | "tif" | "tiff" | "webp" => Format::Image,
             "txt" => Format::Txt,
             "md" | "markdown" | "mdown" | "mkd" => Format::Markdown,
@@ -85,6 +100,20 @@ mod tests {
         assert_eq!(Format::from_extension("PDF"), Some(Format::Pdf));
         assert_eq!(Format::from_extension("Md"), Some(Format::Markdown));
         assert_eq!(Format::from_extension("docx"), None);
+    }
+
+    #[test]
+    fn comics_and_djvu() {
+        assert_eq!(Format::from_extension("CBR"), Some(Format::Cbr));
+        assert_eq!(Format::from_extension("cb7"), Some(Format::Cb7));
+        assert_eq!(Format::from_extension("djv"), Some(Format::Djvu));
+        assert_eq!(Format::from_extension("djvu"), Some(Format::Djvu));
+        // .rar and .7z are archives, not comics: Kitab doesn't claim them.
+        assert_eq!(Format::from_extension("rar"), None);
+        assert_eq!(Format::from_extension("7z"), None);
+        for f in [Format::Cbr, Format::Cb7, Format::Djvu] {
+            assert_eq!(f.default_layout(), LayoutKind::Fixed);
+        }
     }
 
     #[test]

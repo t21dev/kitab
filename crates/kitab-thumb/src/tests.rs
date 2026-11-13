@@ -194,3 +194,44 @@ fn cli_writes_a_png_and_bgra() {
     let bad: Vec<String> = vec!["-s".into(), "nope".into()];
     assert_eq!(cli(&bad, &mut std::io::empty(), &mut Vec::new()), 1);
 }
+
+/// Comics in RAR and 7z (also from bytes, as Explorer hands them over) and
+/// DjVu get a first-page thumbnail with the page's shape; the files Kitab
+/// can't open get none.
+#[test]
+fn comics_in_rar_and_7z_and_djvu_have_thumbnails() {
+    let exp = expected();
+    let other = exp["other"].as_object().expect("other section");
+    let mut checked = 0;
+    for (name, e) in other {
+        let ext = name.rsplit('.').next().unwrap_or("");
+        if !matches!(ext, "cbr" | "cb7" | "djvu") {
+            continue;
+        }
+        let path = fixtures().join("other").join(name);
+        let bytes = std::fs::read(&path).expect("fixture");
+        for result in [
+            thumb_of(&path, 200),
+            render(Source::Bytes(&bytes), ext, 200),
+        ] {
+            if e["opens"] == false {
+                assert!(result.is_err(), "{name}: no thumbnail");
+                continue;
+            }
+            let t = result.unwrap_or_else(|err| panic!("{name}: {err}"));
+            let size = &e["page_sizes_pt"][0];
+            let (w, h) = (
+                size[0].as_f64().unwrap_or(0.0),
+                size[1].as_f64().unwrap_or(1.0),
+            );
+            assert_eq!(t.width().max(t.height()), 200, "{name}");
+            let want = (200.0 * w.min(h) / w.max(h)).round() as u32;
+            assert!(
+                t.width().min(t.height()).abs_diff(want) <= 1,
+                "{name}: shape"
+            );
+        }
+        checked += 1;
+    }
+    assert!(checked >= 7, "{checked} comic and DjVu fixtures");
+}

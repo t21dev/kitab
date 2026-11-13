@@ -38,3 +38,7 @@ unsafe_code = "allow"
 [lints.clippy]
 unwrap_used = "warn"
 expect_used = "warn"
+# As in the workspace (Cargo.toml): suggestions Rust 1.95 brings for 1.85 code.
+collapsible_if = "allow"
+manual_is_multiple_of = "allow"
+chunks_exact_to_as_chunks = "allow"

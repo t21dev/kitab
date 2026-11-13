@@ -23,6 +23,9 @@ pub fn aliases(mime: &str) -> &'static [&'static str] {
     match mime {
         "text/markdown" => &["text/x-markdown"],
         "application/vnd.comicbook+zip" => &["application/x-cbz"],
+        "application/vnd.comicbook-rar" => &["application/x-cbr"],
+        // A DjVu file of more than one page reads as "+multipage" by its content.
+        "image/vnd.djvu" => &["image/vnd.djvu+multipage", "image/x-djvu"],
         "application/oxps" => &["application/vnd.ms-xpsdocument"],
         _ => &[],
     }
