@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-11-14
+
 ### Added
 - Settings › Reading › Markdown text size (100 % to 300 %): the size Markdown files open at. Zoom (Ctrl+=, Ctrl+-, the Aa button) still changes it for one file, and Default size comes back to it. Book text size never applied to Markdown, so there was no lasting way to make Markdown bigger.
 
@@ -318,7 +320,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fit width and fit page follow a window resize even when no new page has to be drawn.
 - The Settings window shrinks to fit small windows instead of running off the left edge.
 
-[Unreleased]: https://github.com/t21dev/kitab/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/t21dev/kitab/compare/v0.4.1...HEAD
+[0.4.1]: https://github.com/t21dev/kitab/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/t21dev/kitab/compare/v0.3.10...v0.4.0
 [0.3.10]: https://github.com/t21dev/kitab/compare/v0.3.9...v0.3.10
 [0.3.9]: https://github.com/t21dev/kitab/compare/v0.3.8...v0.3.9
