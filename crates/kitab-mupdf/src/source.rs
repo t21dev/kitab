@@ -42,6 +42,13 @@ use mupdf_sys::{
 
 use crate::comic::Comic;
 
+// MuPDF's error codes as `fz_throw` takes them: bindgen makes the enum `i32`
+// on Windows and `u32` elsewhere.
+#[allow(clippy::unnecessary_cast)]
+const UNSUPPORTED: c_int = FZ_ERROR_UNSUPPORTED as c_int;
+#[allow(clippy::unnecessary_cast)]
+const ARGUMENT: c_int = FZ_ERROR_ARGUMENT as c_int;
+
 /// A file read for MuPDF to draw.
 pub(crate) enum Source {
     Comic(Comic),
@@ -244,13 +251,7 @@ unsafe extern "C" fn open_doc(
 ) -> *mut fz_document {
     if !PENDING.with(|p| p.borrow().is_some()) {
         // SAFETY: inside MuPDF's open, which catches; nothing to drop here.
-        unsafe {
-            fz_throw(
-                ctx,
-                FZ_ERROR_UNSUPPORTED,
-                c"no page source to open".as_ptr(),
-            )
-        }
+        unsafe { fz_throw(ctx, UNSUPPORTED, c"no page source to open".as_ptr()) }
     }
     // SAFETY: allocates a zeroed document with refs = 1; throws only when
     // out of memory, with no Rust value alive to skip.
@@ -341,7 +342,7 @@ unsafe extern "C" fn load_page(
     let index = match usize::try_from(number) {
         Ok(i) if i < count => i,
         // SAFETY: inside MuPDF's load_page, which catches; nothing to drop.
-        _ => unsafe { fz_throw(ctx, FZ_ERROR_ARGUMENT, c"page out of range".as_ptr()) },
+        _ => unsafe { fz_throw(ctx, ARGUMENT, c"page out of range".as_ptr()) },
     };
     // SAFETY: a zeroed page holding a reference to `doc`; throws only when
     // out of memory, with no Rust value alive to skip.
