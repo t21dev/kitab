@@ -14,6 +14,14 @@ pub const SETTINGS_VERSION: u32 = 1;
 /// The interface sizes on offer (Settings › Appearance), in percent.
 pub const UI_SCALES: [u16; 7] = [90, 100, 110, 125, 150, 175, 200];
 
+/// Interface size works only where Kitab's gpui patch scales windows
+/// (Windows). Elsewhere the setting is hidden: it would do nothing.
+pub const UI_SCALE_WORKS: bool = cfg!(windows);
+
+/// Markdown text sizes on offer (Settings › Reading), in percent. A
+/// Markdown file opens at this size; zoom changes it per file from there.
+pub const MD_TEXT_SIZES: [u16; 7] = [100, 125, 150, 175, 200, 250, 300];
+
 /// How a PDF, comic or XPS file is sized the first time it is opened
 /// (Settings › Reading). A document opened before comes back as it was left.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -734,6 +742,8 @@ pub struct Settings {
     pub toast_at: ToastAt,
     /// Markdown's typeface.
     pub md_face: MdFace,
+    /// Markdown's text size in percent (one of `MD_TEXT_SIZES`).
+    pub md_text: u16,
     /// How a document is sized the first time it is opened.
     pub open_zoom: OpenZoom,
     /// What the tab bar's + does.
@@ -828,6 +838,7 @@ impl Default for Settings {
             ui_scale: 100,
             toast_at: ToastAt::TopCenter,
             md_face: MdFace::System,
+            md_text: 100,
             open_zoom: OpenZoom::FitWidth,
             new_tab: NewTab::Home,
             window: None,
@@ -885,6 +896,8 @@ struct File {
     ui_scale: u16,
     toast_at: ToastAt,
     md_face: MdFace,
+    /// Percent.
+    md_text_size: u16,
     open_zoom: OpenZoom,
     new_tab: NewTab,
     window: Option<WindowPlace>,
@@ -983,6 +996,7 @@ impl From<Settings> for File {
             ui_scale: s.ui_scale,
             toast_at: s.toast_at,
             md_face: s.md_face,
+            md_text_size: s.md_text,
             open_zoom: s.open_zoom,
             new_tab: s.new_tab,
             window: s.window,
@@ -1045,6 +1059,12 @@ impl Settings {
             },
             toast_at: f.toast_at,
             md_face: f.md_face,
+            // A size Kitab doesn't offer (hand-edited, older file) is 100 %.
+            md_text: if MD_TEXT_SIZES.contains(&f.md_text_size) {
+                f.md_text_size
+            } else {
+                100
+            },
             open_zoom: f.open_zoom,
             new_tab: f.new_tab,
             window: f.window,
@@ -1127,6 +1147,7 @@ mod tests {
             ui_scale: 125,
             toast_at: ToastAt::BottomRight,
             md_face: MdFace::Mono,
+            md_text: 175,
             open_zoom: OpenZoom::FitPage,
             new_tab: NewTab::OpenFile,
             window: Some(WindowPlace {
@@ -1161,6 +1182,17 @@ mod tests {
         let s = Settings::from_json(r#"{"book_text_size": 1}"#).expect("parses");
         assert_eq!(s.book_text, kitab_core::BookLayout::EM_MIN);
         assert_eq!(Settings::default().book_text, BOOK_TEXT_DEFAULT);
+    }
+
+    #[test]
+    fn md_text_defaults_to_100_and_falls_back() {
+        // Settings saved before this field existed read Markdown as before.
+        assert_eq!(Settings::from_json("{}").expect("parses").md_text, 100);
+        assert_eq!(Settings::default().md_text, 100);
+        let s = Settings::from_json(r#"{"md_text_size": 200}"#).expect("parses");
+        assert_eq!(s.md_text, 200);
+        let s = Settings::from_json(r#"{"md_text_size": 9000}"#).expect("parses");
+        assert_eq!(s.md_text, 100);
     }
 
     #[test]

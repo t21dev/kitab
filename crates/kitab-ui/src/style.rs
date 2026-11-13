@@ -66,6 +66,8 @@ pub struct Style {
     pub ui_scale: u16,
     pub toast_at: crate::settings::ToastAt,
     pub md_face: crate::settings::MdFace,
+    /// Markdown text size in percent (Settings › Reading).
+    pub md_text: u16,
     pub open_zoom: crate::settings::OpenZoom,
     pub new_tab: crate::settings::NewTab,
     /// The main window's last place, saved with the settings.
@@ -121,6 +123,7 @@ impl Style {
             ui_scale: s.ui_scale,
             toast_at: s.toast_at,
             md_face: s.md_face,
+            md_text: s.md_text,
             open_zoom: s.open_zoom,
             new_tab: s.new_tab,
             window: s.window,
@@ -204,6 +207,7 @@ impl Style {
             ui_scale: self.ui_scale,
             toast_at: self.toast_at,
             md_face: self.md_face,
+            md_text: self.md_text,
             open_zoom: self.open_zoom,
             new_tab: self.new_tab,
             window: self.window,

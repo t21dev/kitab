@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Settings › Reading › Markdown text size (100 % to 300 %): the size Markdown files open at. Zoom (Ctrl+=, Ctrl+-, the Aa button) still changes it for one file, and Default size comes back to it. Book text size never applied to Markdown, so there was no lasting way to make Markdown bigger.
+
+### Fixed
+- Settings › Appearance › Interface size is shown only on Windows, the one place it works. On Linux and macOS it was saved but changed nothing.
+
 ## [0.4.0] - 2026-11-13
 
 ### Added

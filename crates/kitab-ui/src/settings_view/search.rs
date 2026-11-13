@@ -116,6 +116,11 @@ const INDEX: &[(Section, &str, &str)] = &[
     ),
     (
         Section::Reading,
+        "Markdown text size",
+        "font size bigger larger smaller zoom scale markdown md text readable vision",
+    ),
+    (
+        Section::Reading,
         "Code colours",
         "markdown syntax highlighting",
     ),
@@ -231,6 +236,8 @@ pub(super) fn matches(query: &str) -> Vec<(Section, &'static str)> {
     }
     INDEX
         .iter()
+        // Interface size is hidden where it doesn't work, so it isn't found.
+        .filter(|(_, title, _)| crate::settings::UI_SCALE_WORKS || *title != "Interface size")
         .filter(|(s, title, extra)| {
             let hay = format!("{} {} {}", title, extra, s.label()).to_lowercase();
             words.iter().all(|w| hay.contains(w.as_str()))

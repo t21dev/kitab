@@ -244,6 +244,9 @@ pub struct Reader {
     md_sel: md_select::MdSelect,
     /// A code block's sideways scroll bar being dragged.
     md_hdrag: Option<HDrag>,
+    /// Markdown's text scale when the file has no zoom of its own
+    /// (Settings › Reading › Markdown text size); followed each frame.
+    md_base: f32,
     dock: dock::DockState,
     /// Room kept free above the first page (sidebar tabs: the window buttons).
     top_inset: f32,
@@ -383,6 +386,7 @@ impl Reader {
             select: select::SelectState::default(),
             md_sel: md_select::MdSelect::default(),
             md_hdrag: None,
+            md_base: f32::from(Style::get(cx).md_text) / 100.0,
             dock: dock::DockState::default(),
             top_inset: 0.0,
             md: None,
@@ -1849,6 +1853,15 @@ impl Render for Reader {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let st = Style::get(cx).clone();
         self.scale_factor = window.scale_factor();
+        // Settings › Reading › Markdown text size changed: an open Markdown
+        // file without a zoom of its own takes the new size now.
+        let md_base = f32::from(st.md_text) / 100.0;
+        if (md_base - self.md_base).abs() > f32::EPSILON {
+            self.md_base = md_base;
+            if self.md.is_some() && !matches!(self.zoom, ZoomMode::Custom(_)) {
+                self.relayout(cx);
+            }
+        }
         // Pages painted last frame are on the GPU: one copy is enough, so
         // the pixels in memory go (a page at fit width on a large screen is
         // tens of megabytes).

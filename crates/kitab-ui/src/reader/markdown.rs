@@ -204,11 +204,14 @@ fn matches(text: &str, query: &str) -> Vec<Range<usize>> {
 }
 
 impl Reader {
-    /// Text scale for Markdown (zoom changes the type size).
+    /// Text scale for Markdown (zoom changes the type size). A file without
+    /// a zoom of its own, or put back to the default size (Ctrl+2), reads at
+    /// the Markdown text size from Settings; Actual size (Ctrl+0) is 100 %.
     pub(super) fn md_scale(&self) -> f32 {
         match self.zoom {
             kitab_core::ZoomMode::Custom(z) => z,
-            _ => 1.0,
+            kitab_core::ZoomMode::ActualSize => 1.0,
+            kitab_core::ZoomMode::FitWidth | kitab_core::ZoomMode::FitPage => self.md_base,
         }
     }
 

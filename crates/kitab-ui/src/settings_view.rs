@@ -502,7 +502,8 @@ fn appearance(
             st,
         ))
         .child(group("Density", None, density_cards, st))
-        .child(group(
+        // Only where it works (Windows); elsewhere it would do nothing.
+        .when(crate::settings::UI_SCALE_WORKS, |el| el.child(group(
             "Interface size",
             Some("Text, buttons, icons and pages together. 100 % follows your system's own scaling."),
             div()
@@ -523,7 +524,7 @@ fn appearance(
                 ))
                 .into_any_element(),
             st,
-        ))
+        )))
         .child(group(
             "Messages",
             Some("Where notes like \u{201c}Saved\u{201d} or \u{201c}Couldn\u{2019}t print\u{201d} appear."),
@@ -818,6 +819,28 @@ fn reading(ws: &WeakEntity<Workspace>, st: &Style) -> AnyElement {
                                 SharedString::from(v.label()),
                                 st.md_face == v,
                                 change(ws, move |s: &mut Style| s.md_face = v),
+                            )
+                        })
+                        .collect(),
+                    st,
+                ))
+                .into_any_element(),
+            st,
+        ))
+        .child(group(
+            "Markdown text size",
+            Some("The size Markdown files open at. Ctrl+= and Ctrl+- (or the Aa button in the dock) change it for one file; Default size comes back here."),
+            div()
+                .id("md-text")
+                .flex()
+                .child(segmented(
+                    crate::settings::MD_TEXT_SIZES
+                        .into_iter()
+                        .map(|v| {
+                            (
+                                SharedString::from(format!("{v} %")),
+                                st.md_text == v,
+                                change(ws, move |s: &mut Style| s.md_text = v),
                             )
                         })
                         .collect(),
