@@ -7,12 +7,14 @@
 //! requests, locators and reading state.
 
 mod form;
+mod legible;
 mod markup;
 mod model;
 pub mod notes;
 mod ranges;
 mod signature;
 pub use form::*;
+pub use legible::legible;
 pub use markup::*;
 pub use model::*;
 pub use ranges::parse_page_ranges;

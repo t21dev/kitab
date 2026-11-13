@@ -479,11 +479,14 @@ fn walk_documents(dir: &Path, depth: u32, out: &mut Vec<(PathBuf, kitab_core::Fo
 }
 
 fn title_or_name(title: Option<String>, path: &Path) -> String {
-    title.filter(|t| !t.trim().is_empty()).unwrap_or_else(|| {
-        path.file_name()
-            .map(|n| n.to_string_lossy().to_string())
-            .unwrap_or_default()
-    })
+    // Titles stored before garbled (legacy-font) ones were dropped.
+    title
+        .filter(|t| kitab_core::legible(t).is_some())
+        .unwrap_or_else(|| {
+            path.file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_default()
+        })
 }
 
 impl StoreLibrary {

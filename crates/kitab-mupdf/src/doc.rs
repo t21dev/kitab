@@ -270,8 +270,11 @@ fn describe(handle: &Handle, format: Format, page_count: u32, reflowable: bool) 
     };
     DocInfo {
         format,
-        title: non_empty(handle.metadata(MetadataName::Title)),
-        author: non_empty(handle.metadata(MetadataName::Author)),
+        // Legacy-font (Bijoy) titles read as gibberish: drop them.
+        title: non_empty(handle.metadata(MetadataName::Title))
+            .filter(|t| kitab_core::legible(t).is_some()),
+        author: non_empty(handle.metadata(MetadataName::Author))
+            .filter(|a| kitab_core::legible(a).is_some()),
         page_count,
         page_sizes,
         outline,

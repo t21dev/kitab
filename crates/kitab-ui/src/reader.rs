@@ -405,18 +405,26 @@ impl Reader {
         this
     }
 
+    /// The file name without its extension (the tab icon shows the type):
+    /// what tabs, the window title and dialogs call the document. The embedded title is often missing, stale ("Microsoft
+    /// Word - draft3.doc") or typed in a legacy font, so it only shows as
+    /// [`Self::doc_title`].
     pub fn title(&self) -> SharedString {
-        let from_meta = self
-            .info
-            .as_ref()
-            .and_then(|i| i.title.clone())
-            .filter(|t| !t.trim().is_empty());
         let name = self
             .path
-            .file_name()
+            .file_stem()
             .map(|n| n.to_string_lossy().to_string())
             .unwrap_or_default();
-        SharedString::from(from_meta.unwrap_or(name))
+        SharedString::from(name)
+    }
+
+    /// The document's own title, when it has a readable one that says more
+    /// than the file name.
+    pub fn doc_title(&self) -> Option<String> {
+        let t = self.info.as_ref()?.title.as_deref()?;
+        let t = kitab_core::legible(t)?;
+        let stem = self.path.file_stem().map(|s| s.to_string_lossy());
+        (stem.as_deref() != Some(t)).then(|| t.to_string())
     }
 
     pub fn author(&self) -> Option<String> {

@@ -1030,6 +1030,14 @@ impl Workspace {
             let side = !on && self.tools.split.as_ref() == Some(tab);
             let r = tab.read(cx);
             let title = r.title();
+            // The whole file name (the tab truncates it), and the document's
+            // own title when it has a readable one.
+            let name = r.path.file_name().map(|n| n.to_string_lossy().to_string());
+            let name = name.unwrap_or_else(|| title.to_string());
+            let tip = match r.doc_title() {
+                Some(t) => format!("{name} · {t}"),
+                None => name,
+            };
             let tab_icon = tab_icon_for(&r.path);
             let animate = self.booted && st.animations;
             let tab_id = tab.entity_id().as_u64();
@@ -1071,6 +1079,7 @@ impl Workspace {
                 .when(side, |d| {
                     d.bg(st.c(|c| c.hover)).text_color(st.c(|c| c.text))
                 })
+                .tip(tip)
                 .on_click(cx.listener(move |ws, _, window, cx| ws.activate(ix, window, cx)))
                 .child(svg().path(icon(tab_icon)).size(px(14.0)).text_color(if on {
                     st.c(|c| c.accent)
@@ -1895,11 +1904,16 @@ impl Workspace {
                             ws.tab_menu(ix, e.position, window, cx)
                         }),
                     )
-                    .child(svg().path(icon("file")).size(px(14.0)).text_color(if on {
-                        st.c(|c| c.accent)
-                    } else {
-                        st.c(|c| c.faint)
-                    }))
+                    .child(
+                        svg()
+                            .path(icon(tab_icon_for(&r.path)))
+                            .size(px(14.0))
+                            .text_color(if on {
+                                st.c(|c| c.accent)
+                            } else {
+                                st.c(|c| c.faint)
+                            }),
+                    )
                     .child(div().flex_1().min_w_0().truncate().child(title))
                     .children(where_.map(|w| {
                         div()
@@ -4541,6 +4555,7 @@ fn tab_icon_for(path: &std::path::Path) -> &'static str {
         .and_then(|e| e.to_str())
         .and_then(Format::from_extension);
     match format {
+        Some(Format::Pdf) => "pdf",
         Some(Format::Markdown) => "markdown",
         Some(Format::Epub | Format::Mobi | Format::Fb2) => "book",
         Some(Format::Cbz) => "image",
@@ -4555,7 +4570,8 @@ mod tab_icon_tests {
     #[test]
     fn each_format_has_its_icon() {
         let icon = |p: &str| super::tab_icon_for(std::path::Path::new(p));
-        assert_eq!(icon("a.pdf"), "file");
+        assert_eq!(icon("a.pdf"), "pdf");
+        assert_eq!(icon("a.zip"), "file");
         assert_eq!(icon("a.MD"), "markdown");
         assert_eq!(icon("a.epub"), "book");
         assert_eq!(icon("a.fb2"), "book");
