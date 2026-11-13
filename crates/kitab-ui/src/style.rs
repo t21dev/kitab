@@ -62,6 +62,8 @@ pub struct Style {
     pub cover_size: crate::settings::CoverSize,
     pub home_stats: bool,
     pub home_continue: bool,
+    /// Reading progress bars on Home (Settings › Home).
+    pub home_progress: bool,
     /// Interface size in percent (Settings › Appearance).
     pub ui_scale: u16,
     pub toast_at: crate::settings::ToastAt,
@@ -120,6 +122,7 @@ impl Style {
             cover_size: s.cover_size,
             home_stats: s.home_stats,
             home_continue: s.home_continue,
+            home_progress: s.home_progress,
             ui_scale: s.ui_scale,
             toast_at: s.toast_at,
             md_face: s.md_face,
@@ -204,6 +207,7 @@ impl Style {
             cover_size: self.cover_size,
             home_stats: self.home_stats,
             home_continue: self.home_continue,
+            home_progress: self.home_progress,
             ui_scale: self.ui_scale,
             toast_at: self.toast_at,
             md_face: self.md_face,

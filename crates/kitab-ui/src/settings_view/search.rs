@@ -169,6 +169,11 @@ const INDEX: &[(Section, &str, &str)] = &[
     ),
     (Section::Home, "Continue reading", "home in progress resume"),
     (
+        Section::Home,
+        "Reading progress",
+        "home progress bar percent read hide covers list",
+    ),
+    (
         Section::Library,
         "Watched folders",
         "folder scan library add",

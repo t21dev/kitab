@@ -2499,7 +2499,7 @@ impl Workspace {
                     .child("File not found")
                     .into_any_element()
             } else {
-                progress_bar(item.progress, st)
+                home_progress_bar(item.progress, st)
             })
             .into_any_element()
     }
@@ -2617,10 +2617,10 @@ impl Workspace {
                     } else {
                         div()
                             .flex_1()
-                            .child(progress_bar(item.progress, st))
+                            .child(home_progress_bar(item.progress, st))
                             .into_any_element()
                     })
-                    .when(!missing, |d| {
+                    .when(!missing && st.home_progress, |d| {
                         d.child(
                             div()
                                 .w(px(36.0))
@@ -2674,6 +2674,17 @@ fn section_title(text: &str, st: &Style) -> AnyElement {
         .text_color(st.c(|c| c.muted))
         .child(text.to_string())
         .into_any_element()
+}
+
+/// The bar under a book on Home's covers and list rows, or the same
+/// space left empty when Settings › Home › Reading progress is off (so the
+/// cards and rows keep their height and line up as before).
+fn home_progress_bar(progress: f32, st: &Style) -> AnyElement {
+    if st.home_progress {
+        progress_bar(progress, st)
+    } else {
+        div().h(px(4.0)).w_full().into_any_element()
+    }
 }
 
 fn progress_bar(progress: f32, st: &Style) -> AnyElement {

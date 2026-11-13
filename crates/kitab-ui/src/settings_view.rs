@@ -1507,12 +1507,27 @@ fn home_section(ws: &WeakEntity<Workspace>, st: &Style) -> AnyElement {
         .child(group(
             "Covers",
             None,
-            div().flex().flex_col().gap(px(8.0)).child(well_row(
-                "Cover size",
-                "How big the books are in the Covers layout.",
-                size_row,
-                st,
-            )),
+            div()
+                .flex()
+                .flex_col()
+                .gap(px(8.0))
+                .child(well_row(
+                    "Cover size",
+                    "How big the books are in the Covers layout.",
+                    size_row,
+                    st,
+                ))
+                .child(well_row(
+                    "Reading progress",
+                    "A bar under each book showing how far you've read, in Covers and List. Continue reading keeps its own.",
+                    switch(
+                        "home-progress",
+                        st.home_progress,
+                        st,
+                        change(ws, |s: &mut Style| s.home_progress = !s.home_progress),
+                    ),
+                    st,
+                )),
             st,
         ))
         .child(group("Above the books", None, shows, st))

@@ -736,6 +736,8 @@ pub struct Settings {
     pub cover_size: CoverSize,
     pub home_stats: bool,
     pub home_continue: bool,
+    /// The reading progress bar under each book on Home (covers and list).
+    pub home_progress: bool,
     /// Interface size, in percent of the system's scaling (100 = as is).
     pub ui_scale: u16,
     /// Where messages appear.
@@ -835,6 +837,7 @@ impl Default for Settings {
             cover_size: CoverSize::Medium,
             home_stats: true,
             home_continue: true,
+            home_progress: true,
             ui_scale: 100,
             toast_at: ToastAt::TopCenter,
             md_face: MdFace::System,
@@ -893,6 +896,7 @@ struct File {
     cover_size: CoverSize,
     home_stats: bool,
     home_continue: bool,
+    home_progress: bool,
     ui_scale: u16,
     toast_at: ToastAt,
     md_face: MdFace,
@@ -993,6 +997,7 @@ impl From<Settings> for File {
             cover_size: s.cover_size,
             home_stats: s.home_stats,
             home_continue: s.home_continue,
+            home_progress: s.home_progress,
             ui_scale: s.ui_scale,
             toast_at: s.toast_at,
             md_face: s.md_face,
@@ -1052,6 +1057,7 @@ impl Settings {
             cover_size: f.cover_size,
             home_stats: f.home_stats,
             home_continue: f.home_continue,
+            home_progress: f.home_progress,
             ui_scale: if UI_SCALES.contains(&f.ui_scale) {
                 f.ui_scale
             } else {
@@ -1144,6 +1150,7 @@ mod tests {
             cover_size: CoverSize::Large,
             home_stats: false,
             home_continue: false,
+            home_progress: false,
             ui_scale: 125,
             toast_at: ToastAt::BottomRight,
             md_face: MdFace::Mono,
@@ -1182,6 +1189,14 @@ mod tests {
         let s = Settings::from_json(r#"{"book_text_size": 1}"#).expect("parses");
         assert_eq!(s.book_text, kitab_core::BookLayout::EM_MIN);
         assert_eq!(Settings::default().book_text, BOOK_TEXT_DEFAULT);
+    }
+
+    #[test]
+    fn home_progress_is_on_unless_turned_off() {
+        // Settings saved before this field existed keep showing the bars.
+        assert!(Settings::from_json("{}").expect("parses").home_progress);
+        let s = Settings::from_json(r#"{"home_progress": false}"#).expect("parses");
+        assert!(!s.home_progress);
     }
 
     #[test]

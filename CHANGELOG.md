@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Settings › Home › Reading progress: hide the bar under each book on Home (Covers and List, with the list's percent). On by default; Continue reading keeps its bars.
+
 ## [0.4.1] - 2026-11-14
 
 ### Added
