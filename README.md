@@ -221,6 +221,10 @@ AGENTS.md        rules for changing the code
 
 Read [AGENTS.md](AGENTS.md) first. Commits follow [Conventional Commits](https://www.conventionalcommits.org/), every user-visible change adds a line to [CHANGELOG.md](CHANGELOG.md), and a bug fix comes with a test that fails without it.
 
+## Support
+
+This project is free and open source. If it saves you time, you can support [Team 21](https://t21.dev) on [Patreon](https://www.patreon.com/triptex). It pays for code signing, app store fees and servers.
+
 ## Licence
 
 Kitab is free software under the [GNU AGPL 3.0 or later](LICENSE).
