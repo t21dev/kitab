@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Read aloud, with your system's own voices on Windows, macOS and Linux. Ctrl+Shift+U, the speaker in the dock, the ⋯ menu or the page's right-click menu (Read aloud from here) reads from the selection, the place you click or the top of the page in view, sentence by sentence and page after page. The sentence being read is shaded, its word marked, and the pages follow along. The same key or button pauses and carries on; the stop button beside it ends it. Settings › Reading › Read aloud picks the voice (with a preview), the speed (0.75× to 3×) and the tone. Words broken over two lines are read whole, and a title, its authors and each paragraph are read as their own sentences. On Linux it speaks through speech-dispatcher, which the .deb and .rpm recommend. Nothing is loaded until read aloud is first used.
+
 ## [0.3.10] - 2026-11-13
 
 ### Added

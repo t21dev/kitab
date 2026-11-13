@@ -1,0 +1,46 @@
+[package]
+name = "kitab-speech"
+description = "Kitab Reader's read aloud: the system's own text-to-speech voices on Windows, macOS and Linux"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish = false
+
+[dependencies]
+log = "0.4"
+
+[target.'cfg(windows)'.dependencies]
+# The same windows crate gpui uses (no second copy in the binary). WinRT's
+# speech synthesizer has the OneCore voices (more languages than SAPI's) and
+# reports where each word starts.
+windows = { version = "0.61", features = [
+    "Foundation",
+    "Foundation_Collections",
+    "Media_Core",
+    "Media_Playback",
+    "Media_SpeechSynthesis",
+    "Storage_Streams",
+    "Win32_System_Com",
+] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+# The same objc crate gpui uses, for AVSpeechSynthesizer.
+objc = "0.2"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+# speech-dispatcher is loaded when read aloud first starts, so Kitab runs
+# (without read aloud) where it isn't installed. The libloading the tree
+# already has.
+libloading = "0.8"
+
+# unsafe is allowed in this crate only for the OS speech calls, each with a
+# SAFETY comment (AGENTS.md rule 10).
+[lints.rust]
+unsafe_code = "allow"
+
+[lints.clippy]
+unwrap_used = "warn"
+expect_used = "warn"

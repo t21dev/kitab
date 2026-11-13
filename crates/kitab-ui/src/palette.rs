@@ -171,6 +171,20 @@ pub const COMMANDS: &[Command] = &[
         true,
         ToggleBookmark
     ),
+    cmd!(
+        "Read",
+        "Read aloud (or pause, or carry on)",
+        "speak speech voice narrator tts listen text to speech",
+        true,
+        ReadAloud
+    ),
+    cmd!(
+        "Read",
+        "Stop reading aloud",
+        "speak speech voice silence",
+        true,
+        StopReading
+    ),
     cmd!("Mark up", "Undo a mark", "", true, MarkupUndo),
     cmd!("Mark up", "Redo a mark", "", true, MarkupRedo),
     cmd!(

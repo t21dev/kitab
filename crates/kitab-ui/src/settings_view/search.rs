@@ -106,6 +106,11 @@ const INDEX: &[(Section, &str, &str)] = &[
     ),
     (
         Section::Reading,
+        "Read aloud",
+        "speech speak voice narrator text to speech tts listen speed rate tone pitch dictation audio",
+    ),
+    (
+        Section::Reading,
         "Markdown typeface",
         "font face serif sans mono system markdown text",
     ),

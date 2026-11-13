@@ -165,6 +165,8 @@ const MENUS: &[BarMenu] = &[
         key: "t",
         rows: &[
             row!("Draw and mark up", "Ctrl+Shift+D", Pdf, ToggleMarkup),
+            row!("Read aloud", "Ctrl+Shift+U", Doc, ReadAloud),
+            row!("Stop reading", "", Doc, StopReading),
             row!("Page tools…", "", Pdf, PageTools),
             row!("Sign…", "", Pdf, SignPdf),
             row!("Password…", "", Pdf, PdfPassword),

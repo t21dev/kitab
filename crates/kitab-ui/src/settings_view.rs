@@ -799,6 +799,12 @@ fn reading(ws: &WeakEntity<Workspace>, st: &Style) -> AnyElement {
             st,
         ))
         .child(group(
+            "Read aloud",
+            Some("Ctrl+Shift+U, or the speaker in the dock, reads from the selection or from the top of the page in view, and the pages follow along. The voices are your system's own: add more in its speech or language settings."),
+            read_aloud_rows(ws, st),
+            st,
+        ))
+        .child(group(
             "Markdown typeface",
             Some("The font Markdown is read in. The Aa button in the dock switches it too."),
             div()
@@ -1054,6 +1060,26 @@ fn toolbar_rows(ws: &WeakEntity<Workspace>, st: &Style) -> AnyElement {
             .into_any_element();
         col = col.child(well_row(label, "", control, st));
     }
+    // Read aloud sits in the dock (its stop button joins it while reading).
+    let read = [("Dock", true), ("Off", false)]
+        .into_iter()
+        .map(|(name, on)| {
+            (
+                SharedString::from(name),
+                st.dock_items.read_aloud == on,
+                change(ws, move |s: &mut Style| s.dock_items.read_aloud = on),
+            )
+        })
+        .collect();
+    col = col.child(well_row(
+        "Read aloud",
+        "",
+        div()
+            .id("toolbar-read-aloud")
+            .child(segmented(read, st))
+            .into_any_element(),
+        st,
+    ));
     let more = [("Title bar", true), ("Dock", false)]
         .into_iter()
         .map(|(name, up)| {
@@ -1721,6 +1747,111 @@ fn book_rows(ws: &WeakEntity<Workspace>, st: &Style) -> AnyElement {
         .child(well_row("Typeface", "", segmented(faces, st), st))
         .child(well_row("Line spacing", "", segmented(lines, st), st))
         .child(well_row("Margins", "", segmented(margins, st), st))
+        .into_any_element()
+}
+
+fn read_aloud_rows(ws: &WeakEntity<Workspace>, st: &Style) -> AnyElement {
+    use crate::settings::ReadAloud;
+    let ra = &st.read_aloud;
+    let speeds = ReadAloud::SPEEDS
+        .into_iter()
+        .map(|v| {
+            (
+                SharedString::from(format!("{v}×")),
+                (ra.rate - v).abs() < 0.01,
+                change(ws, move |s: &mut Style| s.read_aloud.rate = v),
+            )
+        })
+        .collect();
+    let tones = ReadAloud::TONES
+        .into_iter()
+        .map(|(label, v)| {
+            (
+                SharedString::from(label),
+                (ra.pitch - v).abs() < 0.01,
+                change(ws, move |s: &mut Style| s.read_aloud.pitch = v),
+            )
+        })
+        .collect();
+    let name = if ra.voice.is_empty() {
+        "System default".to_string()
+    } else if ra.voice_name.is_empty() {
+        "Chosen voice".to_string()
+    } else {
+        ra.voice_name.clone()
+    };
+    let button = |id: &'static str, label: SharedString| {
+        crate::kbd::stop_solid(div().id(id), st)
+            .h(st.px(|m| m.control_height))
+            .px(px(12.0))
+            .flex()
+            .items_center()
+            .gap(px(6.0))
+            .rounded(st.px(|m| m.control_radius))
+            .bg(st.c(|c| c.raised))
+            .shadow(st.well())
+            .border_1()
+            .border_color(st.c(|c| c.line))
+            .cursor_pointer()
+            .text_size(st.px(|m| m.ui_text))
+            .text_color(st.c(|c| c.text))
+            .hover(|d| d.bg(st.raised_hover()))
+            .child(div().truncate().child(label))
+    };
+    let pick = {
+        let ws = ws.clone();
+        button("read-aloud-voice", name.into())
+            .max_w(px(300.0))
+            .child(
+                svg()
+                    .path(icon("chevron-down"))
+                    .size(px(12.0))
+                    .flex_none()
+                    .text_color(st.c(|c| c.muted)),
+            )
+            .on_click(move |e: &gpui::ClickEvent, window, cx| {
+                let at = e.position();
+                let _ = ws.update(cx, |ws, cx| ws.voice_menu(at, window, cx));
+            })
+    };
+    let preview = {
+        let settings = ra.clone();
+        button("read-aloud-preview", "Preview".into())
+            .on_click(move |_, _, _| crate::reader::preview_voice(&settings))
+    };
+    div()
+        .flex()
+        .flex_col()
+        .gap(px(8.0))
+        .child(well_row(
+            "Voice",
+            "",
+            div()
+                .flex()
+                .gap(px(8.0))
+                .child(pick)
+                .child(preview)
+                .into_any_element(),
+            st,
+        ))
+        .child(well_row(
+            "Speed",
+            "",
+            div()
+                .id("read-aloud-speed")
+                .child(segmented(speeds, st))
+                .into_any_element(),
+            st,
+        ))
+        .child(well_row(
+            "Tone",
+            "",
+            div()
+                .id("read-aloud-tone")
+                .child(segmented(tones, st))
+                .into_any_element(),
+            st,
+        ))
         .into_any_element()
 }
 

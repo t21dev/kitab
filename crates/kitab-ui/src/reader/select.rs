@@ -150,7 +150,7 @@ impl Reader {
     }
 
     /// The page and boundary under window point `p`, if the page's characters are in.
-    fn end_at(&mut self, p: Point<Pixels>, cx: &mut Context<Self>) -> Option<End> {
+    pub(super) fn end_at(&mut self, p: Point<Pixels>, cx: &mut Context<Self>) -> Option<End> {
         let top = self.list.logical_scroll_top().item_ix;
         let last = self.page_count().saturating_sub(1);
         // The visible page whose sheet is nearest vertically.
@@ -388,7 +388,7 @@ impl Reader {
     }
 }
 
-fn union(a: RectPt, b: RectPt) -> RectPt {
+pub(super) fn union(a: RectPt, b: RectPt) -> RectPt {
     let x0 = a.x.min(b.x);
     let y0 = a.y.min(b.y);
     let x1 = (a.x + a.w).max(b.x + b.w);

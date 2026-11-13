@@ -31,6 +31,8 @@ finish-args:
   - --filesystem=home
   - --filesystem=/media
   - --filesystem=/run/media
+  # Read aloud: speech-dispatcher's socket (the runtime has its library).
+  - --filesystem=xdg-run/speech-dispatcher:ro
   - --filesystem=/mnt
 
 modules:

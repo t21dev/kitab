@@ -44,7 +44,9 @@ mod present;
 mod scrollbar;
 mod select;
 mod signatures;
+mod speech;
 pub(crate) use signatures::check_words;
+pub(crate) use speech::{load_voices, preview as preview_voice, voices};
 
 use crate::actions::*;
 use crate::cache::{PageCache, PageKey, scale_key};
@@ -132,6 +134,8 @@ pub enum ReaderEvent {
     /// Sign…: the page and box (page points from the top-left) the user
     /// clicked, or `None` when placing was cancelled.
     SignaturePlaced(Option<(u32, [f32; 4])>),
+    /// Something went wrong that the reader should hear about (a toast).
+    Message(String),
 }
 
 /// What "Save page as…" writes.
@@ -285,6 +289,8 @@ pub struct Reader {
     shrinking: bool,
     /// The window's scale factor at the last frame.
     scale_factor: f32,
+    /// Read aloud.
+    speech: speech::SpeechState,
 }
 
 /// Smooth scrolling under way.
@@ -399,6 +405,7 @@ impl Reader {
             parked: false,
             shrinking: false,
             scale_factor: window.scale_factor(),
+            speech: Default::default(),
         };
         this.load_file_size(cx);
         this.open(None, cx);
@@ -1644,6 +1651,7 @@ impl Reader {
                     .children(self.note_pins(ix, ppt, &st, cx))
                     .children(self.deleted_outlines(ix, ppt, &st))
                     .children(self.bookmark_ribbon(ix, &st))
+                    .children(self.speech_marks(ix, ppt, &st))
                     .children(self.selection_marks(ix, ppt, &st))
                     .children(self.find_marks(ix, ppt, &st))
                     .children(self.link_marks(ix, ppt, &st, cx))
@@ -2016,6 +2024,8 @@ impl Render for Reader {
             .on_action(cx.listener(|r, _: &MarkupRedo, _, cx| r.markup_redo(cx)))
             .on_action(cx.listener(|r, _: &SaveMarks, _, cx| r.save_marks(cx)))
             .on_action(cx.listener(|r, _: &ToggleBookmark, _, cx| r.toggle_bookmark(cx)))
+            .on_action(cx.listener(|r, _: &ReadAloud, _, cx| r.toggle_read_aloud(cx)))
+            .on_action(cx.listener(|r, _: &StopReading, _, cx| r.stop_read_aloud(cx)))
             .on_action(cx.listener(|r, _: &HighlightSelection, _, cx| {
                 if r.can_markup(cx) {
                     r.mark_selection("highlight", cx)

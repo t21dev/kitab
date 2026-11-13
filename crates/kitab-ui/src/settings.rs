@@ -384,6 +384,8 @@ pub struct DockItems {
     pub markup: bool,
     pub rotate: bool,
     pub bookmark: bool,
+    /// Read aloud: start, pause and resume (stop sits beside it while reading).
+    pub read_aloud: bool,
     pub minimal: bool,
     pub print: bool,
     pub password: bool,
@@ -400,10 +402,65 @@ impl Default for DockItems {
             markup: true,
             rotate: true,
             bookmark: false,
+            read_aloud: true,
             minimal: false,
             print: false,
             password: false,
         }
+    }
+}
+
+/// Read aloud's voice, speed and tone.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ReadAloud {
+    /// A system voice's id; empty for the system's default voice.
+    pub voice: String,
+    /// Its name, to show before the system's voices are loaded.
+    pub voice_name: String,
+    /// Speed, a multiple of the voice's own (0.5 to 3).
+    pub rate: f32,
+    /// Tone, a multiple of the voice's own (0.5 to 1.5).
+    pub pitch: f32,
+}
+
+impl Default for ReadAloud {
+    fn default() -> Self {
+        Self {
+            voice: String::new(),
+            voice_name: String::new(),
+            rate: 1.0,
+            pitch: 1.0,
+        }
+    }
+}
+
+impl ReadAloud {
+    pub const SPEEDS: [f32; 6] = [0.75, 1.0, 1.25, 1.5, 2.0, 3.0];
+    pub const TONES: [(&'static str, f32); 3] = [("Lower", 0.8), ("Normal", 1.0), ("Higher", 1.2)];
+
+    pub fn params(&self) -> kitab_speech::Params {
+        kitab_speech::Params {
+            rate: self.rate,
+            pitch: self.pitch,
+        }
+        .clamped()
+    }
+
+    /// A hand-edited value out of range, pulled back in.
+    pub fn clamped(self) -> Self {
+        let p = self.params();
+        Self {
+            voice: self.voice.chars().take(512).collect(),
+            voice_name: self.voice_name.chars().take(200).collect(),
+            rate: p.rate,
+            pitch: p.pitch,
+        }
+    }
+
+    /// The voice to ask for: `None` for the system's default.
+    pub fn voice(&self) -> Option<String> {
+        (!self.voice.is_empty()).then(|| self.voice.clone())
     }
 }
 
@@ -664,6 +721,8 @@ pub struct Settings {
     /// File, Edit, View, Go, Tools and Help under the title bar
     /// (Settings › Appearance). Off unless asked for.
     pub menu_bar: bool,
+    /// Read aloud's voice, speed and tone (Settings › Reading).
+    pub read_aloud: ReadAloud,
     /// Home: covers or a list, the covers' size, and what's above them.
     pub home_layout: HomeLayout,
     pub cover_size: CoverSize,
@@ -761,6 +820,7 @@ impl Default for Settings {
             smooth_scroll: true,
             tab_count: false,
             menu_bar: false,
+            read_aloud: ReadAloud::default(),
             home_layout: HomeLayout::Covers,
             cover_size: CoverSize::Medium,
             home_stats: true,
@@ -817,6 +877,7 @@ struct File {
     smooth_scroll: bool,
     tab_count: bool,
     menu_bar: bool,
+    read_aloud: ReadAloud,
     home_layout: HomeLayout,
     cover_size: CoverSize,
     home_stats: bool,
@@ -914,6 +975,7 @@ impl From<Settings> for File {
             smooth_scroll: s.smooth_scroll,
             tab_count: s.tab_count,
             menu_bar: s.menu_bar,
+            read_aloud: s.read_aloud,
             home_layout: s.home_layout,
             cover_size: s.cover_size,
             home_stats: s.home_stats,
@@ -971,6 +1033,7 @@ impl Settings {
             smooth_scroll: f.smooth_scroll,
             tab_count: f.tab_count,
             menu_bar: f.menu_bar,
+            read_aloud: f.read_aloud.clamped(),
             home_layout: f.home_layout,
             cover_size: f.cover_size,
             home_stats: f.home_stats,
@@ -1051,6 +1114,12 @@ mod tests {
             smooth_scroll: false,
             tab_count: true,
             menu_bar: true,
+            read_aloud: ReadAloud {
+                voice: "MSTTS_V110_enUS_ZiraM".into(),
+                voice_name: "Microsoft Zira".into(),
+                rate: 1.5,
+                pitch: 0.8,
+            },
             home_layout: HomeLayout::List,
             cover_size: CoverSize::Large,
             home_stats: false,

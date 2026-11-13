@@ -212,6 +212,8 @@ def deb(v: str, root: pathlib.Path) -> None:
         "Maintainer: t21 dev <hello@t21.dev>\n"
         f"Installed-Size: {size}\n"
         + (f"Depends: {depends}\n" if depends else "")
+        # Read aloud speaks through speech-dispatcher, loaded when it starts.
+        + "Recommends: speech-dispatcher\n"
         + "Section: text\nPriority: optional\n"
         "Homepage: https://github.com/t21dev/kitab\n"
         "Description: Fast, native reader for PDF, ebooks, comics and Markdown\n"
@@ -233,6 +235,7 @@ Summary: Fast, native reader for PDF, ebooks, comics and Markdown
 License: AGPL-3.0-or-later
 URL: https://github.com/t21dev/kitab
 BuildArch: {arch}
+Recommends: speech-dispatcher
 
 %description
 Kitab Reader opens PDF, EPUB, MOBI, FB2, CBZ, XPS, Markdown and text.

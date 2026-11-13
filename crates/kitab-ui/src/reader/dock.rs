@@ -409,6 +409,26 @@ impl Reader {
                                 })),
                         )
                     })
+                    .when(items.read_aloud && self.can_read_aloud(), |g| {
+                        let reading = self.reading_aloud();
+                        let (glyph, tip) = match reading {
+                            None => ("speaker", "Read aloud  Ctrl+Shift+U"),
+                            Some(false) => ("pause", "Pause reading  Ctrl+Shift+U"),
+                            Some(true) => ("play", "Carry on reading  Ctrl+Shift+U"),
+                        };
+                        g.child(
+                            dock_button("dock-read-aloud", glyph, reading.is_some(), st)
+                                .tip(tip)
+                                .on_click(cx.listener(|r, _, _, cx| r.toggle_read_aloud(cx))),
+                        )
+                        .when(reading.is_some(), |g| {
+                            g.child(
+                                dock_button("dock-stop-reading", "stop", false, st)
+                                    .tip("Stop reading")
+                                    .on_click(cx.listener(|r, _, _, cx| r.stop_read_aloud(cx))),
+                            )
+                        })
+                    })
                     .when(items.bookmark && self.can_bookmark(), |g| {
                         let marked = self.is_bookmarked(self.current_page() as u32);
                         g.child(

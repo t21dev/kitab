@@ -131,6 +131,7 @@ Kitab is a document reader, so it leaves image files to your image viewer.
 - Touch screens on Windows: drag to scroll, pinch to zoom
 - Remembers the page, zoom and layout of every file, and reopens your tabs after a restart
 - Find (Ctrl+F) with match case and whole word, hits highlighted on the page
+- Read aloud (Ctrl+Shift+U) with your system's voices: pick the voice, speed and tone; the word being read is marked and the pages follow
 - Contents, page thumbnails, bookmarks (Ctrl+D) and your marks, all in the sidebar
 - Back and forward through where you've been, with Alt+Left and the mouse's side buttons
 - Presentation mode (F5): one page at a time, full screen on black

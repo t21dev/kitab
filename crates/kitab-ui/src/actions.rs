@@ -35,6 +35,9 @@ actions!(
         ToggleMarkup,
         HighlightSelection,
         ToggleBookmark,
+        // Read aloud: start, pause and carry on; stop.
+        ReadAloud,
+        StopReading,
         ToggleDock,
         // Markdown's typeface: System, Serif, Mono, round.
         CycleMdFace,
@@ -165,6 +168,7 @@ pub fn bind_default_keys(cx: &mut App) {
         KeyBinding::new("ctrl-shift-d", ToggleMarkup, r),
         KeyBinding::new("h", HighlightSelection, r),
         KeyBinding::new("ctrl-d", ToggleBookmark, r),
+        KeyBinding::new("ctrl-shift-u", ReadAloud, r),
         KeyBinding::new("ctrl-z", MarkupUndo, r),
         KeyBinding::new("ctrl-y", MarkupRedo, r),
         KeyBinding::new("ctrl-shift-z", MarkupRedo, r),

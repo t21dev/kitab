@@ -13,6 +13,7 @@ mod model;
 pub mod notes;
 mod ranges;
 mod signature;
+pub mod spoken;
 pub use form::*;
 pub use legible::legible;
 pub use markup::*;

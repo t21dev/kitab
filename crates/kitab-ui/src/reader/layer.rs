@@ -88,6 +88,7 @@ impl Reader {
                 r.layers.chars_pending.remove(&ix);
                 r.layers.chars.insert(ix, Rc::new(chars));
                 r.layers.trim(r.current_page() as u32);
+                r.speech_chars_in(ix, cx);
                 cx.notify();
             });
         })

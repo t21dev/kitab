@@ -70,6 +70,7 @@ pub const GROUPS: &[Group] = &[
             ("Redo a mark", "Ctrl+Shift+Z"),
             ("Highlight the selected text", "H"),
             ("Bookmark this page (again to remove)", "Ctrl+D"),
+            ("Read aloud, pause, carry on", "Ctrl+Shift+U"),
             ("Save marks into the PDF", "Ctrl+S"),
             ("Put the pen down", "Esc"),
         ],

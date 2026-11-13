@@ -3530,6 +3530,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "kitab-speech"
+version = "0.3.10"
+dependencies = [
+ "libloading",
+ "log",
+ "objc",
+ "windows 0.61.3",
+]
+
+[[package]]
 name = "kitab-store"
 version = "0.3.10"
 dependencies = [
@@ -3573,6 +3583,7 @@ dependencies = [
  "kitab-md",
  "kitab-os",
  "kitab-print",
+ "kitab-speech",
  "kitab-theme",
  "log",
  "lyon_tessellation",

@@ -537,6 +537,7 @@ impl Workspace {
                     ReaderEvent::OpenPath(path) => this.open_tab(path.clone(), window, cx),
                     ReaderEvent::Presenting(on) => this.set_presenting(*on, window, cx),
                     ReaderEvent::Print => this.open_print(window, cx),
+                    ReaderEvent::Message(text) => this.toast(text.clone(), true, None, cx),
                     ReaderEvent::Password => this.open_password(window, cx),
                     ReaderEvent::SignaturePlaced(spot) => this.signature_placed(*spot, cx),
                     ReaderEvent::Signatures => cx.notify(),
@@ -3788,6 +3789,30 @@ impl Workspace {
             .icon("focus")
             .key("F11")
             .checked(Style::get(cx).minimal),
+            {
+                let reader = self.active_reader().cloned();
+                let can = reader.as_ref().is_some_and(|r| r.read(cx).can_read_aloud());
+                let reading = reader.as_ref().and_then(|r| r.read(cx).reading_aloud());
+                MenuItem::new(
+                    match reading {
+                        None => "Read aloud",
+                        Some(false) => "Pause reading",
+                        Some(true) => "Carry on reading",
+                    },
+                    move |_, cx: &mut App| {
+                        if let Some(r) = &reader {
+                            r.update(cx, |r, cx| r.toggle_read_aloud(cx));
+                        }
+                    },
+                )
+                .icon(match reading {
+                    None => "speaker",
+                    Some(false) => "pause",
+                    Some(true) => "play",
+                })
+                .key("Ctrl+Shift+U")
+                .disabled(!can)
+            },
             MenuItem::new(
                 "Print…",
                 self.on_ws(cx, |ws, window, cx| ws.open_print(window, cx)),
@@ -3971,6 +3996,45 @@ impl Workspace {
                 MenuItem::Separator,
             ]);
         }
+        if !selecting && reader.read(cx).can_read_aloud() {
+            match reader.read(cx).reading_aloud() {
+                None => items.push(
+                    MenuItem::new("Read aloud from here", {
+                        let reader = reader.clone();
+                        move |_, cx: &mut App| reader.update(cx, |r, cx| r.read_aloud_at(at, cx))
+                    })
+                    .icon("speaker")
+                    .key("Ctrl+Shift+U"),
+                ),
+                Some(paused) => {
+                    items.push(
+                        MenuItem::new(
+                            if paused {
+                                "Carry on reading"
+                            } else {
+                                "Pause reading"
+                            },
+                            {
+                                let reader = reader.clone();
+                                move |_, cx: &mut App| {
+                                    reader.update(cx, |r, cx| r.toggle_read_aloud(cx))
+                                }
+                            },
+                        )
+                        .icon(if paused { "play" } else { "pause" })
+                        .key("Ctrl+Shift+U"),
+                    );
+                    items.push(
+                        MenuItem::new("Stop reading", {
+                            let reader = reader.clone();
+                            move |_, cx: &mut App| reader.update(cx, |r, cx| r.stop_read_aloud(cx))
+                        })
+                        .icon("stop"),
+                    );
+                }
+            }
+            items.push(MenuItem::Separator);
+        }
         if let Some(preview) = sel_preview {
             items.push(
                 MenuItem::new("Copy", {
@@ -3991,6 +4055,15 @@ impl Workspace {
                 .icon("search")
                 .key("Ctrl+F"),
             );
+            if reader.read(cx).can_read_aloud() {
+                items.push(
+                    MenuItem::new("Read the selection aloud", {
+                        let reader = reader.clone();
+                        move |_, cx: &mut App| reader.update(cx, |r, cx| r.read_selection_aloud(cx))
+                    })
+                    .icon("speaker"),
+                );
+            }
             // Text markup from the selection (when markup is on here).
             if reader.read(cx).can_markup(cx) {
                 for (label, kind, icon_name, key) in [
@@ -4137,6 +4210,86 @@ impl Workspace {
             point(at.x + px(14.0), at.y + px(22.0))
         };
         self.open_menu(at, true, 260.0, items, window, cx);
+    }
+
+    /// Settings › Reading › Read aloud › Voice: the system's voices by
+    /// language (loaded off the UI thread the first time).
+    pub(crate) fn voice_menu(
+        &mut self,
+        at: Point<Pixels>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(Ok(list)) = crate::reader::voices() {
+            self.open_voice_menu(at, list, window, cx);
+            return;
+        }
+        cx.spawn_in(window, async move |this, cx| {
+            let got = cx
+                .background_spawn(async { crate::reader::load_voices() })
+                .await;
+            let _ = this.update_in(cx, |ws, window, cx| match got {
+                Ok(list) => ws.open_voice_menu(at, list, window, cx),
+                Err(e) => ws.toast(format!("No voices to read aloud with: {e}"), true, None, cx),
+            });
+        })
+        .detach();
+    }
+
+    fn open_voice_menu(
+        &mut self,
+        at: Point<Pixels>,
+        list: Vec<kitab_speech::Voice>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let current = Style::get(cx).read_aloud.voice.clone();
+        let mut items = vec![
+            MenuItem::new(
+                "System default",
+                self.on_ws(cx, |ws, _, cx| {
+                    ws.set_voice(String::new(), String::new(), cx)
+                }),
+            )
+            .checked(current.is_empty()),
+        ];
+        let mut language: Option<String> = None;
+        for v in list {
+            if language.as_deref() != Some(v.language.as_str()) {
+                items.push(MenuItem::Separator);
+                let heading = if v.language.is_empty() {
+                    "Other".to_string()
+                } else {
+                    v.language.clone()
+                };
+                items.push(MenuItem::Heading(heading.into()));
+                language = Some(v.language.clone());
+            }
+            let checked = v.id == current;
+            let (id, name) = (v.id, v.name);
+            items.push(
+                MenuItem::new(
+                    name.clone(),
+                    self.on_ws(cx, move |ws, _, cx| {
+                        ws.set_voice(id.clone(), name.clone(), cx)
+                    }),
+                )
+                .checked(checked),
+            );
+        }
+        self.open_menu(at, false, 300.0, items, window, cx);
+    }
+
+    /// Pick a voice, and say something in it.
+    fn set_voice(&mut self, id: String, name: String, cx: &mut Context<Self>) {
+        self.change_style(
+            &|s: &mut Style| {
+                s.read_aloud.voice = id.clone();
+                s.read_aloud.voice_name = name.clone();
+            },
+            cx,
+        );
+        crate::reader::preview_voice(&Style::get(cx).read_aloud);
     }
 
     /// Every open tab, the active one checked; the menu scrolls when long.
