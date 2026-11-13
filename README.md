@@ -223,7 +223,7 @@ Read [AGENTS.md](AGENTS.md) first. Commits follow [Conventional Commits](https:/
 
 ## Support
 
-This project is free and open source. If it saves you time, you can support [Team 21](https://t21.dev) on [Patreon](https://www.patreon.com/triptex). It pays for code signing, app store fees and servers.
+This project is free and open source. If it saves you time, you can support [Team 21](https://t21.dev) on [Patreon](https://www.patreon.com/triptex). It pays for code signing, app store fees and servers. In Bangladesh? You can support in taka on [SupportKori](https://www.supportkori.com/triptex).
 
 ## Licence
 
