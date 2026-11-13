@@ -551,10 +551,14 @@ pub fn prepare_signature(src: &Path, new: &NewSignature) -> Result<Vec<u8>, Stri
     form.dict_put("SigFlags", doc.new_int(3).map_err(err)?)
         .map_err(err)?;
 
-    // Append the update after the original bytes.
+    // Append the update after the original bytes, in a temporary file of
+    // this call's own: the clock alone repeats (Windows ticks in 100 ns), so
+    // two signings at once shared a file and one lost it mid-save.
+    static SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let tmp = std::env::temp_dir().join(format!(
-        "kitab-sign-{}-{}.pdf",
+        "kitab-sign-{}-{}-{}.pdf",
         std::process::id(),
+        SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map_or(0, |d| d.as_nanos())

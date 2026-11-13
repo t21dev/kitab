@@ -213,3 +213,33 @@ fn a_signature_field_is_not_typed_into() {
     assert_eq!(check(&signed).status(), SigStatus::Valid);
     let _ = std::fs::remove_dir_all(&tmp);
 }
+
+#[test]
+fn signings_at_the_same_time_each_keep_their_own_file() {
+    // prepare_signature saves through a temporary file; two at once used to
+    // share one (named by the clock) and one failed with "file not found".
+    let key = load_pfx(
+        &std::fs::read(dir().join("certs").join("landlord.p12")).unwrap(),
+        "kitab",
+    )
+    .unwrap();
+    let new = NewSignature {
+        field: "Kitab1".into(),
+        page: 0,
+        rect: [72.0, 240.0, 272.0, 300.0],
+        lines: vec!["Digitally signed".into()],
+        name: Some(key.name()),
+        reason: None,
+        location: None,
+        when: "D:20261107120000Z".into(),
+    };
+    let src = dir().join("08-lease-unsigned.pdf");
+    std::thread::scope(|s| {
+        let jobs: Vec<_> = (0..16)
+            .map(|_| s.spawn(|| prepare_signature(&src, &new)))
+            .collect();
+        for j in jobs {
+            assert!(j.join().unwrap().is_ok());
+        }
+    });
+}
