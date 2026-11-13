@@ -7,8 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.10] - 2026-11-13
+
 ### Added
 - macOS: Kitab's commands are in the menu bar at the top of the screen: Kitab, File, Edit, View, Go, Tools, Window and Help, each command with its key, and greyed out when it does not apply. The Kitab menu has Settings, Check for Updates, Services, Hide and Quit, and Cmd+Q, Cmd+H, Cmd+Option+H and Cmd+M work as they do in every Mac program. Quit asks about unsaved changes first, as closing the window does.
+
+### Changed
+- Tabs, the window title and dialogs name a document by its file name, without the extension (the tab's icon shows the type). The title stored inside a file is often missing, out of date or wrong, so it now shows in the tab's tooltip, beside the full file name, when it says something the name doesn't.
+- PDF tabs have their own icon, a page with lines of text, instead of the blank page used for unknown files. The tab list in the sidebar shows each format's icon too.
+
+### Fixed
+- Titles typed in a legacy Bangla font (SutonnyMJ and other Bijoy fonts) no longer show as "XvKv (†g‡q‡`i Rb¨)…" in tabs or on the Home shelves: the file name is used instead. Titles already in the library are cleaned up too.
+- The page number shows the page that fills most of the window, and the last page once you scroll to the end. It used to count a page whose last few lines were still at the top, so it lagged a page behind and never reached the last page of a short document.
 
 ## [0.3.9] - 2026-11-11
 
@@ -297,7 +307,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fit width and fit page follow a window resize even when no new page has to be drawn.
 - The Settings window shrinks to fit small windows instead of running off the left edge.
 
-[Unreleased]: https://github.com/t21dev/kitab/compare/v0.3.7...HEAD
+[Unreleased]: https://github.com/t21dev/kitab/compare/v0.3.10...HEAD
+[0.3.10]: https://github.com/t21dev/kitab/compare/v0.3.9...v0.3.10
+[0.3.9]: https://github.com/t21dev/kitab/compare/v0.3.8...v0.3.9
+[0.3.8]: https://github.com/t21dev/kitab/compare/v0.3.7...v0.3.8
 [0.3.7]: https://github.com/t21dev/kitab/compare/v0.3.6...v0.3.7
 [0.3.6]: https://github.com/t21dev/kitab/compare/v0.3.5...v0.3.6
 [0.3.5]: https://github.com/t21dev/kitab/compare/v0.3.4...v0.3.5
