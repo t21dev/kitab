@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-13
+
 ### Added
 - Read aloud, with your system's own voices on Windows, macOS and Linux. Ctrl+Shift+U, the speaker in the dock, the ⋯ menu or the page's right-click menu (Read aloud from here) reads from the selection, the place you click or the top of the page in view, sentence by sentence and page after page. The sentence being read is shaded, its word marked, and the pages follow along. The same key or button pauses and carries on; the stop button beside it ends it. Settings › Reading › Read aloud picks the voice (with a preview), the speed (0.75× to 3×) and the tone. Words broken over two lines are read whole, and a title, its authors and each paragraph are read as their own sentences. On Linux it speaks through speech-dispatcher, which the .deb and .rpm recommend. Nothing is loaded until read aloud is first used.
 
@@ -310,7 +312,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fit width and fit page follow a window resize even when no new page has to be drawn.
 - The Settings window shrinks to fit small windows instead of running off the left edge.
 
-[Unreleased]: https://github.com/t21dev/kitab/compare/v0.3.10...HEAD
+[Unreleased]: https://github.com/t21dev/kitab/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/t21dev/kitab/compare/v0.3.10...v0.4.0
 [0.3.10]: https://github.com/t21dev/kitab/compare/v0.3.9...v0.3.10
 [0.3.9]: https://github.com/t21dev/kitab/compare/v0.3.8...v0.3.9
 [0.3.8]: https://github.com/t21dev/kitab/compare/v0.3.7...v0.3.8
