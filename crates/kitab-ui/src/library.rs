@@ -29,8 +29,9 @@ pub struct LibraryHit {
     pub path: PathBuf,
     pub title: String,
     pub format: Format,
-    /// 0-based.
-    pub page: u32,
+    /// The page the words are on (0-based); `None` for a match on the
+    /// title or file name (it opens where you left off).
+    pub page: Option<u32>,
     /// Words around the match; the matched words between `[` and `]`.
     pub snippet: String,
 }
@@ -204,6 +205,18 @@ pub trait Library: Send + Sync + 'static {
         let _ = (id, path, inside);
     }
     /// A document's favourite flag and collections.
+    /// Take `path` off Home (Recent, shelves, collections, search). The file
+    /// itself isn't touched; opening it again brings it back.
+    fn forget(&self, path: &Path) -> bool {
+        let _ = path;
+        false
+    }
+    /// A missing file was found at `to`: its history follows it. False when
+    /// `to` is already in the library as another document.
+    fn relocate(&self, from: &Path, to: &Path) -> bool {
+        let _ = (from, to);
+        false
+    }
     fn doc_flags(&self, path: &Path) -> Option<(bool, Vec<i64>)> {
         let _ = path;
         None

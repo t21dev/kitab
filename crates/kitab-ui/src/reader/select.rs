@@ -329,6 +329,11 @@ impl Reader {
         self.search(cx);
     }
 
+    /// Characters selected (0 with nothing selected, or text not read yet).
+    pub fn selected_text_len(&self) -> usize {
+        self.selected_text_cached().map_or(0, |t| t.chars().count())
+    }
+
     /// A short preview of the selection for menus ("Find “lantern”").
     pub fn selection_preview(&self) -> Option<String> {
         let text = self.selected_text_cached()?;

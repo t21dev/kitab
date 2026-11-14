@@ -50,6 +50,14 @@ pub const COMMANDS: &[Command] = &[
     ),
     cmd!("File", "Next tab", "switch", false, NextTab),
     cmd!("File", "Previous tab", "switch", false, PrevTab),
+    cmd!("File", "Move tab left", "reorder order", false, MoveTabLeft),
+    cmd!(
+        "File",
+        "Move tab right",
+        "reorder order",
+        false,
+        MoveTabRight
+    ),
     cmd!("File", "Home", "recent library start", false, ShowHome),
     cmd!(
         "File",

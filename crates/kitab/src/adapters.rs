@@ -593,21 +593,46 @@ impl Library for StoreLibrary {
         let query = query.to_string();
         self.call(move |s| {
             let store = s.store.as_ref()?;
-            let hits = store.search_text(&query, limit).ok()?;
-            Some(
-                hits.into_iter()
-                    .filter_map(|h| {
-                        let doc = store.document(h.document_id).ok()??;
-                        Some(kitab_ui::LibraryHit {
-                            title: title_or_name(doc.title.clone(), &doc.path),
-                            path: doc.path,
-                            format: doc.format,
-                            page: h.page,
-                            snippet: h.snippet,
-                        })
+            // Books by title, author or file name first (opened or not),
+            // then pages whose text has the words.
+            let names = store
+                .search_names(&query, limit.min(20))
+                .unwrap_or_default();
+            let mut out: Vec<kitab_ui::LibraryHit> = names
+                .into_iter()
+                .filter_map(|id| {
+                    let doc = store.document(id).ok()??;
+                    let file = doc
+                        .path
+                        .file_name()
+                        .map(|n| n.to_string_lossy().into_owned())
+                        .unwrap_or_default();
+                    let snippet = match &doc.author {
+                        Some(a) if !a.trim().is_empty() => format!("{a} · {file}"),
+                        _ => file,
+                    };
+                    Some(kitab_ui::LibraryHit {
+                        title: title_or_name(doc.title.clone(), &doc.path),
+                        path: doc.path,
+                        format: doc.format,
+                        page: None,
+                        snippet,
                     })
-                    .collect(),
-            )
+                })
+                .collect();
+            let rest = limit.saturating_sub(out.len());
+            let hits = store.search_text(&query, rest).unwrap_or_default();
+            out.extend(hits.into_iter().filter_map(|h| {
+                let doc = store.document(h.document_id).ok()??;
+                Some(kitab_ui::LibraryHit {
+                    title: title_or_name(doc.title.clone(), &doc.path),
+                    path: doc.path,
+                    format: doc.format,
+                    page: Some(h.page),
+                    snippet: h.snippet,
+                })
+            }));
+            Some(out)
         })
         .flatten()
         .unwrap_or_default()
@@ -829,6 +854,28 @@ impl Library for StoreLibrary {
                 .set_in_collection(kitab_store::CollectionId(id), doc, inside)
                 .ok()
         });
+    }
+
+    fn forget(&self, path: &Path) -> bool {
+        let path = path.to_path_buf();
+        self.call(move |s| {
+            let store = s.store.as_mut()?;
+            let doc = store.document_by_path(&path).ok()??;
+            store.forget_document(doc.id).ok()
+        })
+        .flatten()
+        .is_some()
+    }
+
+    fn relocate(&self, from: &Path, to: &Path) -> bool {
+        let (from, to) = (from.to_path_buf(), to.to_path_buf());
+        self.call(move |s| {
+            let store = s.store.as_mut()?;
+            let doc = store.document_by_path(&from).ok()??;
+            store.relocate_document(doc.id, &to).ok()
+        })
+        .flatten()
+        .unwrap_or(false)
     }
 
     fn doc_flags(&self, path: &Path) -> Option<(bool, Vec<i64>)> {

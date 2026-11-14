@@ -833,3 +833,28 @@ fn a_documents_text_goes_with_it_and_others_stay() {
     store.clear_history().unwrap();
     assert!(store.search_text("pear", 10).unwrap().is_empty());
 }
+
+#[test]
+fn books_are_found_by_title_author_or_file_name() {
+    let mut store = Store::open_in_memory().unwrap();
+    let mut meta = DocMeta::new(Format::Epub);
+    meta.title = Some("The Silent Lantern".into());
+    meta.author = Some("Rumi Haque".into());
+    let a = store
+        .upsert_document(&fake_ident(31), Path::new("/Downloads/lantern.epub"), &meta)
+        .unwrap();
+    let b = store
+        .upsert_document(
+            &fake_ident(32),
+            Path::new("/Downloads/tax_2025.pdf"),
+            &DocMeta::new(Format::Pdf),
+        )
+        .unwrap();
+    assert_eq!(store.search_names("lantern", 10).unwrap(), [a]);
+    assert_eq!(store.search_names("silent haque", 10).unwrap(), [a]);
+    assert_eq!(store.search_names("TAX_2025", 10).unwrap(), [b]);
+    // A folder name alone isn't a match, and LIKE's wildcards are literal.
+    assert!(store.search_names("downloads", 10).unwrap().is_empty());
+    assert!(store.search_names("%", 10).unwrap().is_empty());
+    assert!(store.search_names("   ", 10).unwrap().is_empty());
+}

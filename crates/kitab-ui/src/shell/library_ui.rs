@@ -169,7 +169,10 @@ impl Workspace {
     }
 
     fn open_hit(&mut self, hit: LibraryHit, window: &mut Window, cx: &mut Context<Self>) {
-        self.open_tab_at(hit.path, hit.page, window, cx);
+        match hit.page {
+            Some(page) => self.open_tab_at(hit.path, page, window, cx),
+            None => self.open_tab(hit.path, window, cx),
+        }
     }
 
     /// Open `path` (or switch to it) and show `page`.
@@ -318,13 +321,13 @@ impl Workspace {
                             .truncate()
                             .child(title),
                     )
-                    .child(
+                    .children(page.map(|page| {
                         div()
                             .flex_none()
                             .text_size(px(11.5))
                             .text_color(st.c(|c| c.faint))
-                            .child(format!("page {}", page + 1)),
-                    ),
+                            .child(format!("page {}", page + 1))
+                    })),
             )
             .child(line)
             .into_any_element()

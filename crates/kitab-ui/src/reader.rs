@@ -116,6 +116,11 @@ pub enum ReaderEvent {
     TypeMenu(Point<Pixels>),
     /// Read aloud's panel (controls, speed, tone, voice), at the dock's speaker.
     SpeechMenu(Point<Pixels>),
+    /// The "can't open" screen's buttons: close this tab, take the file off
+    /// Home, or find where it went.
+    CloseMe,
+    Forget,
+    Locate,
     /// A link in a Markdown document points at another file: open it in a tab.
     OpenPath(PathBuf),
     /// Zoom in a book changed the text size (points), for every book.
@@ -1775,8 +1780,90 @@ impl Reader {
                     OpenError::Failed(_) => "The file is damaged or uses something Kitab can't read yet.".to_string(),
                     _ => "Something went wrong while opening the file.".to_string(),
                 };
+                let missing = matches!(e, OpenError::NotFound);
+                let action = |id: &'static str, label: &'static str, primary: bool| {
+                    div()
+                        .id(id)
+                        .h(st.px(|m| m.control_height))
+                        .px(px(14.0))
+                        .flex()
+                        .items_center()
+                        .rounded(st.px(|m| m.control_radius))
+                        .text_size(st.px(|m| m.ui_text))
+                        .font_weight(FontWeight::MEDIUM)
+                        .cursor_pointer()
+                        .when(primary, |d| {
+                            d.bg(st.c(|c| c.accent)).text_color(st.c(|c| c.bg))
+                        })
+                        .when(!primary, |d| {
+                            d.bg(st.c(|c| c.hover))
+                                .text_color(st.c(|c| c.text))
+                                .hover(|d| d.bg(st.hover_bg()))
+                        })
+                        .child(label)
+                };
+                let path = self.path.display().to_string();
                 Some(
                     placeholder("alert", "Kitab can't open this file".into(), body)
+                        .child(
+                            div()
+                                .max_w(px(420.0))
+                                .text_size(px(12.0))
+                                .text_color(st.c(|c| c.faint))
+                                .text_center()
+                                .child(path),
+                        )
+                        .child(
+                            div()
+                                .mt(px(10.0))
+                                .flex()
+                                .flex_wrap()
+                                .justify_center()
+                                .gap(px(8.0))
+                                .child(if missing {
+                                    action("failed-locate", "Locate…", true).on_click(
+                                        cx.listener(|_, _, _, cx| cx.emit(ReaderEvent::Locate)),
+                                    )
+                                } else {
+                                    action("failed-retry", "Try again", true)
+                                        .on_click(cx.listener(|r, _, _, cx| r.open(None, cx)))
+                                })
+                                .when(missing, |d| {
+                                    d.child(
+                                        action("failed-retry", "Try again", false)
+                                            .on_click(cx.listener(|r, _, _, cx| r.open(None, cx))),
+                                    )
+                                })
+                                .when(!missing, |d| {
+                                    let path = self.path.clone();
+                                    d.child(
+                                        action(
+                                            "failed-reveal",
+                                            if cfg!(target_os = "macos") {
+                                                "Show in Finder"
+                                            } else {
+                                                "Show in folder"
+                                            },
+                                            false,
+                                        )
+                                        .on_click(
+                                            move |_, _, cx| {
+                                                let path = path.clone();
+                                                cx.background_spawn(async move {
+                                                    let _ = kitab_os::reveal_in_folder(&path);
+                                                })
+                                                .detach();
+                                            },
+                                        ),
+                                    )
+                                })
+                                .child(action("failed-forget", "Remove from Home", false).on_click(
+                                    cx.listener(|_, _, _, cx| cx.emit(ReaderEvent::Forget)),
+                                ))
+                                .child(action("failed-close", "Close tab", false).on_click(
+                                    cx.listener(|_, _, _, cx| cx.emit(ReaderEvent::CloseMe)),
+                                )),
+                        )
                         .into_any_element(),
                 )
             }
@@ -2049,22 +2136,33 @@ impl Render for Reader {
             .on_action(cx.listener(|r, _: &FirstPage, _, cx| r.jump(0, cx)))
             .on_action(cx.listener(|r, _: &LastPage, _, cx| r.jump(usize::MAX, cx)))
             .on_action(cx.listener(|r, _: &GoToPage, window, cx| r.edit_page(window, cx)))
-            .on_action(cx.listener(|r, _: &Find, window, cx| r.open_find(window, cx)))
+            .on_action(cx.listener(|r, _: &Find, window, cx| {
+                // Words selected: look for them (a paragraph is no query).
+                let short = r
+                    .selection_preview()
+                    .is_some_and(|_| r.selected_text_len() <= 200);
+                if short {
+                    r.find_selection(window, cx)
+                } else {
+                    r.open_find(window, cx)
+                }
+            }))
             .on_action(cx.listener(|r, _: &ToggleEdit, window, cx| r.toggle_edit(window, cx)))
             .on_action(cx.listener(|r, _: &Copy, _, cx| r.copy_selection(cx)))
             .on_action(cx.listener(|r, _: &ClearSelection, _, cx| {
                 // Esc closes a footnote, then puts the pen down, then clears
-                // the selection, then stops reading aloud.
+                // the selection, then stops reading aloud; with nothing left
+                // here it goes on to the window (which leaves Focus mode).
+                let selected = r.select.range().is_some() || r.md_sel.range().is_some();
                 if r.close_note(cx) {
                 } else if r.markup.open {
                     r.toggle_markup(cx)
-                } else if r.select.range().is_none()
-                    && r.md_sel.range().is_none()
-                    && r.reading_aloud().is_some()
-                {
+                } else if selected {
+                    r.clear_selection(cx)
+                } else if r.reading_aloud().is_some() {
                     r.stop_read_aloud(cx)
                 } else {
-                    r.clear_selection(cx)
+                    cx.propagate()
                 }
             }))
             .on_action(cx.listener(|r, _: &ToggleMarkup, _, cx| {

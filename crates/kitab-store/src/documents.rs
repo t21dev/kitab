@@ -257,6 +257,23 @@ impl Store {
     }
 
     /// The document with this id, if it exists.
+    /// The file moved and the user showed Kitab where: the document (its
+    /// reading place, bookmarks, marks, collections) now lives at `path`.
+    /// False when another document already has that path.
+    pub fn relocate_document(&mut self, id: DocumentId, path: &Path) -> Result<bool> {
+        let path_s = path_str(path)?;
+        let tx = self.conn.transaction()?;
+        if find_by_path(&tx, path_s)?.is_some_and(|other| other != id) {
+            return Ok(false);
+        }
+        tx.execute(
+            "UPDATE documents SET path = ?1, missing = 0 WHERE id = ?2",
+            params![path_s, id.0],
+        )?;
+        tx.commit()?;
+        Ok(true)
+    }
+
     pub fn document(&self, id: DocumentId) -> Result<Option<DocumentRecord>> {
         self.document_where("id = ?1", rusqlite::types::Value::Integer(id.0))
     }

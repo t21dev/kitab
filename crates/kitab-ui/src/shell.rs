@@ -23,6 +23,7 @@ use gpui::{
 };
 use kitab_core::{OutlineItem, ZoomMode};
 use kitab_theme::{Accent, AccentPreset, Theme};
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::Arc;
@@ -154,6 +155,8 @@ pub struct Workspace {
     /// Restored tabs are still being opened one by one: the session isn't
     /// saved until they all are.
     restore_staging: bool,
+    /// Contents entries the reader folded or unfolded, per document.
+    toc_toggled: HashMap<PathBuf, HashSet<Vec<u16>>>,
     /// A setting picked from search: scrolled to and glowing.
     settings_found: Option<crate::settings_view::Found>,
     /// A dialog playing its exit (its id and serial) before it's dropped.
@@ -283,6 +286,7 @@ impl Workspace {
             born: std::time::Instant::now(),
             restoring: false,
             restore_staging: false,
+            toc_toggled: HashMap::new(),
             settings_found: None,
             modal_exit: None,
             modal_serials: std::collections::HashMap::new(),
@@ -707,6 +711,22 @@ impl Workspace {
                     ReaderEvent::SpeechMenu(at) => {
                         this.speech_menu(reader.clone(), *at, window, cx)
                     }
+                    ReaderEvent::CloseMe => {
+                        if let Some(ix) = this.tabs.iter().position(|t| t == reader) {
+                            this.close_tab(ix, window, cx);
+                        }
+                    }
+                    ReaderEvent::Forget => {
+                        let path = reader.read(cx).path.clone();
+                        this.forget(path, window, cx);
+                    }
+                    ReaderEvent::Locate => {
+                        let path = reader.read(cx).path.clone();
+                        if let Some(ix) = this.tabs.iter().position(|t| t == reader) {
+                            this.close_tab(ix, window, cx);
+                        }
+                        this.locate(path, window, cx);
+                    }
                     ReaderEvent::OpenPath(path) => this.open_tab(path.clone(), window, cx),
                     ReaderEvent::Presenting(on) => this.set_presenting(*on, window, cx),
                     ReaderEvent::Print => this.open_print(window, cx),
@@ -1016,19 +1036,47 @@ fn window_button(
         .into_any_element()
 }
 
-/// Flatten the outline with depth, for the sidebar.
-fn flatten(items: &[OutlineItem], depth: usize, out: &mut Vec<(usize, OutlineItem)>) {
-    for it in items {
-        out.push((
+/// One row of the contents list.
+struct TocRow {
+    depth: usize,
+    item: OutlineItem,
+    /// Where it sits in the tree (child indexes from the top).
+    key: Vec<u16>,
+    /// It has entries under it, which `open` shows.
+    kids: bool,
+    open: bool,
+}
+
+/// Flatten the outline for the sidebar. An entry with entries under it is
+/// open as the file says (top-level entries open), unless the reader
+/// folded or unfolded it (`toggled`).
+fn flatten(
+    items: &[OutlineItem],
+    depth: usize,
+    key: &mut Vec<u16>,
+    toggled: Option<&HashSet<Vec<u16>>>,
+    out: &mut Vec<TocRow>,
+) {
+    for (i, it) in items.iter().enumerate() {
+        key.push(i.min(u16::MAX as usize) as u16);
+        let kids = !it.children.is_empty();
+        let flipped = toggled.is_some_and(|t| t.contains(key.as_slice()));
+        let open = kids && ((it.open || depth == 0) != flipped);
+        out.push(TocRow {
             depth,
-            OutlineItem {
+            item: OutlineItem {
                 children: Vec::new(),
                 ..it.clone()
             },
-        ));
-        if it.open || depth == 0 {
-            flatten(&it.children, depth + 1, out);
+            key: key.clone(),
+            kids,
+            open,
+        });
+        // Deep trees stop growing the list (AGENTS.md rule 5).
+        if open && depth < 32 && out.len() < 20_000 {
+            flatten(&it.children, depth + 1, key, toggled, out);
         }
+        key.pop();
     }
 }
 
@@ -1414,7 +1462,13 @@ impl Workspace {
         let mut current = 0;
         let mut markdown = false;
         if let Some(r) = reader.map(|r| r.read(cx)) {
-            flatten(r.outline(), 0, &mut rows);
+            flatten(
+                r.outline(),
+                0,
+                &mut Vec::new(),
+                self.toc_toggled.get(&r.path),
+                &mut rows,
+            );
             current = r.current_page() as u32;
             markdown = r.is_markdown();
         }
@@ -1423,7 +1477,7 @@ impl Workspace {
         // The current entry: the last one whose page is at or before the current page.
         let active_ix = rows
             .iter()
-            .rposition(|(_, it)| it.page.is_some_and(|p| p <= current));
+            .rposition(|row| row.item.page.is_some_and(|p| p <= current));
         let Some(reader) = reader.cloned() else {
             // Home with tabs in the sidebar: only the open documents.
             return self.sidebar_frame(tabs_panel, None, st, cx);
@@ -1457,8 +1511,16 @@ impl Workspace {
         }
         let stagger = st.animations && self.sidebar_serial > 0;
         let serial = self.sidebar_serial;
-        for (ix, (depth, item)) in rows.into_iter().enumerate() {
+        for (ix, row) in rows.into_iter().enumerate() {
+            let TocRow {
+                depth,
+                item,
+                key,
+                kids,
+                open,
+            } = row;
             let on = Some(ix) == active_ix;
+            let doc_path = reader.read(cx).path.clone();
             let target = item.page;
             let menu_reader = reader.clone();
             let menu_title = item.title.clone();
@@ -1502,7 +1564,44 @@ impl Workspace {
                         reader.update(cx, |r, cx| r.jump_to(p, cx));
                     }
                 })
-                .child(
+                .child(if kids {
+                    // Entries under it: a chevron that folds them away.
+                    div()
+                        .id(("toc-fold", ix))
+                        .size(px(16.0))
+                        .ml(px(-3.0))
+                        .mr(px(-3.0))
+                        .flex_none()
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .rounded(px(4.0))
+                        .hover(|d| d.bg(st.hover_bg()))
+                        .tip(if open { "Fold" } else { "Unfold" })
+                        .on_click(cx.listener(move |ws, _, _, cx| {
+                            cx.stop_propagation();
+                            let set = ws.toc_toggled.entry(doc_path.clone()).or_default();
+                            if !set.remove(&key) {
+                                set.insert(key.clone());
+                            }
+                            cx.notify();
+                        }))
+                        .child(
+                            svg()
+                                .path(icon(if open {
+                                    "chevron-down"
+                                } else {
+                                    "chevron-right"
+                                }))
+                                .size(px(12.0))
+                                .text_color(if on {
+                                    st.c(|c| c.accent)
+                                } else {
+                                    st.c(|c| c.muted)
+                                }),
+                        )
+                        .into_any_element()
+                } else {
                     div()
                         .size(px(10.0))
                         .flex_none()
@@ -1513,8 +1612,9 @@ impl Workspace {
                         } else {
                             st.c(|c| c.ring)
                         })
-                        .when(on, |d| d.bg(st.c(|c| c.accent))),
-                )
+                        .when(on, |d| d.bg(st.c(|c| c.accent)))
+                        .into_any_element()
+                })
                 .child(
                     div()
                         .flex_1()
@@ -3171,6 +3271,14 @@ impl Render for Workspace {
             .on_key_down(cx.listener(Self::bar_key))
             .on_key_down(cx.listener(Self::keep_from_os_menu))
             .on_action(cx.listener(|ws, _: &menu_bar::Quit, window, cx| ws.quit(window, cx)))
+            // Esc that nothing on the page wanted: out of Focus mode.
+            .on_action(
+                cx.listener(|ws, _: &crate::actions::ClearSelection, _, cx| {
+                    if Style::get(cx).minimal {
+                        ws.toggle_minimal(cx);
+                    }
+                }),
+            )
             .on_modifiers_changed(cx.listener(|ws, e: &gpui::ModifiersChangedEvent, _, cx| {
                 let alt = e.modifiers.alt && !e.modifiers.control;
                 if alt != ws.alt_down {
@@ -3206,6 +3314,8 @@ impl Render for Workspace {
                     ws.activate(prev, window, cx)
                 }
             }))
+            .on_action(cx.listener(|ws, _: &MoveTabLeft, _, cx| ws.move_active_tab(-1, cx)))
+            .on_action(cx.listener(|ws, _: &MoveTabRight, _, cx| ws.move_active_tab(1, cx)))
             .on_action(cx.listener(|ws, _: &ShowHome, window, cx| ws.show_home(window, cx)))
             .on_action(cx.listener(|ws, _: &ToggleSidebar, _, cx| ws.toggle_sidebar(cx)))
             .on_action(cx.listener(|ws, _: &ToggleFileInfo, _, cx| {
@@ -3416,11 +3526,31 @@ impl Workspace {
     }
 
     /// F11: hide what Settings › Reading › Minimal mode lists, or show it again.
+    /// Ctrl+Shift+PgUp / PgDn: the tab showing moves one place along.
+    fn move_active_tab(&mut self, by: i32, cx: &mut Context<Self>) {
+        let Some(ix) = self.active else { return };
+        let to = ix as i64 + i64::from(by);
+        if to < 0 || to as usize >= self.tabs.len() {
+            return;
+        }
+        let to = to as usize;
+        self.tabs.swap(ix, to);
+        self.active = Some(to);
+        self.reveal_tab = true;
+        self.save_session(cx);
+        cx.notify();
+    }
+
     pub(crate) fn toggle_minimal(&mut self, cx: &mut Context<Self>) {
         let style = cx.global_mut::<Style>();
         style.minimal = !style.minimal;
+        let entering = style.minimal;
         self.peek = false;
         self.focus_sidebar = false;
+        if entering {
+            // The way out isn't on screen any more: say it once.
+            self.toast("Focus mode. Press Esc or F11 to leave.", false, None, cx);
+        }
         cx.refresh_windows();
     }
 
@@ -4765,11 +4895,114 @@ impl Workspace {
             .disabled(!exists || self.tabs.is_empty()),
         ];
         let mut items = items;
+        if !exists {
+            // Moved or renamed: show Kitab where it is, and its reading
+            // place, bookmarks and marks come along.
+            let from = path.clone();
+            items.insert(
+                0,
+                MenuItem::new(
+                    "Locate…",
+                    self.on_ws(cx, move |ws, window, cx| {
+                        ws.locate(from.clone(), window, cx)
+                    }),
+                )
+                .icon("search"),
+            );
+        }
         items.extend(shelf_items);
         items.push(MenuItem::Separator);
         items.push(file_item_copy(&path));
         items.push(file_item_reveal(&path).disabled(!exists));
+        let gone = path.clone();
+        items.push(
+            MenuItem::new(
+                "Remove from Home",
+                self.on_ws(cx, move |ws, window, cx| {
+                    ws.forget(gone.clone(), window, cx)
+                }),
+            )
+            .icon("trash"),
+        );
         self.open_menu(at, false, 240.0, items, window, cx);
+    }
+
+    /// Take a book off Home, after asking (what Kitab kept about it goes
+    /// too); the file stays where it is.
+    fn forget(&mut self, path: PathBuf, window: &mut Window, cx: &mut Context<Self>) {
+        let name = path
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        let answer = window.prompt(
+            gpui::PromptLevel::Warning,
+            &format!("Remove {name} from Home?"),
+            Some(
+                "Kitab forgets its reading place, and the bookmarks and notes it kept for it.                  The file itself isn't touched; opening it again brings it back.",
+            ),
+            &["Remove", "Cancel"],
+            cx,
+        );
+        let library = self.library.clone();
+        cx.spawn(async move |this, cx| {
+            if answer.await.ok() != Some(0) {
+                return;
+            }
+            let done = cx
+                .background_spawn(async move { library.forget(&path) })
+                .await;
+            let _ = this.update(cx, |ws, cx| {
+                if done {
+                    ws.toast(
+                        "Removed from Home. The file itself is untouched.",
+                        false,
+                        None,
+                        cx,
+                    );
+                }
+                ws.refresh_recent(cx);
+            });
+        })
+        .detach();
+    }
+
+    /// "Locate…" on a missing book: pick the file where it is now.
+    fn locate(&mut self, from: PathBuf, window: &mut Window, cx: &mut Context<Self>) {
+        let rx = cx.prompt_for_paths(PathPromptOptions {
+            files: true,
+            directories: false,
+            multiple: false,
+            prompt: Some("Locate".into()),
+        });
+        let handle = window.window_handle();
+        let library = self.library.clone();
+        cx.spawn(async move |this, cx| {
+            let Ok(Ok(Some(paths))) = rx.await else {
+                return;
+            };
+            let Some(to) = paths.into_iter().next() else {
+                return;
+            };
+            let target = to.clone();
+            let moved = cx
+                .background_spawn(async move { library.relocate(&from, &target) })
+                .await;
+            let _ = handle.update(cx, |_, window, cx| {
+                let _ = this.update(cx, |ws, cx| {
+                    if !moved {
+                        ws.toast(
+                            "That file is already in your library, so it opens as itself.",
+                            false,
+                            None,
+                            cx,
+                        );
+                    }
+                    ws.refresh_recent(cx);
+                    ws.open_tab(to, window, cx);
+                });
+            });
+        })
+        .detach();
     }
 
     fn toc_menu(

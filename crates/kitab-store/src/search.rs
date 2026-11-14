@@ -102,6 +102,69 @@ impl Store {
         Ok(rows.collect::<std::result::Result<_, _>>()?)
     }
 
+    /// Documents whose title, author or file name has every word of `text`
+    /// (case-insensitive), most recently opened first, at most `limit`.
+    /// Finds books by name before they've ever been opened (and indexed).
+    pub fn search_names(&self, text: &str, limit: usize) -> Result<Vec<DocumentId>> {
+        let words: Vec<String> = text
+            .split_whitespace()
+            .take(8)
+            .map(|w| {
+                // LIKE's own characters, taken literally.
+                let w = w
+                    .replace('\\', "\\\\")
+                    .replace('%', "\\%")
+                    .replace('_', "\\_");
+                format!("%{w}%")
+            })
+            .collect();
+        if words.is_empty() {
+            return Ok(Vec::new());
+        }
+        let cond = (1..=words.len())
+            .map(|i| {
+                format!(
+                    "(COALESCE(title, '') || ' ' || COALESCE(author, '') || ' ' || path) LIKE ?{i} ESCAPE '\\'"
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(" AND ");
+        // SQL narrows by the whole path; the words must then be in the title,
+        // author or file name itself (not just a folder the file is in).
+        let sql = format!(
+            "SELECT id, COALESCE(title, ''), COALESCE(author, ''), path FROM documents
+             WHERE {cond}
+             ORDER BY last_opened_at IS NULL, last_opened_at DESC, id DESC LIMIT 2000"
+        );
+        let mut stmt = self.conn.prepare(&sql)?;
+        let rows = stmt.query_map(rusqlite::params_from_iter(words.iter()), |r| {
+            Ok((
+                DocumentId(r.get(0)?),
+                r.get::<_, String>(1)?,
+                r.get::<_, String>(2)?,
+                r.get::<_, String>(3)?,
+            ))
+        })?;
+        let wanted: Vec<String> = text
+            .split_whitespace()
+            .take(8)
+            .map(str::to_lowercase)
+            .collect();
+        let mut out = Vec::new();
+        for row in rows {
+            let (id, title, author, path) = row?;
+            let file = path.rsplit(['/', '\\']).next().unwrap_or(&path);
+            let hay = format!("{title} {author} {file}").to_lowercase();
+            if wanted.iter().all(|w| hay.contains(w.as_str())) {
+                out.push(id);
+                if out.len() >= limit {
+                    break;
+                }
+            }
+        }
+        Ok(out)
+    }
+
     /// How many documents are indexed.
     pub fn indexed_count(&self) -> Result<u64> {
         let n: i64 = self

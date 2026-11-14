@@ -190,6 +190,13 @@ const MENUS: &[BarMenu] = &[
 /// Elsewhere this does nothing.
 pub(crate) fn init_native(cx: &mut App) {
     if !cfg!(target_os = "macos") {
+        // Ctrl+Q quits on Windows and Linux too (SumatraPDF's key), asking
+        // about unsaved changes as closing the window does.
+        cx.bind_keys([KeyBinding::new(
+            "ctrl-q",
+            Quit,
+            Some(crate::actions::WORKSPACE),
+        )]);
         return;
     }
     cx.bind_keys([

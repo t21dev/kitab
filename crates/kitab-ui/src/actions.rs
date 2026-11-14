@@ -14,6 +14,8 @@ actions!(
         CloseTab,
         NextTab,
         PrevTab,
+        MoveTabLeft,
+        MoveTabRight,
         ShowHome,
         ReopenClosedTab,
         SelectTab1,
@@ -141,6 +143,8 @@ pub fn bind_default_keys(cx: &mut App) {
         KeyBinding::new("ctrl-f4", CloseTab, w),
         KeyBinding::new("ctrl-pagedown", NextTab, w),
         KeyBinding::new("ctrl-pageup", PrevTab, w),
+        KeyBinding::new("ctrl-shift-pageup", MoveTabLeft, w),
+        KeyBinding::new("ctrl-shift-pagedown", MoveTabRight, w),
         // Alt+digit, because Ctrl+0/1/2 are SumatraPDF's zoom keys.
         KeyBinding::new("alt-1", SelectTab1, w),
         KeyBinding::new("alt-2", SelectTab2, w),
