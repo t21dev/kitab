@@ -921,9 +921,26 @@ impl Workspace {
         self.retire_tab(&closing, window, cx);
         if self.tabs.is_empty() {
             self.show_home(window, cx);
-        } else {
-            let next = ix.min(self.tabs.len() - 1);
-            self.activate(next, window, cx);
+            return;
+        }
+        // Where you were stays: Home stays Home (a middle-click on a tab
+        // there), and closing another tab keeps the one you're reading.
+        match self.active {
+            None => {
+                self.save_session(cx);
+                cx.notify();
+            }
+            Some(a) if a == ix => {
+                let next = ix.min(self.tabs.len() - 1);
+                self.activate(next, window, cx);
+            }
+            Some(a) => {
+                let keep = if a > ix { a - 1 } else { a };
+                self.active = Some(keep);
+                self.watch_active(cx);
+                self.save_session(cx);
+                cx.notify();
+            }
         }
     }
 
