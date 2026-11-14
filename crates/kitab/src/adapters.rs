@@ -776,28 +776,41 @@ impl Library for StoreLibrary {
             K::Finished => Shelf::Finished,
             K::Collection(id) => Shelf::Collection(kitab_store::CollectionId(id)),
         };
-        self.call(move |s| {
-            let store = s.store.as_ref()?;
-            Some(
-                store
-                    .shelf(shelf)
-                    .ok()?
-                    .into_iter()
-                    .map(|e| RecentItem {
-                        title: title_or_name(e.title, &e.path),
-                        missing: e.missing || !e.path.exists(),
-                        path: e.path,
-                        author: e.author,
-                        format: e.format,
-                        progress: e.progress.unwrap_or(0.0),
-                        last_opened_ms: e.last_opened_at,
-                        favourite: e.favourite,
-                    })
-                    .collect(),
-            )
-        })
-        .flatten()
-        .unwrap_or_default()
+        let mut items: Vec<RecentItem> = self
+            .call(move |s| {
+                let store = s.store.as_ref()?;
+                Some(
+                    store
+                        .shelf(shelf)
+                        .ok()?
+                        .into_iter()
+                        .map(|e| RecentItem {
+                            title: title_or_name(e.title, &e.path),
+                            missing: e.missing,
+                            path: e.path,
+                            author: e.author,
+                            format: e.format,
+                            progress: e.progress.unwrap_or(0.0),
+                            last_opened_ms: e.last_opened_at,
+                            favourite: e.favourite,
+                        })
+                        .collect(),
+                )
+            })
+            .flatten()
+            .unwrap_or_default();
+        // Here, on the caller's thread, not the io thread: a slow or
+        // unplugged drive mustn't hold up documents opening meanwhile.
+        for it in &mut items {
+            it.missing = it.missing || !it.path.exists();
+        }
+        items
+    }
+
+    fn library_size(&self) -> usize {
+        self.call(|s| s.store.as_ref()?.document_count().ok())
+            .flatten()
+            .unwrap_or(0)
     }
 
     fn collections(&self) -> Vec<kitab_ui::CollectionInfo> {

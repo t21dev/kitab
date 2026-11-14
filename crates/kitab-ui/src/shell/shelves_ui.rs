@@ -51,11 +51,10 @@ impl Workspace {
         cx.spawn(async move |this, cx| {
             let (collections, items, size) = cx
                 .background_spawn(async move {
-                    let all = library.shelf(ShelfKind::All);
-                    let size = all.len();
+                    // A count, not the whole library, unless All is showing.
+                    let size = library.library_size();
                     let items = match kind {
                         ShelfKind::Recent => None,
-                        ShelfKind::All => Some(all),
                         _ => Some(library.shelf(kind)),
                     };
                     (library.collections(), items, size)

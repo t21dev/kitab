@@ -91,6 +91,10 @@ pub trait Library: Send + Sync + 'static {
     fn save_session(&self, tabs: Vec<SessionTab>);
     /// Mark the session closed cleanly (on quit).
     fn end_session(&self);
+    /// How many documents the library holds (Home's "All").
+    fn library_size(&self) -> usize {
+        0
+    }
     /// Why the library couldn't be opened, in words for the user (once, at
     /// start-up); `None` when it's fine.
     fn problem(&self) -> Option<String> {

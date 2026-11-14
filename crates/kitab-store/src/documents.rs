@@ -274,6 +274,14 @@ impl Store {
         Ok(true)
     }
 
+    /// How many documents the library holds.
+    pub fn document_count(&self) -> Result<usize> {
+        let n: i64 = self
+            .conn
+            .query_row("SELECT count(*) FROM documents", [], |r| r.get(0))?;
+        Ok(n.max(0) as usize)
+    }
+
     pub fn document(&self, id: DocumentId) -> Result<Option<DocumentRecord>> {
         self.document_where("id = ?1", rusqlite::types::Value::Integer(id.0))
     }

@@ -7,6 +7,7 @@
 mod book;
 mod bookmarks;
 mod dock;
+mod tiles;
 mod tint;
 pub(crate) use dock::note_toggle as note_dock_toggle;
 pub(crate) use dock::set_menu_open;
@@ -211,6 +212,8 @@ pub struct Reader {
     pub(crate) closing: bool,
     /// The page colour the cached pages were drawn in.
     drawn_tint: Option<tint::Tint>,
+    /// Deep zoom's sharp tiles over pages too large to draw whole.
+    tiles: tiles::Tiles,
     /// One page across, two, or two after a cover alone (Ctrl+6/7/8).
     spread: Spread,
     /// Pages run right to left (the second of a pair goes on the left);
@@ -384,6 +387,7 @@ impl Reader {
             save_scheduled: false,
             closing: false,
             drawn_tint: None,
+            tiles: Default::default(),
             spread: Spread::Single,
             spread_rtl: false,
             restore: None,
@@ -1649,7 +1653,14 @@ impl Reader {
         let size = self.page_size(ix);
         let ppt = self.px_per_pt(ix);
         let (w, h) = (size.w * ppt, size.h * ppt);
-        let device_scale = ppt * window.scale_factor();
+        let sf = window.scale_factor();
+        let sharp_scale = ppt * sf;
+        // Too large to draw whole: a smaller picture, sharp tiles on top.
+        let (device_scale, deep) = if self.present.is_none() {
+            tiles::picture_scale(sharp_scale, w, h, sf)
+        } else {
+            (sharp_scale, false)
+        };
         let key = PageKey {
             page: ix as u32,
             scale_key: scale_key(device_scale),
@@ -1711,7 +1722,14 @@ impl Reader {
         // The next page is always ready before it scrolls in: rendering it
         // only once scrolling began showed it soft, then sharp (flicker).
         if ahead < self.page_count() && !pinching {
-            let s = self.px_per_pt(ahead) * window.scale_factor();
+            let ppt_ahead = self.px_per_pt(ahead);
+            let size_ahead = self.page_size(ahead);
+            let (s, _) = tiles::picture_scale(
+                ppt_ahead * sf,
+                size_ahead.w * ppt_ahead,
+                size_ahead.h * ppt_ahead,
+                sf,
+            );
             let k = PageKey {
                 page: ahead as u32,
                 scale_key: scale_key(s),
@@ -1721,6 +1739,11 @@ impl Reader {
                 self.request(ahead, k, s, cx);
             }
         }
+        let tile_els = if deep {
+            self.tile_layer(ix, (w, h), sharp_scale, sf, cx)
+        } else {
+            Vec::new()
+        };
         let sheet = div()
             .w(px(w))
             .h(px(h))
@@ -1811,6 +1834,7 @@ impl Reader {
             .children(self.markup_overlay(ix, ppt))
             .children(self.note_pins(ix, ppt, &st, cx))
             .children(self.deleted_outlines(ix, ppt, &st))
+            .children(tile_els)
             .children(self.bookmark_ribbon(ix, &st))
             .children(self.speech_marks(ix, ppt, &st))
             .children(self.selection_marks(ix, ppt, &st))
@@ -2139,6 +2163,7 @@ impl Render for Reader {
             }
         }
         self.spread_rtl = self.right_to_left(cx);
+        self.note_seen_pages();
         // Page colour or theme changed: the pages are drawn again in it.
         let tint = self.page_tint(cx);
         if tint != self.drawn_tint {
@@ -2161,6 +2186,9 @@ impl Render for Reader {
             }
         }
         // Free GPU atlas space of pages the cache let go of.
+        for image in self.tiles.take_evicted() {
+            let _ = window.drop_image(image);
+        }
         for image in self.cache.take_evicted() {
             let _ = window.drop_image(image);
         }
