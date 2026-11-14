@@ -13,8 +13,6 @@ use gpui::{
 };
 use kitab_md::math::Node;
 
-const MATH_FONT: &str = "Cambria Math";
-const TEXT_FONT: &str = "Cambria";
 /// Scripts and limits are this much smaller than their base.
 const SCRIPT: f32 = 0.7;
 
@@ -67,7 +65,7 @@ fn spaced(op: &str) -> bool {
 fn glyph(st: &Style, text: String, size: f32, italic: bool, bold: bool) -> AnyElement {
     div()
         .flex_none()
-        .font_family(MATH_FONT)
+        .font_family(crate::style::math_font())
         .text_size(px(size))
         .line_height(px(size * 1.25))
         .when(italic, |d| d.italic())
@@ -135,7 +133,7 @@ fn el(st: &Style, n: &Node, size: f32, bold: bool) -> AnyElement {
             .into_any_element(),
         Node::Text(t) => div()
             .flex_none()
-            .font_family(TEXT_FONT)
+            .font_family(crate::style::math_text_font())
             .text_size(px(size))
             .text_color(st.c(|c| c.text))
             .child(t.clone())

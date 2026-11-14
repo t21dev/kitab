@@ -717,7 +717,7 @@ impl Workspace {
                                 .flex_col()
                                 .px(px(10.0))
                                 .py(px(8.0))
-                                .font_family(crate::reader::MONO_FONT)
+                                .font_family(st.code_font())
                                 .text_size(px(11.5))
                                 .text_color(st.c(|c| c.text))
                                 .whitespace_nowrap()

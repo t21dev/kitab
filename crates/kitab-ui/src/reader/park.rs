@@ -96,6 +96,7 @@ impl Reader {
         }
         self.shrinking = true;
         let (engine, doc, generation) = (self.engine.clone(), self.doc, self.generation);
+        let tint = self.page_tint(cx);
         cx.spawn(async move |this, cx| {
             let small = cx
                 .background_spawn(async move {
@@ -124,7 +125,10 @@ impl Reader {
                                 tile: None,
                                 generation,
                             };
-                            let bmp = engine.render(doc?, req).ok().flatten()?;
+                            let mut bmp = engine.render(doc?, req).ok().flatten()?;
+                            if let Some(t) = tint {
+                                t.apply(&mut bmp.bgra);
+                            }
                             let bytes = bmp.byte_size();
                             let buffer = RgbaImage::from_raw(bmp.width, bmp.height, bmp.bgra)?;
                             Some((

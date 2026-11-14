@@ -134,6 +134,28 @@ pub enum Startup {
     LastFile,
 }
 
+impl Startup {
+    pub const ALL: [Startup; 3] = [Self::Restore, Self::LastFile, Self::Home];
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Restore => "The tabs I had open",
+            Self::LastFile => "The last file I read",
+            Self::Home => "Home",
+        }
+    }
+}
+
+impl PageColour {
+    pub const ALL: [PageColour; 3] = [Self::Original, Self::Dark, Self::Theme];
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Original => "As the file has them",
+            Self::Dark => "Dark",
+            Self::Theme => "Theme colours",
+        }
+    }
+}
+
 /// How the pages of PDFs, comics, DjVu and XPS are coloured (Settings ›
 /// Reading). Books, Markdown and text follow the theme already.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]

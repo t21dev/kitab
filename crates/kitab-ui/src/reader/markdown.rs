@@ -29,8 +29,6 @@ use std::sync::Arc;
 const COLUMN: f32 = 720.0;
 /// Body text size at 100 %.
 const BODY: f32 = 16.0;
-pub(crate) const MONO_FONT: &str = "Consolas";
-const MATH_FONT: &str = "Cambria Math";
 /// Nesting drawn before deeper blocks are drawn flat.
 const MAX_DRAW_DEPTH: usize = 12;
 
@@ -173,7 +171,7 @@ fn sub_char(c: char) -> char {
     }
 }
 
-fn font(family: &'static str, bold: bool, italic: bool) -> Font {
+fn font(family: impl Into<SharedString>, bold: bool, italic: bool) -> Font {
     let mut f = gpui::font(family);
     if bold {
         f.weight = FontWeight::BOLD;
@@ -606,7 +604,7 @@ fn code_line(d: &Draw, line: &str, at: usize, tokens: &[Token]) -> StyledText {
     };
     let plain_run = |len: usize| TextRun {
         len,
-        font: font(MONO_FONT, false, false),
+        font: font(st.code_font(), false, false),
         color: token_color(st, TokenKind::Plain),
         background_color: None,
         underline: None,
@@ -622,12 +620,12 @@ fn code_line(d: &Draw, line: &str, at: usize, tokens: &[Token]) -> StyledText {
         });
     }
     let end = at + line.len();
-    let plain = font(MONO_FONT, false, false);
+    let plain = font(st.code_font(), false, false);
     let run = |len: usize, kind: TokenKind| TextRun {
         len,
         font: match kind {
-            TokenKind::Comment => font(MONO_FONT, false, true),
-            TokenKind::Function => font(MONO_FONT, true, false),
+            TokenKind::Comment => font(st.code_font(), false, true),
+            TokenKind::Function => font(st.code_font(), true, false),
             _ => plain.clone(),
         },
         color: token_color(st, kind),
@@ -795,7 +793,7 @@ fn code_el(
                         .flex_none()
                         .min_w_full()
                         .whitespace_nowrap()
-                        .font_family(MONO_FONT)
+                        .font_family(st.code_font())
                         .text_size(d.px(BODY * 0.85))
                         .line_height(relative(1.5))
                         .text_color(token_color(st, TokenKind::Plain))
@@ -952,9 +950,9 @@ fn source_box(d: &Draw, title: &'static str, note: &str, src: &str) -> AnyElemen
         .child(
             div()
                 .font_family(if title == "Math" {
-                    MATH_FONT
+                    SharedString::from(crate::style::math_font())
                 } else {
-                    MONO_FONT
+                    st.code_font()
                 })
                 .text_size(d.px(BODY * if title == "Math" { 1.0 } else { 0.85 }))
                 .text_color(st.c(|c| c.text))
@@ -1361,12 +1359,12 @@ fn text_el(d: &Draw, inlines: &[Inline], base: Base, _cx: &mut Context<Reader>) 
             piece.to_string()
         };
         let mono = style.code || style.kbd;
-        let family = if mono {
-            MONO_FONT
+        let family: SharedString = if mono {
+            st.code_font()
         } else if style.math {
-            MATH_FONT
+            crate::style::math_font().into()
         } else {
-            st.md_face.family()
+            st.md_face.family().into()
         };
         let color = if bad_math {
             st.c(|c| c.bad)

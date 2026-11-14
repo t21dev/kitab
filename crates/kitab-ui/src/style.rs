@@ -85,6 +85,45 @@ pub struct Style {
 
 impl Global for Style {}
 
+/// The system's own monospace font: what code uses unless Settings picks one.
+pub fn default_code_font() -> &'static str {
+    if cfg!(target_os = "macos") {
+        "Menlo"
+    } else if cfg!(windows) {
+        "Consolas"
+    } else {
+        "DejaVu Sans Mono"
+    }
+}
+
+/// A font with mathematical symbols, for typeset math.
+pub fn math_font() -> &'static str {
+    if cfg!(target_os = "macos") {
+        "STIX Two Math"
+    } else if cfg!(windows) {
+        "Cambria Math"
+    } else {
+        "DejaVu Serif"
+    }
+}
+
+/// Upright words inside math (a `text` command).
+pub fn math_text_font() -> &'static str {
+    if cfg!(windows) { "Cambria" } else { "Georgia" }
+}
+
+impl Style {
+    /// The font for code, the Markdown editor and keys: the one picked in
+    /// Settings, else the system's monospace font.
+    pub fn code_font(&self) -> gpui::SharedString {
+        if self.code_font.trim().is_empty() {
+            default_code_font().into()
+        } else {
+            self.code_font.clone().into()
+        }
+    }
+}
+
 impl Style {
     pub fn new(theme: Theme) -> Self {
         Self::from_settings(theme, &Settings::default())

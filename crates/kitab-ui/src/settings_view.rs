@@ -407,9 +407,24 @@ fn appearance(
             theme_preview(t),
             160.0,
             st,
-            change(ws, move |s| s.set_theme(theme.clone())),
+            change(ws, move |s| {
+                // Matching the system: the card fills the slot of its kind.
+                if s.system_theme {
+                    match theme.appearance {
+                        kitab_theme::Appearance::Dark => s.dark_theme = theme.id.clone(),
+                        kitab_theme::Appearance::Light => s.light_theme = theme.id.clone(),
+                    }
+                }
+                s.set_theme(theme.clone())
+            }),
         ));
     }
+    let theme_group = div()
+        .flex()
+        .flex_col()
+        .gap(px(12.0))
+        .child(theme_cards)
+        .child(system_theme_rows(ws, st, themes));
     let mut density_cards = div().flex().flex_wrap().gap(px(12.0));
     for (ix, (d, label, hint)) in [
         (Density::Dense, "Dense", "Most on screen"),
@@ -494,7 +509,7 @@ fn appearance(
             layout_cards,
             st,
         ))
-        .child(group("Theme", None, theme_cards, st))
+        .child(group("Theme", None, theme_group, st))
         .child(group(
             "Accent",
             Some("Kitab adjusts the lightness so the accent stays visible on every theme."),
@@ -800,6 +815,44 @@ fn reading(ws: &WeakEntity<Workspace>, st: &Style) -> AnyElement {
             st,
         ))
         .child(group(
+            "Page colour",
+            Some("For PDFs, comics, DjVu and XPS. Dark turns white paper dark and keeps pictures' colours; Theme colours use your theme's page and text colours. Books and Markdown follow the theme already."),
+            div()
+                .id("page-colour")
+                .flex()
+                .child(segmented(
+                    crate::settings::PageColour::ALL
+                        .into_iter()
+                        .map(|v| {
+                            (
+                                SharedString::from(v.label()),
+                                st.page_colour == v,
+                                change(ws, move |s: &mut Style| s.page_colour = v),
+                            )
+                        })
+                        .collect(),
+                    st,
+                ))
+                .into_any_element(),
+            st,
+        ))
+        .child(group(
+            "Comics",
+            Some("For manga and other comics read from right to left: the left arrow key goes to the next page, and two pages side by side start from the right."),
+            well_row(
+                "Read comics right to left",
+                "",
+                switch(
+                    "comic-rtl",
+                    st.comic_rtl,
+                    st,
+                    change(ws, |s: &mut Style| s.comic_rtl = !s.comic_rtl),
+                ),
+                st,
+            ),
+            st,
+        ))
+        .child(group(
             "Read aloud",
             Some("Ctrl+Shift+U, or the speaker in the dock, reads from the selection or from the top of the page in view, and the pages follow along. The voices are your system's own: add more in its speech or language settings."),
             read_aloud_rows(ws, st),
@@ -853,6 +906,12 @@ fn reading(ws: &WeakEntity<Workspace>, st: &Style) -> AnyElement {
             "Code colours",
             Some("Syntax colours in Markdown code blocks."),
             code_cards,
+            st,
+        ))
+        .child(group(
+            "Code font",
+            Some("For code in Markdown, the Markdown editor and keyboard keys. Your system's monospace fonts are listed."),
+            code_font_row(ws, st),
             st,
         ))
         .child(group(
@@ -1217,6 +1276,119 @@ fn code_preview(t: kitab_theme::CodeTheme, st: &Style) -> AnyElement {
 pub(crate) type Click = Box<dyn Fn(&mut Window, &mut App)>;
 
 /// A click handler that changes the look and saves settings.json.
+/// Settings › Reading › Code font: a button that lists the monospace fonts.
+fn code_font_row(ws: &WeakEntity<Workspace>, st: &Style) -> AnyElement {
+    let name = if st.code_font.trim().is_empty() {
+        format!("System default ({})", crate::style::default_code_font())
+    } else {
+        st.code_font.clone()
+    };
+    let ws = ws.clone();
+    let pick = crate::kbd::stop_solid(div().id("code-font"), st)
+        .h(st.px(|m| m.control_height))
+        .max_w(px(300.0))
+        .px(px(12.0))
+        .flex()
+        .items_center()
+        .gap(px(6.0))
+        .rounded(st.px(|m| m.control_radius))
+        .bg(st.c(|c| c.raised))
+        .shadow(st.well())
+        .border_1()
+        .border_color(st.c(|c| c.line))
+        .cursor_pointer()
+        .text_size(st.px(|m| m.ui_text))
+        .text_color(st.c(|c| c.text))
+        .hover(|d| d.bg(st.raised_hover()))
+        .child(div().truncate().font_family(st.code_font()).child(name))
+        .child(
+            svg()
+                .path(icon("chevron-down"))
+                .size(px(12.0))
+                .flex_none()
+                .text_color(st.c(|c| c.muted)),
+        )
+        .on_click(move |e: &gpui::ClickEvent, window, cx| {
+            let at = e.position();
+            let _ = ws.update(cx, |ws, cx| ws.code_font_menu(at, window, cx));
+        });
+    well_row("Font", "", pick.into_any_element(), st)
+}
+
+/// "Match the system": a switch, and (when on) which light and which dark
+/// theme the system's modes bring.
+fn system_theme_rows(ws: &WeakEntity<Workspace>, st: &Style, themes: &[Theme]) -> AnyElement {
+    let toggle: Click = {
+        let ws = ws.clone();
+        Box::new(move |window, cx| {
+            let _ = ws.update(cx, |ws, cx| {
+                ws.change_style(&|s: &mut Style| s.system_theme = !s.system_theme, cx);
+                ws.follow_system_theme(window, cx);
+            });
+        })
+    };
+    let mut col = div().flex().flex_col().gap(px(8.0)).child(well_row(
+        "Match the system's light or dark mode",
+        "",
+        switch("system-theme", st.system_theme, st, toggle),
+        st,
+    ));
+    if st.system_theme {
+        for (dark, label) in [(false, "In light mode"), (true, "In dark mode")] {
+            let kind = if dark {
+                kitab_theme::Appearance::Dark
+            } else {
+                kitab_theme::Appearance::Light
+            };
+            let now = if dark {
+                &st.dark_theme
+            } else {
+                &st.light_theme
+            };
+            let choices = themes
+                .iter()
+                .filter(|t| t.appearance == kind)
+                .map(|t| {
+                    let id = t.id.clone();
+                    let ws = ws.clone();
+                    let click: Click = Box::new(move |window, cx| {
+                        let id = id.clone();
+                        let _ = ws.update(cx, |ws, cx| {
+                            ws.change_style(
+                                &|s: &mut Style| {
+                                    if dark {
+                                        s.dark_theme = id.clone();
+                                    } else {
+                                        s.light_theme = id.clone();
+                                    }
+                                },
+                                cx,
+                            );
+                            ws.follow_system_theme(window, cx);
+                        });
+                    });
+                    (SharedString::from(t.name.clone()), *now == t.id, click)
+                })
+                .collect();
+            col = col.child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(px(12.0))
+                    .child(
+                        div()
+                            .w(px(110.0))
+                            .text_size(st.px(|m| m.ui_text))
+                            .text_color(st.c(|c| c.muted))
+                            .child(label),
+                    )
+                    .child(div().id(label).flex().child(segmented(choices, st))),
+            );
+        }
+    }
+    col.into_any_element()
+}
+
 fn change(ws: &WeakEntity<Workspace>, f: impl Fn(&mut Style) + 'static) -> Click {
     let ws = ws.clone();
     Box::new(move |_, cx| {
@@ -1503,6 +1675,28 @@ fn home_section(ws: &WeakEntity<Workspace>, st: &Style) -> AnyElement {
                     st,
                 )),
         )
+        .child(group(
+            "When Kitab starts",
+            Some("Opening a file from your folders adds it as a tab: the tabs you had stay."),
+            div()
+                .id("startup")
+                .flex()
+                .child(segmented(
+                    crate::settings::Startup::ALL
+                        .into_iter()
+                        .map(|v| {
+                            (
+                                SharedString::from(v.label()),
+                                st.startup == v,
+                                change(ws, move |s: &mut Style| s.startup = v),
+                            )
+                        })
+                        .collect(),
+                    st,
+                ))
+                .into_any_element(),
+            st,
+        ))
         .child(group("Layout", None, layout_cards, st))
         .child(group(
             "Covers",

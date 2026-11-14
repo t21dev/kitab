@@ -25,7 +25,6 @@ use std::ops::Range;
 use std::rc::Rc;
 use std::time::Duration;
 
-const FONT: &str = "Consolas";
 const FONT_SIZE: f32 = 14.0;
 const LINE_H: f32 = 22.0;
 const GUTTER: f32 = 52.0;
@@ -187,10 +186,17 @@ impl Editor {
     }
 }
 
+thread_local! {
+    /// The code font, noted each time the editor draws (Settings can change
+    /// it), for measuring lines between draws.
+    static EDITOR_FONT: std::cell::RefCell<gpui::SharedString> =
+        std::cell::RefCell::new(crate::style::default_code_font().into());
+}
+
 fn run(len: usize, color: gpui::Hsla) -> TextRun {
     TextRun {
         len,
-        font: gpui::font(FONT),
+        font: gpui::font(EDITOR_FONT.with(|f| f.borrow().clone())),
         color,
         background_color: None,
         underline: None,
@@ -629,6 +635,7 @@ impl Reader {
     /// Lines `range` of the editor, with the selection and the caret.
     fn editor_rows(&self, range: Range<usize>, window: &mut Window, cx: &App) -> Vec<AnyElement> {
         let st = Style::get(cx);
+        EDITOR_FONT.with(|f| *f.borrow_mut() = st.code_font());
         let Some(edit) = self.md.as_ref().and_then(|m| m.edit.as_ref()) else {
             return Vec::new();
         };
@@ -734,7 +741,7 @@ impl Reader {
                                     .flex()
                                     .items_center()
                                     .whitespace_nowrap()
-                                    .font_family(FONT)
+                                    .font_family(st.code_font())
                                     .text_size(px(FONT_SIZE))
                                     .text_color(text_color)
                                     .child(display(text)),

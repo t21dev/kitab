@@ -325,6 +325,11 @@ impl Workspace {
             cx.notify();
         });
         this.subs.push(hex_blur);
+        // Settings › Appearance › Match the system: light or dark with it.
+        let follow = cx
+            .observe_window_appearance(window, |ws, window, cx| ws.follow_system_theme(window, cx));
+        this.subs.push(follow);
+        this.follow_system_theme(window, cx);
         // Start-up mode (Settings › General, PLAN.md §4). Files Kitab was
         // started with join the previous tabs instead of replacing them: the
         // session they'd otherwise overwrite is the user's open books.
@@ -3526,6 +3531,30 @@ impl Workspace {
     }
 
     /// F11: hide what Settings › Reading › Minimal mode lists, or show it again.
+    /// With "Match the system" on, the light or dark theme picked for the
+    /// system's current mode.
+    pub(crate) fn follow_system_theme(&mut self, window: &Window, cx: &mut Context<Self>) {
+        let st = Style::get(cx);
+        if !st.system_theme {
+            return;
+        }
+        let dark = matches!(
+            window.appearance(),
+            gpui::WindowAppearance::Dark | gpui::WindowAppearance::VibrantDark
+        );
+        let want = if dark {
+            st.dark_theme.clone()
+        } else {
+            st.light_theme.clone()
+        };
+        if st.theme.id == want {
+            return;
+        }
+        if let Ok(theme) = kitab_theme::builtin(&want) {
+            self.change_style(&move |s: &mut Style| s.set_theme(theme.clone()), cx);
+        }
+    }
+
     /// Ctrl+Shift+PgUp / PgDn: the tab showing moves one place along.
     fn move_active_tab(&mut self, by: i32, cx: &mut Context<Self>) {
         let Some(ix) = self.active else { return };
@@ -4715,6 +4744,70 @@ impl Workspace {
             point(at.x + px(14.0), at.y + px(22.0))
         };
         self.open_menu(at, true, 300.0, items, window, cx);
+    }
+
+    /// Settings › Reading › Code font: the system's monospace fonts (by
+    /// name: "Mono", "Code" and the well-known ones), each shown in itself.
+    pub(crate) fn code_font_menu(
+        &mut self,
+        at: Point<Pixels>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        const KNOWN: [&str; 14] = [
+            "mono",
+            "code",
+            "consolas",
+            "courier",
+            "menlo",
+            "monaco",
+            "inconsolata",
+            "hack",
+            "fira",
+            "cascadia",
+            "iosevka",
+            "terminal",
+            "fixed",
+            "source code",
+        ];
+        let mut names: Vec<String> = cx
+            .text_system()
+            .all_font_names()
+            .into_iter()
+            .filter(|n| {
+                let l = n.to_lowercase();
+                !l.starts_with('.') && KNOWN.iter().any(|k| l.contains(k))
+            })
+            .collect();
+        names.sort_by_key(|n| n.to_lowercase());
+        names.dedup();
+        names.truncate(200);
+        let current = Style::get(cx).code_font.clone();
+        let mut items = vec![
+            MenuItem::new(
+                format!("System default ({})", crate::style::default_code_font()),
+                self.on_ws(cx, |ws, _, cx| {
+                    ws.change_style(&|s: &mut Style| s.code_font = String::new(), cx)
+                }),
+            )
+            .checked(current.trim().is_empty()),
+            MenuItem::Separator,
+        ];
+        for name in names {
+            let checked = name == current;
+            let pick = name.clone();
+            items.push(
+                MenuItem::new(
+                    name,
+                    self.on_ws(cx, move |ws, _, cx| {
+                        let pick = pick.clone();
+                        ws.change_style(&move |s: &mut Style| s.code_font = pick.clone(), cx)
+                    }),
+                )
+                .checked(checked),
+            );
+        }
+        self.open_menu(at, false, 280.0, items, window, cx);
     }
 
     /// Settings › Reading › Read aloud › Voice: the system's voices by

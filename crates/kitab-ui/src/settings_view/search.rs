@@ -126,6 +126,31 @@ const INDEX: &[(Section, &str, &str)] = &[
     ),
     (
         Section::Reading,
+        "Code font",
+        "monospace mono typeface consolas menlo cascadia fira editor markdown",
+    ),
+    (
+        Section::Reading,
+        "Page colour",
+        "dark mode night invert colours colors pdf comic djvu sepia theme paper eye strain",
+    ),
+    (
+        Section::Reading,
+        "Comics",
+        "manga right to left rtl japanese page order",
+    ),
+    (
+        Section::Home,
+        "When Kitab starts",
+        "startup start up launch open restore session tabs last file reopen",
+    ),
+    (
+        Section::Appearance,
+        "Match the system's light or dark mode",
+        "theme automatic follow system dark light mode os appearance night",
+    ),
+    (
+        Section::Reading,
         "Books",
         "epub typeface font line spacing margins ebook",
     ),

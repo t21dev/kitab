@@ -146,11 +146,11 @@ impl Reader {
             .on_action(cx.listener(|r, _: &NextPage, _, cx| r.present_step(true, cx)))
             .on_action(cx.listener(|r, _: &PrevPage, _, cx| r.present_step(false, cx)))
             .on_action(cx.listener(|r, _: &PageRight, _, cx| {
-                let forward = page_arrow_goes_forward(true, r.right_to_left());
+                let forward = page_arrow_goes_forward(true, r.right_to_left(cx));
                 r.present_step(forward, cx)
             }))
             .on_action(cx.listener(|r, _: &PageLeft, _, cx| {
-                let forward = page_arrow_goes_forward(false, r.right_to_left());
+                let forward = page_arrow_goes_forward(false, r.right_to_left(cx));
                 r.present_step(forward, cx)
             }))
             .on_action(cx.listener(|r, _: &ScrollDown, _, cx| r.present_step(true, cx)))

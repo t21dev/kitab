@@ -7,9 +7,9 @@
 mod book;
 mod bookmarks;
 mod dock;
+mod tint;
 pub(crate) use dock::note_toggle as note_dock_toggle;
 pub(crate) use dock::set_menu_open;
-pub(crate) use markdown::MONO_FONT;
 mod editor;
 mod find;
 mod footnote;
@@ -197,6 +197,8 @@ pub struct Reader {
     save_scheduled: bool,
     /// The tab has closed: its document is handed back and never reopened.
     pub(crate) closing: bool,
+    /// The page colour the cached pages were drawn in.
+    drawn_tint: Option<tint::Tint>,
     /// Where to go once the first layout has a viewport (restored reading state).
     restore: Option<ReadingState>,
     /// The page field (Ctrl+G or a click on the page number).
@@ -364,6 +366,7 @@ impl Reader {
             last_page: 0,
             save_scheduled: false,
             closing: false,
+            drawn_tint: None,
             restore: None,
             page_focus,
             password_focus: cx.focus_handle(),
@@ -1042,16 +1045,42 @@ impl Reader {
     /// Right or left arrow: next or previous page, the other way round in a
     /// book whose pages advance right to left (MANIFEST 04).
     fn page_arrow(&mut self, right: bool, cx: &mut Context<Self>) {
-        if page_arrow_goes_forward(right, self.right_to_left()) {
+        if page_arrow_goes_forward(right, self.right_to_left(cx)) {
             self.next_page(cx);
         } else {
             self.prev_page(cx);
         }
     }
 
-    /// Pages advance right to left (from the book's package document).
-    pub fn right_to_left(&self) -> bool {
-        self.info.as_ref().is_some_and(|i| i.right_to_left)
+    /// Pages advance right to left: the book says so (its package
+    /// document), or it's a comic and Settings reads comics as manga.
+    /// The page colour for this document: none for books and Markdown
+    /// (they take the theme's colours as they lay out).
+    pub(crate) fn page_tint(&self, cx: &gpui::App) -> Option<tint::Tint> {
+        if self.md.is_some() || self.info.as_ref().is_some_and(|i| i.reflowable) {
+            return None;
+        }
+        let st = Style::get(cx);
+        let rgb = |c: kitab_theme::Rgba| {
+            let q = |v: f32| (v.clamp(0.0, 1.0) * 255.0).round() as u8;
+            [q(c.r), q(c.g), q(c.b)]
+        };
+        tint::Tint::from_setting(
+            st.page_colour,
+            rgb(st.theme.colors.bg),
+            rgb(st.theme.colors.read),
+        )
+    }
+
+    pub fn right_to_left(&self, cx: &gpui::App) -> bool {
+        self.info.as_ref().is_some_and(|i| {
+            i.right_to_left
+                || (Style::get(cx).comic_rtl
+                    && matches!(
+                        i.format,
+                        kitab_core::Format::Cbz | kitab_core::Format::Cbr | kitab_core::Format::Cb7
+                    ))
+        })
     }
 
     pub fn next_page(&mut self, cx: &mut Context<Self>) {
@@ -1412,6 +1441,7 @@ impl Reader {
             generation: self.generation,
         };
         let page = ix as u32;
+        let tint = self.page_tint(cx);
         // Only the reading view's renders feed the preview timing.
         let (wanted, quick): (crate::engine::Wanted, Option<bool>) = match what {
             RenderFor::Page { quick } => {
@@ -1430,7 +1460,10 @@ impl Reader {
             let result = cx
                 .background_spawn(async move {
                     let started = std::time::Instant::now();
-                    let r = engine.render_when(doc, req, wanted);
+                    let mut r = engine.render_when(doc, req, wanted);
+                    if let (Some(t), Ok(Some(bmp))) = (tint, r.as_mut()) {
+                        t.apply(&mut bmp.bgra);
+                    }
                     let took = started.elapsed().as_secs_f32() * 1000.0;
                     if trace {
                         let what = match &r {
@@ -1982,6 +2015,14 @@ impl Render for Reader {
             if self.md.is_some() && !matches!(self.zoom, ZoomMode::Custom(_)) {
                 self.relayout(cx);
             }
+        }
+        // Page colour or theme changed: the pages are drawn again in it.
+        let tint = self.page_tint(cx);
+        if tint != self.drawn_tint {
+            self.drawn_tint = tint;
+            self.cache.clear();
+            self.generation += 1;
+            cx.notify();
         }
         // Pages painted last frame are on the GPU: one copy is enough, so
         // the pixels in memory go (a page at fit width on a large screen is
