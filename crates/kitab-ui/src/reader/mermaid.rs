@@ -128,7 +128,7 @@ pub fn draw(
     );
     // tiny-skia is premultiplied RGBA; GPUI images are BGRA.
     let mut px = pixmap.take();
-    for p in px.chunks_exact_mut(4) {
+    for p in px.as_chunks_mut::<4>().0 {
         p.swap(0, 2);
     }
     Ok((px, w, h, lw, lh))
@@ -202,7 +202,7 @@ mod tests {
             assert_eq!(px.len(), (w * h * 4) as usize);
             assert!(lw > 10.0 && lh > 10.0);
             // Something was drawn: not every pixel is transparent.
-            assert!(px.chunks_exact(4).any(|p| p[3] > 0));
+            assert!(px.as_chunks::<4>().0.iter().any(|p| p[3] > 0));
         }
         assert!(draw(&bad[0], &theme, 1.0).is_err());
     }

@@ -246,10 +246,10 @@ fn changes_since(bytes: &[u8], end: usize, password: Option<&str>) -> SigModific
         } else {
             None
         };
-        if let Some(before) = before.as_ref() {
-            if same(&full, &old, num, &now, before) {
-                continue;
-            }
+        if let Some(before) = before.as_ref()
+            && same(&full, &old, num, &now, before)
+        {
+            continue;
         }
         if Some(num) == info {
             continue; // the document info's dates and producer

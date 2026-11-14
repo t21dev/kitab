@@ -221,7 +221,7 @@ pub fn shrink(image: &RenderImage, max_pixels: u64) -> Option<(Arc<RenderImage>,
             let mut sum = [0u32; 4];
             for y in y0..y1 {
                 let row = (y as usize * w as usize + x0 as usize) * 4;
-                for px in src[row..row + (x1 - x0) as usize * 4].chunks_exact(4) {
+                for px in src[row..row + (x1 - x0) as usize * 4].as_chunks::<4>().0 {
                     for c in 0..4 {
                         sum[c] += u32::from(px[c]);
                     }

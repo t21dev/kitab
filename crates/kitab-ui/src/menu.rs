@@ -169,18 +169,18 @@ pub fn tool_row(
             );
         }
         row = row.child(well);
-        if Some(g) == label_after {
-            if let Some(l) = label.clone() {
-                row = row.child(
-                    div()
-                        .min_w(px(44.0))
-                        .text_size(px(12.0))
-                        .text_color(st.c(|c| c.muted))
-                        .flex()
-                        .justify_center()
-                        .child(l),
-                );
-            }
+        if Some(g) == label_after
+            && let Some(l) = label.clone()
+        {
+            row = row.child(
+                div()
+                    .min_w(px(44.0))
+                    .text_size(px(12.0))
+                    .text_color(st.c(|c| c.muted))
+                    .flex()
+                    .justify_center()
+                    .child(l),
+            );
         }
     }
     row.into_any_element()

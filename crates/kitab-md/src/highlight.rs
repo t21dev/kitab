@@ -123,11 +123,12 @@ pub fn highlight(lang: &str, text: &str) -> Vec<Token> {
         if start >= end {
             return;
         }
-        if let Some(last) = out.last_mut() {
-            if last.kind == kind && last.end == start {
-                last.end = end;
-                return;
-            }
+        if let Some(last) = out.last_mut()
+            && last.kind == kind
+            && last.end == start
+        {
+            last.end = end;
+            return;
         }
         out.push(Token { start, end, kind });
     };

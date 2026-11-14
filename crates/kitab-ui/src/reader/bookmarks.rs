@@ -20,10 +20,10 @@ pub struct BookmarkRow {
 pub(super) fn title_for(page: u32, outline: &[OutlineItem], pages: bool) -> String {
     fn walk<'a>(items: &'a [OutlineItem], page: u32, best: &mut Option<(u32, &'a str)>) {
         for it in items {
-            if let Some(p) = it.page.filter(|&p| p <= page) {
-                if best.is_none_or(|(b, _)| p >= b) {
-                    *best = Some((p, &it.title));
-                }
+            if let Some(p) = it.page.filter(|&p| p <= page)
+                && best.is_none_or(|(b, _)| p >= b)
+            {
+                *best = Some((p, &it.title));
             }
             walk(&it.children, page, best);
         }

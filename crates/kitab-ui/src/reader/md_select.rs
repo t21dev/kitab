@@ -274,11 +274,11 @@ impl super::Reader {
 
     /// The pointer moved while selecting.
     pub(super) fn md_select_move(&mut self, p: Point<Pixels>, cx: &mut gpui::Context<Self>) {
-        if let Some(end) = self.md_sel.end_at(p) {
-            if self.md_sel.head != Some(end) {
-                self.md_sel.head = Some(end);
-                cx.notify();
-            }
+        if let Some(end) = self.md_sel.end_at(p)
+            && self.md_sel.head != Some(end)
+        {
+            self.md_sel.head = Some(end);
+            cx.notify();
         }
     }
 }

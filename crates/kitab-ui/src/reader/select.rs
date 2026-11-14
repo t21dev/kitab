@@ -239,11 +239,11 @@ impl Reader {
         } else if p.y > vb.bottom() - px(24.0) {
             self.list.scroll_by(px(24.0));
         }
-        if let Some(end) = self.end_at(p, cx) {
-            if self.select.head != Some(end) {
-                self.select.head = Some(end);
-                cx.notify();
-            }
+        if let Some(end) = self.end_at(p, cx)
+            && self.select.head != Some(end)
+        {
+            self.select.head = Some(end);
+            cx.notify();
         }
     }
 

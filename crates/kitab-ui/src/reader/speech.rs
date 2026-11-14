@@ -223,7 +223,7 @@ impl Reader {
         let view = self.list.viewport_bounds();
         let above = f32::from(view.top() - sheet.top()) + self.top_inset;
         // Turned pages read from their start.
-        if above <= 0.0 || self.rotation % 360 != 0 {
+        if above <= 0.0 || !self.rotation.is_multiple_of(360) {
             return (ix, 0);
         }
         let y = above / self.px_per_pt(page).max(0.0001);

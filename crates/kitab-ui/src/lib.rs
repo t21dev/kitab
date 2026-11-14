@@ -121,11 +121,11 @@ pub(crate) fn fire_first_paint(window: &mut gpui::Window, cx: &mut gpui::App) {
     if cx.try_global::<Unrevealed>().is_some_and(|u| u.0) {
         window.on_next_frame(reveal);
     }
-    if cx.has_global::<FirstPaint>() {
-        if let Some(f) = cx.global_mut::<FirstPaint>().0.take() {
-            kitab_os::trace::mark("first paint: frame requested");
-            window.on_next_frame(move |_, _| f());
-        }
+    if cx.has_global::<FirstPaint>()
+        && let Some(f) = cx.global_mut::<FirstPaint>().0.take()
+    {
+        kitab_os::trace::mark("first paint: frame requested");
+        window.on_next_frame(move |_, _| f());
     }
 }
 pub use icons::Assets;

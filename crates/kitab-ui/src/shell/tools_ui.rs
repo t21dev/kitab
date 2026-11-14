@@ -803,11 +803,11 @@ impl Workspace {
         let before = self.active;
         self.open_tab(path, window, cx);
         let opened = self.active_reader().cloned();
-        if let (Some(ix), Some(side)) = (before, opened) {
-            if self.active != Some(ix) {
-                self.activate(ix, window, cx);
-                self.split_with(side, cx);
-            }
+        if let (Some(ix), Some(side)) = (before, opened)
+            && self.active != Some(ix)
+        {
+            self.activate(ix, window, cx);
+            self.split_with(side, cx);
         }
     }
 
@@ -815,11 +815,11 @@ impl Workspace {
     pub(super) fn toggle_split(&mut self, cx: &mut Context<Self>) {
         if self.tools.split.is_some() {
             self.close_split(cx);
-        } else if let Some(a) = self.active {
-            if self.tabs.len() > 1 {
-                let next = self.tabs[(a + 1) % self.tabs.len()].clone();
-                self.split_with(next, cx);
-            }
+        } else if let Some(a) = self.active
+            && self.tabs.len() > 1
+        {
+            let next = self.tabs[(a + 1) % self.tabs.len()].clone();
+            self.split_with(next, cx);
         }
     }
 

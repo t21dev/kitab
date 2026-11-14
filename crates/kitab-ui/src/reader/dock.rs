@@ -325,19 +325,20 @@ impl Reader {
                 )
             });
         // At the bottom the dock is also the page navigator.
-        if at == DockAt::Bottom && st.shows_page_nav() {
-            if let Some(parts) = self.nav_parts(st, window, cx) {
-                dock = dock.child(
-                    div()
-                        .flex_none()
-                        .flex()
-                        .items_center()
-                        .gap(px(10.0))
-                        .px(px(6.0))
-                        .children(parts),
-                );
-                dock = dock.child(sep());
-            }
+        if at == DockAt::Bottom
+            && st.shows_page_nav()
+            && let Some(parts) = self.nav_parts(st, window, cx)
+        {
+            dock = dock.child(
+                div()
+                    .flex_none()
+                    .flex()
+                    .items_center()
+                    .gap(px(10.0))
+                    .px(px(6.0))
+                    .children(parts),
+            );
+            dock = dock.child(sep());
         }
         dock = dock
             .when(items.zoom || show_fit, |d| {

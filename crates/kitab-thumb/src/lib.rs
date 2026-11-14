@@ -78,7 +78,7 @@ impl Thumb {
     pub fn has_content(&self) -> bool {
         let bgra = self.to_bgra();
         let first = &bgra[..4];
-        bgra.chunks_exact(4).any(|p| p != first)
+        bgra.as_chunks::<4>().0.iter().any(|p| p != first)
     }
 }
 
@@ -117,10 +117,10 @@ fn text_head(source: &Source<'_>) -> Result<String, String> {
         }
     };
     let mut text = String::from_utf8_lossy(&bytes).into_owned();
-    if bytes.len() == TEXT_HEAD {
-        if let Some(end) = text.rfind('\n') {
-            text.truncate(end);
-        }
+    if bytes.len() == TEXT_HEAD
+        && let Some(end) = text.rfind('\n')
+    {
+        text.truncate(end);
     }
     Ok(text)
 }

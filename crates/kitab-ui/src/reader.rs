@@ -1043,10 +1043,10 @@ impl Reader {
     }
 
     fn confirm_page(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if let Some(text) = self.page_edit.take() {
-            if let Some(n) = parse_page(&text, self.page_count()) {
-                self.jump(n, cx);
-            }
+        if let Some(text) = self.page_edit.take()
+            && let Some(n) = parse_page(&text, self.page_count())
+        {
+            self.jump(n, cx);
         }
         window.focus(&self.focus);
         cx.notify();
@@ -1676,10 +1676,12 @@ impl Reader {
         let k = &e.keystroke;
         if k.key == "backspace" {
             self.password.pop();
-        } else if let Some(ch) = k.key_char.as_ref() {
-            if !k.modifiers.control && !k.modifiers.alt && ch.chars().all(|c| !c.is_control()) {
-                self.password.push_str(ch);
-            }
+        } else if let Some(ch) = k.key_char.as_ref()
+            && !k.modifiers.control
+            && !k.modifiers.alt
+            && ch.chars().all(|c| !c.is_control())
+        {
+            self.password.push_str(ch);
         }
         cx.notify();
     }
@@ -2585,7 +2587,7 @@ fn nav_button(id: &'static str, name: &str, st: &Style) -> gpui::Stateful<gpui::
 
 /// Encode a rendered page (BGRA) as PNG.
 pub fn png_from_bgra(width: u32, height: u32, mut bgra: Vec<u8>) -> Option<Vec<u8>> {
-    for px in bgra.chunks_exact_mut(4) {
+    for px in bgra.as_chunks_mut::<4>().0 {
         px.swap(0, 2);
     }
     let mut out = Vec::new();

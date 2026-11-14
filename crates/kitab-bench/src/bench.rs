@@ -362,25 +362,25 @@ fn measure(pid: u32, start: Instant, save: Option<&Path>) -> Result<Run, String>
         }
         if f64::from(ink) / total >= INK_SHARE {
             seen.get_or_insert(ended);
-            if let Some((prev, _prev_start, prev_end, lo)) = last {
-                if prev == hash {
-                    if let Some(path) = save {
-                        let _ = img.save(path);
-                    }
-                    return Ok(Run {
-                        window_ms,
-                        page_lo_ms: lo,
-                        page_hi_ms: prev_end,
-                        page_ms: (lo + prev_end) / 2.0,
-                        seen_ms: seen.unwrap_or(prev_end),
-                        cpu_ms_to_page: 0.0,
-                        working_set_mb: 0.0,
-                        private_mb: 0.0,
-                        idle_cpu_pct: 0.0,
-                        captures,
-                        capture_ms_avg: ms(capture_total) / f64::from(captures),
-                    });
+            if let Some((prev, _prev_start, prev_end, lo)) = last
+                && prev == hash
+            {
+                if let Some(path) = save {
+                    let _ = img.save(path);
                 }
+                return Ok(Run {
+                    window_ms,
+                    page_lo_ms: lo,
+                    page_hi_ms: prev_end,
+                    page_ms: (lo + prev_end) / 2.0,
+                    seen_ms: seen.unwrap_or(prev_end),
+                    cpu_ms_to_page: 0.0,
+                    working_set_mb: 0.0,
+                    private_mb: 0.0,
+                    idle_cpu_pct: 0.0,
+                    captures,
+                    capture_ms_avg: ms(capture_total) / f64::from(captures),
+                });
             }
             last = Some((hash, started, ended, prev_start.unwrap_or(window_ms)));
         } else {

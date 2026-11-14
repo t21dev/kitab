@@ -686,25 +686,25 @@ impl Workspace {
             return;
         }
         // Its place in the strip narrows away instead of the others jumping.
-        if Style::get(cx).animations {
-            if let Some(b) = self.tab_scroll.bounds_for_item(ix) {
-                let r = self.tabs[ix].read(cx);
-                self.tab_ghost_serial += 1;
-                let serial = self.tab_ghost_serial;
-                self.tab_ghost = Some((
-                    ix,
-                    f32::from(b.size.width),
-                    r.title().to_string(),
-                    tab_icon_for(&r.path),
-                    serial,
-                ));
-                self.after(motion::EXIT_BASE, cx, move |ws, cx| {
-                    if ws.tab_ghost.as_ref().is_some_and(|g| g.4 == serial) {
-                        ws.tab_ghost = None;
-                        cx.notify();
-                    }
-                });
-            }
+        if Style::get(cx).animations
+            && let Some(b) = self.tab_scroll.bounds_for_item(ix)
+        {
+            let r = self.tabs[ix].read(cx);
+            self.tab_ghost_serial += 1;
+            let serial = self.tab_ghost_serial;
+            self.tab_ghost = Some((
+                ix,
+                f32::from(b.size.width),
+                r.title().to_string(),
+                tab_icon_for(&r.path),
+                serial,
+            ));
+            self.after(motion::EXIT_BASE, cx, move |ws, cx| {
+                if ws.tab_ghost.as_ref().is_some_and(|g| g.4 == serial) {
+                    ws.tab_ghost = None;
+                    cx.notify();
+                }
+            });
         }
         let closing = self.tabs.remove(ix);
         if self.tools.split.as_ref() == Some(&closing) {
@@ -1021,10 +1021,10 @@ impl Workspace {
         });
         let mut ghost = ghost;
         for (ix, tab) in self.tabs.iter().enumerate() {
-            if ghost.as_ref().is_some_and(|g| g.0 == ix) {
-                if let Some((_, el)) = ghost.take() {
-                    strip = strip.child(el);
-                }
+            if ghost.as_ref().is_some_and(|g| g.0 == ix)
+                && let Some((_, el)) = ghost.take()
+            {
+                strip = strip.child(el);
             }
             let on = self.active == Some(ix);
             // The tab shown in the side pane of a split view.
@@ -1794,10 +1794,10 @@ impl Workspace {
                         .tip(tip)
                         .on_click(cx.listener(move |ws, _, _, cx| {
                             ws.side_pane = p;
-                            if p == SidePane::Pages {
-                                if let Some(r) = ws.active.and_then(|i| ws.tabs.get(i)).cloned() {
-                                    r.update(cx, |r, _| r.reveal_in_pages());
-                                }
+                            if p == SidePane::Pages
+                                && let Some(r) = ws.active.and_then(|i| ws.tabs.get(i)).cloned()
+                            {
+                                r.update(cx, |r, _| r.reveal_in_pages());
                             }
                             cx.notify();
                         }))
@@ -2393,12 +2393,11 @@ impl Workspace {
         };
         let path = dir.join("Welcome to Kitab.pdf");
         let current = std::fs::metadata(&path).is_ok_and(|m| m.len() == GUIDE.len() as u64);
-        if !current {
-            if let Err(e) = std::fs::create_dir_all(&dir).and_then(|_| std::fs::write(&path, GUIDE))
-            {
-                self.toast(format!("Couldn't write the guide: {e}"), true, None, cx);
-                return;
-            }
+        if !current
+            && let Err(e) = std::fs::create_dir_all(&dir).and_then(|_| std::fs::write(&path, GUIDE))
+        {
+            self.toast(format!("Couldn't write the guide: {e}"), true, None, cx);
+            return;
         }
         self.open_tab(path, window, cx);
     }
@@ -3046,10 +3045,10 @@ impl Render for Workspace {
             )
             .on_action(cx.listener(|ws, _: &ToggleSplit, _, cx| ws.toggle_split(cx)))
             .on_action(cx.listener(|ws, _: &ExtractPages, window, cx| {
-                if let Some(r) = ws.active_reader().cloned() {
-                    if r.read(cx).is_pdf() {
-                        ws.open_extract(r, window, cx);
-                    }
+                if let Some(r) = ws.active_reader().cloned()
+                    && r.read(cx).is_pdf()
+                {
+                    ws.open_extract(r, window, cx);
                 }
             }))
             .on_action(
@@ -3449,10 +3448,10 @@ impl Workspace {
             }
         }
         let typed = self.hex.edit.clone().unwrap_or_default();
-        if typed.len() == 6 {
-            if let Some(Accent::Custom(c)) = Accent::parse(&format!("#{typed}")) {
-                self.change_style(&move |s: &mut Style| s.set_accent(Accent::Custom(c)), cx);
-            }
+        if typed.len() == 6
+            && let Some(Accent::Custom(c)) = Accent::parse(&format!("#{typed}"))
+        {
+            self.change_style(&move |s: &mut Style| s.set_accent(Accent::Custom(c)), cx);
         }
         cx.stop_propagation();
         cx.notify();

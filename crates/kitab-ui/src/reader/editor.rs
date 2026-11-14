@@ -173,10 +173,11 @@ impl Editor {
     /// The line with the most characters (the editor's font is monospaced),
     /// found again only after an edit.
     fn widest_line(&self) -> usize {
-        if let Some((generation, line)) = self.widest.get() {
-            if generation == self.generation && line < self.buf.line_count() {
-                return line;
-            }
+        if let Some((generation, line)) = self.widest.get()
+            && generation == self.generation
+            && line < self.buf.line_count()
+        {
+            return line;
         }
         let line = (0..self.buf.line_count())
             .max_by_key(|&i| self.buf.line(i).chars().count())
@@ -617,11 +618,11 @@ impl Reader {
             cx.notify();
             return;
         }
-        if let Some(at) = self.offset_at_point(e.position, window) {
-            if let Some(edit) = self.md.as_mut().and_then(|m| m.edit.as_mut()) {
-                edit.buf.click(at, true);
-                cx.notify();
-            }
+        if let Some(at) = self.offset_at_point(e.position, window)
+            && let Some(edit) = self.md.as_mut().and_then(|m| m.edit.as_mut())
+        {
+            edit.buf.click(at, true);
+            cx.notify();
         }
     }
 

@@ -1163,10 +1163,10 @@ fn details_el(
                 .hover(|h| h.bg(st.hover_bg()))
                 .on_click(move |_, _, cx| {
                     let _ = reader.update(cx, |r, cx| {
-                        if let Some(md) = r.md.as_mut() {
-                            if !md.open_details.remove(&key) {
-                                md.open_details.insert(key);
-                            }
+                        if let Some(md) = r.md.as_mut()
+                            && !md.open_details.remove(&key)
+                        {
+                            md.open_details.insert(key);
                         }
                         cx.notify();
                     });

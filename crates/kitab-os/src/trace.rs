@@ -53,14 +53,14 @@ fn cpu_ms() -> f64 {
 
 /// Note a start-up step (no-op unless `KITAB_TRACE_START` is set).
 pub fn mark(label: &str) {
-    if let Some((start, file)) = sink() {
-        if let Ok(mut f) = file.lock() {
-            let _ = writeln!(
-                f,
-                "{:8.1} ms  cpu {:7.1} ms  {label}",
-                start.elapsed().as_secs_f64() * 1000.0,
-                cpu_ms()
-            );
-        }
+    if let Some((start, file)) = sink()
+        && let Ok(mut f) = file.lock()
+    {
+        let _ = writeln!(
+            f,
+            "{:8.1} ms  cpu {:7.1} ms  {label}",
+            start.elapsed().as_secs_f64() * 1000.0,
+            cpu_ms()
+        );
     }
 }

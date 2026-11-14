@@ -45,7 +45,7 @@ fn balanced(v: &str) -> bool {
             return false;
         }
     }
-    depth == 0 && v.matches('"').count() % 2 == 0
+    depth == 0 && v.matches('"').count().is_multiple_of(2)
 }
 
 fn unquote(v: &str) -> String {

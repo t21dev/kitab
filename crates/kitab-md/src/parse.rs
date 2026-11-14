@@ -119,10 +119,11 @@ pub fn blocks(text: &str) -> MdDoc {
     };
     for (event, range) in Parser::new_ext(text, options).into_offset_iter() {
         b.offset = range.start;
-        if b.stack.len() == 1 && b.pending.is_none() {
-            if let Event::Start(_) = event {
-                b.pending = Some(range.start);
-            }
+        if b.stack.len() == 1
+            && b.pending.is_none()
+            && let Event::Start(_) = event
+        {
+            b.pending = Some(range.start);
         }
         b.event(event);
     }
@@ -188,12 +189,11 @@ impl Builder {
     }
 
     fn close_implicit(&mut self) {
-        if let Some(Frame::Implicit(_)) = self.stack.last() {
-            if let Some(Frame::Implicit(inl)) = self.stack.pop() {
-                if has_content(&inl) {
-                    self.emit(Block::Paragraph(inl));
-                }
-            }
+        if let Some(Frame::Implicit(_)) = self.stack.last()
+            && let Some(Frame::Implicit(inl)) = self.stack.pop()
+            && has_content(&inl)
+        {
+            self.emit(Block::Paragraph(inl));
         }
     }
 
@@ -268,11 +268,11 @@ impl Builder {
             style: s,
             link: l,
         }) = inl.last_mut()
+            && *s == style
+            && *l == link
         {
-            if *s == style && *l == link {
-                last.push_str(text);
-                return;
-            }
+            last.push_str(text);
+            return;
         }
         inl.push(Inline::Text {
             text: text.to_string(),

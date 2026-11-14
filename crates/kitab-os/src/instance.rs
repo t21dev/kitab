@@ -37,11 +37,11 @@ fn message(files: &[PathBuf]) -> Vec<u8> {
         } else {
             cwd.join(f)
         };
-        if let Some(s) = abs.to_str() {
-            if !s.contains('\n') {
-                text.push('\n');
-                text.push_str(s);
-            }
+        if let Some(s) = abs.to_str()
+            && !s.contains('\n')
+        {
+            text.push('\n');
+            text.push_str(s);
         }
     }
     text.into_bytes()

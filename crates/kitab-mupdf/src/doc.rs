@@ -492,7 +492,7 @@ pub(crate) fn render(doc: &OpenDoc, req: &RenderRequest) -> Result<Bitmap, Strin
     if !(req.scale.is_finite() && req.scale > 0.0) {
         return Err(format!("bad scale {}", req.scale));
     }
-    if req.rotation % 90 != 0 {
+    if !req.rotation.is_multiple_of(90) {
         return Err(format!("rotation {} is not a multiple of 90", req.rotation));
     }
     let page = doc
@@ -534,7 +534,7 @@ pub(crate) fn render(doc: &OpenDoc, req: &RenderRequest) -> Result<Bitmap, Strin
         .map_err(|e| e.to_string())?;
     match doc.paper.filter(|_| doc.reflowable) {
         Some(rgb) => {
-            for px in pixmap.samples_mut().chunks_exact_mut(3) {
+            for px in pixmap.samples_mut().as_chunks_mut::<3>().0 {
                 px.copy_from_slice(&rgb);
             }
         }
@@ -562,7 +562,7 @@ fn to_bgra(pixmap: &Pixmap) -> Result<Bitmap, String> {
         let line = samples
             .get(row * stride..row * stride + row_bytes)
             .ok_or("pixmap shorter than its size")?;
-        for px in line.chunks_exact(3) {
+        for px in line.as_chunks::<3>().0 {
             bgra.extend_from_slice(&[px[2], px[1], px[0], 255]);
         }
     }
@@ -732,7 +732,9 @@ pub fn ink_ratio(bitmap: &Bitmap) -> f64 {
     }
     let inked = bitmap
         .bgra
-        .chunks_exact(4)
+        .as_chunks::<4>()
+        .0
+        .iter()
         .filter(|p| p[0] < 250 || p[1] < 250 || p[2] < 250)
         .count();
     inked as f64 / total as f64

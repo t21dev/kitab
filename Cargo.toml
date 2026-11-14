@@ -30,12 +30,6 @@ unsafe_code = "deny"
 [workspace.lints.clippy]
 unwrap_used = "warn"
 expect_used = "warn"
-# Rust 1.95 (the comic and DjVu crates' minimum) brings these suggestions for
-# code written to 1.85 (let chains, is_multiple_of, as_chunks). Off until the
-# code is moved over in a change of its own.
-collapsible_if = "allow"
-manual_is_multiple_of = "allow"
-chunks_exact_to_as_chunks = "allow"
 
 [profile.release]
 lto = "thin"

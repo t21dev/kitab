@@ -65,7 +65,7 @@ fn thumbnail_of(path: &Path, size: u32) -> windows::core::Result<(i32, i32, bool
     let len = (bm.bmWidthBytes * bm.bmHeight) as usize;
     // SAFETY: a DIB section's bits are bmWidthBytes × bmHeight bytes.
     let bits = unsafe { std::slice::from_raw_parts(bm.bmBits as *const u8, len) };
-    let varies = bits.chunks_exact(4).any(|p| p != &bits[..4]);
+    let varies = bits.as_chunks::<4>().0.iter().any(|p| p != &bits[..4]);
     assert_eq!(alpha, WTSAT_RGB);
     // SAFETY: the caller owns the bitmap Explorer receives.
     let _ = unsafe { DeleteObject(hbmp.into()) };

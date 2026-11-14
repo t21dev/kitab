@@ -401,7 +401,7 @@ fn renders_page_1_of_01_with_ink() {
     assert!(ink > 0.01, "page looks blank: ink {ink}");
     assert!(ink < 0.6, "page looks inverted or black: ink {ink}");
     // Opaque and on white: corners are paper.
-    assert!(bmp.bgra.chunks_exact(4).all(|p| p[3] == 255));
+    assert!(bmp.bgra.as_chunks::<4>().0.iter().all(|p| p[3] == 255));
     assert_eq!(&bmp.bgra[..4], &[255, 255, 255, 255]);
 
     // A tile is exactly the matching region of the full page.

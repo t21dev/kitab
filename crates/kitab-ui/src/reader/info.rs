@@ -114,10 +114,10 @@ impl Reader {
         if items.format {
             parts.push(format_label(info.format).to_string());
         }
-        if items.size {
-            if let Some(bytes) = self.file_size {
-                parts.push(human_size(bytes));
-            }
+        if items.size
+            && let Some(bytes) = self.file_size
+        {
+            parts.push(human_size(bytes));
         }
         if let Some(md) = self.md.as_ref() {
             let words = md.source.split_whitespace().count();

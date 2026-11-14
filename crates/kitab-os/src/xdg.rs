@@ -69,10 +69,10 @@ fn point_at(template: &str, exe: &str) -> String {
         .filter(|l| !l.starts_with('#'))
         .map(|l| {
             for key in ["Exec=", "TryExec="] {
-                if let Some(rest) = l.strip_prefix(key) {
-                    if rest == "kitab" || rest.starts_with("kitab ") {
-                        return format!("{key}{exe}{}", &rest["kitab".len()..]);
-                    }
+                if let Some(rest) = l.strip_prefix(key)
+                    && (rest == "kitab" || rest.starts_with("kitab "))
+                {
+                    return format!("{key}{exe}{}", &rest["kitab".len()..]);
                 }
             }
             l.to_string()

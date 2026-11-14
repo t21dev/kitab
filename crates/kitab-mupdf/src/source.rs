@@ -561,7 +561,8 @@ unsafe fn draw(ctx: *mut fz_context, src: &Source, index: usize, width: u32) -> 
         let row = w as usize * 4;
         for (y, src_row) in rgba.chunks_exact(row).take(h as usize).enumerate() {
             let dst = std::slice::from_raw_parts_mut(samples.add(y * stride), w as usize * 3);
-            for (d, s) in dst.chunks_exact_mut(3).zip(src_row.chunks_exact(4)) {
+            let src = src_row.as_chunks::<4>().0;
+            for (d, s) in dst.as_chunks_mut::<3>().0.iter_mut().zip(src) {
                 d.copy_from_slice(&s[..3]);
             }
         }
@@ -621,7 +622,7 @@ fn webp_pixels(data: &[u8]) -> Option<(u32, u32, Vec<u8>)> {
     d.read_image(&mut buf).ok()?;
     let rgba = if has_alpha {
         // Over white paper.
-        buf.chunks_exact_mut(4).for_each(|p| {
+        buf.as_chunks_mut::<4>().0.iter_mut().for_each(|p| {
             let a = u16::from(p[3]);
             for c in &mut p[..3] {
                 *c = ((u16::from(*c) * a + 255 * (255 - a)) / 255) as u8;
@@ -629,7 +630,9 @@ fn webp_pixels(data: &[u8]) -> Option<(u32, u32, Vec<u8>)> {
         });
         buf
     } else {
-        buf.chunks_exact(3)
+        buf.as_chunks::<3>()
+            .0
+            .iter()
             .flat_map(|p| [p[0], p[1], p[2], 255])
             .collect()
     };

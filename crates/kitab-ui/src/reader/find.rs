@@ -277,11 +277,11 @@ impl Reader {
                                 .hits
                                 .insert(page, hits.into_iter().map(|h| h.quads).collect());
                         }
-                        if r.find.current.is_none() {
-                            if let Some(first) = first {
-                                r.find.current = Some(first);
-                                r.reveal_hit(cx);
-                            }
+                        if r.find.current.is_none()
+                            && let Some(first) = first
+                        {
+                            r.find.current = Some(first);
+                            r.reveal_hit(cx);
                         }
                         cx.notify();
                         r.find.total < MAX_HITS

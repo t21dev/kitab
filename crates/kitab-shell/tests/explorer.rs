@@ -68,7 +68,7 @@ fn shell_thumbnail(path: &std::path::Path) -> windows::core::Result<(i32, i32, b
         let len = (bm.bmWidthBytes * bm.bmHeight) as usize;
         // SAFETY: a DIB section's bits are bmWidthBytes × bmHeight bytes.
         let bits = unsafe { std::slice::from_raw_parts(bm.bmBits as *const u8, len) };
-        bits.chunks_exact(4).any(|p| p[..3] != bits[..3])
+        bits.as_chunks::<4>().0.iter().any(|p| p[..3] != bits[..3])
     };
     // SAFETY: the caller owns the returned bitmap.
     let _ = unsafe { DeleteObject(hbmp.into()) };

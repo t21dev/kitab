@@ -597,12 +597,11 @@ impl Workspace {
             Some(Cover::Ready(image, at)) => {
                 let state = CoverState::Ready(image.clone(), *at);
                 // Seen again: last to be dropped.
-                if self.home.order.back().map(PathBuf::as_path) != Some(path) {
-                    if let Some(ix) = self.home.order.iter().position(|p| p == path) {
-                        if let Some(p) = self.home.order.remove(ix) {
-                            self.home.order.push_back(p);
-                        }
-                    }
+                if self.home.order.back().map(PathBuf::as_path) != Some(path)
+                    && let Some(ix) = self.home.order.iter().position(|p| p == path)
+                    && let Some(p) = self.home.order.remove(ix)
+                {
+                    self.home.order.push_back(p);
                 }
                 return state;
             }
@@ -677,10 +676,10 @@ impl Workspace {
                     );
                     h.order.push_back(path);
                     while h.order.len() > COVERS_KEPT {
-                        if let Some(old) = h.order.pop_front() {
-                            if let Some(Cover::Ready(i, _)) = h.covers.remove(&old) {
-                                h.evicted.push(i);
-                            }
+                        if let Some(old) = h.order.pop_front()
+                            && let Some(Cover::Ready(i, _)) = h.covers.remove(&old)
+                        {
+                            h.evicted.push(i);
                         }
                     }
                     cx.notify();

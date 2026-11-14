@@ -63,10 +63,10 @@ impl Workspace {
                 .await;
             let _ = this.update(cx, |ws, cx| {
                 // A deleted collection's shelf falls back to Recent.
-                if let ShelfKind::Collection(id) = ws.shelves.kind {
-                    if !collections.iter().any(|c| c.id == id) {
-                        ws.shelves.kind = ShelfKind::Recent;
-                    }
+                if let ShelfKind::Collection(id) = ws.shelves.kind
+                    && !collections.iter().any(|c| c.id == id)
+                {
+                    ws.shelves.kind = ShelfKind::Recent;
                 }
                 ws.shelves.collections = collections;
                 ws.shelves.library_size = size;

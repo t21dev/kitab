@@ -88,10 +88,10 @@ fn main() {
         })
         .unwrap_or_default();
     let save_settings: Arc<dyn Fn(String) + Send + Sync> = Arc::new(move |json: String| {
-        if let Some(path) = &settings_path {
-            if let Err(e) = write_atomically(path, &json) {
-                log::warn!("could not save settings: {e}");
-            }
+        if let Some(path) = &settings_path
+            && let Err(e) = write_atomically(path, &json)
+        {
+            log::warn!("could not save settings: {e}");
         }
     });
     let theme =

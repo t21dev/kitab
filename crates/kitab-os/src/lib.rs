@@ -74,12 +74,11 @@ pub fn local_today() -> String {
 /// `~/Library/Application Support/dev.t21.kitab`, `$XDG_DATA_HOME/kitab`.
 /// A `portable` file next to the executable puts it in `data/` beside it.
 pub fn data_dir() -> Option<PathBuf> {
-    if let Ok(exe) = std::env::current_exe() {
-        if let Some(dir) = exe.parent() {
-            if dir.join("portable").is_file() {
-                return Some(dir.join("data"));
-            }
-        }
+    if let Ok(exe) = std::env::current_exe()
+        && let Some(dir) = exe.parent()
+        && dir.join("portable").is_file()
+    {
+        return Some(dir.join("data"));
     }
     #[cfg(windows)]
     {
