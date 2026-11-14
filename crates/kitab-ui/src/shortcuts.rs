@@ -19,7 +19,7 @@ pub const GROUPS: &[Group] = &[
             ("Reopen closed tab", "Ctrl+Shift+T"),
             ("Next tab", "Ctrl+Tab / Ctrl+PgDn"),
             ("Previous tab", "Ctrl+Shift+Tab / Ctrl+PgUp"),
-            ("Move tab left / right", "Ctrl+Shift+PgUp / PgDn"),
+            ("Move tab left / right", "Ctrl+Shift+PgUp / Ctrl+Shift+PgDn"),
             ("Go to tab 1–8", "Alt+1–8"),
             ("Go to the last tab", "Alt+9"),
             ("Home", "Ctrl+Shift+H"),
