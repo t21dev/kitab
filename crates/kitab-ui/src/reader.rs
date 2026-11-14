@@ -166,6 +166,18 @@ impl PageExport {
 /// Resolution of pages copied or saved as images.
 pub const EXPORT_DPI: f32 = 150.0;
 
+/// How many pages across (View › Single page / Two pages / Book view).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Spread {
+    #[default]
+    Single,
+    /// Pages side by side in pairs: 1-2, 3-4…
+    Two,
+    /// The first page (the cover) alone, then pairs: 2-3, 4-5…, as a
+    /// printed book opens.
+    Book,
+}
+
 /// Jumps remembered for Alt+Left / Alt+Right.
 const HISTORY_MAX: usize = 100;
 
@@ -199,6 +211,11 @@ pub struct Reader {
     pub(crate) closing: bool,
     /// The page colour the cached pages were drawn in.
     drawn_tint: Option<tint::Tint>,
+    /// One page across, two, or two after a cover alone (Ctrl+6/7/8).
+    spread: Spread,
+    /// Pages run right to left (the second of a pair goes on the left);
+    /// noted each frame for the geometry, which has no `App`.
+    spread_rtl: bool,
     /// Where to go once the first layout has a viewport (restored reading state).
     restore: Option<ReadingState>,
     /// The page field (Ctrl+G or a click on the page number).
@@ -367,6 +384,8 @@ impl Reader {
             save_scheduled: false,
             closing: false,
             drawn_tint: None,
+            spread: Spread::Single,
+            spread_rtl: false,
             restore: None,
             page_focus,
             password_focus: cx.focus_handle(),
@@ -663,6 +682,9 @@ impl Reader {
                 self.index_text_later(cx);
                 // Opened again after a save that failed: the fields as filled in.
                 self.reapply_fields(cx);
+                // Showing: look for the file changing on disk.
+                self.watch_gen += 1;
+                self.start_watch(cx);
                 cx.emit(ReaderEvent::Opened);
             }
             Err(OpenError::NeedsPassword) => {
@@ -779,14 +801,60 @@ impl Reader {
         }
     }
 
+    /// Pages side by side now: a paged document (not a book or Markdown).
+    fn spread_on(&self) -> bool {
+        self.spread != Spread::Single
+            && self.md.is_none()
+            && self.info.as_ref().is_some_and(|i| !i.reflowable)
+    }
+
+    /// The first page of page `ix`'s row (itself in single-page view).
+    pub(crate) fn row_lead(&self, ix: usize) -> usize {
+        if !self.spread_on() {
+            return ix;
+        }
+        match self.spread {
+            Spread::Two => ix - ix % 2,
+            Spread::Book if ix == 0 => 0,
+            Spread::Book => ix - (ix - 1) % 2,
+            Spread::Single => ix,
+        }
+    }
+
+    /// The page beside row lead `lead`, if it has one.
+    fn row_partner(&self, lead: usize) -> Option<usize> {
+        if !self.spread_on() || (self.spread == Spread::Book && lead == 0) {
+            return None;
+        }
+        let next = lead + 1;
+        (next < self.page_count()).then_some(next)
+    }
+
     /// Where page `ix`'s sheet was drawn last frame, in window pixels.
     fn sheet_bounds(&self, ix: usize) -> Option<Bounds<Pixels>> {
-        let item = self.list.bounds_for_item(ix)?;
+        let lead = self.row_lead(ix);
+        let item = self.list.bounds_for_item(lead)?;
         let s = self.page_size(ix);
         let ppt = self.px_per_pt(ix);
         let (w, h) = (s.w * ppt, s.h * ppt);
-        let x = item.origin.x + (item.size.width - px(w)) / 2.0;
-        let y = item.origin.y + px(self.sheet_top_pad(ix));
+        let y = item.origin.y + px(self.sheet_top_pad(lead));
+        let x = match self.row_partner(lead) {
+            None => item.origin.x + (item.size.width - px(w)) / 2.0,
+            Some(partner) => {
+                // Two sheets centred together, GAP apart; the lead on the
+                // left (on the right when pages run right to left).
+                let width = |p: usize| self.page_size(p).w * self.px_per_pt(p);
+                let (lw, pw) = (width(lead), width(partner));
+                let left = item.origin.x + (item.size.width - px(lw + GAP + pw)) / 2.0;
+                let first_is_left = !self.spread_rtl;
+                let on_left = (ix == lead) == first_is_left;
+                if on_left {
+                    left
+                } else {
+                    left + px(if first_is_left { lw } else { pw } + GAP)
+                }
+            }
+        };
         Some(Bounds::new(gpui::point(x, y), gpui::size(px(w), px(h))))
     }
 
@@ -807,7 +875,9 @@ impl Reader {
             if vw > 0.0 { vw } else { 1000.0 },
             if vh > 0.0 { vh } else { 800.0 },
         );
-        let fit_w = ((vw - 2.0 * GAP).max(80.0)) / s.w.max(1.0);
+        // Side by side, each page gets half the width.
+        let across = if self.spread_on() { 2.0 } else { 1.0 };
+        let fit_w = ((vw - (1.0 + across) * GAP) / across).max(80.0) / s.w.max(1.0);
         let fit_h = ((vh - 2.0 * GAP).max(80.0)) / s.h.max(1.0);
         match self.zoom {
             ZoomMode::FitWidth => fit_w,
@@ -820,7 +890,9 @@ impl Reader {
     /// Re-measure every page (zoom, rotation or viewport changed), keeping the reading position.
     fn relayout(&mut self, cx: &mut Context<Self>) {
         let top = self.list.logical_scroll_top();
-        let page = top.item_ix.min(self.page_count().saturating_sub(1));
+        let page = self
+            .row_lead(top.item_ix)
+            .min(self.page_count().saturating_sub(1));
         let before = self.page_size(page).h * self.px_per_pt(page) + GAP;
         let fraction = if before > 0.0 {
             f32::from(top.offset_in_item) / before
@@ -923,7 +995,7 @@ impl Reader {
     fn go_to_page(&mut self, page: usize, cx: &mut Context<Self>) {
         let page = page.min(self.page_count().saturating_sub(1));
         self.list.scroll_to(ListOffset {
-            item_ix: page,
+            item_ix: self.row_lead(page),
             offset_in_item: px(0.0),
         });
         cx.notify();
@@ -1084,11 +1156,37 @@ impl Reader {
     }
 
     pub fn next_page(&mut self, cx: &mut Context<Self>) {
-        self.go_to_page(self.current_page() + 1, cx);
+        // Side by side: the next pair.
+        let lead = self.row_lead(self.current_page());
+        let last = self.row_partner(lead).unwrap_or(lead);
+        self.go_to_page(last + 1, cx);
     }
 
     pub fn prev_page(&mut self, cx: &mut Context<Self>) {
-        self.go_to_page(self.current_page().saturating_sub(1), cx);
+        let lead = self.row_lead(self.current_page());
+        self.go_to_page(self.row_lead(lead.saturating_sub(1)), cx);
+    }
+
+    /// Ctrl+6 / Ctrl+7 / Ctrl+8: one page across, two, or a book's spreads.
+    pub fn set_spread(&mut self, spread: Spread, cx: &mut Context<Self>) {
+        if self.spread == spread {
+            return;
+        }
+        self.spread = spread;
+        if self.md.is_none() && self.info.as_ref().is_some_and(|i| !i.reflowable) {
+            self.relayout(cx);
+        }
+    }
+
+    pub fn spread(&self) -> Spread {
+        self.spread
+    }
+
+    /// Whether pages can go side by side here (paged documents).
+    pub fn can_spread(&self) -> bool {
+        self.status == Status::Open
+            && self.md.is_none()
+            && self.info.as_ref().is_some_and(|i| !i.reflowable)
     }
 
     // ── page field ──
@@ -1529,12 +1627,8 @@ impl Reader {
         }
     }
 
-    fn page_element(
-        &mut self,
-        ix: usize,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
+    /// Page `ix`'s sheet: the page, and its marks, links and fields.
+    fn page_sheet(&mut self, ix: usize, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
         // Frame timing: items of one frame are laid out microseconds apart, so
         // a gap over 2 ms starts a new frame. (The list is borrowed here; ask
         // it nothing.)
@@ -1627,112 +1721,140 @@ impl Reader {
                 self.request(ahead, k, s, cx);
             }
         }
-        div()
+        let sheet = div()
+            .w(px(w))
+            .h(px(h))
+            .flex_none()
+            // Paper before the bitmap arrives; the page's own colour once it has.
+            // A book is printed on the theme's surface (its pages are
+            // rendered on it too); everything else on white paper.
+            .bg(if self.is_book() {
+                st.c(|c| c.bg)
+            } else {
+                gpui::white()
+            })
+            .rounded(radius)
+            .shadow(st.sheet())
+            .overflow_hidden()
+            .relative()
+            .cursor(
+                if self.placing || self.markup.open && self.markup.tool.is_some() {
+                    gpui::CursorStyle::Crosshair
+                } else {
+                    gpui::CursorStyle::IBeam
+                },
+            )
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(move |r, e: &MouseDownEvent, window, cx| {
+                    // A click on the page (not a field) keeps what was
+                    // typed in a field and closes a list's choices.
+                    r.finish_typing(cx);
+                    r.form.choosing = None;
+                    // Placing a signature takes the click; a markup
+                    // tool draws; otherwise the click selects text.
+                    if r.placing {
+                        r.place_signature(ix, e, cx);
+                    } else if !r.markup_down(ix, e, window, cx) {
+                        r.select_down(ix, e, window, cx)
+                    }
+                }),
+            )
+            // Characters for selection load the first time the pointer is over the page.
+            .on_mouse_move(
+                cx.listener(move |r, _: &MouseMoveEvent, _, cx| r.ensure_chars(ix as u32, cx)),
+            )
+            .children(image.as_ref().map(|i| {
+                img(ImageSource::Render(i.clone()))
+                    .w(px(w))
+                    .h(px(h))
+                    .rounded(radius)
+            }))
+            // Painted right after the picture, so by then its
+            // texture is on the GPU (see `painted`). A husk whose
+            // texture has gone asks for another frame, which
+            // draws the page again.
+            .children(image.as_ref().map(|i| {
+                let (husk, painted) = (i.kitab_is_husk(), self.painted.clone());
+                let shown = self.cache.peek(&key).is_some_and(|k| k.id == i.id);
+                let seen = self.seen_misses;
+                let this = cx.weak_entity();
+                gpui::canvas(
+                    |_, _, _| (),
+                    move |_, _, window, cx| {
+                        if husk {
+                            if gpui::kitab_image_misses() != seen {
+                                // After this frame: a refresh
+                                // asked for while drawing is
+                                // dropped.
+                                window.defer(cx, |window, _| window.refresh());
+                            }
+                        } else if shown {
+                            let first = painted.borrow().is_empty();
+                            painted.borrow_mut().push(key);
+                            // Once the frame is done, not at the
+                            // next one: a window left alone draws
+                            // no next frame.
+                            if first {
+                                window.defer(cx, move |_, cx| {
+                                    let _ = this.update(cx, |r, _| r.slim_painted());
+                                });
+                            }
+                        }
+                    },
+                )
+                .absolute()
+                .top_0()
+                .left_0()
+                .size_0()
+            }))
+            .children(self.markup_overlay(ix, ppt))
+            .children(self.note_pins(ix, ppt, &st, cx))
+            .children(self.deleted_outlines(ix, ppt, &st))
+            .children(self.bookmark_ribbon(ix, &st))
+            .children(self.speech_marks(ix, ppt, &st))
+            .children(self.selection_marks(ix, ppt, &st))
+            .children(self.find_marks(ix, ppt, &st))
+            .children(self.link_marks(ix, ppt, &st, cx))
+            .children(self.select_layer(ix, ppt, &st, cx))
+            .children(self.form_layer(ix, ppt, &st, cx));
+        sheet.into_any_element()
+    }
+
+    /// List item `ix`: its page, or (side by side) its pair; the second
+    /// page of a pair is drawn in its partner's row, so its own is empty.
+    fn page_element(
+        &mut self,
+        ix: usize,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        if self.md.is_some() {
+            return self.page_sheet(ix, window, cx);
+        }
+        let lead = self.row_lead(ix);
+        if lead != ix {
+            return div().h(px(0.0)).into_any_element();
+        }
+        let row = div()
             .w_full()
             .flex()
             .justify_center()
+            .gap(px(GAP))
             .pt(px(self.sheet_top_pad(ix)))
-            .pb(px(GAP / 2.0))
-            .child(
-                div()
-                    .w(px(w))
-                    .h(px(h))
-                    .flex_none()
-                    // Paper before the bitmap arrives; the page's own colour once it has.
-                    // A book is printed on the theme's surface (its pages are
-                    // rendered on it too); everything else on white paper.
-                    .bg(if self.is_book() {
-                        st.c(|c| c.bg)
-                    } else {
-                        gpui::white()
-                    })
-                    .rounded(radius)
-                    .shadow(st.sheet())
-                    .overflow_hidden()
-                    .relative()
-                    .cursor(
-                        if self.placing || self.markup.open && self.markup.tool.is_some() {
-                            gpui::CursorStyle::Crosshair
-                        } else {
-                            gpui::CursorStyle::IBeam
-                        },
-                    )
-                    .on_mouse_down(
-                        MouseButton::Left,
-                        cx.listener(move |r, e: &MouseDownEvent, window, cx| {
-                            // A click on the page (not a field) keeps what was
-                            // typed in a field and closes a list's choices.
-                            r.finish_typing(cx);
-                            r.form.choosing = None;
-                            // Placing a signature takes the click; a markup
-                            // tool draws; otherwise the click selects text.
-                            if r.placing {
-                                r.place_signature(ix, e, cx);
-                            } else if !r.markup_down(ix, e, window, cx) {
-                                r.select_down(ix, e, window, cx)
-                            }
-                        }),
-                    )
-                    // Characters for selection load the first time the pointer is over the page.
-                    .on_mouse_move(cx.listener(move |r, _: &MouseMoveEvent, _, cx| {
-                        r.ensure_chars(ix as u32, cx)
-                    }))
-                    .children(image.as_ref().map(|i| {
-                        img(ImageSource::Render(i.clone()))
-                            .w(px(w))
-                            .h(px(h))
-                            .rounded(radius)
-                    }))
-                    // Painted right after the picture, so by then its
-                    // texture is on the GPU (see `painted`). A husk whose
-                    // texture has gone asks for another frame, which
-                    // draws the page again.
-                    .children(image.as_ref().map(|i| {
-                        let (husk, painted) = (i.kitab_is_husk(), self.painted.clone());
-                        let shown = self.cache.peek(&key).is_some_and(|k| k.id == i.id);
-                        let seen = self.seen_misses;
-                        let this = cx.weak_entity();
-                        gpui::canvas(
-                            |_, _, _| (),
-                            move |_, _, window, cx| {
-                                if husk {
-                                    if gpui::kitab_image_misses() != seen {
-                                        // After this frame: a refresh
-                                        // asked for while drawing is
-                                        // dropped.
-                                        window.defer(cx, |window, _| window.refresh());
-                                    }
-                                } else if shown {
-                                    let first = painted.borrow().is_empty();
-                                    painted.borrow_mut().push(key);
-                                    // Once the frame is done, not at the
-                                    // next one: a window left alone draws
-                                    // no next frame.
-                                    if first {
-                                        window.defer(cx, move |_, cx| {
-                                            let _ = this.update(cx, |r, _| r.slim_painted());
-                                        });
-                                    }
-                                }
-                            },
-                        )
-                        .absolute()
-                        .top_0()
-                        .left_0()
-                        .size_0()
-                    }))
-                    .children(self.markup_overlay(ix, ppt))
-                    .children(self.note_pins(ix, ppt, &st, cx))
-                    .children(self.deleted_outlines(ix, ppt, &st))
-                    .children(self.bookmark_ribbon(ix, &st))
-                    .children(self.speech_marks(ix, ppt, &st))
-                    .children(self.selection_marks(ix, ppt, &st))
-                    .children(self.find_marks(ix, ppt, &st))
-                    .children(self.link_marks(ix, ppt, &st, cx))
-                    .children(self.select_layer(ix, ppt, &st, cx))
-                    .children(self.form_layer(ix, ppt, &st, cx)),
-            )
-            .into_any_element()
+            .pb(px(GAP / 2.0));
+        let first = self.page_sheet(ix, window, cx);
+        match self.row_partner(ix) {
+            None => row.child(first).into_any_element(),
+            Some(p) => {
+                let second = self.page_sheet(p, window, cx);
+                if self.spread_rtl {
+                    row.child(second).child(first).into_any_element()
+                } else {
+                    row.child(first).child(second).into_any_element()
+                }
+            }
+        }
     }
 
     // ── actions ───────────────────────────────────────────────────────────
@@ -2016,6 +2138,7 @@ impl Render for Reader {
                 self.relayout(cx);
             }
         }
+        self.spread_rtl = self.right_to_left(cx);
         // Page colour or theme changed: the pages are drawn again in it.
         let tint = self.page_tint(cx);
         if tint != self.drawn_tint {
@@ -2379,6 +2502,9 @@ impl Render for Reader {
             .on_action(cx.listener(|r, _: &FitPage, _, cx| r.set_zoom(ZoomMode::FitPage, cx)))
             .on_action(cx.listener(|r, _: &FitWidth, _, cx| r.set_zoom(ZoomMode::FitWidth, cx)))
             .on_action(cx.listener(|r, _: &ActualSize, _, cx| r.set_zoom(ZoomMode::ActualSize, cx)))
+            .on_action(cx.listener(|r, _: &SinglePage, _, cx| r.set_spread(Spread::Single, cx)))
+            .on_action(cx.listener(|r, _: &TwoPages, _, cx| r.set_spread(Spread::Two, cx)))
+            .on_action(cx.listener(|r, _: &BookView, _, cx| r.set_spread(Spread::Book, cx)))
             .on_action(cx.listener(|r, _: &RotateRight, _, cx| r.rotate(true, cx)))
             .on_action(cx.listener(|r, _: &RotateLeft, _, cx| r.rotate(false, cx)))
             .child({

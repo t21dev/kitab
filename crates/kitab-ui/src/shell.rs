@@ -3336,6 +3336,9 @@ impl Render for Workspace {
                     ws.activate(prev, window, cx)
                 }
             }))
+            .on_action(cx.listener(|ws, _: &SaveCopyWithMarks, window, cx| {
+                ws.save_copy_with_marks(window, cx)
+            }))
             .on_action(cx.listener(|ws, _: &MoveTabLeft, _, cx| ws.move_active_tab(-1, cx)))
             .on_action(cx.listener(|ws, _: &MoveTabRight, _, cx| ws.move_active_tab(1, cx)))
             .on_action(cx.listener(|ws, _: &ShowHome, window, cx| ws.show_home(window, cx)))
@@ -4348,15 +4351,32 @@ impl Workspace {
                 zoom("Fit page", "Ctrl+0", ZoomMode::FitPage),
                 zoom("Actual size", "Ctrl+1", ZoomMode::ActualSize),
                 MenuItem::Separator,
-                MenuItem::new("Go to page…", {
-                    let reader = reader.clone();
-                    move |window: &mut Window, cx: &mut App| {
-                        reader.update(cx, |r, cx| r.edit_page(window, cx))
-                    }
-                })
-                .icon("hash")
-                .key("Ctrl+G"),
             ]);
+            if reader.read(cx).can_spread() {
+                let now = reader.read(cx).spread();
+                let spread = |label: &'static str, key: &'static str, s: crate::reader::Spread| {
+                    let reader = reader.clone();
+                    MenuItem::new(label, move |_, cx: &mut App| {
+                        reader.update(cx, |r, cx| r.set_spread(s, cx))
+                    })
+                    .key(key)
+                    .checked(now == s)
+                };
+                items.extend([
+                    spread("Single page", "Ctrl+6", crate::reader::Spread::Single),
+                    spread("Two pages", "Ctrl+7", crate::reader::Spread::Two),
+                    spread("Book view", "Ctrl+8", crate::reader::Spread::Book),
+                    MenuItem::Separator,
+                ]);
+            }
+            items.extend([MenuItem::new("Go to page…", {
+                let reader = reader.clone();
+                move |window: &mut Window, cx: &mut App| {
+                    reader.update(cx, |r, cx| r.edit_page(window, cx))
+                }
+            })
+            .icon("hash")
+            .key("Ctrl+G")]);
         }
         if !selecting {
             items.extend([

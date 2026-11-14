@@ -160,13 +160,18 @@ impl Reader {
                 continue;
             };
             let (y, t, bt) = (f32::from(p.y), f32::from(b.top()), f32::from(b.bottom()));
-            let d = if y < t {
-                t - y
-            } else if y > bt {
-                y - bt
-            } else {
-                0.0
+            let (x, l, r) = (f32::from(p.x), f32::from(b.left()), f32::from(b.right()));
+            let off = |v: f32, lo: f32, hi: f32| {
+                if v < lo {
+                    lo - v
+                } else if v > hi {
+                    v - hi
+                } else {
+                    0.0
+                }
             };
+            // Pages side by side are level: the one across settles it.
+            let d = off(y, t, bt) + off(x, l, r);
             if best.is_none_or(|(bd, ..)| d < bd) {
                 best = Some((d, ix, b));
             }

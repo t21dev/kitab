@@ -493,6 +493,51 @@ impl Workspace {
         .detach();
     }
 
+    /// Save a copy of the PDF with the marks and filled-in fields, leaving
+    /// the file itself as it is (the marks stay unsaved in it).
+    pub(super) fn save_copy_with_marks(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(reader) = self.active_reader().cloned() else {
+            return;
+        };
+        let r = reader.read(cx);
+        if !r.is_pdf() {
+            return;
+        }
+        let (src, unlock) = (r.path.clone(), r.unlock());
+        let (marks, edits) = r.pending_marks();
+        if marks.is_empty() && edits.is_empty() {
+            self.toast("There are no marks to save yet.", false, None, cx);
+            return;
+        }
+        let rx =
+            cx.prompt_for_new_path(&dir_of(&src), Some(&format!("{} (marked).pdf", stem(&src))));
+        let engine = self.engine.clone();
+        cx.spawn_in(window, async move |this, cx| {
+            let Ok(Ok(Some(mut out))) = rx.await else {
+                return;
+            };
+            if out.extension().is_none() {
+                out.set_extension("pdf");
+            }
+            // The same file: that's Save (Ctrl+S), which reopens it after.
+            if out == src {
+                let _ = reader.update(cx, |r, cx| r.save_marks(cx));
+                return;
+            }
+            let result = cx
+                .background_spawn(async move {
+                    engine
+                        .write_marks(&src, unlock.as_deref(), &marks, &edits, &out)
+                        .map(|_| out)
+                })
+                .await;
+            let _ = this.update(cx, |ws, cx| {
+                ws.report(result, "Saved a copy with your marks to", cx)
+            });
+        })
+        .detach();
+    }
+
     pub(super) fn extract_view(
         &mut self,
         st: &Style,

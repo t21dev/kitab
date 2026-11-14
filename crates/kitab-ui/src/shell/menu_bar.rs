@@ -87,6 +87,7 @@ const MENUS: &[BarMenu] = &[
             ),
             None,
             row!("Save marks into the PDF", "Ctrl+S", Pdf, SaveMarks),
+            row!("Save a copy with marks…", "", Pdf, SaveCopyWithMarks),
             row!(
                 "Save pages as a new PDF…",
                 "Ctrl+Shift+E",
@@ -128,6 +129,10 @@ const MENUS: &[BarMenu] = &[
             row!("Fit width", "Ctrl+2", Doc, FitWidth),
             row!("Fit page", "Ctrl+0", Doc, FitPage),
             row!("Actual size", "Ctrl+1", Doc, ActualSize),
+            None,
+            row!("Single page", "Ctrl+6", Doc, SinglePage),
+            row!("Two pages side by side", "Ctrl+7", Doc, TwoPages),
+            row!("Book view", "Ctrl+8", Doc, BookView),
             None,
             row!("Rotate clockwise", "Ctrl+Shift+=", Doc, RotateRight),
             row!("Rotate counter-clockwise", "Ctrl+Shift+-", Doc, RotateLeft),

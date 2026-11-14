@@ -6,6 +6,11 @@
 //! thread and shown in place, keeping the reading position. Tabs in the
 //! background aren't looked at, so idle cost doesn't grow with tabs
 //! (AGENTS.md rule 4). Not while editing in Kitab: the editor owns the text.
+//!
+//! PDFs (and comics, DjVu, XPS) are looked at the same way: a file written
+//! again (LaTeX building it, a download finishing) opens again at the same
+//! place once it has stopped changing, unless marks or form fields not yet
+//! saved would be lost.
 
 use super::*;
 
@@ -30,7 +35,11 @@ impl Reader {
     /// Start looking (when shown, or when a shown tab's Markdown finished
     /// opening). A newer start or `set_watched(false)` ends this loop.
     pub(super) fn start_watch(&mut self, cx: &mut Context<Self>) {
-        if !self.watched || self.md.is_none() {
+        if !self.watched {
+            return;
+        }
+        if self.md.is_none() {
+            self.start_page_watch(cx);
             return;
         }
         let generation = self.watch_gen;
@@ -89,5 +98,81 @@ impl Reader {
             }
         })
         .detach();
+    }
+
+    /// A page document's file changing on disk: reopen it in place.
+    fn start_page_watch(&mut self, cx: &mut Context<Self>) {
+        let pages = self.status == Status::Open
+            && self.doc.is_some()
+            && self.info.as_ref().is_some_and(|i| !i.reflowable);
+        if !pages {
+            return;
+        }
+        let generation = self.watch_gen;
+        let path = self.path.clone();
+        let stamp = |p: &std::path::Path| {
+            let m = std::fs::metadata(p).ok()?;
+            Some((m.modified().ok()?, m.len()))
+        };
+        cx.spawn(async move |this, cx| {
+            let p = path.clone();
+            let mut known = cx.background_spawn(async move { stamp(&p) }).await;
+            // A new stamp seen once; reloaded when the next look agrees.
+            let mut settling = None;
+            loop {
+                cx.background_executor().timer(EVERY).await;
+                let live = this.update(cx, |r, _| {
+                    r.watched && r.watch_gen == generation && !r.closing
+                });
+                if !matches!(live, Ok(true)) {
+                    return;
+                }
+                let p = path.clone();
+                let now = cx.background_spawn(async move { stamp(&p) }).await;
+                // Gone for a moment (written by delete-and-create): wait.
+                if now.is_none() || now == known {
+                    settling = None;
+                    continue;
+                }
+                if settling != now {
+                    settling = now;
+                    continue;
+                }
+                known = now;
+                settling = None;
+                let reopened = this.update(cx, |r, cx| r.reload_from_disk(cx));
+                if matches!(reopened, Ok(true)) {
+                    // The reopened document starts its own watch.
+                    return;
+                }
+            }
+        })
+        .detach();
+    }
+
+    /// The file changed on disk: open it again where you are. False when
+    /// it can't now (edits not yet saved into it, a save running).
+    fn reload_from_disk(&mut self, cx: &mut Context<Self>) -> bool {
+        if self.has_unsaved_edits() || self.markup_saving() || self.status != Status::Open {
+            return false;
+        }
+        self.save_now(cx);
+        if let Some(doc) = self.doc.take() {
+            let engine = self.engine.clone();
+            cx.background_spawn(async move { engine.close(doc) })
+                .detach();
+        }
+        self.form.fields.clear();
+        self.form.typing = None;
+        self.form.choosing = None;
+        self.file_annots = None;
+        self.cache.clear();
+        self.layers = layer::Layers::default();
+        self.generation += 1;
+        let password = self.unlock.clone();
+        self.open(password, cx);
+        self.load_file_size(cx);
+        cx.notify();
+        true
     }
 }

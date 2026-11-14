@@ -3,7 +3,9 @@
 //! Presentation mode (F5, PLAN.md Phase 3): one page at a time, fitted to the
 //! whole screen on black, nothing else drawn. Right, Down, Space, PgDn, N, a
 //! click or the wheel go forward; Left, Up, PgUp, P or a right click go back;
-//! Home and End jump; Esc or F5 ends it on the page you were showing. Pages
+//! Home and End jump; a page number then Enter goes there; B (or .) blanks
+//! the screen black and W (or ,) white, any key brings the page back; the
+//! pointer hides when still. Esc or F5 ends it on the page you were showing. Pages
 //! come from the reader's renderer and share its byte-bounded cache; the next
 //! page is rendered ahead so a click never waits.
 
@@ -18,7 +20,16 @@ pub(super) struct Present {
     /// The last wheel step: one swipe of a touchpad sends many events, and
     /// should turn one page.
     pub last_wheel: Option<std::time::Instant>,
+    /// The screen blanked: black (true) or white (false).
+    pub blank: Option<bool>,
+    /// A page number being typed (Enter goes there).
+    pub typed: String,
+    /// When the pointer last moved: it hides after a moment still.
+    pub moved: std::time::Instant,
 }
+
+/// The pointer hides once still this long.
+const POINTER_IDLE: std::time::Duration = std::time::Duration::from_secs(2);
 
 /// Wheel events closer than this to the last step turn no page.
 const WHEEL_GAP: std::time::Duration = std::time::Duration::from_millis(350);
@@ -46,6 +57,9 @@ impl Reader {
             page,
             shown: Arc::new(AtomicU64::new(page as u64)),
             last_wheel: None,
+            blank: None,
+            typed: String::new(),
+            moved: std::time::Instant::now(),
         });
         cx.emit(ReaderEvent::Presenting(true));
         cx.notify();
@@ -118,6 +132,44 @@ impl Reader {
         (self.cache.any_for_page(ix as u32, self.rotation), shown)
     }
 
+    /// Keys presenting takes before the page's own: page numbers, Enter,
+    /// Backspace, and B / W to blank the screen (any key brings it back).
+    fn present_key(&mut self, e: &gpui::KeyDownEvent, cx: &mut Context<Self>) {
+        let Some(p) = self.present.as_mut() else {
+            return;
+        };
+        let k = &e.keystroke;
+        if k.modifiers.control || k.modifiers.alt || k.modifiers.platform {
+            return;
+        }
+        if p.blank.is_some() {
+            p.blank = None;
+            cx.stop_propagation();
+            cx.notify();
+            return;
+        }
+        match k.key.as_str() {
+            d if d.len() == 1 && d.as_bytes()[0].is_ascii_digit() => {
+                if p.typed.len() < 6 {
+                    p.typed.push_str(d);
+                }
+            }
+            "backspace" if !p.typed.is_empty() => {
+                p.typed.pop();
+            }
+            "enter" if !p.typed.is_empty() => {
+                let n = std::mem::take(&mut p.typed).parse::<usize>().unwrap_or(1);
+                self.present_go(n.saturating_sub(1), cx);
+            }
+            "b" | "." => p.blank = Some(true),
+            "w" | "," => p.blank = Some(false),
+            "escape" if !p.typed.is_empty() => p.typed.clear(),
+            _ => return,
+        }
+        cx.stop_propagation();
+        cx.notify();
+    }
+
     /// The whole reader while presenting.
     pub(super) fn present_view(
         &mut self,
@@ -133,6 +185,12 @@ impl Reader {
             let _ = self.present_image(page + 1, area, window, cx);
         }
         crate::fire_first_paint(window, cx);
+        let (blank, typed, still) = self
+            .present
+            .as_ref()
+            .map_or((None, String::new(), false), |p| {
+                (p.blank, p.typed.clone(), p.moved.elapsed() >= POINTER_IDLE)
+            });
         div()
             .id("reader")
             .key_context(READER)
@@ -141,8 +199,29 @@ impl Reader {
             .flex()
             .items_center()
             .justify_center()
+            .relative()
             .bg(gpui::black())
-            .cursor(gpui::CursorStyle::Arrow)
+            .cursor(if still {
+                gpui::CursorStyle::None
+            } else {
+                gpui::CursorStyle::Arrow
+            })
+            .capture_key_down(cx.listener(|r, e: &gpui::KeyDownEvent, _, cx| r.present_key(e, cx)))
+            .on_mouse_move(cx.listener(|r, _: &gpui::MouseMoveEvent, _, cx| {
+                let Some(p) = r.present.as_mut() else { return };
+                let was_still = p.moved.elapsed() >= POINTER_IDLE;
+                p.moved = std::time::Instant::now();
+                if was_still {
+                    cx.notify();
+                }
+                // Look again once it could have gone still.
+                let timer = cx.background_executor().timer(POINTER_IDLE);
+                cx.spawn(async move |this, cx| {
+                    timer.await;
+                    let _ = this.update(cx, |_, cx| cx.notify());
+                })
+                .detach();
+            }))
             .on_action(cx.listener(|r, _: &NextPage, _, cx| r.present_step(true, cx)))
             .on_action(cx.listener(|r, _: &PrevPage, _, cx| r.present_step(false, cx)))
             .on_action(cx.listener(|r, _: &PageRight, _, cx| {
@@ -190,6 +269,29 @@ impl Reader {
                     .bg(gpui::white())
                     .children(image.map(|i| img(ImageSource::Render(i)).size_full())),
             )
+            .when_some(blank, |d, black| {
+                d.child(div().absolute().inset_0().bg(if black {
+                    gpui::black()
+                } else {
+                    gpui::white()
+                }))
+            })
+            .when(!typed.is_empty(), |d| {
+                // The page number being typed, small in a corner.
+                d.child(
+                    div()
+                        .absolute()
+                        .bottom(px(24.0))
+                        .right(px(28.0))
+                        .px(px(12.0))
+                        .py(px(6.0))
+                        .rounded(px(8.0))
+                        .bg(gpui::black().opacity(0.7))
+                        .text_color(gpui::white())
+                        .text_size(px(18.0))
+                        .child(format!("Page {typed}")),
+                )
+            })
             .into_any_element()
     }
 }

@@ -111,6 +111,21 @@ pub const COMMANDS: &[Command] = &[
     cmd!("View", "Zoom in", "bigger larger magnify", true, ZoomIn),
     cmd!("View", "Zoom out", "smaller", true, ZoomOut),
     cmd!("View", "Fit page", "whole", true, FitPage),
+    cmd!("View", "Single page", "one page layout", true, SinglePage),
+    cmd!(
+        "View",
+        "Two pages side by side",
+        "facing spread double layout",
+        true,
+        TwoPages
+    ),
+    cmd!(
+        "View",
+        "Book view",
+        "cover spread facing double layout manga comic",
+        true,
+        BookView
+    ),
     cmd!("View", "Fit width", "wide", true, FitWidth),
     cmd!("View", "Actual size", "100 one", true, ActualSize),
     cmd!("View", "Rotate clockwise", "turn right", true, RotateRight),
@@ -203,6 +218,13 @@ pub const COMMANDS: &[Command] = &[
         SaveMarks
     ),
     cmd!(
+        "Mark up",
+        "Save a copy with marks…",
+        "export annotations duplicate save as",
+        true,
+        SaveCopyWithMarks
+    ),
+    cmd!(
         "Markdown",
         "Edit beside the preview",
         "markdown editor write",
@@ -244,6 +266,9 @@ pub const COMMANDS: &[Command] = &[
 /// missing, else higher is better. Letters must appear in order; a run of
 /// letters, a word start and an early start all score more.
 pub fn score(query: &str, text: &str) -> Option<i32> {
+    // Very long titles aren't worth scanning letter by letter.
+    let text: String = text.chars().take(200).collect();
+    let text = text.as_str();
     let q: Vec<char> = query
         .to_lowercase()
         .chars()

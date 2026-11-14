@@ -1,25 +1,42 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 //! The command palette (Ctrl+K / Ctrl+Shift+P, DESIGN.md § Command palette):
-//! a field over a list of commands with their keys. Enter runs the chosen
+//! a field over a list of commands with their keys. Typing also finds open
+//! tabs, recent files and the document's headings. Enter runs the chosen
 //! one on the page that was focused before; Up and Down choose; Esc closes.
 
 use super::Workspace;
 use crate::actions::{CloseOverlay, OVERLAY};
-use crate::palette::{COMMANDS, matches};
+use crate::palette::{COMMANDS, matches, score};
 use crate::shortcuts;
 use crate::style::Style;
 use crate::text_field::{FieldEvent, TextField, new_field};
 use gpui::{
     AnyElement, Context, ElementId, Entity, FontWeight, InteractiveElement, IntoElement,
-    KeyDownEvent, MouseButton, ParentElement, ScrollHandle, StatefulInteractiveElement, Styled,
-    Subscription, Window, div, prelude::FluentBuilder, px,
+    KeyDownEvent, MouseButton, ParentElement, ScrollHandle, SharedString,
+    StatefulInteractiveElement, Styled, Subscription, Window, div, prelude::FluentBuilder, px,
 };
+
+/// One row of the palette.
+#[derive(Clone)]
+pub(super) enum Hit {
+    /// An index into COMMANDS.
+    Command(usize),
+    /// An open tab (its index then), by title.
+    Tab(usize, String),
+    /// A file from Recent.
+    Recent(std::path::PathBuf, String),
+    /// A heading in the document showing: its page (or Markdown block).
+    Heading(u32, String),
+}
+
+/// At most this many tabs, recent files and headings each (commands first).
+const EXTRA_MAX: usize = 6;
 
 pub(super) struct Palette {
     field: Entity<TextField>,
-    /// Indexes into COMMANDS, best first.
-    hits: Vec<usize>,
+    /// Best first.
+    hits: Vec<Hit>,
     selected: usize,
     scroll: ScrollHandle,
     /// Per opening, so its entrance plays each time.
@@ -51,9 +68,9 @@ impl Workspace {
             |ws, field, e: &FieldEvent, window, cx| match e {
                 FieldEvent::Changed => {
                     let q = field.read(cx).text();
-                    let doc = ws.active.is_some();
+                    let hits = ws.palette_hits(&q, cx);
                     if let Some(p) = ws.palette.as_mut() {
-                        p.hits = matches(&q, doc);
+                        p.hits = hits;
                         p.selected = 0;
                         p.scroll.scroll_to_item(0);
                     }
@@ -63,9 +80,10 @@ impl Workspace {
                 FieldEvent::Cancel => ws.close_palette(window, cx),
             },
         );
+        let hits = self.palette_hits("", cx);
         self.palette = Some(Palette {
             field,
-            hits: matches("", self.active.is_some()),
+            hits,
             selected: 0,
             scroll: ScrollHandle::new(),
             serial: OPENED.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
@@ -86,13 +104,106 @@ impl Workspace {
         });
     }
 
-    /// Run the chosen command (or `pick`), on whatever had focus before.
+    /// Commands for `q`, then (once something is typed) the open tabs,
+    /// recent files and headings it matches, each best first.
+    fn palette_hits(&self, q: &str, cx: &Context<Self>) -> Vec<Hit> {
+        let mut hits: Vec<Hit> = matches(q, self.active.is_some())
+            .into_iter()
+            .map(Hit::Command)
+            .collect();
+        if q.trim().is_empty() {
+            return hits;
+        }
+        let best = |mut found: Vec<(i32, Hit)>| {
+            found.sort_by_key(|h| std::cmp::Reverse(h.0));
+            found.into_iter().take(EXTRA_MAX).map(|h| h.1)
+        };
+        let tabs: Vec<(i32, Hit)> = self
+            .tabs
+            .iter()
+            .enumerate()
+            .filter_map(|(i, t)| {
+                let title = t.read(cx).title().to_string();
+                Some((score(q, &title)?, Hit::Tab(i, title)))
+            })
+            .collect();
+        let open: Vec<std::path::PathBuf> =
+            self.tabs.iter().map(|t| t.read(cx).path.clone()).collect();
+        let recent: Vec<(i32, Hit)> = self
+            .recent
+            .iter()
+            .filter(|r| !r.missing && !open.contains(&r.path))
+            .filter_map(|r| {
+                Some((
+                    score(q, &r.title)?,
+                    Hit::Recent(r.path.clone(), r.title.clone()),
+                ))
+            })
+            .collect();
+        let mut headings = Vec::new();
+        if let Some(r) = self.active_reader() {
+            fn walk(items: &[kitab_core::OutlineItem], q: &str, out: &mut Vec<(i32, Hit)>) {
+                for it in items {
+                    if out.len() > 2000 {
+                        return;
+                    }
+                    if let (Some(page), Some(s)) = (it.page, score(q, &it.title)) {
+                        out.push((s, Hit::Heading(page, it.title.clone())));
+                    }
+                    walk(&it.children, q, out);
+                }
+            }
+            walk(r.read(cx).outline(), q, &mut headings);
+        }
+        // A tab or heading named exactly as typed beats a command that
+        // merely contains the letters.
+        let mut extra: Vec<Hit> = best(tabs)
+            .chain(best(headings))
+            .chain(best(recent))
+            .collect();
+        let lead = extra
+            .iter()
+            .position(|h| match h {
+                Hit::Tab(_, t) | Hit::Recent(_, t) | Hit::Heading(_, t) => {
+                    t.to_lowercase().starts_with(&q.trim().to_lowercase())
+                }
+                Hit::Command(_) => false,
+            })
+            .map(|i| extra.remove(i));
+        hits.extend(extra);
+        if let Some(lead) = lead {
+            hits.insert(0, lead);
+        }
+        hits
+    }
+
+    /// Run the chosen row (or `pick`), on whatever had focus before.
     fn run_palette(&mut self, pick: Option<usize>, window: &mut Window, cx: &mut Context<Self>) {
         let Some(p) = self.palette.as_ref() else {
             return;
         };
-        let Some(&ix) = p.hits.get(pick.unwrap_or(p.selected)) else {
+        let Some(hit) = p.hits.get(pick.unwrap_or(p.selected)).cloned() else {
             return;
+        };
+        let ix = match hit {
+            Hit::Command(ix) => ix,
+            Hit::Tab(i, _) => {
+                self.close_palette(window, cx);
+                self.activate(i, window, cx);
+                return;
+            }
+            Hit::Recent(path, _) => {
+                self.close_palette(window, cx);
+                self.open_tab(path, window, cx);
+                return;
+            }
+            Hit::Heading(page, _) => {
+                self.close_palette(window, cx);
+                if let Some(r) = self.active_reader().cloned() {
+                    r.update(cx, |r, cx| r.jump_to(page, cx));
+                }
+                return;
+            }
         };
         let action = (COMMANDS[ix].action)();
         self.close_palette(window, cx);
@@ -146,12 +257,58 @@ impl Workspace {
                     .py(px(14.0))
                     .text_size(st.px(|m| m.ui_text))
                     .text_color(st.c(|c| c.faint))
-                    .child("No command by that name"),
+                    .child("Nothing by that name"),
             );
         }
-        for (row, &ix) in p.hits.iter().enumerate() {
-            let c = &COMMANDS[ix];
+        for (row, hit) in p.hits.iter().enumerate() {
             let on = row == p.selected;
+            let (group, label, ix): (&str, SharedString, Option<usize>) = match hit {
+                Hit::Command(ix) => (COMMANDS[*ix].group, COMMANDS[*ix].label.into(), Some(*ix)),
+                Hit::Tab(_, t) => ("Tab", t.clone().into(), None),
+                Hit::Recent(_, t) => ("Recent", t.clone().into(), None),
+                Hit::Heading(_, t) => ("Contents", t.clone().into(), None),
+            };
+            let Some(ix) = ix else {
+                list = list.child(
+                    div()
+                        .id(ElementId::NamedInteger("palette-other".into(), row as u64))
+                        .flex()
+                        .items_center()
+                        .gap(px(12.0))
+                        .h(st.px(|m| m.list_row))
+                        .px(px(10.0))
+                        .rounded(st.px(|m| m.control_radius))
+                        .when(on, |d| d.bg(st.c(|c| c.hover)))
+                        .cursor_pointer()
+                        .on_click(cx.listener(move |ws, _, window, cx| {
+                            ws.run_palette(Some(row), window, cx)
+                        }))
+                        .child(
+                            div()
+                                .w(px(64.0))
+                                .flex_none()
+                                .text_size(px(11.5))
+                                .text_color(st.c(|c| c.accent))
+                                .child(group.to_string()),
+                        )
+                        .child(
+                            div()
+                                .flex_1()
+                                .min_w_0()
+                                .truncate()
+                                .text_size(st.px(|m| m.ui_text))
+                                .text_color(if on {
+                                    st.c(|c| c.text)
+                                } else {
+                                    st.c(|c| c.muted)
+                                })
+                                .child(label),
+                        ),
+                );
+                continue;
+            };
+            let _ = (group, label);
+            let c = &COMMANDS[ix];
             let action = (c.action)();
             // keymap.json's binding when it set one (it comes last); else the
             // first default, the main one (Ctrl+W before Ctrl+F4).

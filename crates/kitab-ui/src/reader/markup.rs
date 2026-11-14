@@ -1194,6 +1194,22 @@ impl Reader {
     }
 
     /// A save is running.
+    /// The marks, field edits and deletions not yet saved into the file.
+    pub fn pending_marks(&self) -> (Vec<Mark>, Vec<kitab_core::AnnotEdit>) {
+        let marks = self.markup.marks.iter().map(|p| p.mark.clone()).collect();
+        let edits = kitab_core::latest_edits(&self.form.edits)
+            .into_iter()
+            .map(kitab_core::AnnotEdit::Field)
+            .chain(
+                self.markup
+                    .deleted
+                    .iter()
+                    .map(|&(page, index)| kitab_core::AnnotEdit::Delete { page, index }),
+            )
+            .collect();
+        (marks, edits)
+    }
+
     pub fn markup_saving(&self) -> bool {
         self.markup.saving
     }
