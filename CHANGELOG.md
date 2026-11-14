@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Read aloud has a panel: the dock's speaker opens play and pause, a sentence back or on, stop, speed, tone and voice. A new speed, tone or voice is heard at once while reading. "Follow the voice" can be turned off, so scrolling elsewhere isn't pulled back.
+- Markdown files read aloud, block by block; the block being read is shaded. Code and diagrams are skipped.
+- Two pages side by side (Ctrl+7) and book view, the cover alone then pairs (Ctrl+8), for PDFs, comics, DjVu and XPS; Ctrl+6 goes back to one page. In the page menu and the View menu too.
+- Settings › Home › When Kitab starts: the tabs you had open, the last file you read, or Home.
+- Settings › Appearance › Match the system's light or dark mode, with a light and a dark theme of your choice.
+- Settings › Reading › Page colour for PDFs, comics, DjVu and XPS: Dark (night reading; pictures keep their colours) or your theme's colours.
+- Settings › Reading › Read comics right to left (manga).
+- Settings › Reading › Code font, from your system's monospace fonts.
+- The command palette (Ctrl+K) also finds open tabs, recent files and the document's headings.
+- A PDF that changes on disk (a LaTeX build, a download finishing) opens again at the same place.
+- Save a copy with marks…: marks and filled-in fields go into a new file and the open one is left as it is.
+- Presentation mode: type a page number and Enter to go there; B or W blanks the screen black or white; the pointer hides when still.
+- Home: Remove from Home, and Locate… for a file that has moved (its reading place, bookmarks and marks follow it). Library search finds books by title, author or file name, opened or not.
+- The "can't open" screen shows the file's path and offers Locate… or Try again, Show in folder, Remove from Home and Close tab.
+- Contents entries fold and unfold. A heading with no words shows as "Untitled section".
+- Esc leaves Focus mode, and entering it says how. Ctrl+F starts with the selected words. Ctrl+Shift+PgUp / PgDn move the tab; Ctrl+Q quits on Windows and Linux.
+
+### Changed
+- Very deep zoom draws only what's in view, sharp, in tiles: pages past about 40 megapixels showed soft or blank before.
+- Restoring many tabs opens the one you were reading first and the others after it.
+- Code and math use the system's own fonts on macOS and Linux.
+
+### Fixed
+- Tabs no longer vanish when Kitab is started by opening a file (common right after a reinstall): the file joins the tabs you had.
+- A tab on a drive that's unplugged keeps its place instead of being dropped.
+- Closing a tab now frees its document; before, it stayed open (and in memory) until Kitab quit.
+- Close others and Close to the right ask before losing unsaved edits.
+- Closing a tab from Home keeps you on Home, and closing another tab keeps the one you're reading.
+- Zoom, rotation and the place on the page are kept when Kitab quits.
+- settings.json can no longer be damaged by two saves at once; an unreadable one is kept as settings.json.bad.
+- A library that can't be opened is reported instead of showing an empty Home.
+- Library search: forgotten books leave the index, re-indexing a book no longer scans the whole index, one unreadable page no longer stops a book being indexed, and Clear history also clears reading time, search text and covers.
+- A cover image cut short is drawn again instead of failing for good.
+- The voice preview no longer cuts off a reading; Esc stops reading, and switching tabs pauses it.
+
 ## [0.5.0] - 2026-11-14
 
 ### Added
