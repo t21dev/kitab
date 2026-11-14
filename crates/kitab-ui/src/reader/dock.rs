@@ -411,16 +411,16 @@ impl Reader {
                         )
                     })
                     .when(items.read_aloud && self.can_read_aloud(), |g| {
+                        // The speaker opens read aloud's panel: play, skip,
+                        // speed, tone and voice, all changeable while reading.
                         let reading = self.reading_aloud();
-                        let (glyph, tip) = match reading {
-                            None => ("speaker", "Read aloud  Ctrl+Shift+U"),
-                            Some(false) => ("pause", "Pause reading  Ctrl+Shift+U"),
-                            Some(true) => ("play", "Carry on reading  Ctrl+Shift+U"),
-                        };
+                        let glyph = if reading == Some(false) { "pause" } else { "speaker" };
                         g.child(
                             dock_button("dock-read-aloud", glyph, reading.is_some(), st)
-                                .tip(tip)
-                                .on_click(cx.listener(|r, _, _, cx| r.toggle_read_aloud(cx))),
+                                .tip("Read aloud  Ctrl+Shift+U")
+                                .on_click(cx.listener(|_, e: &gpui::ClickEvent, _, cx| {
+                                    cx.emit(ReaderEvent::SpeechMenu(e.position()))
+                                })),
                         )
                         .when(reading.is_some(), |g| {
                             g.child(

@@ -49,6 +49,8 @@ use tools_ui::ToolsState;
 /// Writes settings.json (the app passes it in; called off the UI thread).
 /// The typography panel's height, near enough to place it above the dock.
 const TYPE_MENU_H: f32 = 182.0;
+/// The read-aloud panel's height, likewise.
+const SPEECH_MENU_H: f32 = 318.0;
 
 pub struct SettingsSink(pub Arc<dyn Fn(String) + Send + Sync>);
 
@@ -384,6 +386,16 @@ impl Workspace {
     }
 }
 
+/// `title`, or `placeholder` when it has no words (an empty heading).
+fn untitled(title: impl Into<SharedString>, placeholder: &'static str) -> SharedString {
+    let title = title.into();
+    if title.trim().is_empty() {
+        placeholder.into()
+    } else {
+        title
+    }
+}
+
 /// What became of a file from the last session.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum SessionFile {
@@ -692,6 +704,9 @@ impl Workspace {
                     ReaderEvent::ContextMenu(at) => this.page_menu(reader.clone(), *at, window, cx),
                     ReaderEvent::MoreMenu(at) => this.more_menu(Some(*at), window, cx),
                     ReaderEvent::TypeMenu(at) => this.type_menu(reader.clone(), *at, window, cx),
+                    ReaderEvent::SpeechMenu(at) => {
+                        this.speech_menu(reader.clone(), *at, window, cx)
+                    }
                     ReaderEvent::OpenPath(path) => this.open_tab(path.clone(), window, cx),
                     ReaderEvent::Presenting(on) => this.set_presenting(*on, window, cx),
                     ReaderEvent::Print => this.open_print(window, cx),
@@ -1506,7 +1521,12 @@ impl Workspace {
                         .overflow_hidden()
                         .whitespace_nowrap()
                         .text_ellipsis()
-                        .child(item.title),
+                        // A heading with no words still has a place in the
+                        // list: say so rather than show a blank row.
+                        .when(item.title.trim().is_empty(), |d| {
+                            d.italic().text_color(st.c(|c| c.faint))
+                        })
+                        .child(untitled(item.title, "Untitled section")),
                 )
                 // Markdown entries point at blocks, not pages: no number.
                 .children(item.page.filter(|_| !markdown).map(|p| {
@@ -1804,7 +1824,10 @@ impl Workspace {
                             .overflow_hidden()
                             .whitespace_nowrap()
                             .text_ellipsis()
-                            .child(b.title),
+                            .when(b.title.trim().is_empty(), |d| {
+                                d.italic().text_color(st.c(|c| c.faint))
+                            })
+                            .child(untitled(b.title, "Untitled bookmark")),
                     )
                     .child(
                         div()
@@ -3266,7 +3289,22 @@ impl Workspace {
     /// Change the look, redraw, and save settings.json off the UI thread.
     pub(crate) fn change_style(&mut self, f: &dyn Fn(&mut Style), cx: &mut Context<Self>) {
         let scale_before = Style::get(cx).ui_scale;
+        let voice_before = {
+            let r = &Style::get(cx).read_aloud;
+            (r.voice.clone(), r.rate, r.pitch)
+        };
         f(cx.global_mut::<Style>());
+        // A new voice, speed or tone while a document reads: heard at once
+        // (the sentence being read starts again with it).
+        let voice_now = {
+            let r = &Style::get(cx).read_aloud;
+            (r.voice.clone(), r.rate, r.pitch)
+        };
+        if voice_now != voice_before {
+            for t in self.tabs.clone() {
+                t.update(cx, |r, cx| r.read_aloud_settings_changed(cx));
+            }
+        }
         let scale = Style::get(cx).ui_scale;
         if scale != scale_before {
             // A new interface size: the windows take it now. The message is
@@ -4383,6 +4421,170 @@ impl Workspace {
             point(at.x + px(14.0), at.y + px(22.0))
         };
         self.open_menu(at, true, 260.0, items, window, cx);
+    }
+
+    /// The dock's speaker: read aloud's controls (play, pause, a sentence
+    /// back or on, stop), its speed, tone and voice, and whether the page
+    /// follows the voice. Changes are heard at once while reading.
+    fn speech_menu(
+        &mut self,
+        reader: Entity<Reader>,
+        at: Point<Pixels>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let controls = {
+            let reader = reader.clone();
+            MenuItem::Custom(Rc::new(move |st: &Style, cx: &mut App| {
+                let state = reader.read(cx).reading_aloud();
+                let act = |f: fn(&mut Reader, &mut Context<Reader>)| {
+                    let reader = reader.clone();
+                    move |_: &mut Window, cx: &mut App| reader.update(cx, f)
+                };
+                let (play_icon, play_tip) = match state {
+                    Some(false) => ("pause", "Pause  Ctrl+Shift+U"),
+                    Some(true) => ("play", "Carry on  Ctrl+Shift+U"),
+                    None => ("play", "Read aloud  Ctrl+Shift+U"),
+                };
+                let reading = state.is_some();
+                menu::tool_row(
+                    "speech-controls",
+                    vec![
+                        vec![
+                            Tool::new(
+                                "skip-back",
+                                "Previous sentence",
+                                act(|r, cx| r.skip_sentence(-1, cx)),
+                            )
+                            .disabled(!reading),
+                            Tool::new(play_icon, play_tip, act(|r, cx| r.toggle_read_aloud(cx)))
+                                .on(state == Some(false)),
+                            Tool::new(
+                                "skip-forward",
+                                "Next sentence",
+                                act(|r, cx| r.skip_sentence(1, cx)),
+                            )
+                            .disabled(!reading),
+                        ],
+                        vec![
+                            Tool::new(
+                                "stop",
+                                "Stop reading  Esc",
+                                act(|r, cx| r.stop_read_aloud(cx)),
+                            )
+                            .disabled(!reading),
+                        ],
+                    ],
+                    None,
+                    None,
+                    st,
+                )
+            }))
+        };
+        let ws = cx.weak_entity();
+        let speeds = {
+            let ws = ws.clone();
+            MenuItem::Custom(Rc::new(move |st: &Style, _cx: &mut App| {
+                let now = st.read_aloud.rate;
+                let choices = crate::settings::ReadAloud::SPEEDS
+                    .into_iter()
+                    .map(|v| {
+                        let ws = ws.clone();
+                        let click: crate::settings_view::Click = Box::new(move |_, cx| {
+                            let _ = ws.update(cx, |ws, cx| {
+                                ws.change_style(&|s: &mut Style| s.read_aloud.rate = v, cx)
+                            });
+                        });
+                        (
+                            SharedString::from(format!("{v}\u{d7}")),
+                            (now - v).abs() < 0.01,
+                            click,
+                        )
+                    })
+                    .collect();
+                div()
+                    .px(px(6.0))
+                    .py(px(4.0))
+                    .flex()
+                    .child(crate::settings_view::segmented(choices, st))
+                    .into_any_element()
+            }))
+        };
+        let tones = {
+            let ws = ws.clone();
+            MenuItem::Custom(Rc::new(move |st: &Style, _cx: &mut App| {
+                let now = st.read_aloud.pitch;
+                let choices = crate::settings::ReadAloud::TONES
+                    .into_iter()
+                    .map(|(name, v)| {
+                        let ws = ws.clone();
+                        let click: crate::settings_view::Click = Box::new(move |_, cx| {
+                            let _ = ws.update(cx, |ws, cx| {
+                                ws.change_style(&|s: &mut Style| s.read_aloud.pitch = v, cx)
+                            });
+                        });
+                        (SharedString::from(name), (now - v).abs() < 0.01, click)
+                    })
+                    .collect();
+                div()
+                    .px(px(6.0))
+                    .py(px(4.0))
+                    .flex()
+                    .child(crate::settings_view::segmented(choices, st))
+                    .into_any_element()
+            }))
+        };
+        let voice_name = {
+            let r = &Style::get(cx).read_aloud;
+            if r.voice.is_empty() || r.voice_name.is_empty() {
+                "System default".to_string()
+            } else {
+                r.voice_name.clone()
+            }
+        };
+        let voice = MenuItem::new(
+            format!("Voice: {voice_name}"),
+            self.on_ws(cx, move |ws, window, cx| ws.voice_menu(at, window, cx)),
+        )
+        .icon("speaker");
+        let follow = MenuItem::new(
+            "Follow the voice",
+            self.on_ws(cx, |ws, _, cx| {
+                ws.change_style(
+                    &|s: &mut Style| s.read_aloud.follow = !s.read_aloud.follow,
+                    cx,
+                )
+            }),
+        )
+        .checked(Style::get(cx).read_aloud.follow);
+        let settings = MenuItem::new(
+            "More in Settings",
+            self.on_ws(cx, |ws, window, cx| {
+                ws.open_settings_at(crate::settings_view::Section::Reading, window, cx)
+            }),
+        )
+        .icon("settings");
+        let items = vec![
+            MenuItem::Heading("Read aloud".into()),
+            controls,
+            MenuItem::Heading("Speed".into()),
+            speeds,
+            MenuItem::Heading("Tone".into()),
+            tones,
+            MenuItem::Separator,
+            voice,
+            follow,
+            settings,
+        ];
+        // Above the button when the dock is low in the window, below it
+        // when it's high; lined up with the button's right edge.
+        let h = f32::from(window.viewport_size().height);
+        let at = if f32::from(at.y) > h / 2.0 {
+            point(at.x + px(14.0), at.y - px(SPEECH_MENU_H + 22.0))
+        } else {
+            point(at.x + px(14.0), at.y + px(22.0))
+        };
+        self.open_menu(at, true, 300.0, items, window, cx);
     }
 
     /// Settings › Reading › Read aloud › Voice: the system's voices by

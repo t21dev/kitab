@@ -114,6 +114,8 @@ pub enum ReaderEvent {
     MoreMenu(Point<Pixels>),
     /// Markdown's typography panel (typeface and text size), at the dock's button.
     TypeMenu(Point<Pixels>),
+    /// Read aloud's panel (controls, speed, tone, voice), at the dock's speaker.
+    SpeechMenu(Point<Pixels>),
     /// A link in a Markdown document points at another file: open it in a tab.
     OpenPath(PathBuf),
     /// Zoom in a book changed the text size (points), for every book.
@@ -2052,10 +2054,15 @@ impl Render for Reader {
             .on_action(cx.listener(|r, _: &Copy, _, cx| r.copy_selection(cx)))
             .on_action(cx.listener(|r, _: &ClearSelection, _, cx| {
                 // Esc closes a footnote, then puts the pen down, then clears
-                // the selection.
+                // the selection, then stops reading aloud.
                 if r.close_note(cx) {
                 } else if r.markup.open {
                     r.toggle_markup(cx)
+                } else if r.select.range().is_none()
+                    && r.md_sel.range().is_none()
+                    && r.reading_aloud().is_some()
+                {
+                    r.stop_read_aloud(cx)
                 } else {
                     r.clear_selection(cx)
                 }

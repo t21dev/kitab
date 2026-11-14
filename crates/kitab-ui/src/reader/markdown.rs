@@ -305,6 +305,20 @@ impl Reader {
         };
         let el = block_el(&d, block, 0, cx);
         let last = ix + 1 == md.doc.blocks.len();
+        // Read aloud: the block being read is shaded, with a rule beside it.
+        let reading = self.speech_block() == Some(ix);
+        let column = div()
+            .w_full()
+            .max_w(px(COLUMN * scale.max(0.5)))
+            .when(reading, |d| {
+                d.bg(st.c(|c| c.accent).opacity(0.10))
+                    .border_l_2()
+                    .border_color(st.c(|c| c.accent))
+                    .rounded(px(4.0))
+                    .ml(px(-10.0))
+                    .pl(px(8.0))
+            })
+            .child(el);
         div()
             .w_full()
             .flex()
@@ -320,7 +334,7 @@ impl Reader {
                     r.md_select_down(e, cx)
                 }),
             )
-            .child(div().w_full().max_w(px(COLUMN * scale.max(0.5))).child(el))
+            .child(column)
             .into_any_element()
     }
 }

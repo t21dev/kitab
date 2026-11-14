@@ -5,9 +5,12 @@
 //! a time and page after page. The sentence being read is shaded and its
 //! word marked, and the pages follow along.
 //!
-//! One document reads at a time: starting another (or the preview in
-//! Settings) takes the voice over, and the first one simply finds itself
-//! stopped. Nothing is loaded until read aloud is first used.
+//! Markdown reads block by block: the block being read is shaded (its text
+//! isn't laid out as page characters, so there is no word to mark).
+//!
+//! One document reads at a time: starting another takes the voice over, and
+//! the first one simply finds itself stopped. The voice preview waits while a
+//! document reads. Nothing is loaded until read aloud is first used.
 
 use super::Reader;
 use super::geom::rect_to_view;
@@ -26,6 +29,8 @@ const EMPTY_PAGES_MAX: u32 = 30;
 static SPEAKER: OnceLock<Speaker> = OnceLock::new();
 /// The reading that has the voice now (0: none).
 static OWNER: AtomicU64 = AtomicU64::new(0);
+/// The preview's serial, when it was the last to take the voice.
+static PREVIEW: AtomicU64 = AtomicU64::new(0);
 static NEXT: AtomicU64 = AtomicU64::new(1);
 /// The system's voices, once asked for.
 static VOICES: Mutex<Option<Result<Vec<Voice>, String>>> = Mutex::new(None);
@@ -57,10 +62,22 @@ pub(crate) fn load_voices() -> Result<Vec<Voice>, String> {
     v
 }
 
-/// Settings' Preview: a sentence in the chosen voice, speed and tone. It
-/// takes the voice from any document reading.
+/// Whether a document is reading aloud now (paused or not).
+pub(crate) fn document_reading() -> bool {
+    let owner = OWNER.load(Ordering::SeqCst);
+    owner != 0 && owner != PREVIEW.load(Ordering::SeqCst)
+}
+
+/// Settings' Preview: a sentence in the chosen voice, speed and tone. While
+/// a document reads, nothing: the reading itself picks the change up (the
+/// caller restarts its sentence) instead of being cut off.
 pub(crate) fn preview(s: &crate::settings::ReadAloud) {
-    OWNER.store(NEXT.fetch_add(1, Ordering::SeqCst), Ordering::SeqCst);
+    if document_reading() {
+        return;
+    }
+    let serial = NEXT.fetch_add(1, Ordering::SeqCst);
+    PREVIEW.store(serial, Ordering::SeqCst);
+    OWNER.store(serial, Ordering::SeqCst);
     speaker().speak(
         "This is how Kitab reads your documents aloud.".into(),
         s.voice(),
@@ -83,6 +100,9 @@ pub(super) struct SpeechState {
     /// The word being spoken: page characters `a..b`.
     word: Option<(usize, usize)>,
     empty_pages: u32,
+    /// Going back a sentence from a page's first: start the page loaded next
+    /// at its last sentence.
+    from_end: bool,
     tx: Option<smol::channel::Sender<(u64, Event)>>,
 }
 
@@ -104,9 +124,102 @@ impl Drop for SpeechState {
 }
 
 impl Reader {
-    /// Read aloud works here: pages with text (not Markdown, for now).
+    /// Read aloud works here: pages with text, and Markdown (not while
+    /// it's being edited).
     pub fn can_read_aloud(&self) -> bool {
-        self.status == Status::Open && self.md.is_none()
+        self.status == Status::Open && self.md.as_ref().is_none_or(|m| m.edit.is_none())
+    }
+
+    /// Markdown: the block being read aloud (shaded).
+    pub(super) fn speech_block(&self) -> Option<usize> {
+        (self.md.is_some() && self.speech.mine() && !self.speech.waiting)
+            .then_some(self.speech.page as usize)
+    }
+
+    /// Pages to read: a Markdown file's blocks, else the document's pages.
+    fn speech_pages(&self) -> usize {
+        match self.md.as_ref() {
+            Some(md) => md.doc.blocks.len(),
+            None => self.page_count(),
+        }
+    }
+
+    /// Markdown block `ix` as characters to read: its text, one "line" per
+    /// line of it. Code, diagrams and the like say nothing.
+    fn md_chars(&self, ix: usize) -> Option<Vec<kitab_core::TextChar>> {
+        use kitab_md::Block;
+        let block = self.md.as_ref()?.doc.blocks.get(ix)?;
+        if matches!(
+            block,
+            Block::Code { .. }
+                | Block::Mermaid(_)
+                | Block::Math(_)
+                | Block::Rule
+                | Block::Frontmatter(_)
+        ) {
+            return Some(Vec::new());
+        }
+        let mut line = 0;
+        let mut out = Vec::new();
+        for ch in kitab_md::plain_text(block).chars() {
+            let (ch, next) = match ch {
+                '\n' => (' ', line + 1),
+                '\t' => (' ', line),
+                c => (c, line),
+            };
+            out.push(kitab_core::TextChar {
+                ch,
+                rect: RectPt::default(),
+                line,
+            });
+            line = next;
+        }
+        Some(out)
+    }
+
+    /// Skip `delta` sentences (-1 back, +1 on), across pages; 0 says the
+    /// current one again (a new speed or voice is heard at once).
+    pub fn skip_sentence(&mut self, delta: i32, cx: &mut Context<Self>) {
+        if !self.speech.mine() || self.speech.waiting {
+            return;
+        }
+        // The sentence being spoken is cut off; its last events arrive
+        // under the old number and are ignored.
+        let serial = NEXT.fetch_add(1, Ordering::SeqCst);
+        OWNER.store(serial, Ordering::SeqCst);
+        self.speech.serial = serial;
+        speaker().stop();
+        let at = self.speech.at as i64 + i64::from(delta);
+        if at < 0 {
+            if self.speech.page == 0 {
+                self.speech.at = 0;
+                self.speak_sentence(cx);
+            } else {
+                self.speech.from_end = true;
+                self.read_page(self.speech.page - 1, 0, cx);
+            }
+        } else if (at as usize) >= self.speech.sentences.len() {
+            self.read_next_page(cx);
+        } else {
+            self.speech.at = at as usize;
+            self.speak_sentence(cx);
+        }
+        cx.notify();
+    }
+
+    /// The voice, speed or tone changed while reading: say the current
+    /// sentence again with it (a paused reading picks it up on resume).
+    pub fn read_aloud_settings_changed(&mut self, cx: &mut Context<Self>) {
+        if self.reading_aloud() == Some(false) {
+            self.skip_sentence(0, cx);
+        }
+    }
+
+    /// The tab went out of sight: a reading in it pauses.
+    pub(super) fn pause_read_aloud(&mut self, cx: &mut Context<Self>) {
+        if self.reading_aloud() == Some(false) {
+            self.toggle_read_aloud(cx);
+        }
     }
 
     /// `Some(paused)` while this document is reading aloud.
@@ -145,6 +258,13 @@ impl Reader {
     }
 
     fn start_read_aloud(&mut self, cx: &mut Context<Self>) {
+        if self.md.is_some() {
+            // From the selected block, else the block at the top.
+            let top = self.list.logical_scroll_top().item_ix;
+            let block = self.md_sel.range().map_or(top, |((key, _), _)| key.0);
+            self.read_aloud_from(block as u32, 0, cx);
+            return;
+        }
         let (page, from) = match self.select.range() {
             Some(((p, i), _)) => (p, i),
             None => self.first_visible_char(),
@@ -236,16 +356,32 @@ impl Reader {
         self.speech.page = page;
         self.speech.from = from;
         self.speech.word = None;
-        let Some(chars) = self.layers.chars.get(&page).cloned() else {
-            self.speech.waiting = true;
-            self.ensure_chars(page, cx);
-            return;
+        let chars = if self.md.is_some() {
+            let Some(chars) = self.md_chars(page as usize) else {
+                self.end_reading(cx);
+                return;
+            };
+            chars
+        } else {
+            let Some(chars) = self.layers.chars.get(&page) else {
+                self.speech.waiting = true;
+                self.ensure_chars(page, cx);
+                return;
+            };
+            chars.to_vec()
         };
         self.speech.waiting = false;
         self.speech.sentences = sentences(&chars, from);
-        self.speech.at = 0;
+        self.speech.at = if std::mem::take(&mut self.speech.from_end) {
+            self.speech.sentences.len().saturating_sub(1)
+        } else {
+            0
+        };
         if self.speech.sentences.is_empty() {
-            self.speech.empty_pages += 1;
+            // A Markdown code block isn't a scanned page.
+            if self.md.is_none() {
+                self.speech.empty_pages += 1;
+            }
             self.read_next_page(cx);
         } else {
             self.speech.empty_pages = 0;
@@ -262,7 +398,7 @@ impl Reader {
 
     fn read_next_page(&mut self, cx: &mut Context<Self>) {
         let next = self.speech.page + 1;
-        if (next as usize) >= self.page_count() {
+        if (next as usize) >= self.speech_pages() {
             self.end_reading(cx);
             return;
         }
@@ -344,9 +480,25 @@ impl Reader {
         }
     }
 
-    /// Scroll so page character `ch` is in view, when it isn't.
+    /// Scroll so page character `ch` is in view, when it isn't (unless
+    /// following is off in the read-aloud panel).
     fn follow_speech(&mut self, page: u32, ch: usize, cx: &mut Context<Self>) {
+        if !Style::get(cx).read_aloud.follow {
+            return;
+        }
         let ix = page as usize;
+        if self.md.is_some() {
+            // The block, when it isn't on screen.
+            let view = self.list.viewport_bounds();
+            let shown = self.list.bounds_for_item(ix).is_some_and(|b| {
+                b.top() >= view.top() + px(self.top_inset) && b.top() < view.bottom() - px(160.0)
+            });
+            if !shown {
+                super::markdown::reveal_block(self, ix);
+                cx.notify();
+            }
+            return;
+        }
         let Some(rect) = self
             .layers
             .chars

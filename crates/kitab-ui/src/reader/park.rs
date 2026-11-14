@@ -19,6 +19,8 @@ const STAND_IN_PIXELS: u64 = 350_000;
 impl Reader {
     /// The workspace hid this tab. `keep_sharp`: it is the one left last.
     pub fn park(&mut self, keep_sharp: bool, cx: &mut Context<Self>) {
+        // Reading aloud in a tab you can't see: paused until you're back.
+        self.pause_read_aloud(cx);
         let was_parked = std::mem::replace(&mut self.parked, true);
         if !was_parked && let Some(doc) = self.doc {
             // Off the UI thread: it only queues a message per helper.
