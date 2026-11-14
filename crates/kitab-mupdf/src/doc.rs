@@ -652,6 +652,10 @@ pub(crate) fn annotations(doc: &OpenDoc) -> Result<Vec<kitab_core::FileAnnot>, S
 
 /// The page's links, in page points. Runs on a worker.
 pub(crate) fn links(doc: &OpenDoc, page: u32) -> Result<Vec<Link>, String> {
+    if let Some(crate::source::Source::Djvu(d)) = doc.source.as_deref() {
+        page_index(doc, page)?;
+        return Ok(crate::djvu::page_links(d, page as usize, doc.page_count));
+    }
     let page = doc
         .pdf
         .load_page(page_index(doc, page)?)

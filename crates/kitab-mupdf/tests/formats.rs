@@ -623,3 +623,81 @@ fn comics_and_djvu_draw_through_kitabs_page_source() {
     engine().close(pdf);
     let _ = std::fs::remove_file(&out);
 }
+
+#[test]
+fn djvu_links_go_to_pages_and_web_addresses() {
+    use djvu_rs::annotation::{Annotation, MapArea, Rect, Shape};
+    use djvu_rs::djvu_mut::DjVuDocumentMut;
+    use kitab_core::LinkTarget;
+
+    // The scan has no links: give page 1 three, in DjVu's own pixels
+    // (129 dpi, counted from the bottom).
+    let src = std::fs::read(fixtures_dir().join("other/11-scan-cyrillic.djvu")).unwrap();
+    let area = |url: &str, shape: Shape| MapArea {
+        url: url.into(),
+        target: None,
+        description: String::new(),
+        shape,
+        border: None,
+        highlight: None,
+        extra: Vec::new(),
+    };
+    let areas = [
+        area(
+            "#+2",
+            Shape::Rect(Rect {
+                x: 129,
+                y: 258,
+                width: 258,
+                height: 129,
+            }),
+        ),
+        area(
+            "https://example.org/",
+            Shape::Poly(vec![(0, 0), (129, 0), (129, 129)]),
+        ),
+        // Never followed: scripts, files.
+        area(
+            "javascript:alert(1)",
+            Shape::Rect(Rect {
+                x: 0,
+                y: 0,
+                width: 10,
+                height: 10,
+            }),
+        ),
+    ];
+    let mut doc = DjVuDocumentMut::from_bytes(&src).unwrap();
+    doc.page_mut(0)
+        .unwrap()
+        .set_annotations(&Annotation::default(), &areas);
+    let path = std::env::temp_dir().join(format!("kitab-djvu-links-{}.djvu", std::process::id()));
+    std::fs::write(&path, doc.into_bytes()).unwrap();
+
+    let (id, info) = engine().open(&path, None).unwrap();
+    let links = engine().links(id, 0).unwrap();
+    let h = info.page_sizes[0].h;
+    assert_eq!(links.len(), 2, "{links:?}");
+    // 129 px at 129 dpi is 72 pt.
+    let near = |a: f32, b: f32| (a - b).abs() < 0.5;
+    let r = links[0].rect;
+    assert_eq!(links[0].target, LinkTarget::Page { page: 2, y: None });
+    assert!(
+        near(r.x, 72.0) && near(r.w, 144.0) && near(r.h, 72.0),
+        "{r:?}"
+    );
+    assert!(near(r.y, h - 216.0), "{r:?}");
+    let r = links[1].rect;
+    assert_eq!(
+        links[1].target,
+        LinkTarget::Uri("https://example.org/".into())
+    );
+    assert!(
+        near(r.x, 0.0) && near(r.y, h - 72.0) && near(r.w, 72.0),
+        "{r:?}"
+    );
+    // Pages without links have none.
+    assert!(engine().links(id, 1).unwrap().is_empty());
+    engine().close(id);
+    let _ = std::fs::remove_file(&path);
+}
