@@ -90,6 +90,22 @@ pub trait Library: Send + Sync + 'static {
     fn save_session(&self, tabs: Vec<SessionTab>);
     /// Mark the session closed cleanly (on quit).
     fn end_session(&self);
+    /// Why the library couldn't be opened, in words for the user (once, at
+    /// start-up); `None` when it's fine.
+    fn problem(&self) -> Option<String> {
+        None
+    }
+    /// Quitting: save these reading states and (when given) the tabs, ahead
+    /// of [`Library::end_session`]. Must not wait for the work to finish:
+    /// the window is closing.
+    fn save_on_quit(&self, states: Vec<(PathBuf, ReadingState)>, tabs: Option<Vec<SessionTab>>) {
+        for (path, state) in states {
+            self.save_state(&path, state);
+        }
+        if let Some(tabs) = tabs {
+            self.save_session(tabs);
+        }
+    }
     /// The tabs of the previous session.
     fn last_session(&self) -> Vec<SessionTab>;
     /// Marks kept for `path` (not yet saved into the file, or a format Kitab

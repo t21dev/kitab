@@ -18,6 +18,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("migrations/0002_marks.sql"),
     include_str!("migrations/0003_search_stats.sql"),
     include_str!("migrations/0004_collections.sql"),
+    include_str!("migrations/0005_page_text_rowids.sql"),
 ];
 
 /// The schema version this build writes.

@@ -149,6 +149,9 @@ pub struct Workspace {
     /// The previous session's tabs are still loading: Home isn't the first
     /// thing to show, so it doesn't reveal the window.
     restoring: bool,
+    /// Restored tabs are still being opened one by one: the session isn't
+    /// saved until they all are.
+    restore_staging: bool,
     /// A setting picked from search: scrolled to and glowing.
     settings_found: Option<crate::settings_view::Found>,
     /// A dialog playing its exit (its id and serial) before it's dropped.
@@ -277,6 +280,7 @@ impl Workspace {
             sidebar_w: crate::layout::SIDEBAR_W,
             born: std::time::Instant::now(),
             restoring: false,
+            restore_staging: false,
             settings_found: None,
             modal_exit: None,
             modal_serials: std::collections::HashMap::new(),
@@ -300,19 +304,36 @@ impl Workspace {
             shelves: Default::default(),
         };
         this.start_library(window, cx);
+        // A library that didn't open looks like an empty Home: say why.
+        let library = this.library.clone();
+        cx.spawn(async move |this, cx| {
+            let problem = cx.background_spawn(async move { library.problem() }).await;
+            if let Some(text) = problem {
+                let _ = this.update(cx, |ws, cx| ws.toast(text, true, None, cx));
+            }
+        })
+        .detach();
         // Leaving the hex field ends the edit.
         let hex_blur = cx.on_blur(&this.hex.focus, window, |ws, _, cx| {
             ws.hex.edit = None;
             cx.notify();
         });
         this.subs.push(hex_blur);
-        if files.is_empty() {
-            // Start-up mode "Restore last session" (PLAN.md §4, the default): the
-            // previous tabs, read off the UI thread.
-            this.restore_session(window, cx);
-        } else {
-            for f in files {
-                this.open_tab(f, window, cx);
+        // Start-up mode (Settings › General, PLAN.md §4). Files Kitab was
+        // started with join the previous tabs instead of replacing them: the
+        // session they'd otherwise overwrite is the user's open books.
+        match (Style::get(cx).startup, files.is_empty()) {
+            (crate::settings::Startup::Restore, _) => {
+                this.restore_session(files, false, window, cx)
+            }
+            (crate::settings::Startup::LastFile, true) => {
+                this.restore_session(files, true, window, cx)
+            }
+            (_, true) => {}
+            (_, false) => {
+                for f in files {
+                    this.open_tab(f, window, cx);
+                }
             }
         }
         if this.tabs.is_empty() {
@@ -363,6 +384,27 @@ impl Workspace {
     }
 }
 
+/// What became of a file from the last session.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SessionFile {
+    Here,
+    /// Its folder is there but the file isn't: deleted or moved. Dropped.
+    Gone,
+    /// Its folder isn't there either: an unplugged drive or a share that's
+    /// offline. Kept, so the tab comes back when the drive does.
+    Away,
+}
+
+fn session_file(path: &std::path::Path) -> SessionFile {
+    if path.exists() {
+        SessionFile::Here
+    } else if path.parent().is_some_and(|d| d.is_dir()) {
+        SessionFile::Gone
+    } else {
+        SessionFile::Away
+    }
+}
+
 /// The window is about to close (or the app to quit). True when it may go
 /// now; false when unsaved changes are being asked about first, and the
 /// window is removed once that is answered.
@@ -370,6 +412,7 @@ fn confirm_close(me: &gpui::WeakEntity<Workspace>, window: &mut Window, cx: &mut
     save_window_place(crate::window_place(window), true, cx);
     // Unsaved Markdown edits or a form filled in: ask before they go.
     let Some(ws) = me.upgrade() else { return true };
+    ws.read(cx).save_for_quit(cx);
     let dirty: Vec<Entity<Reader>> = ws
         .read(cx)
         .tabs
@@ -448,32 +491,116 @@ impl Workspace {
         });
     }
 
-    fn restore_session(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    /// Open the previous session's tabs (all, or only the one that was
+    /// showing), then `extra` (files Kitab was started with) after them.
+    /// The tab to show opens first; the others follow once it has had time
+    /// to paint, so start-up costs one document however many tabs there were.
+    fn restore_session(
+        &mut self,
+        extra: Vec<PathBuf>,
+        only_active: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         self.restoring = true;
+        self.restore_staging = true;
         let library = self.library.clone();
         let handle = window.window_handle();
         cx.spawn(async move |this, cx| {
+            // Off the UI thread: the session, and a look at each file (a
+            // dead network share can take seconds to answer).
             let tabs = cx
-                .background_spawn(async move { library.last_session() })
+                .background_spawn(async move {
+                    let tabs = library.last_session();
+                    let keep = |t: &crate::library::SessionTab| match session_file(&t.path) {
+                        SessionFile::Here | SessionFile::Away => true,
+                        SessionFile::Gone => false,
+                    };
+                    let tabs: Vec<_> = tabs.into_iter().filter(keep).collect();
+                    if only_active {
+                        tabs.into_iter().filter(|t| t.active).take(1).collect()
+                    } else {
+                        tabs
+                    }
+                })
                 .await;
-            let _ = handle.update(cx, |_, window, cx| {
-                let _ = this.update(cx, |ws, cx| {
-                    ws.restoring = false;
-                    cx.notify();
-                    let mut active = None;
-                    for t in tabs.iter().filter(|t| t.path.exists()) {
-                        ws.open_tab(t.path.clone(), window, cx);
-                        if t.active {
-                            active = Some(ws.tabs.len() - 1);
+            let mut plan: Vec<PathBuf> = Vec::new();
+            let mut first = None;
+            for t in tabs {
+                if !plan.contains(&t.path) {
+                    if t.active {
+                        first = Some(plan.len());
+                    }
+                    plan.push(t.path);
+                }
+            }
+            // A file Kitab was started with shows; it goes after the old tabs.
+            for f in extra {
+                match plan.iter().position(|p| *p == f) {
+                    Some(i) => first = Some(i),
+                    None => {
+                        first = Some(plan.len());
+                        plan.push(f);
+                    }
+                }
+            }
+            let first = first.unwrap_or(0);
+            let opened = handle
+                .update(cx, |_, window, cx| {
+                    this.update(cx, |ws, cx| {
+                        ws.restoring = false;
+                        if let Some(p) = plan.get(first) {
+                            ws.open_tab(p.clone(), window, cx);
                         }
-                    }
-                    if let Some(i) = active {
-                        ws.activate(i, window, cx);
-                    }
-                });
+                        cx.notify();
+                    })
+                    .is_ok()
+                })
+                .unwrap_or(false);
+            if !opened {
+                return;
+            }
+            // The rest, in session order around the one already open, a
+            // few frames apart so the page that shows isn't kept waiting.
+            cx.background_executor()
+                .timer(Duration::from_millis(350))
+                .await;
+            for (i, path) in plan.iter().enumerate() {
+                if i == first {
+                    continue;
+                }
+                let done = handle
+                    .update(cx, |_, window, cx| {
+                        this.update(cx, |ws, cx| {
+                            let at = ws.restored_position(&plan, i, cx);
+                            ws.insert_tab(path.clone(), Some(at), false, window, cx);
+                        })
+                        .is_err()
+                    })
+                    .unwrap_or(true);
+                if done {
+                    return;
+                }
+                cx.background_executor()
+                    .timer(Duration::from_millis(40))
+                    .await;
+            }
+            let _ = this.update(cx, |ws, cx| {
+                ws.restore_staging = false;
+                ws.save_session(cx);
             });
         })
         .detach();
+    }
+
+    /// Where plan entry `i` goes in the strip: after the nearest earlier
+    /// entry that is open (the user may have moved or closed tabs meanwhile).
+    fn restored_position(&self, plan: &[PathBuf], i: usize, cx: &App) -> usize {
+        plan[..i]
+            .iter()
+            .rev()
+            .find_map(|p| self.tabs.iter().position(|t| t.read(cx).path == *p))
+            .map_or(0, |ix| ix + 1)
     }
 
     fn refresh_recent(&mut self, cx: &mut Context<Self>) {
@@ -491,32 +618,63 @@ impl Workspace {
     }
 
     fn save_session(&mut self, cx: &mut Context<Self>) {
-        let tabs: Vec<SessionTab> = self
-            .tabs
+        // Mid-restore the strip is half built: saving it would lose the
+        // tabs still to come if Kitab closed now. Saved once at the end.
+        if self.restore_staging {
+            return;
+        }
+        let tabs = self.session_tabs(cx);
+        let library = self.library.clone();
+        cx.background_spawn(async move { library.save_session(tabs) })
+            .detach();
+    }
+
+    fn session_tabs(&self, cx: &App) -> Vec<SessionTab> {
+        self.tabs
             .iter()
             .enumerate()
             .map(|(i, t)| SessionTab {
                 path: t.read(cx).path.clone(),
                 active: self.active == Some(i),
             })
-            .collect();
-        let library = self.library.clone();
-        cx.background_spawn(async move { library.save_session(tabs) })
-            .detach();
+            .collect()
     }
 
-    /// Save every tab's place (on quit).
-    pub fn save_all(&mut self, cx: &mut Context<Self>) {
-        for t in &self.tabs {
-            t.update(cx, |r, cx| r.save_now(cx));
-        }
-        self.save_session(cx);
+    /// The window is closing: every tab's place (zoom, rotation, scroll)
+    /// and the tabs themselves, handed to the library in one job before the
+    /// session is marked closed, so the quit waits for them.
+    fn save_for_quit(&self, cx: &App) {
+        let states: Vec<(PathBuf, kitab_core::ReadingState)> = self
+            .tabs
+            .iter()
+            .filter_map(|t| {
+                let r = t.read(cx);
+                Some((r.path.clone(), r.reading_state()?))
+            })
+            .collect();
+        // Mid-restore, the strip isn't the whole session yet: keep the saved one.
+        let tabs = (!self.restore_staging).then(|| self.session_tabs(cx));
+        self.library.save_on_quit(states, tabs);
     }
 
     pub fn open_tab(&mut self, path: PathBuf, window: &mut Window, cx: &mut Context<Self>) {
-        // Already open: switch to it.
+        self.insert_tab(path, None, true, window, cx);
+    }
+
+    /// Open `path` in a new tab at `at` (the end when `None`), showing it
+    /// when `show`. A file already open is switched to (when `show`).
+    fn insert_tab(
+        &mut self,
+        path: PathBuf,
+        at: Option<usize>,
+        show: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         if let Some(ix) = self.tabs.iter().position(|t| t.read(cx).path == path) {
-            self.activate(ix, window, cx);
+            if show {
+                self.activate(ix, window, cx);
+            }
             return;
         }
         let reader = open_reader(path, self.engine.clone(), self.library.clone(), window, cx);
@@ -561,9 +719,22 @@ impl Workspace {
                 }
             },
         ));
-        self.tabs.push(reader);
-        let ix = self.tabs.len() - 1;
-        self.activate(ix, window, cx);
+        let ix = at.unwrap_or(self.tabs.len()).min(self.tabs.len());
+        self.tabs.insert(ix, reader);
+        if show {
+            self.activate(ix, window, cx);
+        } else {
+            // The tab showing keeps showing; its index moves if this one
+            // went in before it. The new one waits out of sight.
+            if let Some(a) = self.active
+                && a >= ix
+            {
+                self.active = Some(a + 1);
+            }
+            self.watch_active(cx);
+            self.save_session(cx);
+            cx.notify();
+        }
     }
 
     fn activate(&mut self, ix: usize, window: &mut Window, cx: &mut Context<Self>) {
@@ -707,15 +878,7 @@ impl Workspace {
             });
         }
         let closing = self.tabs.remove(ix);
-        if self.tools.split.as_ref() == Some(&closing) {
-            self.tools.split = None;
-        }
-        closing.update(cx, |r, cx| r.save_now(cx));
-        // Its pages' GPU memory goes with it.
-        for image in closing.update(cx, |r, _| r.release_all()) {
-            let _ = window.drop_image(image);
-        }
-        self.remember_closed(closing.read(cx).path.clone());
+        self.retire_tab(&closing, window, cx);
         if self.tabs.is_empty() {
             self.show_home(window, cx);
         } else {
@@ -4456,22 +4619,83 @@ impl Workspace {
         }
     }
 
-    /// Close every tab whose index matches `close`.
+    /// A tab leaving the strip: its place saved, its pages' GPU memory
+    /// and its document let go, and it can come back with Ctrl+Shift+T.
+    fn retire_tab(&mut self, t: &Entity<Reader>, window: &mut Window, cx: &mut Context<Self>) {
+        if self.tools.split.as_ref() == Some(t) {
+            self.tools.split = None;
+        }
+        t.update(cx, |r, cx| r.save_now(cx));
+        for image in t.update(cx, |r, _| r.release_all()) {
+            let _ = window.drop_image(image);
+        }
+        t.update(cx, |r, cx| r.release_document(cx));
+        self.remember_closed(t.read(cx).path.clone());
+    }
+
+    /// Close every tab whose index matches `close`, asking first when any
+    /// of them has unsaved edits (as closing one tab does).
     fn close_where(
         &mut self,
         window: &mut Window,
         cx: &mut Context<Self>,
         close: impl Fn(usize) -> bool,
     ) {
+        let closing: Vec<Entity<Reader>> = (0..self.tabs.len())
+            .filter(|&i| close(i))
+            .map(|i| self.tabs[i].clone())
+            .collect();
+        let dirty: Vec<Entity<Reader>> = closing
+            .iter()
+            .filter(|t| t.read(cx).has_unsaved_edits())
+            .cloned()
+            .collect();
+        if dirty.is_empty() {
+            self.close_these(&closing, window, cx);
+            return;
+        }
+        let names: Vec<String> = dirty
+            .iter()
+            .map(|r| r.read(cx).title().to_string())
+            .collect();
+        let answer = window.prompt(
+            gpui::PromptLevel::Warning,
+            "Save your changes before closing these tabs?",
+            Some(&format!(
+                "Not saved yet: {}. They will be lost if you don't save them.",
+                names.join(", ")
+            )),
+            &["Save", "Don't save", "Cancel"],
+            cx,
+        );
+        cx.spawn_in(window, async move |this, cx| {
+            let choice = answer.await.ok();
+            if !matches!(choice, Some(0) | Some(1)) {
+                return;
+            }
+            let _ = this.update_in(cx, |ws, window, cx| {
+                if choice == Some(0) {
+                    for r in &dirty {
+                        r.update(cx, |r, cx| r.save_changes(cx));
+                    }
+                }
+                ws.close_these(&closing, window, cx);
+            });
+        })
+        .detach();
+    }
+
+    fn close_these(
+        &mut self,
+        closing: &[Entity<Reader>],
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let active = self.active.and_then(|i| self.tabs.get(i).cloned());
         let tabs = std::mem::take(&mut self.tabs);
-        for (i, t) in tabs.into_iter().enumerate() {
-            if close(i) {
-                if self.tools.split.as_ref() == Some(&t) {
-                    self.tools.split = None;
-                }
-                t.update(cx, |r, cx| r.save_now(cx));
-                self.remember_closed(t.read(cx).path.clone());
+        for t in tabs {
+            if closing.contains(&t) {
+                self.retire_tab(&t, window, cx);
             } else {
                 self.tabs.push(t);
             }

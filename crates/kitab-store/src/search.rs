@@ -32,6 +32,10 @@ pub fn fts_query(text: &str) -> Option<String> {
     (!words.is_empty()).then(|| words.join(" "))
 }
 
+/// Pages per document the index can hold: a page's row is
+/// `document_id * PAGE_SPAN + page`, so a document is one rowid range.
+const PAGE_SPAN: i64 = 1 << 20;
+
 impl Store {
     /// The file time the document's text was read at, if it's indexed.
     pub fn text_indexed(&self, id: DocumentId) -> Result<Option<i64>> {
@@ -49,14 +53,19 @@ impl Store {
     pub fn index_text(&mut self, id: DocumentId, mtime: i64, pages: &[String]) -> Result<()> {
         let now = self.now_ms();
         let tx = self.conn.transaction()?;
-        tx.execute("DELETE FROM page_text WHERE document_id = ?1", [id.0])?;
+        let first = id.0.saturating_mul(PAGE_SPAN);
+        tx.execute(
+            "DELETE FROM page_text WHERE rowid BETWEEN ?1 AND ?2",
+            [first, first.saturating_add(PAGE_SPAN - 1)],
+        )?;
         {
             let mut insert = tx.prepare_cached(
-                "INSERT INTO page_text (body, document_id, page) VALUES (?1, ?2, ?3)",
+                "INSERT INTO page_text (rowid, body, document_id, page) VALUES (?1, ?2, ?3, ?4)",
             )?;
-            for (i, body) in pages.iter().enumerate() {
+            for (i, body) in pages.iter().enumerate().take(PAGE_SPAN as usize) {
                 if !body.trim().is_empty() {
-                    insert.execute(params![body, id.0, i as i64])?;
+                    let page = i as i64;
+                    insert.execute(params![first + page, body, id.0, page])?;
                 }
             }
         }

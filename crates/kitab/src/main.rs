@@ -83,14 +83,29 @@ fn main() {
         .map(|text| {
             kitab_ui::Settings::from_json(&text).unwrap_or_else(|e| {
                 log::warn!("settings.json is not valid, using defaults: {e}");
+                // Kept beside it: the next save would otherwise overwrite
+                // every setting the user had.
+                if let Some(p) = &settings_path {
+                    let _ = std::fs::copy(p, p.with_extension("json.bad"));
+                }
                 kitab_ui::Settings::default()
             })
         })
         .unwrap_or_default();
+    // Saves come from several background tasks at once (a text-size step,
+    // the window moving): one at a time, and an older one that arrives late
+    // never overwrites a newer one.
+    let save_seq = Arc::new(std::sync::atomic::AtomicU64::new(0));
+    let written = Arc::new(std::sync::Mutex::new(0u64));
     let save_settings: Arc<dyn Fn(String) + Send + Sync> = Arc::new(move |json: String| {
-        if let Some(path) = &settings_path
-            && let Err(e) = write_atomically(path, &json)
-        {
+        let seq = save_seq.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
+        let Some(path) = &settings_path else { return };
+        let Ok(mut last) = written.lock() else { return };
+        if seq < *last {
+            return;
+        }
+        *last = seq;
+        if let Err(e) = write_atomically(path, &json) {
             log::warn!("could not save settings: {e}");
         }
     });

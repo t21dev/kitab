@@ -72,6 +72,13 @@ pub struct Style {
     pub md_text: u16,
     pub open_zoom: crate::settings::OpenZoom,
     pub new_tab: crate::settings::NewTab,
+    pub startup: crate::settings::Startup,
+    pub system_theme: bool,
+    pub light_theme: String,
+    pub dark_theme: String,
+    pub code_font: String,
+    pub comic_rtl: bool,
+    pub page_colour: crate::settings::PageColour,
     /// The main window's last place, saved with the settings.
     pub window: Option<crate::settings::WindowPlace>,
 }
@@ -129,6 +136,13 @@ impl Style {
             md_text: s.md_text,
             open_zoom: s.open_zoom,
             new_tab: s.new_tab,
+            startup: s.startup,
+            system_theme: s.system_theme,
+            light_theme: s.light_theme.clone(),
+            dark_theme: s.dark_theme.clone(),
+            code_font: s.code_font.clone(),
+            comic_rtl: s.comic_rtl,
+            page_colour: s.page_colour,
             window: s.window,
         };
         style.resolve_accent();
@@ -214,6 +228,13 @@ impl Style {
             md_text: self.md_text,
             open_zoom: self.open_zoom,
             new_tab: self.new_tab,
+            startup: self.startup,
+            system_theme: self.system_theme,
+            light_theme: self.light_theme.clone(),
+            dark_theme: self.dark_theme.clone(),
+            code_font: self.code_font.clone(),
+            comic_rtl: self.comic_rtl,
+            page_colour: self.page_colour,
             window: self.window,
         }
     }

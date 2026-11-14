@@ -41,6 +41,7 @@ const FROZEN: &[&str] = &[
     include_str!("schema/v2.sql"),
     include_str!("schema/v3.sql"),
     include_str!("schema/v4.sql"),
+    include_str!("schema/v5.sql"),
 ];
 
 /// The live migrations, read straight from the source tree.
@@ -49,11 +50,18 @@ const LIVE: &[&str] = &[
     include_str!("../src/migrations/0002_marks.sql"),
     include_str!("../src/migrations/0003_search_stats.sql"),
     include_str!("../src/migrations/0004_collections.sql"),
+    include_str!("../src/migrations/0005_page_text_rowids.sql"),
 ];
 
 /// One fixture builder per released schema version.
 type Builder = fn(&Connection);
-const FIXTURES: &[(u32, Builder)] = &[(1, build_v1), (2, build_v2), (3, build_v3), (4, build_v4)];
+const FIXTURES: &[(u32, Builder)] = &[
+    (1, build_v1),
+    (2, build_v2),
+    (3, build_v3),
+    (4, build_v4),
+    (5, build_v5),
+];
 
 fn normalise(s: &str) -> String {
     s.replace("\r\n", "\n")
@@ -131,6 +139,14 @@ fn build_v4(conn: &Connection) {
     .unwrap();
 }
 
+/// Kitab 0.6 (schema 5): page text keyed by document and page; nothing new
+/// to seed.
+fn build_v5(conn: &Connection) {
+    build_v4(conn);
+    conn.execute_batch(FROZEN[4]).unwrap();
+    conn.execute_batch("PRAGMA user_version = 5;").unwrap();
+}
+
 /// What every fixture's seed data must look like after migrating.
 fn check_seed(store: &mut Store) {
     let id = DocumentId(7);
@@ -191,6 +207,10 @@ fn check_seed(store: &mut Store) {
         let stats = store.reading_stats("2026-11-07", 7).unwrap();
         assert_eq!(stats.streak_days, 1);
         assert_eq!(stats.week_seconds, 600);
+        // Schema 5: the text moved to per-document rowids and leaves with
+        // its document. Re-indexing replaces it rather than doubling it.
+        store.index_text(id, 2, &["a lease".into()]).unwrap();
+        assert_eq!(store.search_text("lease", 10).unwrap().len(), 1);
     }
 
     // Schema 4: collections and watched folders, when the version had them.

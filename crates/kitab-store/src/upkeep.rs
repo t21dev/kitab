@@ -7,15 +7,18 @@ use crate::{Result, Store};
 
 impl Store {
     /// Forget what was read and when: the Recent list, saved reading
-    /// positions and closed tabs. Marks and bookmarks are the reader's own
-    /// work and stay, as do the documents they belong to and the session that
-    /// reopens today's tabs.
+    /// positions, closed tabs, reading time and the text kept for library
+    /// search. Marks and bookmarks are the reader's own work and stay, as do
+    /// the documents they belong to and the session that reopens today's tabs.
     pub fn clear_history(&mut self) -> Result<()> {
         let tx = self.conn.transaction()?;
         tx.execute_batch(
             "UPDATE documents SET last_opened_at = NULL;
              DELETE FROM reading_state;
-             DELETE FROM closed_tabs;",
+             DELETE FROM closed_tabs;
+             DELETE FROM reading_days;
+             DELETE FROM page_text;
+             DELETE FROM text_index;",
         )?;
         tx.commit()?;
         Ok(())

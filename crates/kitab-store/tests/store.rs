@@ -797,3 +797,39 @@ fn unwatching_a_folder_lets_go_of_what_only_it_brought_in() {
         [std::path::PathBuf::from("/scans/keep")]
     );
 }
+
+#[test]
+fn a_documents_text_goes_with_it_and_others_stay() {
+    let mut store = Store::open_in_memory().unwrap();
+    let a = store
+        .upsert_document(
+            &fake_ident(21),
+            Path::new("/a.pdf"),
+            &DocMeta::new(Format::Pdf),
+        )
+        .unwrap();
+    let b = store
+        .upsert_document(
+            &fake_ident(22),
+            Path::new("/b.pdf"),
+            &DocMeta::new(Format::Pdf),
+        )
+        .unwrap();
+    store
+        .index_text(a, 1, &["apple orchard".into(), "apple pie".into()])
+        .unwrap();
+    store.index_text(b, 1, &["apple cider".into()]).unwrap();
+    assert_eq!(store.search_text("apple", 10).unwrap().len(), 3);
+    // Re-indexing one book leaves the other's pages alone.
+    store.index_text(a, 2, &["pear".into()]).unwrap();
+    let hits = store.search_text("apple", 10).unwrap();
+    assert_eq!(hits.len(), 1);
+    assert_eq!(hits[0].document_id, b);
+    // Forgetting a book takes its text out of library search.
+    store.forget_document(b).unwrap();
+    assert!(store.search_text("apple", 10).unwrap().is_empty());
+    assert_eq!(store.search_text("pear", 10).unwrap().len(), 1);
+    // Clearing history clears the search text too.
+    store.clear_history().unwrap();
+    assert!(store.search_text("pear", 10).unwrap().is_empty());
+}

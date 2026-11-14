@@ -1306,6 +1306,12 @@ impl Reader {
 
     fn after_save(&mut self, result: Result<usize, String>, cx: &mut Context<Self>) {
         self.markup.saving = false;
+        if self.closing {
+            if let Err(e) = result {
+                log::warn!("saving marks failed: {e}");
+            }
+            return;
+        }
         match result {
             Ok(n) => {
                 // The file draws them now, and lists them.

@@ -387,12 +387,17 @@ impl DocEngine for MupdfEngine {
 
 // ── library ─────────────────────────────────────────────────────────────
 
+/// The last chunk of every complete PNG file (IEND and its CRC).
+const PNG_END: &[u8] = &[b'I', b'E', b'N', b'D', 0xAE, 0x42, 0x60, 0x82];
+
 type Job = Box<dyn FnOnce(&mut IoState) + Send>;
 
 struct IoState {
     store: Option<Store>,
     /// The session this run writes to; begun lazily, after the previous one was read.
     session: Option<SessionId>,
+    /// Why the database didn't open, in words for the user.
+    problem: Option<String>,
 }
 
 /// The library on an io thread that owns SQLite. If the database can't be
@@ -408,16 +413,22 @@ impl StoreLibrary {
         let _ = std::thread::Builder::new()
             .name("kitab-io".into())
             .spawn(move || {
+                let mut problem = None;
                 let store = db_path.and_then(|p| match Store::open(&p) {
                     Ok(s) => Some(s),
                     Err(e) => {
                         log::warn!("library database unavailable: {e}");
+                        problem = Some(match e {
+                            kitab_store::Error::SchemaTooNew { .. } => "Your library was saved by a newer Kitab, so this one can't read it. Nothing is lost: update Kitab to see it again.".to_string(),
+                            e => format!("Kitab couldn't open your library ({e}). Home, bookmarks and reading places won't be kept this time."),
+                        });
                         None
                     }
                 });
                 let mut state = IoState {
                     store,
                     session: None,
+                    problem,
                 };
                 while let Ok(job) = rx.recv() {
                     job(&mut state);
@@ -440,6 +451,45 @@ impl StoreLibrary {
         self.jobs.lock().ok()?.send(job).ok()?;
         rx.recv().ok()
     }
+
+    /// Queue `f` on the io thread without waiting for it. Jobs run in the
+    /// order they're queued, so a later [`Self::call`] waits for this one.
+    fn post(&self, f: impl FnOnce(&mut IoState) + Send + 'static) {
+        if let Ok(jobs) = self.jobs.lock() {
+            let _ = jobs.send(Box::new(f));
+        }
+    }
+}
+
+fn write_state(s: &mut IoState, path: &Path, state: &ReadingState) -> Option<()> {
+    let store = s.store.as_mut()?;
+    let doc = store.document_by_path(path).ok().flatten()?;
+    store.save_reading_state(doc.id, state).ok()
+}
+
+fn write_session(s: &mut IoState, tabs: &[SessionTab]) -> Option<()> {
+    let store = s.store.as_mut()?;
+    let session = match s.session {
+        Some(id) => id,
+        None => {
+            let id = store.begin_session().ok()?;
+            s.session = Some(id);
+            id
+        }
+    };
+    let records: Vec<TabRecord> = tabs
+        .iter()
+        .filter_map(|t| {
+            let doc = store.document_by_path(&t.path).ok().flatten()?;
+            Some(TabRecord {
+                document_id: doc.id,
+                pinned: false,
+                active: t.active,
+                scroll: None,
+            })
+        })
+        .collect();
+    store.save_session_tabs(session, &records).ok()
 }
 
 /// The most files one scan of the watched folders looks at, and how deep.
@@ -647,6 +697,10 @@ impl Library for StoreLibrary {
     }
 
     fn clear_history(&self) -> bool {
+        // Covers show what was read too; they're drawn again when needed.
+        if let Some(dir) = kitab_os::data_dir() {
+            let _ = std::fs::remove_dir_all(dir.join("covers"));
+        }
         self.call(|s| s.store.as_mut()?.clear_history().ok())
             .flatten()
             .is_some()
@@ -683,11 +737,7 @@ impl Library for StoreLibrary {
 
     fn save_state(&self, path: &Path, state: ReadingState) {
         let path = path.to_path_buf();
-        let _ = self.call(move |s| {
-            let store = s.store.as_mut()?;
-            let doc = store.document_by_path(&path).ok().flatten()?;
-            store.save_reading_state(doc.id, &state).ok()
-        });
+        let _ = self.call(move |s| write_state(s, &path, &state));
     }
 
     fn shelf(&self, kind: kitab_ui::ShelfKind) -> Vec<RecentItem> {
@@ -830,7 +880,12 @@ impl Library for StoreLibrary {
         let dir = kitab_os::data_dir()?.join("covers");
         let file = dir.join(format!("{:016x}.png", h.finish()));
         if let Ok(png) = std::fs::read(&file) {
-            return Some(png);
+            // A file cut short (a crash mid-write) would fail to show for
+            // good: drawn again instead.
+            if png.ends_with(PNG_END) {
+                return Some(png);
+            }
+            let _ = std::fs::remove_file(&file);
         }
         let ext = path.extension()?.to_str()?.to_ascii_lowercase();
         let png = kitab_thumb::render(kitab_thumb::Source::Path(path), &ext, size)
@@ -838,7 +893,10 @@ impl Library for StoreLibrary {
             .to_png()
             .ok()?;
         if std::fs::create_dir_all(&dir).is_ok() {
-            let _ = std::fs::write(&file, &png);
+            let tmp = file.with_extension(format!("{}.tmp", std::process::id()));
+            if std::fs::write(&tmp, &png).is_ok() && std::fs::rename(&tmp, &file).is_err() {
+                let _ = std::fs::remove_file(&tmp);
+            }
         }
         Some(png)
     }
@@ -927,30 +985,22 @@ impl Library for StoreLibrary {
     }
 
     fn save_session(&self, tabs: Vec<SessionTab>) {
-        let _ = self.call(move |s| {
-            let store = s.store.as_mut()?;
-            let session = match s.session {
-                Some(id) => id,
-                None => {
-                    let id = store.begin_session().ok()?;
-                    s.session = Some(id);
-                    id
-                }
-            };
-            let records: Vec<TabRecord> = tabs
-                .iter()
-                .filter_map(|t| {
-                    let doc = store.document_by_path(&t.path).ok().flatten()?;
-                    Some(TabRecord {
-                        document_id: doc.id,
-                        pinned: false,
-                        active: t.active,
-                        scroll: None,
-                    })
-                })
-                .collect();
-            store.save_session_tabs(session, &records).ok()
+        let _ = self.call(move |s| write_session(s, &tabs));
+    }
+
+    fn save_on_quit(&self, states: Vec<(PathBuf, ReadingState)>, tabs: Option<Vec<SessionTab>>) {
+        self.post(move |s| {
+            for (path, state) in &states {
+                write_state(s, path, state);
+            }
+            if let Some(tabs) = tabs {
+                write_session(s, &tabs);
+            }
         });
+    }
+
+    fn problem(&self) -> Option<String> {
+        self.call(|s| s.problem.clone()).flatten()
     }
 
     fn end_session(&self) {

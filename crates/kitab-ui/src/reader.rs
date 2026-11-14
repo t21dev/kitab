@@ -188,6 +188,8 @@ pub struct Reader {
     last_page: usize,
     /// A save is scheduled (debounced: at most one write per 2 s).
     save_scheduled: bool,
+    /// The tab has closed: its document is handed back and never reopened.
+    pub(crate) closing: bool,
     /// Where to go once the first layout has a viewport (restored reading state).
     restore: Option<ReadingState>,
     /// The page field (Ctrl+G or a click on the page number).
@@ -354,6 +356,7 @@ impl Reader {
             viewport: (0.0, 0.0),
             last_page: 0,
             save_scheduled: false,
+            closing: false,
             restore: None,
             page_focus,
             password_focus: cx.focus_handle(),
@@ -699,6 +702,23 @@ impl Reader {
         }
     }
 
+    /// The tab is closing: hand the document back to the engine (its
+    /// memory, helper copies and the file itself). Off the UI thread.
+    pub fn release_document(&mut self, cx: &mut Context<Self>) {
+        self.closing = true;
+        // A save into the PDF closes the document itself (and would open
+        // it again afterwards, which `closing` stops).
+        if self.markup_saving() {
+            self.doc = None;
+            return;
+        }
+        if let Some(doc) = self.doc.take() {
+            let engine = self.engine.clone();
+            cx.background_spawn(async move { engine.close(doc) })
+                .detach();
+        }
+    }
+
     /// Save in at most 2 s, once, however much the reader scrolls meanwhile.
     fn schedule_save(&mut self, cx: &mut Context<Self>) {
         if self.save_scheduled {
@@ -834,6 +854,7 @@ impl Reader {
         }
         self.zoom = zoom;
         self.relayout(cx);
+        self.schedule_save(cx);
     }
 
     /// A pinch (touch screen or touchpad): zoom by `factor`, continuously.
@@ -956,8 +977,11 @@ impl Reader {
                         for p in 0..pages {
                             match engine.page_text(doc, p) {
                                 Some(t) => out.push(t),
-                                // Closed while reading it: try next time.
-                                None if p > 0 => return,
+                                // Closed while reading it (the first page
+                                // no longer answers either): next time.
+                                None if p > 0 && engine.page_text(doc, 0).is_none() => return,
+                                // One page that can't be read keeps the
+                                // rest of the book searchable.
                                 None => out.push(String::new()),
                             }
                         }
@@ -1005,6 +1029,7 @@ impl Reader {
         self.rotation = (self.rotation + if clockwise { 90 } else { 270 }) % 360;
         self.cache.clear();
         self.relayout(cx);
+        self.schedule_save(cx);
     }
 
     /// Right or left arrow: next or previous page, the other way round in a

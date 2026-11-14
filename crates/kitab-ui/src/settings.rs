@@ -121,6 +121,33 @@ impl MdFace {
     }
 }
 
+/// What Kitab shows when it starts without a file (Settings › General).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Startup {
+    /// The tabs open when Kitab last closed (files it was started with join them).
+    #[default]
+    Restore,
+    /// Home, with no tabs.
+    Home,
+    /// Only the tab that was showing when Kitab last closed.
+    LastFile,
+}
+
+/// How the pages of PDFs, comics, DjVu and XPS are coloured (Settings ›
+/// Reading). Books, Markdown and text follow the theme already.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum PageColour {
+    /// As the file draws them.
+    #[default]
+    Original,
+    /// Light and dark swapped, colours kept (night reading).
+    Dark,
+    /// White paper takes the theme's page colour, black ink its text colour.
+    Theme,
+}
+
 /// What the tab bar's + does (Settings › Appearance › Tabs).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -430,6 +457,8 @@ pub struct ReadAloud {
     pub rate: f32,
     /// Tone, a multiple of the voice's own (0.5 to 1.5).
     pub pitch: f32,
+    /// Keep the spoken word in view (scrolling away turns it off for that reading).
+    pub follow: bool,
 }
 
 impl Default for ReadAloud {
@@ -439,6 +468,7 @@ impl Default for ReadAloud {
             voice_name: String::new(),
             rate: 1.0,
             pitch: 1.0,
+            follow: true,
         }
     }
 }
@@ -463,6 +493,7 @@ impl ReadAloud {
             voice_name: self.voice_name.chars().take(200).collect(),
             rate: p.rate,
             pitch: p.pitch,
+            follow: self.follow,
         }
     }
 
@@ -750,6 +781,16 @@ pub struct Settings {
     pub open_zoom: OpenZoom,
     /// What the tab bar's + does.
     pub new_tab: NewTab,
+    pub startup: Startup,
+    /// Follow the system's light or dark mode with `light_theme` / `dark_theme`.
+    pub system_theme: bool,
+    pub light_theme: String,
+    pub dark_theme: String,
+    /// The font for code and the Markdown editor; empty for the system's own.
+    pub code_font: String,
+    /// Comics read right to left (manga): the first page on the right.
+    pub comic_rtl: bool,
+    pub page_colour: PageColour,
     /// The main window's last place (none before the first close).
     pub window: Option<WindowPlace>,
 }
@@ -844,6 +885,13 @@ impl Default for Settings {
             md_text: 100,
             open_zoom: OpenZoom::FitWidth,
             new_tab: NewTab::Home,
+            startup: Startup::Restore,
+            system_theme: false,
+            light_theme: "light".into(),
+            dark_theme: "dark".into(),
+            code_font: String::new(),
+            comic_rtl: false,
+            page_colour: PageColour::Original,
             window: None,
         }
     }
@@ -904,7 +952,23 @@ struct File {
     md_text_size: u16,
     open_zoom: OpenZoom,
     new_tab: NewTab,
+    startup: Startup,
+    system_theme: bool,
+    light_theme: String,
+    dark_theme: String,
+    code_font: String,
+    comic_rtl: bool,
+    page_colour: PageColour,
     window: Option<WindowPlace>,
+}
+
+/// A built-in theme id, or `fallback` for one Kitab doesn't have.
+fn theme_id(id: String, fallback: &str) -> String {
+    if kitab_theme::BUILTIN_IDS.contains(&id.as_str()) {
+        id
+    } else {
+        fallback.into()
+    }
 }
 
 fn face_name(f: kitab_core::BookFace) -> &'static str {
@@ -1004,6 +1068,13 @@ impl From<Settings> for File {
             md_text_size: s.md_text,
             open_zoom: s.open_zoom,
             new_tab: s.new_tab,
+            startup: s.startup,
+            system_theme: s.system_theme,
+            light_theme: s.light_theme,
+            dark_theme: s.dark_theme,
+            code_font: s.code_font,
+            comic_rtl: s.comic_rtl,
+            page_colour: s.page_colour,
             window: s.window,
         }
     }
@@ -1073,6 +1144,13 @@ impl Settings {
             },
             open_zoom: f.open_zoom,
             new_tab: f.new_tab,
+            startup: f.startup,
+            system_theme: f.system_theme,
+            light_theme: theme_id(f.light_theme, "light"),
+            dark_theme: theme_id(f.dark_theme, "dark"),
+            code_font: f.code_font.chars().take(200).collect(),
+            comic_rtl: f.comic_rtl,
+            page_colour: f.page_colour,
             window: f.window,
         })
     }
@@ -1145,6 +1223,7 @@ mod tests {
                 voice_name: "Microsoft Zira".into(),
                 rate: 1.5,
                 pitch: 0.8,
+                follow: false,
             },
             home_layout: HomeLayout::List,
             cover_size: CoverSize::Large,
@@ -1157,6 +1236,13 @@ mod tests {
             md_text: 175,
             open_zoom: OpenZoom::FitPage,
             new_tab: NewTab::OpenFile,
+            startup: Startup::LastFile,
+            system_theme: true,
+            light_theme: "paper".into(),
+            dark_theme: "nord".into(),
+            code_font: "Cascadia Code".into(),
+            comic_rtl: true,
+            page_colour: PageColour::Dark,
             window: Some(WindowPlace {
                 x: 40.0,
                 y: 30.0,
