@@ -7,11 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-14
+
 ### Added
 - Comics in RAR and 7z (.cbr, .cb7), page by page like CBZ. Kitab goes by what the file really is, so a .cbr that is really a ZIP (common) or a .cbz that is really a RAR opens too. WebP pages draw as well. Password-protected and split (multi-part) archives are refused with a plain message. RAR is read with compcol's clean-room decoders: no RARLAB code, decode only.
-- DjVu (.djvu, .djv): scanned books at their own page size, sharp at every zoom (each page is drawn at the size it's shown). When the scan has a text layer, search, selection, copy and read aloud work; the bookmarks are the contents. Read with djvu-rs, written from the public DjVu specification.
+- DjVu (.djvu, .djv): scanned books at their own page size, sharp at every zoom (each page is drawn at the size it's shown). When the scan has a text layer, search, selection, copy and read aloud work; the bookmarks are the contents, and links inside pages work (to other pages and to web addresses). Read with djvu-rs, written from the public DjVu specification.
 - Thumbnails for the new types on Home, in Explorer and in Linux file managers; a comic's cover is unpacked without the rest of the archive.
 - File types: CBR, CB7 and DjVu in Settings › File types, the Windows installer and Store package, Linux and macOS, each with its own icon.
+
+### Changed
+- Building Kitab from source now needs Rust 1.95 or newer (it was 1.85), for the RAR, 7z and DjVu readers.
+
+### Fixed
+- Two signatures saved at the same moment no longer share one temporary file (one of them could fail to save).
 
 ## [0.4.2] - 2026-11-14
 
@@ -331,7 +339,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fit width and fit page follow a window resize even when no new page has to be drawn.
 - The Settings window shrinks to fit small windows instead of running off the left edge.
 
-[Unreleased]: https://github.com/t21dev/kitab/compare/v0.4.2...HEAD
+[Unreleased]: https://github.com/t21dev/kitab/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/t21dev/kitab/compare/v0.4.2...v0.5.0
 [0.4.2]: https://github.com/t21dev/kitab/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/t21dev/kitab/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/t21dev/kitab/compare/v0.3.10...v0.4.0
