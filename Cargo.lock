@@ -3578,6 +3578,7 @@ version = "0.6.2"
 dependencies = [
  "libc",
  "serde_json",
+ "sha2 0.10.9",
  "windows 0.61.3",
 ]
 

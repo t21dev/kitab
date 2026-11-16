@@ -4,6 +4,7 @@
 //! kitab-mupdf, kitab-print and kitab-sign allowed `unsafe` (AGENTS.md rule 10).
 
 pub mod assoc;
+pub mod install;
 pub mod instance;
 #[cfg(windows)]
 pub mod splash;

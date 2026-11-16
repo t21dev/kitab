@@ -3,7 +3,8 @@
 //! Check for updates (Settings › About): ask GitHub for the latest release's
 //! number and notes. Kitab only asks when the user presses Check now, or after
 //! they turn on "Check automatically" (AGENTS.md rule 12, PRIVACY.md). Nothing
-//! is downloaded or installed: Download opens the release page in the browser.
+//! is downloaded or installed unless the user presses Install (`install.rs`);
+//! where Kitab can't install itself, Download opens the release page.
 //!
 //! The request goes through the system's `curl` (in Windows 10 1803 and later,
 //! macOS and Linux) rather than an HTTP and TLS stack in the app: no size cost
@@ -176,7 +177,7 @@ pub fn fetch_latest() -> Result<Release, String> {
 
 /// The system's curl: by full path on Windows, so a `curl.exe` in the
 /// working folder is never the one that runs.
-fn curl() -> std::path::PathBuf {
+pub(crate) fn curl() -> std::path::PathBuf {
     #[cfg(windows)]
     {
         if let Some(root) = std::env::var_os("SystemRoot") {

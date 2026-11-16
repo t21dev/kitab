@@ -137,6 +137,9 @@ fn main() {
             }
         });
     }
+    // macOS: closing the window leaves Kitab running in the Dock; clicking
+    // it there opens the window again.
+    app.on_reopen(kitab_ui::reopen);
     kitab_os::trace::mark("gpui application");
     app.run(move |cx| {
         kitab_os::trace::mark("gpui running");
@@ -152,6 +155,10 @@ fn main() {
         .detach();
         let on_quit = library.clone();
         cx.on_app_quit(move |cx| {
+            // An update downloaded with Install goes in now, once Kitab has gone.
+            if let Err(e) = kitab_os::install::install_staged() {
+                log::warn!("could not start installing the update: {e}");
+            }
             let library = on_quit.clone();
             // Off the UI thread; the quit waits for it (bounded by GPUI's quit timeout).
             cx.background_spawn(async move { library.end_session() })

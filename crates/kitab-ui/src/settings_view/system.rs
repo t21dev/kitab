@@ -46,7 +46,21 @@ pub enum UpdateState {
     Checking,
     UpToDate,
     Available(Release),
+    /// Install was pressed: downloading and checking it.
+    Downloading(Release),
+    /// Downloaded and checked: it goes in when Kitab quits (or Restart now).
+    Ready(Release),
     Failed(String),
+}
+
+impl UpdateState {
+    /// The newer release, while there is one to show.
+    pub fn release(&self) -> Option<&Release> {
+        match self {
+            Self::Available(r) | Self::Downloading(r) | Self::Ready(r) => Some(r),
+            _ => None,
+        }
+    }
 }
 
 /// A format's icon, the same as its tab's.
@@ -89,6 +103,17 @@ fn act(ws: &WeakEntity<Workspace>, f: fn(&mut Workspace, &mut gpui::Context<Work
     let ws = ws.clone();
     Box::new(move |_, cx| {
         let _ = ws.update(cx, f);
+    })
+}
+
+/// [`act`] for what needs the window too.
+fn act_window(
+    ws: &WeakEntity<Workspace>,
+    f: fn(&mut Workspace, &mut gpui::Window, &mut gpui::Context<Workspace>),
+) -> Click {
+    let ws = ws.clone();
+    Box::new(move |window, cx| {
+        let _ = ws.update(cx, |ws, cx| f(ws, window, cx));
     })
 }
 
@@ -679,6 +704,16 @@ pub(super) fn about(ws: &WeakEntity<Workspace>, info: &SystemInfo, st: &Style) -
                 act(ws, |ws, cx| ws.check_for_updates(true, cx)),
             ),
         ),
+        UpdateState::Available(r) if kitab_os::install::supported().is_some() => (
+            format!("Kitab {} is available. You have {version}.", r.version),
+            button(
+                "update-install",
+                "Install",
+                false,
+                st,
+                act(ws, |ws, cx| ws.install_update(cx)),
+            ),
+        ),
         UpdateState::Available(r) => (
             format!("Kitab {} is available. You have {version}.", r.version),
             button(
@@ -688,6 +723,23 @@ pub(super) fn about(ws: &WeakEntity<Workspace>, info: &SystemInfo, st: &Style) -
                 st,
                 // The release page in the browser: no dialog over Settings.
                 act(ws, |ws, cx| ws.open_release_page(cx)),
+            ),
+        ),
+        UpdateState::Downloading(r) => (
+            format!("Downloading Kitab {}…", r.version),
+            status("Downloading", false, st),
+        ),
+        UpdateState::Ready(r) => (
+            format!(
+                "Kitab {} is ready. It installs when Kitab quits, or restart now.",
+                r.version
+            ),
+            button(
+                "update-restart",
+                "Restart now",
+                false,
+                st,
+                act_window(ws, |ws, window, cx| ws.restart_to_update(window, cx)),
             ),
         ),
         UpdateState::Failed(e) => (

@@ -543,7 +543,10 @@ impl Workspace {
     /// progress and errors; an automatic check stays quiet unless there's an
     /// update.
     pub(crate) fn check_for_updates(&mut self, manual: bool, cx: &mut Context<Self>) {
-        if matches!(self.system.update, UpdateState::Checking) {
+        if matches!(
+            self.system.update,
+            UpdateState::Checking | UpdateState::Downloading(_) | UpdateState::Ready(_)
+        ) {
             return;
         }
         let before = std::mem::replace(&mut self.system.update, UpdateState::Checking);
@@ -582,7 +585,7 @@ impl Workspace {
 
     /// The newest release's page on GitHub, in the browser.
     pub(crate) fn open_release_page(&mut self, cx: &mut Context<Self>) {
-        if let UpdateState::Available(r) = &self.system.update {
+        if let Some(r) = self.system.update.release() {
             cx.open_url(&r.url);
         }
     }
@@ -606,24 +609,80 @@ impl Workspace {
         self.close_update(window, cx);
     }
 
-    /// Download: the release page in the browser. Kitab never installs
-    /// anything by itself.
+    /// Download: the release page in the browser, where Kitab can't
+    /// install the update itself (the portable zip, Scoop, Linux).
     fn download_update(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if let UpdateState::Available(r) = &self.system.update {
+        if let Some(r) = self.system.update.release() {
             cx.open_url(&r.url);
         }
         self.close_update(window, cx);
     }
 
+    /// Install: download the update and check it against the release's
+    /// checksums, in the background. It then waits for Kitab to quit (or
+    /// Restart now). Only ever on this click: Kitab never installs by itself.
+    pub(crate) fn install_update(&mut self, cx: &mut Context<Self>) {
+        let UpdateState::Available(r) = &self.system.update else {
+            return;
+        };
+        let r = r.clone();
+        let Some(method) = kitab_os::install::supported() else {
+            cx.open_url(&r.url);
+            return;
+        };
+        self.system.update = UpdateState::Downloading(r.clone());
+        cx.notify();
+        cx.spawn(async move |this, cx| {
+            let version = r.version.clone();
+            let result = cx
+                .background_spawn(async move { kitab_os::install::download(&version, &method) })
+                .await;
+            let _ = this.update(cx, |ws, cx| {
+                match result {
+                    Ok(_) => ws.system.update = UpdateState::Ready(r),
+                    Err(e) => {
+                        ws.system.update = UpdateState::Available(r);
+                        ws.toast(e, true, None, cx);
+                    }
+                }
+                cx.notify();
+            });
+        })
+        .detach();
+    }
+
+    /// Restart now: quit as Quit does (asking about unsaved changes first),
+    /// install the update, and open the new version.
+    pub(crate) fn restart_to_update(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if !matches!(self.system.update, UpdateState::Ready(_)) {
+            return;
+        }
+        kitab_os::install::relaunch_after_install();
+        self.system.update_open = false;
+        self.quit(window, cx);
+    }
+
     /// The title bar's "Update" pill, when a newer release is out and wasn't
     /// put off with Later.
     pub(super) fn update_pill(&self, st: &Style, cx: &mut Context<Self>) -> Option<AnyElement> {
-        let UpdateState::Available(r) = &self.system.update else {
-            return None;
-        };
-        if r.version == st.skipped_update {
+        let r = self.system.update.release()?;
+        if r.version == st.skipped_update && matches!(self.system.update, UpdateState::Available(_))
+        {
             return None;
         }
+        let (label, tip) = match &self.system.update {
+            UpdateState::Downloading(_) => {
+                ("Downloading…", format!("Downloading Kitab {}", r.version))
+            }
+            UpdateState::Ready(_) => (
+                "Restart to update",
+                format!(
+                    "Kitab {} is ready: restart now, or it installs when Kitab quits",
+                    r.version
+                ),
+            ),
+            _ => ("Update", format!("Kitab {} is available", r.version)),
+        };
         Some(
             div()
                 .id("update-pill")
@@ -643,15 +702,21 @@ impl Workspace {
                 .text_color(st.c(|c| c.accent))
                 .cursor_pointer()
                 .hover(|d| d.bg(st.hover_bg()))
-                .tip(format!("Kitab {} is available", r.version))
-                .on_click(cx.listener(|ws, _, _, cx| ws.open_update(cx)))
+                .tip(tip)
+                .on_click(cx.listener(|ws, _, window, cx| {
+                    if matches!(ws.system.update, UpdateState::Ready(_)) {
+                        ws.restart_to_update(window, cx);
+                    } else {
+                        ws.open_update(cx);
+                    }
+                }))
                 .child(
                     svg()
                         .path(icon("arrow-down"))
                         .size(px(12.0))
                         .text_color(st.c(|c| c.accent)),
                 )
-                .child("Update")
+                .child(label)
                 .into_any_element(),
         )
     }
@@ -665,9 +730,8 @@ impl Workspace {
         if !self.system.update_open {
             return None;
         }
-        let UpdateState::Available(r) = &self.system.update else {
-            return None;
-        };
+        let r = self.system.update.release()?;
+        let can_install = kitab_os::install::supported().is_some();
         let blocks = update::note_blocks(&r.notes, 60);
         let mut notes = div()
             .flex()
@@ -805,9 +869,17 @@ impl Workspace {
                 div()
                     .text_size(px(12.5))
                     .text_color(st.c(|c| c.muted))
-                    .child(format!(
-                        "{released}You have {VERSION}. Install the new version over it: your library, marks and settings stay."
-                    )),
+                    .child(match &self.system.update {
+                        UpdateState::Ready(_) => format!(
+                            "{released}Downloaded and checked. Restart now, or it installs the next time Kitab quits. Your library, marks and settings stay."
+                        ),
+                        _ if can_install => format!(
+                            "{released}You have {VERSION}. Install downloads it now and puts it in when Kitab restarts: your library, marks and settings stay."
+                        ),
+                        _ => format!(
+                            "{released}You have {VERSION}. Install the new version over it: your library, marks and settings stay."
+                        ),
+                    }),
             )
             .when(!blocks.is_empty(), |d| {
                 d.child(
@@ -833,11 +905,21 @@ impl Workspace {
                             .tip("Hide the Update button until a newer version")
                             .on_click(cx.listener(|ws, _, window, cx| ws.skip_update(window, cx))),
                     )
-                    .child(
-                        dialog_button(st, "update-download", "Download", true)
+                    .child(match &self.system.update {
+                        UpdateState::Ready(_) => dialog_button(st, "update-restart", "Restart now", true)
+                            .tip("Quit, install the update and open Kitab again")
+                            .on_click(cx.listener(|ws, _, window, cx| ws.restart_to_update(window, cx))),
+                        UpdateState::Downloading(_) => {
+                            dialog_button(st, "update-downloading", "Downloading…", true)
+                                .tip("Downloading and checking the update")
+                        }
+                        _ if can_install => dialog_button(st, "update-install", "Install", true)
+                            .tip("Download the update and check it; it goes in when Kitab restarts")
+                            .on_click(cx.listener(|ws, _, _, cx| ws.install_update(cx))),
+                        _ => dialog_button(st, "update-download", "Download", true)
                             .tip("Open the release page in your browser")
                             .on_click(cx.listener(|ws, _, window, cx| ws.download_update(window, cx))),
-                    ),
+                    }),
             );
         let serial = self.system.update_serial;
         Some(self.modal_layer(
