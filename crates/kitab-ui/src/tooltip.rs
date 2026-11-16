@@ -38,7 +38,9 @@ pub trait Tip: Sized {
 
 impl Tip for Stateful<Div> {
     fn tip(self, text: impl Into<SharedString>) -> Self {
-        let text = text.into();
+        let text: SharedString = text.into();
+        // Shortcuts in tips are written for Windows and Linux; a Mac shows Cmd.
+        let text: SharedString = crate::shortcuts::for_os(&text).into_owned().into();
         self.tooltip(move |_: &mut Window, cx: &mut App| -> AnyView {
             cx.new(|_| TooltipView { text: text.clone() }).into()
         })

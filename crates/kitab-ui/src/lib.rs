@@ -49,18 +49,48 @@ pub mod layout {
 struct MainWindow(gpui::WindowHandle<shell::Workspace>);
 impl gpui::Global for MainWindow {}
 
+/// What the main window opens with, kept to open it again: on macOS Kitab
+/// keeps running when its window is closed, as Mac apps do.
+struct Opener {
+    engine: Arc<dyn DocEngine>,
+    library: Arc<dyn Library>,
+}
+impl gpui::Global for Opener {}
+
 /// Open `paths` as tabs in the main window and bring it to the front (a
-/// second Kitab handed them over). An empty list only brings it forward.
+/// second Kitab handed them over, or Finder opened them). An empty list only
+/// brings it forward. With the window closed (macOS), a new one opens on them.
 pub fn open_paths(cx: &mut App, paths: Vec<PathBuf>) {
-    let Some(handle) = cx.try_global::<MainWindow>().map(|w| w.0) else {
+    let handle = cx.try_global::<MainWindow>().map(|w| w.0);
+    if let Some(handle) = handle
+        && handle.update(cx, |_, _, _| ()).is_ok()
+    {
+        let _ = handle.update(cx, |ws, window, cx| {
+            for p in paths {
+                ws.open_tab(p, window, cx);
+            }
+            window.activate_window();
+        });
+        return;
+    }
+    let Some(opener) = cx.try_global::<Opener>() else {
         return;
     };
-    let _ = handle.update(cx, |ws, window, cx| {
-        for p in paths {
-            ws.open_tab(p, window, cx);
-        }
-        window.activate_window();
-    });
+    let (engine, library) = (opener.engine.clone(), opener.library.clone());
+    // Where the window was when it closed (saved then) and the rest as now.
+    let settings = kitab_os::data_dir()
+        .and_then(|d| std::fs::read_to_string(d.join("settings.json")).ok())
+        .and_then(|text| Settings::from_json(&text).ok())
+        .unwrap_or_default();
+    if !open_window(cx, engine, library, &settings, paths) {
+        log::warn!("could not open the window again");
+    }
+}
+
+/// macOS: Kitab's icon in the Dock was clicked (or the app launched again)
+/// with no window open: open one, on Home and the tabs it restores.
+pub fn reopen(cx: &mut App) {
+    open_paths(cx, Vec::new());
 }
 
 pub struct FirstPaint(pub Option<Box<dyn FnOnce()>>);
@@ -206,6 +236,21 @@ pub fn open_main_window(
     cx.set_global(shell::SettingsSink(save_settings));
     actions::bind_default_keys(cx);
     shell::init_native_menu(cx);
+    cx.set_global(Opener {
+        engine: engine.clone(),
+        library: library.clone(),
+    });
+    open_window(cx, engine, library, &settings, files)
+}
+
+/// Open the main window on `files`, where `settings` says it was.
+fn open_window(
+    cx: &mut App,
+    engine: Arc<dyn DocEngine>,
+    library: Arc<dyn Library>,
+    settings: &Settings,
+    files: Vec<PathBuf>,
+) -> bool {
     // Where the window was when Kitab last closed, if that place is still on
     // a screen; otherwise the default size, centred.
     let (bounds, display_id) = settings
@@ -221,13 +266,27 @@ pub fn open_main_window(
                 None,
             )
         });
+    // macOS: its close, minimise and zoom buttons, centred on the bar Kitab
+    // draws at the top (the tab bar, or the shorter strip when the tabs are
+    // in the sidebar). The bar leaves room for them (`shell::MAC_LIGHTS_W`).
+    let traffic_light_position = cfg!(target_os = "macos").then(|| {
+        let st = Style::get(cx);
+        let bar = if st.tabs == crate::settings::TabsAt::Top && st.shows_tabs() {
+            st.m().title_bar
+        } else {
+            crate::reader::TOP_INSET
+        };
+        let scale = f32::from(settings.ui_scale) / 100.0;
+        // The buttons are about 14 points tall.
+        gpui::point(px(12.0 * scale), px(((bar * scale - 14.0) / 2.0).max(4.0)))
+    });
     let options = WindowOptions {
         window_bounds: Some(bounds),
         display_id,
         titlebar: Some(TitlebarOptions {
             title: Some("Kitab".into()),
             appears_transparent: true,
-            traffic_light_position: None,
+            traffic_light_position,
         }),
         window_background: WindowBackgroundAppearance::Opaque,
         app_id: Some("dev.t21.kitab".into()),

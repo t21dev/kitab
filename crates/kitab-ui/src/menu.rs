@@ -341,7 +341,7 @@ pub fn panel(
                                 .flex_none()
                                 .text_size(px(11.0))
                                 .text_color(st.c(|c| c.faint))
-                                .child(k)
+                                .child(crate::shortcuts::for_os(k).into_owned())
                         }))
                         .into_any_element(),
                 );

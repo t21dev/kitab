@@ -2749,6 +2749,7 @@ fn shortcuts_section(ws: &WeakEntity<Workspace>, st: &Style) -> AnyElement {
         let last = g.rows.len().saturating_sub(1);
         for (i, (what, keys)) in g.rows.iter().enumerate() {
             let mut caps = div().flex().items_center().gap(px(4.0));
+            let keys = shortcuts::for_os(keys);
             for (ai, alt) in keys.split(" / ").enumerate() {
                 if ai > 0 {
                     caps = caps.child(

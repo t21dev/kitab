@@ -4,7 +4,7 @@
 //! AGENTS.md rule 19), and listed in the command palette (`palette.rs`).
 //! keymap.json adds to and overrides them (`keymap.rs`).
 
-use gpui::{App, KeyBinding, NoAction, actions};
+use gpui::{Action, App, KeyBinding, NoAction, actions};
 
 actions!(
     kitab,
@@ -132,107 +132,118 @@ pub const MARKUP_HEX: &str = "MarkupHex";
 /// Settings and open menus: Escape closes them.
 pub const OVERLAY: &str = "Overlay";
 
+/// A default binding, with the Mac's keys on a Mac: Cmd where Windows and
+/// Linux use Ctrl ("ctrl-o" is Cmd+O). Tab switching keeps Ctrl, as in
+/// Safari and Finder.
+fn key<A: Action>(keys: &str, action: A, context: Option<&str>) -> KeyBinding {
+    if cfg!(target_os = "macos") {
+        KeyBinding::new(&crate::shortcuts::mac_keys(keys), action, context)
+    } else {
+        KeyBinding::new(keys, action, context)
+    }
+}
+
 pub fn bind_default_keys(cx: &mut App) {
     let r = Some(READER);
     let w = Some(WORKSPACE);
     cx.bind_keys([
         // Files and tabs
-        KeyBinding::new("ctrl-o", OpenFile, w),
-        KeyBinding::new("ctrl-w", CloseTab, w),
-        KeyBinding::new("ctrl-tab", NextTab, w),
-        KeyBinding::new("ctrl-shift-tab", PrevTab, w),
-        KeyBinding::new("ctrl-shift-h", ShowHome, w),
-        KeyBinding::new("ctrl-b", ToggleSidebar, w),
-        KeyBinding::new("ctrl-.", ToggleDock, w),
-        KeyBinding::new("ctrl-i", ToggleFileInfo, w),
-        KeyBinding::new("f12", ToggleSidebar, w),
-        KeyBinding::new("ctrl-shift-t", ReopenClosedTab, w),
-        KeyBinding::new("ctrl-f4", CloseTab, w),
-        KeyBinding::new("ctrl-pagedown", NextTab, w),
-        KeyBinding::new("ctrl-pageup", PrevTab, w),
-        KeyBinding::new("ctrl-shift-pageup", MoveTabLeft, w),
-        KeyBinding::new("ctrl-shift-pagedown", MoveTabRight, w),
+        key("ctrl-o", OpenFile, w),
+        key("ctrl-w", CloseTab, w),
+        key("ctrl-tab", NextTab, w),
+        key("ctrl-shift-tab", PrevTab, w),
+        key("ctrl-shift-h", ShowHome, w),
+        key("ctrl-b", ToggleSidebar, w),
+        key("ctrl-.", ToggleDock, w),
+        key("ctrl-i", ToggleFileInfo, w),
+        key("f12", ToggleSidebar, w),
+        key("ctrl-shift-t", ReopenClosedTab, w),
+        key("ctrl-f4", CloseTab, w),
+        key("ctrl-pagedown", NextTab, w),
+        key("ctrl-pageup", PrevTab, w),
+        key("ctrl-shift-pageup", MoveTabLeft, w),
+        key("ctrl-shift-pagedown", MoveTabRight, w),
         // Alt+digit, because Ctrl+0/1/2 are SumatraPDF's zoom keys.
-        KeyBinding::new("alt-1", SelectTab1, w),
-        KeyBinding::new("alt-2", SelectTab2, w),
-        KeyBinding::new("alt-3", SelectTab3, w),
-        KeyBinding::new("alt-4", SelectTab4, w),
-        KeyBinding::new("alt-5", SelectTab5, w),
-        KeyBinding::new("alt-6", SelectTab6, w),
-        KeyBinding::new("alt-7", SelectTab7, w),
-        KeyBinding::new("alt-8", SelectTab8, w),
-        KeyBinding::new("alt-9", SelectLastTab, w),
-        KeyBinding::new("ctrl-,", OpenSettings, w),
-        KeyBinding::new("ctrl-/", ShowShortcuts, w),
-        KeyBinding::new("ctrl-k", CommandPalette, w),
-        KeyBinding::new("ctrl-shift-p", CommandPalette, w),
-        KeyBinding::new("ctrl-shift-e", ExtractPages, w),
-        KeyBinding::new("ctrl-\\", ToggleSplit, w),
-        KeyBinding::new("escape", CloseOverlay, Some(OVERLAY)),
-        KeyBinding::new("tab", FocusNext, w),
-        KeyBinding::new("shift-tab", FocusPrev, w),
-        KeyBinding::new("ctrl-shift-l", CycleTheme, w),
-        KeyBinding::new("f11", ToggleMinimal, w),
-        KeyBinding::new("f5", Present, w),
-        KeyBinding::new("ctrl-p", Print, w),
+        key("alt-1", SelectTab1, w),
+        key("alt-2", SelectTab2, w),
+        key("alt-3", SelectTab3, w),
+        key("alt-4", SelectTab4, w),
+        key("alt-5", SelectTab5, w),
+        key("alt-6", SelectTab6, w),
+        key("alt-7", SelectTab7, w),
+        key("alt-8", SelectTab8, w),
+        key("alt-9", SelectLastTab, w),
+        key("ctrl-,", OpenSettings, w),
+        key("ctrl-/", ShowShortcuts, w),
+        key("ctrl-k", CommandPalette, w),
+        key("ctrl-shift-p", CommandPalette, w),
+        key("ctrl-shift-e", ExtractPages, w),
+        key("ctrl-\\", ToggleSplit, w),
+        key("escape", CloseOverlay, Some(OVERLAY)),
+        key("tab", FocusNext, w),
+        key("shift-tab", FocusPrev, w),
+        key("ctrl-shift-l", CycleTheme, w),
+        key("f11", ToggleMinimal, w),
+        key("f5", Present, w),
+        key("ctrl-p", Print, w),
         // Navigate (SumatraPDF-compatible where Sumatra has a binding)
-        KeyBinding::new("ctrl-shift-d", ToggleMarkup, r),
-        KeyBinding::new("h", HighlightSelection, r),
-        KeyBinding::new("ctrl-d", ToggleBookmark, r),
-        KeyBinding::new("ctrl-shift-u", ReadAloud, r),
-        KeyBinding::new("ctrl-z", MarkupUndo, r),
-        KeyBinding::new("ctrl-y", MarkupRedo, r),
-        KeyBinding::new("ctrl-shift-z", MarkupRedo, r),
-        KeyBinding::new("ctrl-s", SaveMarks, r),
-        KeyBinding::new("right", PageRight, r),
-        KeyBinding::new("left", PageLeft, r),
-        KeyBinding::new("n", NextPage, r),
-        KeyBinding::new("p", PrevPage, r),
-        KeyBinding::new("home", FirstPage, r),
-        KeyBinding::new("end", LastPage, r),
-        KeyBinding::new("j", ScrollDown, r),
-        KeyBinding::new("k", ScrollUp, r),
-        KeyBinding::new("down", ScrollDown, r),
-        KeyBinding::new("up", ScrollUp, r),
-        KeyBinding::new("pagedown", ScreenDown, r),
-        KeyBinding::new("pageup", ScreenUp, r),
-        KeyBinding::new("space", ScreenDown, r),
-        KeyBinding::new("shift-space", ScreenUp, r),
-        KeyBinding::new("ctrl-g", GoToPage, r),
-        KeyBinding::new("alt-left", HistoryBack, r),
-        KeyBinding::new("alt-right", HistoryForward, r),
-        KeyBinding::new("enter", ConfirmPage, Some(PAGE_FIELD)),
-        KeyBinding::new("escape", CancelPage, Some(PAGE_FIELD)),
+        key("ctrl-shift-d", ToggleMarkup, r),
+        key("h", HighlightSelection, r),
+        key("ctrl-d", ToggleBookmark, r),
+        key("ctrl-shift-u", ReadAloud, r),
+        key("ctrl-z", MarkupUndo, r),
+        key("ctrl-y", MarkupRedo, r),
+        key("ctrl-shift-z", MarkupRedo, r),
+        key("ctrl-s", SaveMarks, r),
+        key("right", PageRight, r),
+        key("left", PageLeft, r),
+        key("n", NextPage, r),
+        key("p", PrevPage, r),
+        key("home", FirstPage, r),
+        key("end", LastPage, r),
+        key("j", ScrollDown, r),
+        key("k", ScrollUp, r),
+        key("down", ScrollDown, r),
+        key("up", ScrollUp, r),
+        key("pagedown", ScreenDown, r),
+        key("pageup", ScreenUp, r),
+        key("space", ScreenDown, r),
+        key("shift-space", ScreenUp, r),
+        key("ctrl-g", GoToPage, r),
+        key("alt-left", HistoryBack, r),
+        key("alt-right", HistoryForward, r),
+        key("enter", ConfirmPage, Some(PAGE_FIELD)),
+        key("escape", CancelPage, Some(PAGE_FIELD)),
         // Markdown
-        KeyBinding::new("ctrl-e", ToggleEdit, r),
+        key("ctrl-e", ToggleEdit, r),
         // Select and copy
-        KeyBinding::new("ctrl-c", Copy, r),
-        KeyBinding::new("escape", ClearSelection, r),
+        key("ctrl-c", Copy, r),
+        key("escape", ClearSelection, r),
         // Find
-        KeyBinding::new("ctrl-f", Find, r),
-        KeyBinding::new("/", Find, r),
-        KeyBinding::new("f3", FindNext, r),
-        KeyBinding::new("shift-f3", FindPrev, r),
-        KeyBinding::new("enter", FindNext, Some(FIND_BAR)),
-        KeyBinding::new("shift-enter", FindPrev, Some(FIND_BAR)),
-        KeyBinding::new("escape", CloseFind, Some(FIND_BAR)),
-        KeyBinding::new("alt-c", ToggleMatchCase, Some(FIND_BAR)),
-        KeyBinding::new("alt-w", ToggleWholeWord, Some(FIND_BAR)),
+        key("ctrl-f", Find, r),
+        key("/", Find, r),
+        key("f3", FindNext, r),
+        key("shift-f3", FindPrev, r),
+        key("enter", FindNext, Some(FIND_BAR)),
+        key("shift-enter", FindPrev, Some(FIND_BAR)),
+        key("escape", CloseFind, Some(FIND_BAR)),
+        key("alt-c", ToggleMatchCase, Some(FIND_BAR)),
+        key("alt-w", ToggleWholeWord, Some(FIND_BAR)),
         // Zoom and view
-        KeyBinding::new("ctrl-=", ZoomIn, r),
-        KeyBinding::new("ctrl-+", ZoomIn, r),
-        KeyBinding::new("ctrl--", ZoomOut, r),
-        KeyBinding::new("ctrl-0", FitPage, r),
-        KeyBinding::new("ctrl-1", ActualSize, r),
-        KeyBinding::new("ctrl-2", FitWidth, r),
-        KeyBinding::new("ctrl-6", SinglePage, r),
-        KeyBinding::new("ctrl-7", TwoPages, r),
-        KeyBinding::new("ctrl-8", BookView, r),
-        KeyBinding::new("ctrl-shift--", RotateLeft, r),
-        KeyBinding::new("ctrl-shift-=", RotateRight, r),
+        key("ctrl-=", ZoomIn, r),
+        key("ctrl-+", ZoomIn, r),
+        key("ctrl--", ZoomOut, r),
+        key("ctrl-0", FitPage, r),
+        key("ctrl-1", ActualSize, r),
+        key("ctrl-2", FitWidth, r),
+        key("ctrl-6", SinglePage, r),
+        key("ctrl-7", TwoPages, r),
+        key("ctrl-8", BookView, r),
+        key("ctrl-shift--", RotateLeft, r),
+        key("ctrl-shift-=", RotateRight, r),
         // Password prompt
-        KeyBinding::new("enter", SubmitPassword, Some(PROMPT)),
-        KeyBinding::new("escape", DismissPrompt, Some(PROMPT)),
+        key("enter", SubmitPassword, Some(PROMPT)),
+        key("escape", DismissPrompt, Some(PROMPT)),
     ]);
     // Inside the find field these keys type (or move nothing): unbind the
     // reader's page keys there.
@@ -251,7 +262,7 @@ pub fn bind_default_keys(cx: &mut App) {
             "home",
             "end",
         ]
-        .map(|key| KeyBinding::new(key, NoAction, typing)),
+        .map(|k| key(k, NoAction, typing)),
     );
     // In the Markdown editor the reader's page keys move the caret instead,
     // Ctrl+C copies the editor's selection and Esc ends editing.
@@ -287,7 +298,7 @@ pub fn bind_default_keys(cx: &mut App) {
             "tab",
             "shift-tab",
         ]
-        .map(|key| KeyBinding::new(key, NoAction, editor)),
+        .map(|k| key(k, NoAction, editor)),
     );
     // Typing a hex colour: every key goes to the field, none to the reader.
     let hex = Some(MARKUP_HEX);
@@ -315,19 +326,19 @@ pub fn bind_default_keys(cx: &mut App) {
         ]
         .map(String::from),
     );
-    cx.bind_keys(keys.iter().map(|k| KeyBinding::new(k, NoAction, hex)));
+    cx.bind_keys(keys.iter().map(|k| key(k, NoAction, hex)));
     // A text field (notes, text boxes) takes every key it types with.
     let field = Some(crate::text_field::TEXT_FIELD);
-    cx.bind_keys(keys.iter().map(|k| KeyBinding::new(k, NoAction, field)));
+    cx.bind_keys(keys.iter().map(|k| key(k, NoAction, field)));
     // A form's text box: Tab goes to the form's next field, not the next control.
     let form = Some(crate::text_field::TAB_OUT);
-    cx.bind_keys(["tab", "shift-tab"].map(|k| KeyBinding::new(k, NoAction, form)));
+    cx.bind_keys(["tab", "shift-tab"].map(|k| key(k, NoAction, form)));
     // The password prompt too: plain letters are reader shortcuts (j, k, n,
     // p, h), which ate them. Enter and Escape keep their prompt actions.
     cx.bind_keys(
         keys.iter()
             .filter(|k| !matches!(k.as_str(), "enter" | "escape"))
-            .map(|k| KeyBinding::new(k, NoAction, Some(PROMPT))),
+            .map(|k| key(k, NoAction, Some(PROMPT))),
     );
     cx.bind_keys(
         [
@@ -341,6 +352,6 @@ pub fn bind_default_keys(cx: &mut App) {
             "ctrl-v",
             "ctrl-enter",
         ]
-        .map(|k| KeyBinding::new(k, NoAction, field)),
+        .map(|k| key(k, NoAction, field)),
     );
 }

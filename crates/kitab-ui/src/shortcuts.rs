@@ -142,7 +142,68 @@ pub const GROUPS: &[Group] = &[
     },
 ];
 
-/// A GPUI keystroke ("ctrl-shift-p") as shown to people ("Ctrl+Shift+P").
+/// Keys that keep Ctrl on a Mac too: tab switching, as in Safari and Finder.
+const MAC_KEEPS_CTRL: &[&str] = &[
+    "tab",
+    "shift-tab",
+    "pageup",
+    "pagedown",
+    "shift-pageup",
+    "shift-pagedown",
+];
+/// The same keys as shown ("Ctrl+Shift+Tab" stays as it is).
+const MAC_KEEPS_CTRL_SHOWN: &[&str] = &[
+    "Tab",
+    "Shift+Tab",
+    "PgUp",
+    "PgDn",
+    "Shift+PgUp",
+    "Shift+PgDn",
+];
+
+/// A default binding as a Mac binds it: Cmd where Windows and Linux use Ctrl
+/// ("ctrl-shift-t" → "cmd-shift-t"), except for tab switching. Each step of
+/// a sequence ("ctrl-k ctrl-s") is changed on its own.
+pub fn mac_keys(keys: &str) -> String {
+    keys.split(' ')
+        .map(|step| match step.strip_prefix("ctrl-") {
+            Some(rest) if !MAC_KEEPS_CTRL.contains(&rest) => format!("cmd-{rest}"),
+            _ => step.to_string(),
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// Shortcut text as written for Windows and Linux ("Zoom in  Ctrl+=") as
+/// this computer's keys: on a Mac, Cmd for Ctrl (but not for tab switching)
+/// and Option for Alt. Elsewhere it is unchanged.
+pub fn for_os(text: &str) -> std::borrow::Cow<'_, str> {
+    if cfg!(target_os = "macos") {
+        std::borrow::Cow::Owned(to_mac_text(text))
+    } else {
+        std::borrow::Cow::Borrowed(text)
+    }
+}
+
+fn to_mac_text(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(at) = rest.find("Ctrl+") {
+        out.push_str(&rest[..at]);
+        let after = &rest[at + "Ctrl+".len()..];
+        let keeps = MAC_KEEPS_CTRL_SHOWN.iter().any(|k| {
+            after.starts_with(k)
+                && !after[k.len()..].starts_with(|c: char| c.is_ascii_alphanumeric())
+        });
+        out.push_str(if keeps { "Ctrl+" } else { "Cmd+" });
+        rest = after;
+    }
+    out.push_str(rest);
+    out.replace("Alt+", "Option+")
+}
+
+/// A GPUI keystroke ("ctrl-shift-p") as shown to people ("Ctrl+Shift+P";
+/// "cmd-shift-p" is "Cmd+Shift+P" on a Mac).
 pub fn pretty(binding: &str) -> String {
     let (body, minus) = match binding.strip_suffix("--") {
         Some(body) => (body, true),
@@ -154,7 +215,9 @@ pub fn pretty(binding: &str) -> String {
         .map(|p| match p {
             "ctrl" => "Ctrl".into(),
             "shift" => "Shift".into(),
+            "alt" if cfg!(target_os = "macos") => "Option".into(),
             "alt" => "Alt".into(),
+            "cmd" if cfg!(target_os = "macos") => "Cmd".into(),
             "cmd" | "win" | "super" => "Win".into(),
             "pagedown" => "PgDn".into(),
             "pageup" => "PgUp".into(),
@@ -196,6 +259,29 @@ pub fn caps(keys: &str) -> Vec<&str> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_mac_binds_cmd_but_switches_tabs_with_ctrl() {
+        assert_eq!(mac_keys("ctrl-o"), "cmd-o");
+        assert_eq!(mac_keys("ctrl-shift-t"), "cmd-shift-t");
+        assert_eq!(mac_keys("ctrl--"), "cmd--");
+        assert_eq!(mac_keys("ctrl-k ctrl-s"), "cmd-k cmd-s");
+        assert_eq!(mac_keys("ctrl-tab"), "ctrl-tab");
+        assert_eq!(mac_keys("ctrl-shift-pagedown"), "ctrl-shift-pagedown");
+        assert_eq!(mac_keys("alt-left"), "alt-left");
+        assert_eq!(mac_keys("f5"), "f5");
+    }
+
+    #[test]
+    fn mac_text_says_cmd_and_option() {
+        assert_eq!(to_mac_text("Zoom in  Ctrl+="), "Zoom in  Cmd+=");
+        assert_eq!(to_mac_text("Ctrl+Tab / Ctrl+PgDn"), "Ctrl+Tab / Ctrl+PgDn");
+        assert_eq!(to_mac_text("Ctrl+Shift+Tab"), "Ctrl+Shift+Tab");
+        assert_eq!(to_mac_text("Ctrl+Shift+T"), "Cmd+Shift+T");
+        assert_eq!(to_mac_text("Ctrl+W / Ctrl+F4"), "Cmd+W / Cmd+F4");
+        assert_eq!(to_mac_text("Alt+Left"), "Option+Left");
+        assert_eq!(to_mac_text("Esc"), "Esc");
+    }
 
     #[test]
     fn keystrokes_read_as_people_write_them() {
@@ -242,7 +328,7 @@ mod tests {
         };
         let source = include_str!("actions.rs");
         let mut checked = 0;
-        for chunk in source.split("KeyBinding::new(\"").skip(1) {
+        for chunk in source.split(" key(\"").skip(1) {
             let Some(binding) = chunk.split('"').next() else {
                 continue;
             };

@@ -1066,6 +1066,15 @@ fn icon_button(
         )
 }
 
+/// Minimise, maximise and close, for a bar's right end.
+fn window_buttons(st: &Style) -> [AnyElement; 3] {
+    [
+        window_button("win-min", "win-min", WindowControlArea::Min, st, false),
+        window_button("win-max", "win-max", WindowControlArea::Max, st, false),
+        window_button("win-close", "close", WindowControlArea::Close, st, true),
+    ]
+}
+
 fn window_button(
     id: &'static str,
     name: &str,
@@ -1146,6 +1155,25 @@ fn flatten(
 /// however many tabs are open.
 const DRAG_MIN: f32 = 56.0;
 
+/// macOS draws its own close, minimise and zoom buttons at the window's top
+/// left (`lib.rs` places them in the title bar): what comes first in a top
+/// bar starts after them. Kitab's own window buttons are for Windows and
+/// Linux only.
+pub(crate) const MAC_LIGHTS_W: f32 = 78.0;
+
+/// Where a top bar's first control starts: after the Mac's window buttons,
+/// or `pad` from the edge elsewhere.
+fn lead(pad: f32) -> gpui::Pixels {
+    px(if cfg!(target_os = "macos") {
+        MAC_LIGHTS_W
+    } else {
+        pad
+    })
+}
+
+/// Kitab's own minimise, maximise and close: not on a Mac, which has its own.
+const OWN_WINDOW_BUTTONS: bool = !cfg!(target_os = "macos");
+
 impl Workspace {
     fn title_bar(&mut self, st: &Style, window: &Window, cx: &mut Context<Self>) -> AnyElement {
         let home_on = self.active.is_none();
@@ -1154,7 +1182,7 @@ impl Workspace {
             .flex_none()
             .items_center()
             .h(st.px(|m| m.title_bar))
-            .pl(px(8.0))
+            .pl(lead(8.0))
             .gap(px(4.0))
             .bg(st.c(|c| c.bg))
             .border_b_1()
@@ -1190,8 +1218,10 @@ impl Workspace {
         } else {
             0.0
         };
+        let lead_w = f32::from(lead(8.0));
+        let buttons_w = if OWN_WINDOW_BUTTONS { 3.0 * 46.0 } else { 0.0 };
         let base =
-            8.0 + 2.0 * st.m().icon_button + 17.0 + 40.0 + DRAG_MIN + 3.0 * 46.0 + 12.0 + count_w;
+            lead_w + 2.0 * st.m().icon_button + 17.0 + 40.0 + DRAG_MIN + buttons_w + 12.0 + count_w;
         let win_w = f32::from(window.viewport_size().width);
         // The title-bar buttons give way (to More alone) before the tabs do.
         let squeezed = win_w - base - self.title_actions_width(st, false) < 140.0;
@@ -1490,27 +1520,7 @@ impl Workspace {
         .children(count.map(|c| c.mr(px(6.0))))
         .children(actions)
         .children(pill)
-        .child(window_button(
-            "win-min",
-            "win-min",
-            WindowControlArea::Min,
-            st,
-            false,
-        ))
-        .child(window_button(
-            "win-max",
-            "win-max",
-            WindowControlArea::Max,
-            st,
-            false,
-        ))
-        .child(window_button(
-            "win-close",
-            "close",
-            WindowControlArea::Close,
-            st,
-            true,
-        ))
+        .when(OWN_WINDOW_BUTTONS, |b| b.children(window_buttons(st)))
         .into_any_element()
     }
 
@@ -2146,7 +2156,8 @@ impl Workspace {
                         .items_center()
                         .gap(px(4.0))
                         .h(px(crate::reader::TOP_INSET))
-                        .px(px(8.0))
+                        .pl(lead(8.0))
+                        .pr(px(8.0))
                         .child(
                             icon_button("side-sidebar", "sidebar", true, st)
                                 .tip("Sidebar  Ctrl+B")
@@ -2417,7 +2428,8 @@ impl Workspace {
                         .items_center()
                         .gap(px(4.0))
                         .h_full()
-                        .px(px(6.0))
+                        .pl(lead(6.0))
+                        .pr(px(6.0))
                         .rounded_br(px(10.0))
                         .bg(st.c(|c| c.bg))
                         .shadow(st.elev())
@@ -2442,62 +2454,45 @@ impl Workspace {
                     .h_full()
                     .window_control_area(WindowControlArea::Drag),
             )
-            // On a solid corner tab, so they read over any page.
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .h_full()
-                    .when(Style::get(cx).minimal, |d| {
-                        d.pl(px(6.0)).child(
-                            div()
-                                .id("exit-minimal")
-                                .flex()
-                                .items_center()
-                                .gap(px(6.0))
-                                .h(px(26.0))
-                                .px(px(10.0))
-                                .rounded(px(7.0))
-                                .text_size(px(12.0))
-                                .text_color(st.c(|c| c.muted))
-                                .hover(|d| d.bg(st.hover_bg()).text_color(st.c(|c| c.text)))
-                                .tip("Show everything again  F11")
-                                .on_click(cx.listener(|ws, _, _, cx| ws.toggle_minimal(cx)))
-                                .child(
-                                    svg()
-                                        .path(icon("focus"))
-                                        .size(px(14.0))
-                                        .text_color(st.c(|c| c.muted)),
-                                )
-                                .child("Exit focus mode"),
-                        )
-                    })
-                    .rounded_bl(px(10.0))
-                    .overflow_hidden()
-                    .bg(st.c(|c| c.bg))
-                    .shadow(st.elev())
-                    .child(window_button(
-                        "win-min",
-                        "win-min",
-                        WindowControlArea::Min,
-                        st,
-                        false,
-                    ))
-                    .child(window_button(
-                        "win-max",
-                        "win-max",
-                        WindowControlArea::Max,
-                        st,
-                        false,
-                    ))
-                    .child(window_button(
-                        "win-close",
-                        "close",
-                        WindowControlArea::Close,
-                        st,
-                        true,
-                    )),
-            )
+            // On a solid corner tab, so they read over any page. A Mac has
+            // nothing here outside focus mode: its window buttons are top left.
+            .when(OWN_WINDOW_BUTTONS || Style::get(cx).minimal, |d| {
+                d.child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .h_full()
+                        .when(Style::get(cx).minimal, |d| {
+                            d.pl(px(6.0)).child(
+                                div()
+                                    .id("exit-minimal")
+                                    .flex()
+                                    .items_center()
+                                    .gap(px(6.0))
+                                    .h(px(26.0))
+                                    .px(px(10.0))
+                                    .rounded(px(7.0))
+                                    .text_size(px(12.0))
+                                    .text_color(st.c(|c| c.muted))
+                                    .hover(|d| d.bg(st.hover_bg()).text_color(st.c(|c| c.text)))
+                                    .tip("Show everything again  F11")
+                                    .on_click(cx.listener(|ws, _, _, cx| ws.toggle_minimal(cx)))
+                                    .child(
+                                        svg()
+                                            .path(icon("focus"))
+                                            .size(px(14.0))
+                                            .text_color(st.c(|c| c.muted)),
+                                    )
+                                    .child("Exit focus mode"),
+                            )
+                        })
+                        .rounded_bl(px(10.0))
+                        .overflow_hidden()
+                        .bg(st.c(|c| c.bg))
+                        .shadow(st.elev())
+                        .when(OWN_WINDOW_BUTTONS, |d| d.children(window_buttons(st))),
+                )
+            })
             .into_any_element()
     }
 

@@ -171,7 +171,12 @@ pub fn apply(cx: &mut App, user: &[UserBinding]) -> Vec<String> {
     ];
     let plain: Vec<&str> = user
         .iter()
-        .filter(|b| b.action.is_some() && !b.keys.contains("ctrl-") && !b.keys.contains("alt-"))
+        .filter(|b| {
+            b.action.is_some()
+                && !b.keys.contains("ctrl-")
+                && !b.keys.contains("cmd-")
+                && !b.keys.contains("alt-")
+        })
         .map(|b| b.keys.as_str())
         .collect();
     for ctx in typing {
