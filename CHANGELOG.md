@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-17
+
+### Added
+- Install updates from inside Kitab (Windows installer and macOS): Install downloads the new version, checks it against the release's checksums, and puts it in when Kitab quits; Restart now does it straight away and opens the new version. The portable zip, Scoop and Linux keep Download, which opens the release page.
+
+### Fixed
+- macOS: shortcuts use Cmd (Cmd+O, Cmd+W, Cmd+F, Cmd+S…) instead of Ctrl, and menus, tooltips and the shortcut list show Cmd and Option. Tab switching keeps Ctrl+Tab.
+- macOS: the window's close, minimise and zoom buttons no longer sit on top of Home and the tabs, and Kitab's own Windows-style window buttons are gone there.
+- macOS: clicking Kitab in the Dock after closing its window opens the window again, and files opened from Finder then open in a new window instead of nowhere.
+
 ## [0.6.2] - 2026-11-16
 
 ### Added
@@ -400,7 +410,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fit width and fit page follow a window resize even when no new page has to be drawn.
 - The Settings window shrinks to fit small windows instead of running off the left edge.
 
-[Unreleased]: https://github.com/t21dev/kitab/compare/v0.6.2...HEAD
+[Unreleased]: https://github.com/t21dev/kitab/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/t21dev/kitab/compare/v0.6.2...v0.7.0
 [0.6.2]: https://github.com/t21dev/kitab/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/t21dev/kitab/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/t21dev/kitab/compare/v0.5.0...v0.6.0
