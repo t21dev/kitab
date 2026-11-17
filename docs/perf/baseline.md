@@ -267,3 +267,12 @@ The first build of "pages on screen first" kept a page that was laid out blank a
 ### "Pages on screen first" taken out (same day)
 
 It only moved work (about 30 ms of CPU from before the first page to just after it, the same in total), showed no gain in time to the page on these files, and started the page ahead later. Taken out at the owner's request: the page ahead, links, fields and thumbnails start alongside the visible page again, as in 0.8.1. The other two changes (renders that stop, slow pages that wait out a zoom) stay; the heavy-page numbers above were measured with all three, and the start-up numbers will match 0.8.1's ordering again.
+
+Heavy pages again without it (new build at 177c59c, three runs each; 0.8.1 as above):
+
+| Scenario | Render work | Final page sharp at |
+|---|---|---|
+| Page Down × 12 | 14.7, 16.9, 19.0 s (median 16.9; 0.8.1 21.9) | 4.2, 4.9, 5.0 s (median 4.9; 0.8.1 5.7) |
+| Zoom in × 6 | 5.0, 5.0, 5.0 s (0.8.1 6.7–9.7) | 3.6, 3.7, 3.7 s (0.8.1 4.1–5.7) |
+
+Part of the 40 % saving when paging came from not drawing the page ahead early; without the gate the saving is about 23 %, and the final page is sharp about 0.8 s sooner than 0.8.1 (sooner than with the gate, which held the page ahead back).
