@@ -30,9 +30,51 @@ pub fn legible(text: &str) -> Option<&str> {
     (tells < 2 || tells * 10 < shown).then_some(text)
 }
 
+/// Whether a title or author from a file's metadata is a placeholder that
+/// says nothing ("untitled", "anonymous", "unknown"…), so the file name
+/// should show instead.
+pub fn placeholder(text: &str) -> bool {
+    const SAYS_NOTHING: &[&str] = &[
+        "untitled",
+        "untitled document",
+        "anonymous",
+        "unknown",
+        "unknown author",
+        "author",
+        "title",
+        "none",
+        "null",
+        "n/a",
+        "-",
+        "?",
+    ];
+    let t = text.trim().to_lowercase();
+    SAYS_NOTHING.contains(&t.as_str())
+}
+
+/// A title or author worth showing: legible and not a placeholder.
+pub fn meaningful(text: &str) -> Option<&str> {
+    legible(text).filter(|t| !placeholder(t))
+}
+
 #[cfg(test)]
 mod tests {
-    use super::legible;
+    use super::{legible, meaningful};
+
+    #[test]
+    fn placeholders_say_nothing() {
+        assert_eq!(meaningful("untitled"), None);
+        assert_eq!(meaningful("  Anonymous "), None);
+        assert_eq!(meaningful("Unknown"), None);
+        assert_eq!(
+            meaningful("IT Audit Fundamentals"),
+            Some("IT Audit Fundamentals")
+        );
+        assert_eq!(
+            meaningful("Untitled Love Story"),
+            Some("Untitled Love Story")
+        );
+    }
 
     #[test]
     fn bijoy_title_is_not_legible() {

@@ -472,7 +472,7 @@ impl Reader {
     /// than the file name.
     pub fn doc_title(&self) -> Option<String> {
         let t = self.info.as_ref()?.title.as_deref()?;
-        let t = kitab_core::legible(t)?;
+        let t = kitab_core::meaningful(t)?;
         let stem = self.path.file_stem().map(|s| s.to_string_lossy());
         (stem.as_deref() != Some(t)).then(|| t.to_string())
     }
@@ -481,7 +481,7 @@ impl Reader {
         self.info
             .as_ref()
             .and_then(|i| i.author.clone())
-            .filter(|a| !a.trim().is_empty())
+            .filter(|a| kitab_core::meaningful(a).is_some())
     }
 
     pub fn outline(&self) -> &[OutlineItem] {

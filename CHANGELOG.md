@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Home, search and the reader show the file name instead of a placeholder title like "untitled", and leave out a placeholder author like "anonymous". A book with a real title and no author shows its file name under the title.
+
 ## [0.8.0] - 2026-11-17
 
 ### Added

@@ -315,11 +315,12 @@ fn describe(handle: &Handle, format: Format, page_count: u32, reflowable: bool) 
     };
     DocInfo {
         format,
-        // Legacy-font (Bijoy) titles read as gibberish: drop them.
+        // Legacy-font (Bijoy) titles read as gibberish, and "untitled" or
+        // "anonymous" say nothing: drop them.
         title: non_empty(handle.metadata(MetadataName::Title))
-            .filter(|t| kitab_core::legible(t).is_some()),
+            .filter(|t| kitab_core::meaningful(t).is_some()),
         author: non_empty(handle.metadata(MetadataName::Author))
-            .filter(|a| kitab_core::legible(a).is_some()),
+            .filter(|a| kitab_core::meaningful(a).is_some()),
         page_count,
         page_sizes,
         outline,

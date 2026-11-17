@@ -530,15 +530,29 @@ fn walk_documents(dir: &Path, depth: u32, out: &mut Vec<(PathBuf, kitab_core::Fo
     }
 }
 
+fn file_name(path: &Path) -> String {
+    path.file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_default()
+}
+
+/// The title to show: the file's own, unless it's garbled (legacy fonts,
+/// stored before those were dropped) or a placeholder ("untitled"); then
+/// the file name.
 fn title_or_name(title: Option<String>, path: &Path) -> String {
-    // Titles stored before garbled (legacy-font) ones were dropped.
     title
-        .filter(|t| kitab_core::legible(t).is_some())
-        .unwrap_or_else(|| {
-            path.file_name()
-                .map(|n| n.to_string_lossy().to_string())
-                .unwrap_or_default()
-        })
+        .filter(|t| kitab_core::meaningful(t).is_some())
+        .unwrap_or_else(|| file_name(path))
+}
+
+/// The line under a card's title: the author, unless it's a placeholder
+/// ("anonymous"); without one, the file name, when the title isn't it.
+fn author_or_name(author: Option<String>, title: &str, path: &Path) -> Option<String> {
+    if let Some(a) = author.filter(|a| kitab_core::meaningful(a).is_some()) {
+        return Some(a);
+    }
+    let name = file_name(path);
+    (!name.is_empty() && name != title).then_some(name)
 }
 
 impl StoreLibrary {
@@ -786,15 +800,18 @@ impl Library for StoreLibrary {
                         .shelf(shelf)
                         .ok()?
                         .into_iter()
-                        .map(|e| RecentItem {
-                            title: title_or_name(e.title, &e.path),
-                            missing: e.missing,
-                            path: e.path,
-                            author: e.author,
-                            format: e.format,
-                            progress: e.progress.unwrap_or(0.0),
-                            last_opened_ms: e.last_opened_at,
-                            favourite: e.favourite,
+                        .map(|e| {
+                            let title = title_or_name(e.title, &e.path);
+                            RecentItem {
+                                author: author_or_name(e.author, &title, &e.path),
+                                title,
+                                missing: e.missing,
+                                path: e.path,
+                                format: e.format,
+                                progress: e.progress.unwrap_or(0.0),
+                                last_opened_ms: e.last_opened_at,
+                                favourite: e.favourite,
+                            }
                         })
                         .collect(),
                 )
@@ -1085,15 +1102,18 @@ impl Library for StoreLibrary {
             Some(
                 entries
                     .into_iter()
-                    .map(|e| RecentItem {
-                        title: title_or_name(e.title, &e.path),
-                        path: e.path,
-                        author: e.author,
-                        format: e.format,
-                        progress: e.progress.unwrap_or(0.0),
-                        last_opened_ms: e.last_opened_at,
-                        missing: e.missing,
-                        favourite: e.favourite,
+                    .map(|e| {
+                        let title = title_or_name(e.title, &e.path);
+                        RecentItem {
+                            author: author_or_name(e.author, &title, &e.path),
+                            title,
+                            path: e.path,
+                            format: e.format,
+                            progress: e.progress.unwrap_or(0.0),
+                            last_opened_ms: e.last_opened_at,
+                            missing: e.missing,
+                            favourite: e.favourite,
+                        }
                     })
                     .collect(),
             )
@@ -1210,6 +1230,24 @@ mod tests {
     /// GitHub #10: a folder's documents, known or new, all go into one
     /// collection; archives and other files in it don't, and nothing
     /// starts watching the folder.
+    #[test]
+    fn placeholder_titles_and_authors_give_way_to_the_file_name() {
+        let p = Path::new("books/IT Audit.pdf");
+        let t = title_or_name(Some("untitled".into()), p);
+        assert_eq!(t, "IT Audit.pdf");
+        // The title is already the file name: nothing under it.
+        assert_eq!(author_or_name(Some("anonymous".into()), &t, p), None);
+        // A real title and no author: the file name under it.
+        assert_eq!(
+            author_or_name(None, "IT Audit Fundamentals", p).as_deref(),
+            Some("IT Audit.pdf")
+        );
+        assert_eq!(
+            author_or_name(Some("ISACA".into()), "IT Audit Fundamentals", p).as_deref(),
+            Some("ISACA")
+        );
+    }
+
     #[test]
     fn a_folder_becomes_a_collection() {
         let dir = std::env::temp_dir().join(format!("kitab-collect-{}", std::process::id()));

@@ -15,7 +15,7 @@ mod ranges;
 mod signature;
 pub mod spoken;
 pub use form::*;
-pub use legible::legible;
+pub use legible::{legible, meaningful, placeholder};
 pub use markup::*;
 pub use model::*;
 pub use ranges::parse_page_ranges;
