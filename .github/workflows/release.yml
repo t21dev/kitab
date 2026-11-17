@@ -255,11 +255,10 @@ jobs:
             -F draft=false -f make_latest=true --jq .html_url
 
   # The website follows the release: the changelog, privacy page and shortcut
-  # lists are synced into the `landing` branch, and the site is deployed, so
-  # kitab.t21.dev/latest.json (which the app's update check asks before
-  # GitHub's rate-limited API) names the new version. CLOUDFLARE_API_TOKEN
-  # (Workers Scripts: Edit) and CLOUDFLARE_ACCOUNT_ID: the account that owns
-  # t21.dev. Without them the branch is still updated, for a deploy by hand.
+  # lists are synced into the `landing` branch, which Cloudflare Workers Builds
+  # deploys on every push, so kitab.t21.dev/latest.json (which the app's
+  # update check asks alongside GitHub's rate-limited API) names the new
+  # version once the release is out.
   website:
     needs: [publish]
     if: github.event_name == 'push' && needs.publish.result == 'success' && !contains(github.ref_name, '-')
@@ -290,20 +289,6 @@ jobs:
             git commit -am "chore: sync content for ${{ github.ref_name }}"
             git push origin HEAD:landing
           fi
-      - name: Deploy
-        shell: bash
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
-            echo "::warning::CLOUDFLARE_API_TOKEN isn't set; deploy the landing branch by hand (npm run deploy)"
-            exit 0
-          fi
-          npx wrangler deploy
-          curl -fsS https://kitab.t21.dev/latest.json
 
   # The Homebrew cask (t21dev/homebrew-tap) follows the release at once, so
   # `brew upgrade` sees it within minutes instead of waiting for the tap's
