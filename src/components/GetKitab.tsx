@@ -79,7 +79,9 @@ export function pick(release: Release, seen: Seen): Pick | null {
   return { name: NAMES[seen.os], main: all[0], more: all.slice(1) };
 }
 
+/** "13.3 MB", or "" when the size isn't known. */
 export function size(n: number): string {
+  if (!n) return "";
   if (n >= 1024 * 1024) return `${(n / 1024 / 1024).toFixed(1)} MB`;
   return `${Math.max(1, Math.round(n / 1024))} KB`;
 }
@@ -100,7 +102,7 @@ export function ForYou({ release }: { release: Release }) {
           <Icon name="download" size={17} /> Download for {p.name}
         </a>
         <span className="text-[13.5px] text-muted">
-          {p.main.label} · {size(p.main.asset.size)}
+          {[p.main.label, size(p.main.asset.size)].filter(Boolean).join(" · ")}
         </span>
       </div>
       {p.more.length > 0 && (

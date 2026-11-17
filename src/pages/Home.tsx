@@ -75,7 +75,7 @@ function HeroCtas({ data }: { data: PageData }) {
       </div>
       {p && (
         <p className="cta-note">
-          {data.release!.tag.replace(/^v/, "")} · {p.main.label} · {size(p.main.asset.size)} ·{" "}
+          {[data.release!.tag.replace(/^v/, ""), p.main.label, size(p.main.asset.size)].filter(Boolean).join(" · ")} ·{" "}
           <a href="/download">Other systems</a>
         </p>
       )}

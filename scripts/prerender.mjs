@@ -47,7 +47,32 @@ async function latestRelease() {
   }
 }
 
-const release = await latestRelease();
+// GitHub's API sometimes refuses the build (rate limits on shared builders). Then the release is
+// worked out from the synced changelog's newest version and the file names every release has,
+// without sizes, so the download buttons still go straight to the files.
+const RELEASE_FILES = [
+  "x64_setup.exe", "x64_portable.zip", "aarch64.dmg", "x86_64.dmg",
+  "x86_64.AppImage", "aarch64.AppImage", "amd64.deb", "arm64.deb",
+  "x86_64.rpm", "aarch64.rpm", "x86_64.flatpak", "x86_64.tar.gz", "aarch64.tar.gz",
+];
+function releaseFromChangelog() {
+  if (process.env.KITAB_OFFLINE) return null;
+  const m = read("content/CHANGELOG.md").match(/^## \[(\d[^\]]*)\] - (\d{4}-\d{2}-\d{2})/m);
+  if (!m) return null;
+  const [, v, date] = m;
+  const base = `https://github.com/t21dev/kitab/releases/download/v${v}`;
+  console.log(`release: v${v} from the changelog (file sizes unknown)`);
+  return {
+    tag: `v${v}`,
+    name: `Kitab Reader ${v}`,
+    url: `https://github.com/t21dev/kitab/releases/tag/v${v}`,
+    publishedAt: date,
+    prerelease: v.includes("-"),
+    assets: RELEASE_FILES.map((f) => ({ name: `Kitab_${v}_${f}`, url: `${base}/Kitab_${v}_${f}`, size: 0 })),
+  };
+}
+
+const release = (await latestRelease()) ?? releaseFromChangelog();
 
 // ---------------------------------------------------------------- markdown sources
 
