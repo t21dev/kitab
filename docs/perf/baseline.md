@@ -250,4 +250,16 @@ Render work is the sum of the finished renders' times after the input started; "
 
 The first build of "pages on screen first" kept a page that was laid out blank and then scrolled away marked as waiting, so the page ahead, links and fields never loaded after a flick. Fixed before the numbers above: it now waits on the on-screen renders still out, which always come back (drawn, skipped or stopped).
 
-The start-up benchmark (`kitab-bench s2`) didn't run: it refuses while another Kitab is open (an installed one was).
+### Start-up: `kitab-bench s2 --runs 15 --warmup 2`, medians
+
+| File | App | Window on screen | Page on screen | CPU to page | Working set | Private | CPU in the 2 s after |
+|---|---|---|---|---|---|---|---|
+| 01-text-outline.pdf | Kitab 0.8.1 | 246 ms (with the page) | 259 ms | 265 ms | 106.6 MB | 145.2 MB | 6.2 % |
+| | Kitab new | 240 ms (with the page) | 253 ms | 234 ms | 107.1 MB | 144.9 MB | 6.2 % |
+| | SumatraPDF 3.6.1 | 84 ms (blank) | ≤ 401 ms | 187 ms | 46.7 MB | 15.4 MB | 0.0 % |
+| 06-large-20mb.pdf | Kitab 0.8.1 | 251 ms (with the page) | 265 ms | 281 ms | 109.1 MB | 127.0 MB | 7.0 % |
+| | Kitab new | 258 ms (with the page) | 272 ms | 250 ms | 106.9 MB | 125.5 MB | 7.0 % |
+| | SumatraPDF 3.6.1 | 110 ms (blank) | ≤ 413 ms | 187 ms | 74.6 MB | 37.4 MB | 0.0 % |
+
+- Start-up is unchanged within noise (±7 ms to the window); CPU to the first page is 30 ms lower in both files (the page ahead and the link loading now wait for the first page).
+- SumatraPDF shows its window 150 ms sooner but blank; Kitab's window arrives with the page in it, and the page is on screen sooner than SumatraPDF's (253–272 ms against up to 401–413 ms).
