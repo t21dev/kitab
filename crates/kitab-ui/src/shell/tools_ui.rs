@@ -180,7 +180,7 @@ impl Workspace {
         }
     }
 
-    fn dismiss_toast(&mut self, serial: u64, cx: &mut Context<Self>) {
+    pub(super) fn dismiss_toast(&mut self, serial: u64, cx: &mut Context<Self>) {
         if self
             .tools
             .toast

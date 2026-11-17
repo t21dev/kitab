@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Open a plain ZIP, RAR or 7z archive of pictures as a comic, from Open, drag and drop or a link (#7). Kitab doesn't claim these files in the system, and watched folders skip them.
+- Home: + From folder makes a collection of every document in a folder (and its subfolders), and a collection's menu has Add a folder… (#10). The folder isn't watched.
+- At the end of a book, going on (N, the arrow keys, Space or Page Down) offers the next file in the same folder in name order, and going on once more opens it in the same tab (#9). Settings › Reading › Go on to the next book turns it off.
+
 ### Fixed
 - Home: a book whose file is gone says "File not found" in place of its author, instead of leaving a gap under the title.
 

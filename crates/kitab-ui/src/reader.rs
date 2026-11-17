@@ -144,6 +144,9 @@ pub enum ReaderEvent {
     SignaturePlaced(Option<(u32, [f32; 4])>),
     /// Something went wrong that the reader should hear about (a toast).
     Message(String),
+    /// Asked to go on with the end of the document in view: the workspace
+    /// offers the next book in the folder (GitHub #9).
+    PastEnd,
 }
 
 /// What "Save page as…" writes.
@@ -493,6 +496,17 @@ impl Reader {
     /// last page once the scroll reaches the end (it may never fill the view).
     /// Not the page whose top is in view: a thin strip of the previous page
     /// at the top would otherwise count.
+    /// The end of the document is in view: scrolled as far as it goes,
+    /// nothing still gliding. Going on from here means the next book.
+    pub(crate) fn at_end(&self) -> bool {
+        if self.status != Status::Open || self.page_count() == 0 || self.glide.is_some() {
+            return false;
+        }
+        let max = self.list.max_offset_for_scrollbar().height;
+        let at = -self.list.scroll_px_offset_for_scrollbar().y;
+        max <= px(1.0) || at >= max - px(1.0)
+    }
+
     pub fn current_page(&self) -> usize {
         let last = self.page_count().saturating_sub(1);
         let top = self.list.logical_scroll_top().item_ix.min(last);
@@ -1122,6 +1136,10 @@ impl Reader {
     /// book whose pages advance right to left (MANIFEST 04).
     fn page_arrow(&mut self, right: bool, cx: &mut Context<Self>) {
         if page_arrow_goes_forward(right, self.right_to_left(cx)) {
+            if self.at_end() {
+                cx.emit(ReaderEvent::PastEnd);
+                return;
+            }
             self.next_page(cx);
         } else {
             self.prev_page(cx);
@@ -2320,7 +2338,13 @@ impl Render for Reader {
             } else {
                 st.c(|c| c.desk)
             })
-            .on_action(cx.listener(|r, _: &NextPage, _, cx| r.go_to_page(r.current_page() + 1, cx)))
+            .on_action(cx.listener(|r, _: &NextPage, _, cx| {
+                if r.at_end() {
+                    cx.emit(ReaderEvent::PastEnd);
+                } else {
+                    r.go_to_page(r.current_page() + 1, cx)
+                }
+            }))
             .on_action(cx.listener(|r, _: &PrevPage, _, cx| {
                 r.go_to_page(r.current_page().saturating_sub(1), cx)
             }))
@@ -2524,7 +2548,13 @@ impl Render for Reader {
             )
             .on_action(cx.listener(|r, _: &ScrollDown, _, cx| r.glide_by(64.0, cx)))
             .on_action(cx.listener(|r, _: &ScrollUp, _, cx| r.glide_by(-64.0, cx)))
-            .on_action(cx.listener(|r, _: &ScreenDown, _, cx| r.glide_by(r.viewport.1 * 0.9, cx)))
+            .on_action(cx.listener(|r, _: &ScreenDown, _, cx| {
+                if r.at_end() {
+                    cx.emit(ReaderEvent::PastEnd);
+                } else {
+                    r.glide_by(r.viewport.1 * 0.9, cx)
+                }
+            }))
             .on_action(cx.listener(|r, _: &ScreenUp, _, cx| r.glide_by(-r.viewport.1 * 0.9, cx)))
             .on_action(cx.listener(|r, _: &ZoomIn, _, cx| r.step_zoom(true, cx)))
             .on_action(cx.listener(|r, _: &ZoomOut, _, cx| r.step_zoom(false, cx)))

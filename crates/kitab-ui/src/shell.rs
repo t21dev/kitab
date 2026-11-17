@@ -32,6 +32,7 @@ use std::time::Duration;
 mod home_ui;
 mod library_ui;
 mod menu_bar;
+mod next_book;
 pub(crate) use menu_bar::init_native as init_native_menu;
 mod page_tools_ui;
 mod palette_ui;
@@ -65,6 +66,8 @@ impl gpui::Global for SettingsSink {}
 const CLOSED_MAX: usize = 20;
 
 pub struct Workspace {
+    /// The next book offered at the end of one (`next_book.rs`).
+    next_book: Option<next_book::Offer>,
     /// The menu bar's menu that is open (see `menu_bar.rs`).
     bar_open: Option<usize>,
     /// Where the menu bar's titles are on screen, from the last frame.
@@ -265,6 +268,7 @@ impl Workspace {
             overlay_focus: cx.focus_handle(),
             ui_trace: std::env::var_os("KITAB_TRACE_UI")
                 .map(|_| std::cell::Cell::new(std::time::Instant::now())),
+            next_book: None,
             bar_open: None,
             bar_bounds: Rc::default(),
             alt_down: false,
@@ -791,6 +795,7 @@ impl Workspace {
                         }
                         cx.notify();
                     }
+                    ReaderEvent::PastEnd => this.past_end(reader.clone(), window, cx),
                     ReaderEvent::BookText(pt) => {
                         // Remembered across launches (settings.json `book_text_size`).
                         let pt = *pt;
@@ -5658,7 +5663,9 @@ mod tab_icon_tests {
     fn each_format_has_its_icon() {
         let icon = |p: &str| super::tab_icon_for(std::path::Path::new(p));
         assert_eq!(icon("a.pdf"), "pdf");
-        assert_eq!(icon("a.zip"), "file");
+        // A plain archive opens as a comic (GitHub #7).
+        assert_eq!(icon("a.zip"), "image");
+        assert_eq!(icon("a.docx"), "file");
         assert_eq!(icon("a.MD"), "markdown");
         assert_eq!(icon("a.epub"), "book");
         assert_eq!(icon("a.fb2"), "book");

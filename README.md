@@ -172,7 +172,7 @@ SumatraPDF starts sooner and is lighter: it draws with GDI, while Kitab first se
 | PDF | Password-protected files too. Links, contents, text selection, annotations already in the file |
 | EPUB | Flowing and fixed-layout, right-to-left books, every script your system has fonts for |
 | MOBI, FB2, TXT | Flow like EPUB, in your typeface and text size |
-| CBZ, CBR, CB7 | Comics, page by page, whatever archive they're really in (WebP pages too) |
+| CBZ, CBR, CB7 | Comics, page by page, whatever archive they're really in (WebP pages too). A plain ZIP, RAR or 7z of pictures opens the same way from inside Kitab |
 | DjVu | Scanned books at their own page size; search, select and read aloud when the scan has a text layer; contents from its bookmarks |
 | XPS | Pages at their own size |
 | Markdown | Tables, task lists, footnotes, code with syntax colours, math, Mermaid diagrams, frontmatter |
@@ -218,7 +218,8 @@ Kitab is a document reader, so it leaves image files to your image viewer.
 
 **Library**
 - Home shows your books as covers or a list, on shelves: Recent, All, Favourites, In progress, Finished and your own collections
-- Watched folders bring in every document they hold
+- Watched folders bring in every document they hold; + From folder makes a collection of one folder's documents
+- At the end of a book, go on to the next file in its folder
 - Library search finds words inside every document you've opened, and books by title, author or file name
 - Reading stats: time read today and this week, your streak, and a bar per day
 - Remove a book from Home, or Locate… one that moved (its place, bookmarks and marks follow it)

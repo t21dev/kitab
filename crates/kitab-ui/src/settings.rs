@@ -812,6 +812,9 @@ pub struct Settings {
     pub code_font: String,
     /// Comics read right to left (manga): the first page on the right.
     pub comic_rtl: bool,
+    /// Going on past the last page offers the next file in the folder, and
+    /// a second press opens it (GitHub #9).
+    pub next_book: bool,
     pub page_colour: PageColour,
     /// The main window's last place (none before the first close).
     pub window: Option<WindowPlace>,
@@ -913,6 +916,7 @@ impl Default for Settings {
             dark_theme: "dark".into(),
             code_font: String::new(),
             comic_rtl: false,
+            next_book: true,
             page_colour: PageColour::Original,
             window: None,
         }
@@ -980,6 +984,7 @@ struct File {
     dark_theme: String,
     code_font: String,
     comic_rtl: bool,
+    next_book: bool,
     page_colour: PageColour,
     window: Option<WindowPlace>,
 }
@@ -1096,6 +1101,7 @@ impl From<Settings> for File {
             dark_theme: s.dark_theme,
             code_font: s.code_font,
             comic_rtl: s.comic_rtl,
+            next_book: s.next_book,
             page_colour: s.page_colour,
             window: s.window,
         }
@@ -1172,6 +1178,7 @@ impl Settings {
             dark_theme: theme_id(f.dark_theme, "dark"),
             code_font: f.code_font.chars().take(200).collect(),
             comic_rtl: f.comic_rtl,
+            next_book: f.next_book,
             page_colour: f.page_colour,
             window: f.window,
         })
@@ -1264,6 +1271,7 @@ mod tests {
             dark_theme: "nord".into(),
             code_font: "Cascadia Code".into(),
             comic_rtl: true,
+            next_book: false,
             page_colour: PageColour::Dark,
             window: Some(WindowPlace {
                 x: 40.0,

@@ -853,6 +853,22 @@ fn reading(ws: &WeakEntity<Workspace>, st: &Style) -> AnyElement {
             st,
         ))
         .child(group(
+            "At the end of a book",
+            Some("Going on past the last page (N, the arrow keys, Space or Page Down) offers the next file in the same folder, in name order. Go on once more to open it in the same tab."),
+            well_row(
+                "Go on to the next book",
+                "",
+                switch(
+                    "next-book",
+                    st.next_book,
+                    st,
+                    change(ws, |s: &mut Style| s.next_book = !s.next_book),
+                ),
+                st,
+            ),
+            st,
+        ))
+        .child(group(
             "Read aloud",
             Some("Ctrl+Shift+U, or the speaker in the dock, reads from the selection or from the top of the page in view, and the pages follow along. The voices are your system's own: add more in its speech or language settings."),
             read_aloud_rows(ws, st),

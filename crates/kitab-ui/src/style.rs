@@ -78,6 +78,7 @@ pub struct Style {
     pub dark_theme: String,
     pub code_font: String,
     pub comic_rtl: bool,
+    pub next_book: bool,
     pub page_colour: crate::settings::PageColour,
     /// The main window's last place, saved with the settings.
     pub window: Option<crate::settings::WindowPlace>,
@@ -181,6 +182,7 @@ impl Style {
             dark_theme: s.dark_theme.clone(),
             code_font: s.code_font.clone(),
             comic_rtl: s.comic_rtl,
+            next_book: s.next_book,
             page_colour: s.page_colour,
             window: s.window,
         };
@@ -273,6 +275,7 @@ impl Style {
             dark_theme: self.dark_theme.clone(),
             code_font: self.code_font.clone(),
             comic_rtl: self.comic_rtl,
+            next_book: self.next_book,
             page_colour: self.page_colour,
             window: self.window,
         }
