@@ -142,7 +142,12 @@ impl Workspace {
             prompt: Some("Choose certificate".into()),
         });
         cx.spawn(async move |this, cx| {
-            let Ok(Ok(Some(mut paths))) = rx.await else {
+            let picked = rx.await;
+            // The picker couldn't open (Linux without a desktop portal): say so.
+            if matches!(picked, Ok(Err(_)) | Err(_)) {
+                let _ = this.update(cx, |ws, cx| ws.picker_failed(cx));
+            }
+            let Ok(Ok(Some(mut paths))) = picked else {
                 return;
             };
             let Some(path) = paths.pop() else { return };
@@ -238,7 +243,12 @@ impl Workspace {
         let dir = src.parent().map(Path::to_path_buf).unwrap_or_default();
         let rx = cx.prompt_for_new_path(&dir, Some(&format!("{} (signed).pdf", stem(&src))));
         cx.spawn(async move |this, cx| {
-            let Ok(Ok(Some(mut out))) = rx.await else {
+            let picked = rx.await;
+            // The picker couldn't open (Linux without a desktop portal): say so.
+            if matches!(picked, Ok(Err(_)) | Err(_)) {
+                let _ = this.update(cx, |ws, cx| ws.picker_failed(cx));
+            }
+            let Ok(Ok(Some(mut out))) = picked else {
                 return;
             };
             if out.extension().is_none() {

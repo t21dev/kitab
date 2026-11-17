@@ -77,7 +77,12 @@ impl Workspace {
         });
         let library = self.library.clone();
         cx.spawn(async move |this, cx| {
-            let Ok(Ok(Some(mut picked))) = rx.await else {
+            let picked = rx.await;
+            // The picker couldn't open (Linux without a desktop portal): say so.
+            if matches!(picked, Ok(Err(_)) | Err(_)) {
+                let _ = this.update(cx, |ws, cx| ws.picker_failed(cx));
+            }
+            let Ok(Ok(Some(mut picked))) = picked else {
                 return;
             };
             let Some(dir) = picked.pop() else { return };
@@ -176,7 +181,12 @@ impl Workspace {
         });
         let engine = self.engine.clone();
         cx.spawn(async move |this, cx| {
-            let Ok(Ok(Some(paths))) = rx.await else {
+            let picked = rx.await;
+            // The picker couldn't open (Linux without a desktop portal): say so.
+            if matches!(picked, Ok(Err(_)) | Err(_)) {
+                let _ = this.update(cx, |ws, cx| ws.picker_failed(cx));
+            }
+            let Ok(Ok(Some(paths))) = picked else {
                 return;
             };
             let result = cx

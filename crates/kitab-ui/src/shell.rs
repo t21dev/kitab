@@ -135,6 +135,9 @@ pub struct Workspace {
     side_search: side_search::SideSearch,
     /// Frames in a row that panicked (the frame guard in `render`).
     panics_in_row: u32,
+    /// Kitab draws its own window buttons (`own_window_buttons`), as of
+    /// the latest frame.
+    own_buttons: bool,
     /// Too many panics: the window shows only "restart", and closing it
     /// keeps the unsaved work for the next start.
     crashed: bool,
@@ -297,6 +300,7 @@ impl Workspace {
             toc_folds: 0,
             side_search: side_search::SideSearch::new(cx),
             panics_in_row: 0,
+            own_buttons: own_window_buttons(window),
             crashed: false,
             style_serial: 0,
             _style_watch: cx.observe_global::<Style>(|ws, _| ws.style_serial += 1),
@@ -1025,7 +1029,12 @@ impl Workspace {
         });
         let handle = window.window_handle();
         cx.spawn(async move |this, cx| {
-            if let Ok(Ok(Some(paths))) = rx.await {
+            let picked = rx.await;
+            // The picker couldn't open (Linux without a desktop portal): say so.
+            if matches!(picked, Ok(Err(_)) | Err(_)) {
+                let _ = this.update(cx, |ws, cx| ws.picker_failed(cx));
+            }
+            if let Ok(Ok(Some(paths))) = picked {
                 let _ = handle.update(cx, |_, window, cx| {
                     let _ = this.update(cx, |ws, cx| {
                         for p in paths {
@@ -1128,6 +1137,22 @@ fn window_button(
         .items_center()
         .justify_center()
         .window_control_area(area)
+        // Windows clicks these through hit testing (above); elsewhere the
+        // click does it. Close asks about unsaved changes first, as the
+        // window manager's close does.
+        .when(!cfg!(windows), |d| {
+            d.on_click(move |_, window, cx| match area {
+                WindowControlArea::Min => window.minimize_window(),
+                WindowControlArea::Max => window.zoom_window(),
+                _ => {
+                    if let Some(Some(ws)) = window.root::<Workspace>()
+                        && confirm_close(&ws.downgrade(), window, cx)
+                    {
+                        window.remove_window();
+                    }
+                }
+            })
+        })
         .text_color(st.c(|c| c.muted))
         .hover(move |d| d.bg(hover_bg))
         .child(
@@ -1203,8 +1228,39 @@ fn lead(pad: f32) -> gpui::Pixels {
     })
 }
 
-/// Kitab's own minimise, maximise and close: not on a Mac, which has its own.
-const OWN_WINDOW_BUTTONS: bool = !cfg!(target_os = "macos");
+/// Whether Kitab draws its own minimise, maximise and close: on Windows
+/// always; never on a Mac (it has its own); on Linux only when the window
+/// manager doesn't draw a title bar (GNOME on Wayland does not; KDE's KWin
+/// does, and two sets of buttons showed there).
+fn own_window_buttons(window: &Window) -> bool {
+    if cfg!(target_os = "macos") {
+        false
+    } else if cfg!(target_os = "linux") || cfg!(target_os = "freebsd") {
+        matches!(
+            window.window_decorations(),
+            gpui::Decorations::Client { .. }
+        )
+    } else {
+        true
+    }
+}
+
+/// A stretch of a top bar that drags the window. Windows finds it by hit
+/// testing (`WindowControlArea::Drag`); elsewhere a press starts the move,
+/// and a double click maximises or restores, as a title bar does.
+fn drag_area(d: gpui::Stateful<gpui::Div>) -> gpui::Stateful<gpui::Div> {
+    let d = d.window_control_area(WindowControlArea::Drag);
+    if cfg!(windows) {
+        return d;
+    }
+    d.on_mouse_down(MouseButton::Left, |e: &MouseDownEvent, window, _| {
+        if e.click_count >= 2 {
+            window.zoom_window();
+        } else {
+            window.start_window_move();
+        }
+    })
+}
 
 impl Workspace {
     fn title_bar(&mut self, st: &Style, window: &Window, cx: &mut Context<Self>) -> AnyElement {
@@ -1251,7 +1307,7 @@ impl Workspace {
             0.0
         };
         let lead_w = f32::from(lead(8.0));
-        let buttons_w = if OWN_WINDOW_BUTTONS { 3.0 * 46.0 } else { 0.0 };
+        let buttons_w = if self.own_buttons { 3.0 * 46.0 } else { 0.0 };
         let base =
             lead_w + 2.0 * st.m().icon_button + 17.0 + 40.0 + DRAG_MIN + buttons_w + 12.0 + count_w;
         let win_w = f32::from(window.viewport_size().width);
@@ -1539,20 +1595,19 @@ impl Workspace {
             });
         let pill = self.update_pill(st, cx);
         let actions = self.title_actions(st, self.title_squeezed, cx);
-        bar.child(
+        bar.child(drag_area(
             div()
                 .id("drag")
                 .flex_1()
                 // Always leave room to drag the window.
                 .min_w(px(DRAG_MIN))
-                .h_full()
-                .window_control_area(WindowControlArea::Drag),
-        )
+                .h_full(),
+        ))
         // The tab count sits on the right, before the title-bar buttons.
         .children(count.map(|c| c.mr(px(6.0))))
         .children(actions)
         .children(pill)
-        .when(OWN_WINDOW_BUTTONS, |b| b.children(window_buttons(st)))
+        .when(self.own_buttons, |b| b.children(window_buttons(st)))
         .into_any_element()
     }
 
@@ -2175,7 +2230,12 @@ impl Workspace {
         });
         let rx = cx.prompt_for_new_path(&dir, Some(&name));
         cx.spawn(async move |this, cx| {
-            let Ok(Ok(Some(out))) = rx.await else {
+            let picked = rx.await;
+            // The picker couldn't open (Linux without a desktop portal): say so.
+            if matches!(picked, Ok(Err(_)) | Err(_)) {
+                let _ = this.update(cx, |ws, cx| ws.picker_failed(cx));
+            }
+            let Ok(Ok(Some(out))) = picked else {
                 return;
             };
             let written = cx
@@ -2252,13 +2312,7 @@ impl Workspace {
                                     cx.listener(|ws, _, window, cx| ws.show_home(window, cx)),
                                 ),
                         )
-                        .child(
-                            div()
-                                .id("side-drag")
-                                .flex_1()
-                                .h_full()
-                                .window_control_area(WindowControlArea::Drag),
-                        )
+                        .child(drag_area(div().id("side-drag").flex_1().h_full()))
                         .child(
                             icon_button("side-open", "plus", false, st)
                                 .tip("Open a file  Ctrl+O")
@@ -2529,16 +2583,10 @@ impl Workspace {
                         ),
                 )
             })
-            .child(
-                div()
-                    .id("strip-drag")
-                    .flex_1()
-                    .h_full()
-                    .window_control_area(WindowControlArea::Drag),
-            )
+            .child(drag_area(div().id("strip-drag").flex_1().h_full()))
             // On a solid corner tab, so they read over any page. A Mac has
             // nothing here outside focus mode: its window buttons are top left.
-            .when(OWN_WINDOW_BUTTONS || Style::get(cx).minimal, |d| {
+            .when(self.own_buttons || Style::get(cx).minimal, |d| {
                 d.child(
                     div()
                         .flex()
@@ -2572,7 +2620,7 @@ impl Workspace {
                         .overflow_hidden()
                         .bg(st.c(|c| c.bg))
                         .shadow(st.elev())
-                        .when(OWN_WINDOW_BUTTONS, |d| d.children(window_buttons(st))),
+                        .when(self.own_buttons, |d| d.children(window_buttons(st))),
                 )
             })
             .into_any_element()
@@ -3389,6 +3437,7 @@ impl Workspace {
     fn render_frame(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         #[cfg(debug_assertions)]
         debug_panic();
+        self.own_buttons = own_window_buttons(window);
         let st = Style::get(cx).clone();
         kitab_os::trace::mark("frame");
         if let Some(last) = &self.ui_trace {
@@ -5439,7 +5488,12 @@ impl Workspace {
         let handle = window.window_handle();
         let library = self.library.clone();
         cx.spawn(async move |this, cx| {
-            let Ok(Ok(Some(paths))) = rx.await else {
+            let picked = rx.await;
+            // The picker couldn't open (Linux without a desktop portal): say so.
+            if matches!(picked, Ok(Err(_)) | Err(_)) {
+                let _ = this.update(cx, |ws, cx| ws.picker_failed(cx));
+            }
+            let Ok(Ok(Some(paths))) = picked else {
                 return;
             };
             let Some(to) = paths.into_iter().next() else {

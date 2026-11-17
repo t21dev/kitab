@@ -110,6 +110,18 @@ pub(super) fn dialog_button(
 impl Workspace {
     // ── toast ──
 
+    /// The system's file picker couldn't open. On Linux it comes from the
+    /// desktop portal (xdg-desktop-portal and the desktop's own backend);
+    /// without one, Open file did nothing at all.
+    pub(super) fn picker_failed(&mut self, cx: &mut Context<Self>) {
+        let text = if cfg!(target_os = "linux") || cfg!(target_os = "freebsd") {
+            "Couldn't open the file picker. Kitab uses your desktop's: install xdg-desktop-portal and the one for your desktop (xdg-desktop-portal-kde on KDE, -gnome on GNOME, -gtk elsewhere), then try again. Dropping a file on the window works meanwhile."
+        } else {
+            "Couldn't open the file picker. Try again, or drop a file on the window."
+        };
+        self.toast(text, true, None, cx);
+    }
+
     pub(super) fn toast(
         &mut self,
         text: impl Into<SharedString>,
@@ -467,7 +479,12 @@ impl Workspace {
         let rx = cx.prompt_for_new_path(&dir_of(&src), Some(&name));
         let engine = self.engine.clone();
         cx.spawn(async move |this, cx| {
-            let Ok(Ok(Some(mut out))) = rx.await else {
+            let picked = rx.await;
+            // The picker couldn't open (Linux without a desktop portal): say so.
+            if matches!(picked, Ok(Err(_)) | Err(_)) {
+                let _ = this.update(cx, |ws, cx| ws.picker_failed(cx));
+            }
+            let Ok(Ok(Some(mut out))) = picked else {
                 return;
             };
             if out.extension().is_none() {
@@ -513,7 +530,12 @@ impl Workspace {
             cx.prompt_for_new_path(&dir_of(&src), Some(&format!("{} (marked).pdf", stem(&src))));
         let engine = self.engine.clone();
         cx.spawn_in(window, async move |this, cx| {
-            let Ok(Ok(Some(mut out))) = rx.await else {
+            let picked = rx.await;
+            // The picker couldn't open (Linux without a desktop portal): say so.
+            if matches!(picked, Ok(Err(_)) | Err(_)) {
+                let _ = this.update(cx, |ws, cx| ws.picker_failed(cx));
+            }
+            let Ok(Ok(Some(mut out))) = picked else {
                 return;
             };
             if out.extension().is_none() {
@@ -785,7 +807,12 @@ impl Workspace {
         });
         let engine = self.engine.clone();
         cx.spawn(async move |this, cx| {
-            let Ok(Ok(Some(more))) = rx.await else { return };
+            let picked = rx.await;
+            // The picker couldn't open (Linux without a desktop portal): say so.
+            if matches!(picked, Ok(Err(_)) | Err(_)) {
+                let _ = this.update(cx, |ws, cx| ws.picker_failed(cx));
+            }
+            let Ok(Ok(Some(more))) = picked else { return };
             let more: Vec<PathBuf> = more.into_iter().filter(|p| *p != first).collect();
             if more.is_empty() {
                 return;
@@ -796,7 +823,12 @@ impl Workspace {
             }) else {
                 return;
             };
-            let Ok(Ok(Some(mut out))) = save_rx.await else {
+            let picked = save_rx.await;
+            // The picker couldn't open (Linux without a desktop portal): say so.
+            if matches!(picked, Ok(Err(_)) | Err(_)) {
+                let _ = this.update(cx, |ws, cx| ws.picker_failed(cx));
+            }
+            let Ok(Ok(Some(mut out))) = picked else {
                 return;
             };
             if out.extension().is_none() {
