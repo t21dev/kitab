@@ -7,6 +7,185 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-11-17
+
+### Added
+- Open a plain ZIP, RAR or 7z archive of pictures as a comic, from Open, drag and drop or a link (#7). Kitab doesn't claim these files in the system, and watched folders skip them.
+- Home: + From folder makes a collection of every document in a folder (and its subfolders), and a collection's menu has Add a folder… (#10). The folder isn't watched.
+- At the end of a book, going on (N, the arrow keys, Space or Page Down) offers the next file in the same folder in name order, and going on once more opens it in the same tab (#9). Settings › Reading › Go on to the next book turns it off.
+
+### Fixed
+- The update check no longer fails when GitHub is busy ("rate limit") or down: Kitab now also asks its own website, and the newer answer wins.
+- Home: a book whose file is gone says "File not found" in place of its author, instead of leaving a gap under the title.
+
+## [0.7.0] - 2026-11-17
+
+### Added
+- Install updates from inside Kitab (Windows installer and macOS): Install downloads the new version, checks it against the release's checksums, and puts it in when Kitab quits; Restart now does it straight away and opens the new version. The portable zip, Scoop and Linux keep Download, which opens the release page.
+
+### Fixed
+- macOS: shortcuts use Cmd (Cmd+O, Cmd+W, Cmd+F, Cmd+S…) instead of Ctrl, and menus, tooltips and the shortcut list show Cmd and Option. Tab switching keeps Ctrl+Tab.
+- macOS: the window's close, minimise and zoom buttons no longer sit on top of Home and the tabs, and Kitab's own Windows-style window buttons are gone there.
+- macOS: clicking Kitab in the Dock after closing its window opens the window again, and files opened from Finder then open in a new window instead of nowhere.
+
+## [0.6.2] - 2026-11-16
+
+### Added
+- Help has a Guide (kitab.t21.dev/docs), Kitab on GitHub and Report an issue; the Guide is also in the ⋯ menu, the command palette and Settings › About.
+- Home can remove every missing file on a shelf at once ("Remove N missing files"). Books on a drive or share that isn't connected are kept.
+
+### Fixed
+- An open menu closes when you switch to another app instead of staying over it.
+- Recent shows books whose file was deleted as missing, like the other shelves.
+
+## [0.6.1] - 2026-11-15
+
+### Changed
+- Long PDFs open faster and use less memory: page sizes are read from the page list instead of loading every page (a 1,251-page textbook: 54 → 19 ms to open, 29 MB less).
+- Pages full of links (contents pages, indexes) cost less to draw: each link is worked out once, not on every frame (about 30 % less work while the pointer moves over a contents page with 255 links).
+- Scrolling with Find open costs less: a page's highlights are painted together instead of each as its own element (searching a common letter, 8,245 matches: about 19 % less work while scrolling).
+- Pages with pen marks scroll more smoothly: each stroke is shaped once and reused, instead of on every frame (60 strokes on a page: about 14 % less work while scrolling).
+- Deep zoom and Home's covers keep their pictures only on the graphics card once drawn, as pages already did (about 20 MB less at deep zoom, 6 MB less on a big Home shelf).
+
+## [0.6.0] - 2026-11-15
+
+### Added
+- Read aloud has a panel: the dock's speaker opens play and pause, a sentence back or on, stop, speed, tone and voice. A new speed, tone or voice is heard at once while reading. "Follow the voice" can be turned off, so scrolling elsewhere isn't pulled back.
+- Markdown files read aloud, block by block; the block being read is shaded. Code and diagrams are skipped.
+- Two pages side by side (Ctrl+7) and book view, the cover alone then pairs (Ctrl+8), for PDFs, comics, DjVu and XPS; Ctrl+6 goes back to one page. In the page menu and the View menu too.
+- Settings › Home › When Kitab starts: the tabs you had open, the last file you read, or Home.
+- Settings › Appearance › Match the system's light or dark mode, with a light and a dark theme of your choice.
+- Settings › Reading › Page colour for PDFs, comics, DjVu and XPS: Dark (night reading; pictures keep their colours) or your theme's colours.
+- Settings › Reading › Read comics right to left (manga).
+- Settings › Reading › Code font, from your system's monospace fonts.
+- The command palette (Ctrl+K) also finds open tabs, recent files and the document's headings.
+- A PDF that changes on disk (a LaTeX build, a download finishing) opens again at the same place.
+- Save a copy with marks…: marks and filled-in fields go into a new file and the open one is left as it is.
+- Presentation mode: type a page number and Enter to go there; B or W blanks the screen black or white; the pointer hides when still.
+- Home: Remove from Home, and Locate… for a file that has moved (its reading place, bookmarks and marks follow it). Library search finds books by title, author or file name, opened or not.
+- The "can't open" screen shows the file's path and offers Locate… or Try again, Show in folder, Remove from Home and Close tab.
+- Contents entries fold and unfold. A heading with no words shows as "Untitled section".
+- Esc leaves Focus mode, and entering it says how. Ctrl+F starts with the selected words. Ctrl+Shift+PgUp / PgDn move the tab; Ctrl+Q quits on Windows and Linux.
+
+### Changed
+- Very deep zoom draws only what's in view, sharp, in tiles: pages past about 40 megapixels showed soft or blank before.
+- Restoring many tabs opens the one you were reading first and the others after it.
+- Code and math use the system's own fonts on macOS and Linux.
+- Scrolling with the sidebar open costs much less: the contents list is kept from frame to frame instead of being built again on every one (a fast screen draws up to 160 frames a second while the page glides).
+
+### Fixed
+- The mouse wheel could zoom instead of scrolling, on Windows, after Ctrl was let go while another window had the keyboard: Kitab still thought Ctrl was held. The wheel's own message now says whether Ctrl and Shift are down.
+- Home with a big library: going back to a shelf, or to Home, shows its books at once instead of an empty page while the whole shelf reloads; files are checked after the shelf shows, a drive that isn't plugged in is noticed once instead of file by file, and a slow load that finishes after you've picked another shelf no longer shows its books there.
+- Dialogs (Settings and others) no longer stop half faded in, or open late, until the mouse moves: a repaint asked for while a slow frame was drawing was lost.
+- Tabs no longer vanish when Kitab is started by opening a file (common right after a reinstall): the file joins the tabs you had.
+- A tab on a drive that's unplugged keeps its place instead of being dropped.
+- Closing a tab now frees its document; before, it stayed open (and in memory) until Kitab quit.
+- Close others and Close to the right ask before losing unsaved edits.
+- Closing a tab from Home keeps you on Home, and closing another tab keeps the one you're reading.
+- Zoom, rotation and the place on the page are kept when Kitab quits.
+- settings.json can no longer be damaged by two saves at once; an unreadable one is kept as settings.json.bad.
+- A library that can't be opened is reported instead of showing an empty Home.
+- Library search: forgotten books leave the index, re-indexing a book no longer scans the whole index, one unreadable page no longer stops a book being indexed, and Clear history also clears reading time, search text and covers.
+- A cover image cut short is drawn again instead of failing for good.
+- The voice preview no longer cuts off a reading; Esc stops reading, and switching tabs pauses it.
+
+## [0.5.0] - 2026-11-14
+
+### Added
+- Comics in RAR and 7z (.cbr, .cb7), page by page like CBZ. Kitab goes by what the file really is, so a .cbr that is really a ZIP (common) or a .cbz that is really a RAR opens too. WebP pages draw as well. Password-protected and split (multi-part) archives are refused with a plain message. RAR is read with compcol's clean-room decoders: no RARLAB code, decode only.
+- DjVu (.djvu, .djv): scanned books at their own page size, sharp at every zoom (each page is drawn at the size it's shown). When the scan has a text layer, search, selection, copy and read aloud work; the bookmarks are the contents, and links inside pages work (to other pages and to web addresses). Read with djvu-rs, written from the public DjVu specification.
+- Thumbnails for the new types on Home, in Explorer and in Linux file managers; a comic's cover is unpacked without the rest of the archive.
+- File types: CBR, CB7 and DjVu in Settings › File types, the Windows installer and Store package, Linux and macOS, each with its own icon.
+
+### Changed
+- Building Kitab from source now needs Rust 1.95 or newer (it was 1.85), for the RAR, 7z and DjVu readers.
+
+### Fixed
+- Two signatures saved at the same moment no longer share one temporary file (one of them could fail to save).
+
+## [0.4.2] - 2026-11-14
+
+### Added
+- Settings › Home › Reading progress: hide the bar under each book on Home (Covers and List, with the list's percent). On by default; Continue reading keeps its bars.
+
+## [0.4.1] - 2026-11-14
+
+### Added
+- Settings › Reading › Markdown text size (100 % to 300 %): the size Markdown files open at. Zoom (Ctrl+=, Ctrl+-, the Aa button) still changes it for one file, and Default size comes back to it. Book text size never applied to Markdown, so there was no lasting way to make Markdown bigger.
+
+### Fixed
+- Settings › Appearance › Interface size is shown only on Windows, the one place it works. On Linux and macOS it was saved but changed nothing.
+
+## [0.4.0] - 2026-11-13
+
+### Added
+- Read aloud, with your system's own voices on Windows, macOS and Linux. Ctrl+Shift+U, the speaker in the dock, the ⋯ menu or the page's right-click menu (Read aloud from here) reads from the selection, the place you click or the top of the page in view, sentence by sentence and page after page. The sentence being read is shaded, its word marked, and the pages follow along. The same key or button pauses and carries on; the stop button beside it ends it. Settings › Reading › Read aloud picks the voice (with a preview), the speed (0.75× to 3×) and the tone. Words broken over two lines are read whole, and a title, its authors and each paragraph are read as their own sentences. On Linux it speaks through speech-dispatcher, which the .deb and .rpm recommend. Nothing is loaded until read aloud is first used.
+
+## [0.3.10] - 2026-11-13
+
+### Added
+- macOS: Kitab's commands are in the menu bar at the top of the screen: Kitab, File, Edit, View, Go, Tools, Window and Help, each command with its key, and greyed out when it does not apply. The Kitab menu has Settings, Check for Updates, Services, Hide and Quit, and Cmd+Q, Cmd+H, Cmd+Option+H and Cmd+M work as they do in every Mac program. Quit asks about unsaved changes first, as closing the window does.
+
+### Changed
+- Tabs, the window title and dialogs name a document by its file name, without the extension (the tab's icon shows the type). The title stored inside a file is often missing, out of date or wrong, so it now shows in the tab's tooltip, beside the full file name, when it says something the name doesn't.
+- PDF tabs have their own icon, a page with lines of text, instead of the blank page used for unknown files. The tab list in the sidebar shows each format's icon too.
+
+### Fixed
+- Titles typed in a legacy Bangla font (SutonnyMJ and other Bijoy fonts) no longer show as "XvKv (†g‡q‡`i Rb¨)…" in tabs or on the Home shelves: the file name is used instead. Titles already in the library are cleaned up too.
+- The page number shows the page that fills most of the window, and the last page once you scroll to the end. It used to count a page whose last few lines were still at the top, so it lagged a page behind and never reached the last page of a short document.
+
+## [0.3.9] - 2026-11-11
+
+### Added
+- A menu bar, for those who prefer one: File, Edit, View, Go, Tools and Help under the title bar, each command with its shortcut. Alt and a menu's first letter opens it (Alt+F for File), Left and Right move between the menus, and the pointer moves along the bar once one is open. It is off until you turn it on in Settings › Appearance › Menu bar.
+- Two more themes for bright rooms, beside Paper: Sand, a little darker and more golden with an ochre accent, and Linen, a cooler, greyer beige with a muted teal accent.
+- Touch screens on Windows: drag a finger to scroll (it keeps gliding when you let go), and pinch with two fingers to zoom. A pinch on a touchpad zooms too. While you pinch the page stretches with your fingers, and it is drawn sharp as soon as they stop.
+- Smooth scrolling: the mouse wheel and the arrow, Page Up and Page Down keys glide to where they scroll instead of jumping there. Settings › Reading › Smooth scrolling turns it off; a touchpad scrolls as before.
+- Settings › Reading › New documents open at: Fit width, Fit page or Actual size, for a PDF, comic or XPS file opened for the first time. One you have read before still comes back the way you left it.
+
+### Changed
+- Less memory, most of all in a large window. A page that has been drawn is kept once, on the graphics card, not also as pixels in memory, and the two window-sized surfaces used only for ink and drawn shapes exist only while there is something to draw. In a 2400×1500 window with a 300-page image PDF: 231 → 190 MB after opening, 330 → 219 MB at the most while scrolling, 255 → 163 MB once settled.
+- Printing many pages shows one message with a bar that fills, then "Sent … to the printer", instead of a new message for every page.
+- Settings › About › View update opens the release page in your browser, instead of a second dialog on top of Settings.
+
+### Fixed
+- Markdown editor: a click lands on the line under the pointer at every interface size. At 110 % (and other sizes where a line is not a whole number of pixels) clicks drifted further off the further down the file you were: 12 lines by line 1,400.
+
+## [0.3.8] - 2026-11-11
+
+### Fixed
+- Markdown editor: a click puts the caret where you click, and dragging selects text again. Since 0.3.6 every click landed near the top of the file.
+- Markdown editor: long lines have a scroll bar along the bottom (drag it, or click the track), and the file has one down the right edge. Shift+wheel and sideways swipes scroll sideways. The line numbers stay put while the text scrolls, and a drag selection keeps going when the pointer leaves the editor.
+- While you edit Markdown, the dock and the page navigator sit over the preview, so they no longer cover the source.
+
+## [0.3.7] - 2026-11-11
+
+### Added
+- Kitab Reader is on the Microsoft Store. The Store version sets up its file types and File Explorer thumbnails when it installs, and leaves updates to the Store, so it doesn't check GitHub for them. Settings › File types and Settings › About say so.
+
+### Fixed
+- Memory no longer grows with every tab. A tab out of sight keeps only the pages it showed: the one you just left stays sharp for a minute, so going back and forth is instant, and older ones keep a small soft copy that shows at once and sharpens as the page draws again. Nineteen open PDFs, most of them large scans, went from about 2 GB to about 230 MB in a maximised window (850 MB to 165 MB at 1400×900).
+- MuPDF's cache of decoded images and fonts is trimmed after every piece of work, not only after drawing a page, so a big artbook left in a background tab no longer holds hundreds of megabytes.
+- Closing a tab frees its pages' graphics memory too.
+- With many tabs open, the window's close button no longer slides off the edge of the title bar. The tabs fill the room the bar has left, show whole tabs only (no half-hidden tab after Home), and the gap kept for dragging the window is smaller.
+
+## [0.3.6] - 2026-11-09
+
+### Fixed
+- Markdown tables: columns get room by what they hold, text wraps inside its cell instead of running past the table or into the next column, and a short word never breaks. A table too wide even so scrolls sideways.
+- Long text no longer spills out of its box anywhere: text fields (notes, form fields, search, signing) slide to keep the caret in view, menu items and collection names end in "…", long tooltips wrap, a long signer name stays in the status bar, and the update notes' tables wrap.
+- The Markdown editor scrolls sideways for long lines and follows the caret, so nothing is cut off at the edge.
+- Wide formulas and a details block's long summary stay inside the reading column; many printers scroll in the Print sheet; very deep contents lists stop indenting past the sidebar.
+
+## [0.3.5] - 2026-11-09
+
+### Added
+- Discard, beside Save in the dock: lets go of every unsaved mark, deletion and form value, after asking. The file stays as it is.
+- Filled-in form fields can be undone and redone (Ctrl+Z, Ctrl+Y or Ctrl+Shift+Z), like marks. Undoing a radio button turns the one that was on back on.
+
+### Changed
+- With Select, choosing a colour or a thickness changes the picked mark (one undo step), not only what you draw next.
+
 ## [0.3.4] - 2026-11-09
 
 ### Added
@@ -242,7 +421,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fit width and fit page follow a window resize even when no new page has to be drawn.
 - The Settings window shrinks to fit small windows instead of running off the left edge.
 
-[Unreleased]: https://github.com/t21dev/kitab/compare/v0.3.4...HEAD
+[Unreleased]: https://github.com/t21dev/kitab/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/t21dev/kitab/compare/v0.7.0...v0.8.0
+[0.7.0]: https://github.com/t21dev/kitab/compare/v0.6.2...v0.7.0
+[0.6.2]: https://github.com/t21dev/kitab/compare/v0.6.1...v0.6.2
+[0.6.1]: https://github.com/t21dev/kitab/compare/v0.6.0...v0.6.1
+[0.6.0]: https://github.com/t21dev/kitab/compare/v0.5.0...v0.6.0
+[0.5.0]: https://github.com/t21dev/kitab/compare/v0.4.2...v0.5.0
+[0.4.2]: https://github.com/t21dev/kitab/compare/v0.4.1...v0.4.2
+[0.4.1]: https://github.com/t21dev/kitab/compare/v0.4.0...v0.4.1
+[0.4.0]: https://github.com/t21dev/kitab/compare/v0.3.10...v0.4.0
+[0.3.10]: https://github.com/t21dev/kitab/compare/v0.3.9...v0.3.10
+[0.3.9]: https://github.com/t21dev/kitab/compare/v0.3.8...v0.3.9
+[0.3.8]: https://github.com/t21dev/kitab/compare/v0.3.7...v0.3.8
+[0.3.7]: https://github.com/t21dev/kitab/compare/v0.3.6...v0.3.7
+[0.3.6]: https://github.com/t21dev/kitab/compare/v0.3.5...v0.3.6
+[0.3.5]: https://github.com/t21dev/kitab/compare/v0.3.4...v0.3.5
 [0.3.4]: https://github.com/t21dev/kitab/compare/v0.3.3...v0.3.4
 [0.3.3]: https://github.com/t21dev/kitab/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/t21dev/kitab/compare/v0.3.1...v0.3.2

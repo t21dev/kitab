@@ -31,6 +31,10 @@ export const KEY_GROUPS: KeyGroup[] = [
         "Ctrl+Shift+Tab / Ctrl+PgUp"
       ],
       [
+        "Move tab left / right",
+        "Ctrl+Shift+PgUp / Ctrl+Shift+PgDn"
+      ],
+      [
         "Go to tab 1–8",
         "Alt+1–8"
       ],
@@ -41,6 +45,10 @@ export const KEY_GROUPS: KeyGroup[] = [
       [
         "Home",
         "Ctrl+Shift+H"
+      ],
+      [
+        "Quit Kitab",
+        "Ctrl+Q"
       ]
     ]
   },
@@ -175,6 +183,10 @@ export const KEY_GROUPS: KeyGroup[] = [
         "Ctrl+D"
       ],
       [
+        "Read aloud, pause, carry on",
+        "Ctrl+Shift+U"
+      ],
+      [
         "Save marks into the PDF",
         "Ctrl+S"
       ],
@@ -231,6 +243,18 @@ export const KEY_GROUPS: KeyGroup[] = [
       [
         "Fit width",
         "Ctrl+2"
+      ],
+      [
+        "Single page",
+        "Ctrl+6"
+      ],
+      [
+        "Two pages side by side",
+        "Ctrl+7"
+      ],
+      [
+        "Book view (cover alone, then pairs)",
+        "Ctrl+8"
       ],
       [
         "Rotate clockwise",
@@ -322,6 +346,10 @@ export const KEY_GROUPS: KeyGroup[] = [
       [
         "Type a page number",
         "Click the page number"
+      ],
+      [
+        "Alt+",
+        "Option+"
       ]
     ]
   }
@@ -333,76 +361,67 @@ export const PALETTE: PaletteCommand[] = [
     "group": "File",
     "label": "Open a file…",
     "doc": false,
-    "keys": [
-      "Ctrl+O"
-    ]
+    "keys": []
   },
   {
     "group": "File",
     "label": "Close tab",
     "doc": true,
-    "keys": [
-      "Ctrl+W",
-      "Ctrl+F4"
-    ]
+    "keys": []
   },
   {
     "group": "File",
     "label": "Reopen closed tab",
     "doc": false,
-    "keys": [
-      "Ctrl+Shift+T"
-    ]
+    "keys": []
   },
   {
     "group": "File",
     "label": "Next tab",
     "doc": false,
-    "keys": [
-      "Ctrl+Tab",
-      "Ctrl+PgDn"
-    ]
+    "keys": []
   },
   {
     "group": "File",
     "label": "Previous tab",
     "doc": false,
-    "keys": [
-      "Ctrl+Shift+Tab",
-      "Ctrl+PgUp"
-    ]
+    "keys": []
+  },
+  {
+    "group": "File",
+    "label": "Move tab left",
+    "doc": false,
+    "keys": []
+  },
+  {
+    "group": "File",
+    "label": "Move tab right",
+    "doc": false,
+    "keys": []
   },
   {
     "group": "File",
     "label": "Home",
     "doc": false,
-    "keys": [
-      "Ctrl+Shift+H"
-    ]
+    "keys": []
   },
   {
     "group": "File",
     "label": "Save pages as a new PDF…",
     "doc": true,
-    "keys": [
-      "Ctrl+Shift+E"
-    ]
+    "keys": []
   },
   {
     "group": "File",
     "label": "Split view with the next tab",
     "doc": true,
-    "keys": [
-      "Ctrl+\\"
-    ]
+    "keys": []
   },
   {
     "group": "File",
     "label": "Print…",
     "doc": true,
-    "keys": [
-      "Ctrl+P"
-    ]
+    "keys": []
   },
   {
     "group": "File",
@@ -426,260 +445,229 @@ export const PALETTE: PaletteCommand[] = [
     "group": "Go",
     "label": "Go to page…",
     "doc": true,
-    "keys": [
-      "Ctrl+G"
-    ]
+    "keys": []
   },
   {
     "group": "Go",
     "label": "Next page",
     "doc": true,
-    "keys": [
-      "N"
-    ]
+    "keys": []
   },
   {
     "group": "Go",
     "label": "Previous page",
     "doc": true,
-    "keys": [
-      "P"
-    ]
+    "keys": []
   },
   {
     "group": "Go",
     "label": "First page",
     "doc": true,
-    "keys": [
-      "Home"
-    ]
+    "keys": []
   },
   {
     "group": "Go",
     "label": "Last page",
     "doc": true,
-    "keys": [
-      "End"
-    ]
+    "keys": []
   },
   {
     "group": "Go",
     "label": "Back",
     "doc": true,
-    "keys": [
-      "Alt+Left"
-    ]
+    "keys": []
   },
   {
     "group": "Go",
     "label": "Forward",
     "doc": true,
-    "keys": [
-      "Alt+Right"
-    ]
+    "keys": []
   },
   {
     "group": "Find",
     "label": "Find in document",
     "doc": true,
-    "keys": [
-      "Ctrl+F",
-      "/"
-    ]
+    "keys": []
   },
   {
     "group": "Find",
     "label": "Next result",
     "doc": true,
-    "keys": [
-      "F3"
-    ]
+    "keys": []
   },
   {
     "group": "Find",
     "label": "Previous result",
     "doc": true,
-    "keys": [
-      "Shift+F3"
-    ]
+    "keys": []
   },
   {
     "group": "View",
     "label": "Zoom in",
     "doc": true,
-    "keys": [
-      "Ctrl+="
-    ]
+    "keys": []
   },
   {
     "group": "View",
     "label": "Zoom out",
     "doc": true,
-    "keys": [
-      "Ctrl+-"
-    ]
+    "keys": []
   },
   {
     "group": "View",
     "label": "Fit page",
     "doc": true,
-    "keys": [
-      "Ctrl+0"
-    ]
+    "keys": []
+  },
+  {
+    "group": "View",
+    "label": "Single page",
+    "doc": true,
+    "keys": []
+  },
+  {
+    "group": "View",
+    "label": "Two pages side by side",
+    "doc": true,
+    "keys": []
+  },
+  {
+    "group": "View",
+    "label": "Book view",
+    "doc": true,
+    "keys": []
   },
   {
     "group": "View",
     "label": "Fit width",
     "doc": true,
-    "keys": [
-      "Ctrl+2"
-    ]
+    "keys": []
   },
   {
     "group": "View",
     "label": "Actual size",
     "doc": true,
-    "keys": [
-      "Ctrl+1"
-    ]
+    "keys": []
   },
   {
     "group": "View",
     "label": "Rotate clockwise",
     "doc": true,
-    "keys": [
-      "Ctrl+Shift+="
-    ]
+    "keys": []
   },
   {
     "group": "View",
     "label": "Rotate counter-clockwise",
     "doc": true,
-    "keys": [
-      "Ctrl+Shift+-"
-    ]
+    "keys": []
   },
   {
     "group": "View",
     "label": "Sidebar",
     "doc": false,
-    "keys": [
-      "Ctrl+B",
-      "F12"
-    ]
+    "keys": []
   },
   {
     "group": "View",
     "label": "Hide or show the dock",
     "doc": true,
-    "keys": [
-      "Ctrl+."
-    ]
+    "keys": []
   },
   {
     "group": "View",
     "label": "Show or hide the status bar",
     "doc": true,
-    "keys": [
-      "Ctrl+I"
-    ]
+    "keys": []
   },
   {
     "group": "View",
     "label": "Focus mode",
     "doc": false,
-    "keys": [
-      "F11"
-    ]
+    "keys": []
   },
   {
     "group": "View",
     "label": "Next theme",
     "doc": false,
-    "keys": [
-      "Ctrl+Shift+L"
-    ]
+    "keys": []
   },
   {
     "group": "View",
     "label": "Presentation mode",
     "doc": true,
-    "keys": [
-      "F5"
-    ]
+    "keys": []
   },
   {
     "group": "Mark up",
     "label": "Draw and mark up",
     "doc": true,
-    "keys": [
-      "Ctrl+Shift+D"
-    ]
+    "keys": []
   },
   {
     "group": "Mark up",
     "label": "Highlight the selected text",
     "doc": true,
-    "keys": [
-      "H"
-    ]
+    "keys": []
   },
   {
     "group": "Mark up",
     "label": "Bookmark this page",
     "doc": true,
-    "keys": [
-      "Ctrl+D"
-    ]
+    "keys": []
+  },
+  {
+    "group": "Read",
+    "label": "Read aloud (or pause, or carry on)",
+    "doc": true,
+    "keys": []
+  },
+  {
+    "group": "Read",
+    "label": "Stop reading aloud",
+    "doc": true,
+    "keys": []
   },
   {
     "group": "Mark up",
     "label": "Undo a mark",
     "doc": true,
-    "keys": [
-      "Ctrl+Z"
-    ]
+    "keys": []
   },
   {
     "group": "Mark up",
     "label": "Redo a mark",
     "doc": true,
-    "keys": [
-      "Ctrl+Y",
-      "Ctrl+Shift+Z"
-    ]
+    "keys": []
   },
   {
     "group": "Mark up",
     "label": "Save marks into the PDF",
     "doc": true,
-    "keys": [
-      "Ctrl+S"
-    ]
+    "keys": []
+  },
+  {
+    "group": "Mark up",
+    "label": "Save a copy with marks…",
+    "doc": true,
+    "keys": []
   },
   {
     "group": "Markdown",
     "label": "Edit beside the preview",
     "doc": true,
-    "keys": [
-      "Ctrl+E"
-    ]
+    "keys": []
   },
   {
     "group": "Kitab",
     "label": "Settings",
     "doc": false,
-    "keys": [
-      "Ctrl+,"
-    ]
+    "keys": []
   },
   {
     "group": "Kitab",
     "label": "Keyboard shortcuts",
     "doc": false,
-    "keys": [
-      "Ctrl+/"
-    ]
+    "keys": []
   },
   {
     "group": "Kitab",
@@ -690,6 +678,24 @@ export const PALETTE: PaletteCommand[] = [
   {
     "group": "Kitab",
     "label": "Check for updates",
+    "doc": false,
+    "keys": []
+  },
+  {
+    "group": "Kitab",
+    "label": "Guide",
+    "doc": false,
+    "keys": []
+  },
+  {
+    "group": "Kitab",
+    "label": "Kitab on GitHub",
+    "doc": false,
+    "keys": []
+  },
+  {
+    "group": "Kitab",
+    "label": "Report an issue",
     "doc": false,
     "keys": []
   }

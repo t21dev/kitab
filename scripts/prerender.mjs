@@ -320,6 +320,21 @@ writeFileSync(
 rmSync(new URL("index.html", dist), { force: true }); // replaced below by the prerendered home
 writeFileSync(new URL("index.html", dist), page(ROUTES[0], { release, builtAt }));
 
+// ---------------------------------------------------------------- latest.json (the app's update check)
+
+// Kitab asks this before GitHub's API, which limits requests per address. Built from the newest
+// released section of the synced CHANGELOG, so it needs no network.
+{
+  const m = changelogMd.match(/^## \[(\d[^\]]*)\] - (\d{4}-\d{2}-\d{2})[^\n]*\n([\s\S]*?)(?=^## \[|^\[[^\]]+\]: |(?![\s\S]))/m);
+  if (!m) throw new Error("latest.json: no released version in content/CHANGELOG.md");
+  const [, version, published, notes] = m;
+  writeFileSync(
+    new URL("latest.json", dist),
+    JSON.stringify({ version, published, url: `https://github.com/t21dev/kitab/releases/tag/v${version}`, notes: notes.trim() }, null, 2) + "\n",
+  );
+  console.log(`latest.json: ${version} (${published})`);
+}
+
 // ---------------------------------------------------------------- sitemap, robots
 
 writeFileSync(
@@ -437,6 +452,11 @@ writeFileSync(
 /llms-full.txt
   Content-Type: text/plain; charset=utf-8
   Cache-Control: public, max-age=3600
+  X-Robots-Tag: noindex
+
+/latest.json
+  Content-Type: application/json; charset=utf-8
+  Cache-Control: public, max-age=300
   X-Robots-Tag: noindex
 
 /og.png
