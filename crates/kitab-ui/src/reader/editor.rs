@@ -214,8 +214,10 @@ impl Reader {
         self.md.as_ref().is_some_and(|m| m.edit.is_some())
     }
 
-    /// Unsaved Markdown edits, or form fields filled in and not saved (they
-    /// live only in the open document until Save).
+    /// Unsaved Markdown edits, form fields filled in, or the PDF's own
+    /// annotations taken out: they live only in the open document until
+    /// Save, so closing asks first. (New marks are kept in the library as
+    /// they're drawn, so closing doesn't lose them.)
     pub fn has_unsaved_edits(&self) -> bool {
         self.md
             .as_ref()
@@ -223,6 +225,7 @@ impl Reader {
             .is_some_and(|e| e.buf.dirty)
             || self.unsaved_fields() > 0
             || self.form.typing.is_some()
+            || (self.is_pdf() && !self.markup.deleted.is_empty())
     }
 
     /// Save what the close prompt asked about: the Markdown, or the PDF's
