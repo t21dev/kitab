@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-11-17
+
 ### Fixed
 - Home, search and the reader show the file name instead of a placeholder title like "untitled", and leave out a placeholder author like "anonymous". A book with a real title and no author shows its file name under the title.
 
@@ -424,7 +426,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fit width and fit page follow a window resize even when no new page has to be drawn.
 - The Settings window shrinks to fit small windows instead of running off the left edge.
 
-[Unreleased]: https://github.com/t21dev/kitab/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/t21dev/kitab/compare/v0.8.1...HEAD
+[0.8.1]: https://github.com/t21dev/kitab/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/t21dev/kitab/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/t21dev/kitab/compare/v0.6.2...v0.7.0
 [0.6.2]: https://github.com/t21dev/kitab/compare/v0.6.1...v0.6.2
