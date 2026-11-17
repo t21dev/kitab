@@ -261,7 +261,9 @@ jobs:
   # version once the release is out.
   website:
     needs: [publish]
-    if: github.event_name == 'push' && needs.publish.result == 'success' && !contains(github.ref_name, '-')
+    # always(): a build that failed or was cancelled (a runner that never
+    # came) mustn't hold these back once the release is published.
+    if: always() && github.event_name == 'push' && needs.publish.result == 'success' && !contains(github.ref_name, '-')
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -296,7 +298,9 @@ jobs:
   # tap (classic, public_repo scope).
   homebrew:
     needs: [publish]
-    if: github.event_name == 'push' && needs.publish.result == 'success' && !contains(github.ref_name, '-')
+    # always(): a build that failed or was cancelled (a runner that never
+    # came) mustn't hold these back once the release is published.
+    if: always() && github.event_name == 'push' && needs.publish.result == 'success' && !contains(github.ref_name, '-')
     runs-on: ubuntu-latest
     steps:
       - name: Update the cask

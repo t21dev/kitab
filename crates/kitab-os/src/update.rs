@@ -173,16 +173,27 @@ enum Failed {
     Status(u16),
 }
 
-/// Ask for the latest release: the website and GitHub, and the newer answer
-/// wins, so one of them failing is fine. Both are asked at once. Blocks for
-/// up to ~15 s: call it off the UI thread.
+/// Ask for the latest release in three places at once, and the newest answer
+/// wins, so any of them failing (or behind) is fine: the website's
+/// `latest.json`; GitHub's API (rate-limited, sometimes "busy"); and where
+/// github.com's own "latest release" page redirects to, which has no limit
+/// and is never behind, but only gives the number. Blocks for up to ~15 s:
+/// call it off the UI thread.
 pub fn fetch_latest() -> Result<Release, String> {
-    let (site, github) = std::thread::scope(|s| {
+    let (site, github, page) = std::thread::scope(|s| {
         let site = s.spawn(|| get(SITE_LATEST, "application/json"));
+        let page = s.spawn(|| redirect_of(RELEASES_PAGE));
         let github = get(LATEST_API, "application/vnd.github+json");
-        (site.join().unwrap_or(Err(Failed::Status(0))), github)
+        (
+            site.join().unwrap_or(Err(Failed::Status(0))),
+            github,
+            page.join().unwrap_or(None),
+        )
     });
     let site = site.map_err(|_| String::new()).and_then(|j| parse_site(&j));
+    let page = page
+        .and_then(|url| release_from_page(&url))
+        .ok_or_else(String::new);
     let github = match github {
         Ok(j) => parse_release(&j),
         Err(Failed::NoCurl) => Err("Couldn't check for updates (curl isn't available)".into()),
@@ -192,19 +203,85 @@ pub fn fetch_latest() -> Result<Release, String> {
         }
         Err(_) => Err("Couldn't check for updates. Check the connection and try again.".into()),
     };
-    newer(site, github)
+    newest(vec![github, site, page])
 }
 
-/// The newer of two answers, or the one that came, or GitHub's error.
-fn newer(
-    site: Result<Release, String>,
-    github: Result<Release, String>,
-) -> Result<Release, String> {
-    match (site, github) {
-        (Ok(a), Ok(b)) if compare_versions(&b.version, &a.version) == Ordering::Greater => Ok(b),
-        (Ok(a), _) => Ok(a),
-        (Err(_), b) => b,
+/// The newest answer, one with release notes first when two say the same
+/// version; GitHub's error (the first) when none came.
+fn newest(answers: Vec<Result<Release, String>>) -> Result<Release, String> {
+    let mut error = None;
+    let mut best: Option<Release> = None;
+    for a in answers {
+        match a {
+            Ok(r) => {
+                let better =
+                    best.as_ref()
+                        .is_none_or(|b| match compare_versions(&r.version, &b.version) {
+                            Ordering::Greater => true,
+                            Ordering::Equal => b.notes.is_empty() && !r.notes.is_empty(),
+                            Ordering::Less => false,
+                        });
+                if better {
+                    best = Some(r);
+                }
+            }
+            Err(e) => {
+                if error.is_none() {
+                    error = Some(e);
+                }
+            }
+        }
     }
+    best.ok_or_else(|| error.unwrap_or_default())
+}
+
+/// Where `url` redirects to, without following it (a HEAD request).
+fn redirect_of(url: &str) -> Option<String> {
+    let mut cmd = std::process::Command::new(curl());
+    cmd.args([
+        "--silent",
+        "--head",
+        "--proto",
+        "=https",
+        "--max-time",
+        "15",
+        "-H",
+        "User-Agent: Kitab-Reader",
+        "--write-out",
+        "
+KITAB-REDIRECT:%{redirect_url}",
+        url,
+    ]);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+    let out = cmd.output().ok()?;
+    let text = String::from_utf8_lossy(&out.stdout);
+    let target = text.rsplit_once("KITAB-REDIRECT:")?.1.trim().to_string();
+    (!target.is_empty()).then_some(target)
+}
+
+/// The release that github.com's latest-release page redirected to:
+/// `…/releases/tag/v0.9.0` is 0.9.0 (no notes; the page has them).
+fn release_from_page(url: &str) -> Option<Release> {
+    let tag = url.strip_prefix(&format!("{REPO}/releases/tag/"))?;
+    let version = tag.trim_start_matches(['v', 'V']).to_string();
+    if !version.starts_with(|c: char| c.is_ascii_digit())
+        || !version
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || ".-+".contains(c))
+    {
+        return None;
+    }
+    Some(Release {
+        version,
+        url: url.to_string(),
+        notes: String::new(),
+        published: String::new(),
+    })
 }
 
 /// The HTTP status in curl's "The requested URL returned error: 403".
@@ -463,7 +540,9 @@ mod tests {
         );
         let busy: Result<Release, String> = Err("GitHub is busy".into());
         assert_eq!(
-            newer(Ok(site.clone()), busy.clone()).unwrap().version,
+            newest(vec![busy.clone(), Ok(site.clone())])
+                .unwrap()
+                .version,
             "0.8.0"
         );
         // A website not yet redeployed loses to GitHub's newer answer.
@@ -472,8 +551,8 @@ mod tests {
             "https://github.com/t21dev/kitab/releases/tag/v0.9.0",
         ))
         .unwrap();
-        assert_eq!(newer(Ok(site), Ok(gh)).unwrap().version, "0.9.0");
-        assert!(newer(Err(String::new()), busy).is_err());
+        assert_eq!(newest(vec![Ok(gh), Ok(site)]).unwrap().version, "0.9.0");
+        assert!(newest(vec![busy, Err(String::new())]).is_err());
         assert!(parse_site("{}").is_err());
         assert!(parse_site("<html>").is_err());
         let r = parse_site(r#"{"version":"1.0.0","url":"https://evil.example"}"#).unwrap();
@@ -483,6 +562,38 @@ mod tests {
             403
         );
         assert_eq!(status_of("curl: (6) Could not resolve host: x"), 0);
+    }
+
+    #[test]
+    fn the_release_page_redirect_gives_the_number() {
+        let r = release_from_page("https://github.com/t21dev/kitab/releases/tag/v0.9.0").unwrap();
+        assert_eq!(r.version, "0.9.0");
+        assert!(release_from_page("https://evil.example/releases/tag/v9.9.9").is_none());
+        assert!(release_from_page("https://github.com/t21dev/kitab/releases").is_none());
+        assert!(release_from_page("https://github.com/t21dev/kitab/releases/tag/v1;rm").is_none());
+        // A stale website loses to the page; the same number prefers notes.
+        let stale = Release {
+            version: "0.8.1".into(),
+            url: String::new(),
+            notes: "notes".into(),
+            published: String::new(),
+        };
+        let busy: Result<Release, String> = Err("busy".into());
+        assert_eq!(
+            newest(vec![busy.clone(), Ok(stale.clone()), Ok(r.clone())])
+                .unwrap()
+                .version,
+            "0.9.0"
+        );
+        let same = Release {
+            version: "0.9.0".into(),
+            notes: "## Added".into(),
+            ..stale
+        };
+        assert_eq!(
+            newest(vec![busy, Ok(r), Ok(same)]).unwrap().notes,
+            "## Added"
+        );
     }
 
     #[test]

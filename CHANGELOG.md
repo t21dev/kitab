@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- The update check could say "the latest version" while a newer one was out, when GitHub's API was busy and Kitab's website hadn't caught up yet. It now also asks where GitHub's latest-release page points, which is never behind, and the newest answer wins. The release workflow now updates the website even when one system's build fails.
+
 ## [0.9.0] - 2026-11-17
 
 ### Added
