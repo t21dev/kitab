@@ -51,10 +51,6 @@ impl Reader {
         if let Some(image) = self.cache.get(&key) {
             return Some(image);
         }
-        // The pages being read come first; thumbnails start once they show.
-        if !self.on_screen_ready() {
-            return self.cache.any_for_page(ix as u32, self.rotation);
-        }
         let visible = self.pages.visible.clone();
         let page = ix as u32;
         let wanted: crate::engine::Wanted = Arc::new(move || {

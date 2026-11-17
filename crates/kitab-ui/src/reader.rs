@@ -277,11 +277,6 @@ pub struct Reader {
     settle_wake: bool,
     /// Unsaved work from a crash, put back once the document has opened.
     pending_recovery: Option<crate::recovery::Unsaved>,
-    /// Renders asked for by pages on screen and not back yet. While any is
-    /// out, thumbnails, link and field loading and the page ahead wait, so
-    /// the page being read comes first. Every render comes back (drawn,
-    /// skipped or stopped), so this always empties.
-    on_screen_pending: HashSet<PageKey>,
     last_frame: Option<std::time::Instant>,
     /// The password that opened this document, if it needed one (memory only).
     unlock: Option<String>,
@@ -442,7 +437,6 @@ impl Reader {
             zoomed_at: None,
             page_ms: std::collections::HashMap::new(),
             settle_wake: false,
-            on_screen_pending: HashSet::new(),
             pending_recovery: None,
             last_frame: None,
             unlock: None,
@@ -1660,10 +1654,6 @@ impl Reader {
             let (result, took) = result;
             let _ = this.update(cx, |this, cx| {
                 this.pending.remove(&key);
-                // The last on-screen render back: what waited for it starts.
-                if this.on_screen_pending.remove(&key) && this.on_screen_pending.is_empty() {
-                    cx.notify();
-                }
                 if let (Ok(Some(_)), Some(false)) = (&result, quick) {
                     this.page_ms.insert(page, took);
                 }
@@ -1702,11 +1692,6 @@ impl Reader {
             });
         })
         .detach();
-    }
-
-    /// Whether the pages on screen have no render still out.
-    pub(crate) fn on_screen_ready(&self) -> bool {
-        self.on_screen_pending.is_empty()
     }
 
     /// Draw again after `d` (once, however many pages ask), so pages that
@@ -1778,10 +1763,8 @@ impl Reader {
         let image = match self.cache.get(&key) {
             Some(i) => {
                 crate::fire_first_paint(window, cx);
-                if self.on_screen_ready() {
-                    self.ensure_links(ix as u32, cx);
-                    self.ensure_fields(ix as u32, cx);
-                }
+                self.ensure_links(ix as u32, cx);
+                self.ensure_fields(ix as u32, cx);
                 Some(i)
             }
             None => {
@@ -1821,7 +1804,6 @@ impl Reader {
                     .map(|t| t.elapsed())
                     .filter(|d| slow && *d < SLOW_SETTLE);
                 if any.is_none() || (!pinching && slow_wait.is_none()) {
-                    self.on_screen_pending.insert(key);
                     self.request(ix, key, device_scale, cx);
                 } else if let Some(d) = slow_wait {
                     self.wake_after(SLOW_SETTLE - d, cx);
@@ -1838,7 +1820,7 @@ impl Reader {
         };
         // The next page is always ready before it scrolls in: rendering it
         // only once scrolling began showed it soft, then sharp (flicker).
-        if ahead < self.page_count() && !pinching && self.on_screen_ready() {
+        if ahead < self.page_count() && !pinching {
             let ppt_ahead = self.px_per_pt(ahead);
             let size_ahead = self.page_size(ahead);
             let (s, _) = tiles::picture_scale(

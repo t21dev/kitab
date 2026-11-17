@@ -217,7 +217,7 @@ Three changes, measured against the released 0.8.1 (its portable build, `portabl
 
 - **Renders nobody wants stop part-way** (`kitab-mupdf/src/abort.rs`): each render carries a MuPDF cookie, and a watchdog sets its abort flag once the page has left the view (± 2 pages) or the zoom changed.
 - **Only slow pages wait out a zoom**: a page whose sharp render took 250 ms or more keeps its stretched picture until zooming has paused 350 ms; a pinch settles after 60 ms (was 140 ms) for the rest.
-- **The pages on screen first**: thumbnails, link and field loading and the page ahead wait while a render for a page on screen is still out.
+- **The pages on screen first** (taken out again the same day, see below): thumbnails, link and field loading and the page ahead waited while a render for a page on screen was still out.
 
 ### Heavy pages: `heavy.pdf`, 40 pages of 12,000 curves each (about 1.4 s to draw a page at 107 %), 1765×1294, `KITAB_TRACE_RENDER=1`
 
@@ -263,3 +263,7 @@ The first build of "pages on screen first" kept a page that was laid out blank a
 
 - Start-up is unchanged within noise (±7 ms to the window); CPU to the first page is 30 ms lower in both files (the page ahead and the link loading now wait for the first page).
 - SumatraPDF shows its window 150 ms sooner but blank; Kitab's window arrives with the page in it, and the page is on screen sooner than SumatraPDF's (253–272 ms against up to 401–413 ms).
+
+### "Pages on screen first" taken out (same day)
+
+It only moved work (about 30 ms of CPU from before the first page to just after it, the same in total), showed no gain in time to the page on these files, and started the page ahead later. Taken out at the owner's request: the page ahead, links, fields and thumbnails start alongside the visible page again, as in 0.8.1. The other two changes (renders that stop, slow pages that wait out a zoom) stay; the heavy-page numbers above were measured with all three, and the start-up numbers will match 0.8.1's ordering again.
