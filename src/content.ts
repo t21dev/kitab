@@ -26,7 +26,6 @@ export const SITE = {
   phase: "Phase 10, polish, accessibility and distribution before 1.0.0",
   /** The hero badge. The release in it comes from GitHub at build time when GitHub answers. */
   latest: "0.2",
-  latestNote: "printing, signatures and a faster reader",
   locale: "en",
 } as const;
 

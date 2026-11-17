@@ -3,11 +3,7 @@ import { PLATFORMS, SHORTCUTS, SITE } from "../content";
 import type { PageData } from "../data";
 import { Icon } from "../components/Icon";
 import { PageHeader } from "../components/Layout";
-
-function bytes(n: number): string {
-  if (n >= 1024 * 1024) return `${(n / 1024 / 1024).toFixed(1)} MB`;
-  return `${Math.max(1, Math.round(n / 1024))} KB`;
-}
+import { ForYou, size as bytes } from "../components/GetKitab";
 
 export function Download({ data }: { data: PageData }) {
   const r = data.release;
@@ -30,6 +26,7 @@ export function Download({ data }: { data: PageData }) {
         }
       />
       <div className="mx-auto max-w-6xl px-5 py-12">
+        {r && <ForYou release={r} />}
         {r ? (
           <div className="overflow-hidden rounded-2xl ring-1 ring-line">
             <ul className="divide-y divide-line">

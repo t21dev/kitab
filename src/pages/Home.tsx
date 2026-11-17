@@ -8,15 +8,16 @@ import { KitabApp } from "../mock/KitabApp";
 import { HERO, SCENES } from "../mock/scenes";
 import type { PageData } from "../data";
 import { FEATURE_ICONS, Icon } from "../components/Icon";
+import { pick, size, useSystem } from "../components/GetKitab";
 
 function Hero({ data }: { data: PageData }) {
   return (
     <section className="hero wrap" aria-labelledby="hero-title">
       <div className="hero__text">
-        <p className="status rise" style={{ "--i": 0 } as React.CSSProperties}>
+        <a href="/changelog" className="status rise" style={{ "--i": 0 } as React.CSSProperties}>
           <i />
-          {`${data.release ? data.release.tag.replace(/^v/, "") : SITE.latest} is out · ${SITE.latestNote}`}
-        </p>
+          {`${data.release ? data.release.tag.replace(/^v/, "") : SITE.latest} is out · see what's new`}
+        </a>
         <h1 id="hero-title" className="rise" style={{ "--i": 1 } as React.CSSProperties}>
           {SITE.tagline}
         </h1>
@@ -25,14 +26,7 @@ function Hero({ data }: { data: PageData }) {
           drawn on the GPU with GPUI, with MuPDF rendering the pages and no browser engine inside. Your files stay on your
           computer.
         </p>
-        <div className="ctas rise" style={{ "--i": 3 } as React.CSSProperties}>
-          <a className="btn btn--primary" href={SITE.repo}>
-            <Icon name="github" size={16} /> Follow on GitHub
-          </a>
-          <a className="btn btn--raised" href="/download">
-            {data.release ? "Download" : "Release status"}
-          </a>
-        </div>
+        <HeroCtas data={data} />
         <ul className="facts rise" style={{ "--i": 4 } as React.CSSProperties}>
           <li>
             <b>Free</b> · AGPL-3.0
@@ -47,6 +41,45 @@ function Hero({ data }: { data: PageData }) {
       </div>
       <HeroShot />
     </section>
+  );
+}
+
+/** The hero's buttons. Once the page knows the visitor's system, Download goes straight to the file
+ * for it and comes first; until then (and without JavaScript) it leads to /download. */
+function HeroCtas({ data }: { data: PageData }) {
+  const seen = useSystem();
+  const p = data.release && seen ? pick(data.release, seen) : null;
+  const github = (primary: boolean) => (
+    <a className={`btn ${primary ? "btn--primary" : "btn--raised"}`} href={SITE.repo}>
+      <Icon name="github" size={16} /> Follow on GitHub
+    </a>
+  );
+  return (
+    <>
+      <div className="ctas rise" style={{ "--i": 3 } as React.CSSProperties}>
+        {p ? (
+          <>
+            <a className="btn btn--primary" href={p.main.asset.url}>
+              <Icon name="download" size={16} /> Download for {p.name}
+            </a>
+            {github(false)}
+          </>
+        ) : (
+          <>
+            {github(true)}
+            <a className="btn btn--raised" href="/download">
+              {data.release ? "Download" : "Release status"}
+            </a>
+          </>
+        )}
+      </div>
+      {p && (
+        <p className="cta-note">
+          {data.release!.tag.replace(/^v/, "")} · {p.main.label} · {size(p.main.asset.size)} ·{" "}
+          <a href="/download">Other systems</a>
+        </p>
+      )}
+    </>
   );
 }
 
