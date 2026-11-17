@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-11-17
+
+### Added
+- Search in the sidebar's Contents and Bookmarks: type to narrow the list. In Contents a match keeps the headings above it, opened; Esc clears it.
+- Page labels: a PDF's own page numbering (i, ii, iii, then 1, 2…) in the page box, the status bar ("Page iv (4 of 312)") and the contents list, and Go to page takes a label too. Settings › Reading › Page numbers turns it off.
+- Crash recovery: form fields filled in, a PDF's annotations taken out and Markdown edits not saved yet are kept on disk every few seconds, and after a crash Kitab offers them back when it opens. A problem while drawing no longer closes Kitab: it says so and carries on, or, if it keeps happening, offers to restart with your changes kept.
+
+### Changed
+- Faster on heavy pages: a page scrolled past or zoomed away stops rendering part-way instead of finishing first; slow pages (scans, maps) keep their stretched picture until zooming pauses instead of starting again at every step, and fast pages go sharp sooner after a pinch.
+
+### Fixed
+- Windows: signed in at the screen and over Remote Desktop at once, a file double-clicked in one session opened in the other session's Kitab.
+
 ## [0.8.1] - 2026-11-17
 
 ### Fixed
@@ -426,7 +439,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fit width and fit page follow a window resize even when no new page has to be drawn.
 - The Settings window shrinks to fit small windows instead of running off the left edge.
 
-[Unreleased]: https://github.com/t21dev/kitab/compare/v0.8.1...HEAD
+[Unreleased]: https://github.com/t21dev/kitab/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/t21dev/kitab/compare/v0.8.1...v0.9.0
 [0.8.1]: https://github.com/t21dev/kitab/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/t21dev/kitab/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/t21dev/kitab/compare/v0.6.2...v0.7.0
