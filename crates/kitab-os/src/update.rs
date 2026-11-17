@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-//! Check for updates (Settings › About): ask GitHub for the latest release's
-//! number and notes. Kitab only asks when the user presses Check now, or after
+//! Check for updates (Settings › About): ask Kitab's website for the latest
+//! release's number and notes (`latest.json`, published with every release),
+//! and GitHub's API too, which limits requests per address and sometimes says
+//! no. Either answer is enough; the newer one wins. Kitab only asks when the user presses Check now, or after
 //! they turn on "Check automatically" (AGENTS.md rule 12, PRIVACY.md). Nothing
 //! is downloaded or installed unless the user presses Install (`install.rs`);
 //! where Kitab can't install itself, Download opens the release page.
@@ -43,6 +45,8 @@ pub const RELEASES_PAGE: &str = "https://github.com/t21dev/kitab/releases/latest
 /// The API answer for the latest published release (drafts and pre-releases
 /// are left out by GitHub).
 const LATEST_API: &str = "https://api.github.com/repos/t21dev/kitab/releases/latest";
+/// The same answer from Kitab's website, which has no request limit.
+const SITE_LATEST: &str = "https://kitab.t21.dev/latest.json";
 /// The answer is a few kilobytes; anything near this is not GitHub's.
 const MAX_BYTES: usize = 1 << 20;
 
@@ -130,9 +134,92 @@ pub fn parse_release(json: &str) -> Result<Release, String> {
     })
 }
 
-/// Ask GitHub for the latest release. Blocks for up to ~15 s: call it off the
-/// UI thread.
+/// Read the website's `latest.json`: `{"version", "url", "published", "notes"}`.
+pub fn parse_site(json: &str) -> Result<Release, String> {
+    let bad = || "The website sent something unexpected".to_string();
+    let v: serde_json::Value = serde_json::from_str(json).map_err(|_| bad())?;
+    let text = |key: &str| {
+        v.get(key)
+            .and_then(|x| x.as_str())
+            .unwrap_or("")
+            .to_string()
+    };
+    let version = text("version")
+        .trim()
+        .trim_start_matches(['v', 'V'])
+        .to_string();
+    if !version.starts_with(|c: char| c.is_ascii_digit()) {
+        return Err(bad());
+    }
+    let url = text("url");
+    let url = if url.starts_with(REPO) {
+        url
+    } else {
+        RELEASES_PAGE.to_string()
+    };
+    Ok(Release {
+        version,
+        url,
+        notes: text("notes"),
+        published: text("published").chars().take(10).collect(),
+    })
+}
+
+/// Why a request failed.
+enum Failed {
+    /// curl isn't there.
+    NoCurl,
+    /// The HTTP error status (404, 403, 429…), or 0 when none came back.
+    Status(u16),
+}
+
+/// Ask for the latest release: the website and GitHub, and the newer answer
+/// wins, so one of them failing is fine. Both are asked at once. Blocks for
+/// up to ~15 s: call it off the UI thread.
 pub fn fetch_latest() -> Result<Release, String> {
+    let (site, github) = std::thread::scope(|s| {
+        let site = s.spawn(|| get(SITE_LATEST, "application/json"));
+        let github = get(LATEST_API, "application/vnd.github+json");
+        (site.join().unwrap_or(Err(Failed::Status(0))), github)
+    });
+    let site = site.map_err(|_| String::new()).and_then(|j| parse_site(&j));
+    let github = match github {
+        Ok(j) => parse_release(&j),
+        Err(Failed::NoCurl) => Err("Couldn't check for updates (curl isn't available)".into()),
+        Err(Failed::Status(404)) => Err("GitHub has no release yet".into()),
+        Err(Failed::Status(403 | 429)) => {
+            Err("GitHub is busy and asked Kitab to wait. Try again in an hour.".into())
+        }
+        Err(_) => Err("Couldn't check for updates. Check the connection and try again.".into()),
+    };
+    newer(site, github)
+}
+
+/// The newer of two answers, or the one that came, or GitHub's error.
+fn newer(
+    site: Result<Release, String>,
+    github: Result<Release, String>,
+) -> Result<Release, String> {
+    match (site, github) {
+        (Ok(a), Ok(b)) if compare_versions(&b.version, &a.version) == Ordering::Greater => Ok(b),
+        (Ok(a), _) => Ok(a),
+        (Err(_), b) => b,
+    }
+}
+
+/// The HTTP status in curl's "The requested URL returned error: 403".
+fn status_of(stderr: &str) -> u16 {
+    stderr
+        .split("error: ")
+        .nth(1)
+        .and_then(|t| t.get(..3))
+        .and_then(|n| n.parse().ok())
+        .unwrap_or(0)
+}
+
+/// GET `url` with the system's curl. Blocks for up to ~15 s.
+fn get(url: &str, accept: &str) -> Result<String, Failed> {
+    let accept = format!("Accept: {accept}");
     let mut cmd = std::process::Command::new(curl());
     cmd.args([
         "--silent",
@@ -146,10 +233,10 @@ pub fn fetch_latest() -> Result<Release, String> {
         "--max-filesize",
         "1048576",
         "-H",
-        "Accept: application/vnd.github+json",
+        &accept,
         "-H",
         "User-Agent: Kitab-Reader",
-        LATEST_API,
+        url,
     ]);
     #[cfg(windows)]
     {
@@ -158,21 +245,16 @@ pub fn fetch_latest() -> Result<Release, String> {
         const CREATE_NO_WINDOW: u32 = 0x0800_0000;
         cmd.creation_flags(CREATE_NO_WINDOW);
     }
-    let out = cmd
-        .output()
-        .map_err(|_| "Couldn't reach GitHub (curl isn't available)".to_string())?;
+    let out = cmd.output().map_err(|_| Failed::NoCurl)?;
     if !out.status.success() {
-        let err = String::from_utf8_lossy(&out.stderr);
-        return Err(if err.contains("404") {
-            "GitHub has no release yet".into()
-        } else {
-            "Couldn't reach GitHub. Check the connection and try again.".into()
-        });
+        return Err(Failed::Status(status_of(&String::from_utf8_lossy(
+            &out.stderr,
+        ))));
     }
     if out.stdout.len() > MAX_BYTES {
-        return Err("GitHub sent something unexpected".into());
+        return Err(Failed::Status(0));
     }
-    parse_release(&String::from_utf8_lossy(&out.stdout))
+    Ok(String::from_utf8_lossy(&out.stdout).into_owned())
 }
 
 /// The system's curl: by full path on Windows, so a `curl.exe` in the
@@ -367,6 +449,40 @@ mod tests {
     fn only_the_projects_own_page_is_opened() {
         let r = parse_release(&github("0.2.0", "https://evil.example/download")).expect("parses");
         assert_eq!(r.url, RELEASES_PAGE);
+    }
+
+    #[test]
+    fn the_website_answers_when_github_cannot() {
+        let site = parse_site(
+            r#"{"version":"0.8.0","url":"https://github.com/t21dev/kitab/releases/tag/v0.8.0","published":"2026-11-17","notes":"- X"}"#,
+        )
+        .expect("parses");
+        assert_eq!(
+            (site.version.as_str(), site.published.as_str()),
+            ("0.8.0", "2026-11-17")
+        );
+        let busy: Result<Release, String> = Err("GitHub is busy".into());
+        assert_eq!(
+            newer(Ok(site.clone()), busy.clone()).unwrap().version,
+            "0.8.0"
+        );
+        // A website not yet redeployed loses to GitHub's newer answer.
+        let gh = parse_release(&github(
+            "v0.9.0",
+            "https://github.com/t21dev/kitab/releases/tag/v0.9.0",
+        ))
+        .unwrap();
+        assert_eq!(newer(Ok(site), Ok(gh)).unwrap().version, "0.9.0");
+        assert!(newer(Err(String::new()), busy).is_err());
+        assert!(parse_site("{}").is_err());
+        assert!(parse_site("<html>").is_err());
+        let r = parse_site(r#"{"version":"1.0.0","url":"https://evil.example"}"#).unwrap();
+        assert_eq!(r.url, RELEASES_PAGE);
+        assert_eq!(
+            status_of("curl: (22) The requested URL returned error: 403"),
+            403
+        );
+        assert_eq!(status_of("curl: (6) Could not resolve host: x"), 0);
     }
 
     #[test]

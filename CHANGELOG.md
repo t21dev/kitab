@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - At the end of a book, going on (N, the arrow keys, Space or Page Down) offers the next file in the same folder in name order, and going on once more opens it in the same tab (#9). Settings › Reading › Go on to the next book turns it off.
 
 ### Fixed
+- The update check no longer fails when GitHub is busy ("rate limit") or down: Kitab now also asks its own website, and the newer answer wins.
 - Home: a book whose file is gone says "File not found" in place of its author, instead of leaving a gap under the title.
 
 ## [0.7.0] - 2026-11-17
