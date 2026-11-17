@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Home: a book whose file is gone says "File not found" in place of its author, instead of leaving a gap under the title.
+
 ## [0.7.0] - 2026-11-17
 
 ### Added

@@ -2876,14 +2876,16 @@ impl Workspace {
                     .whitespace_nowrap()
                     .overflow_hidden()
                     .text_ellipsis()
-                    .child(item.author.clone().unwrap_or_default()),
+                    // A missing file says so in the author's place, so the
+                    // card keeps its height without a gap under the title.
+                    .child(if missing {
+                        "File not found".into()
+                    } else {
+                        item.author.clone().unwrap_or_default()
+                    }),
             )
             .child(if missing {
-                div()
-                    .text_size(px(11.5))
-                    .text_color(st.c(|c| c.faint))
-                    .child("File not found")
-                    .into_any_element()
+                div().h(px(4.0)).w_full().into_any_element()
             } else {
                 home_progress_bar(item.progress, st)
             })
