@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-11-18
+
+### Fixed
+- Linux: on desktops whose window manager draws the title bar (KDE's KWin and others), Kitab no longer adds a second set of minimise, maximise and close buttons; where Kitab draws them (GNOME on Wayland), they work, close asks about unsaved changes, and the empty title bar drags the window (double-click maximises).
+- Linux: when the file picker can't open (no xdg-desktop-portal, or none for the desktop, such as xdg-desktop-portal-kde on KDE), Kitab says what to install instead of doing nothing. The same for every open, save-as and folder picker.
+- Closing a PDF's tab (or quitting) after taking out annotations the file already had now asks to save first, as it does for form fields; the removals were quietly forgotten before.
+- The update check could say "the latest version" while a newer one was out, when GitHub's API was busy and Kitab's website hadn't caught up yet. It now also asks where GitHub's latest-release page points, which is never behind, and the newest answer wins. The release workflow now updates the website even when one system's build fails.
+
 ## [0.9.0] - 2026-11-17
 
 ### Added
@@ -439,7 +447,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fit width and fit page follow a window resize even when no new page has to be drawn.
 - The Settings window shrinks to fit small windows instead of running off the left edge.
 
-[Unreleased]: https://github.com/t21dev/kitab/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/t21dev/kitab/compare/v0.9.1...HEAD
+[0.9.1]: https://github.com/t21dev/kitab/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/t21dev/kitab/compare/v0.8.1...v0.9.0
 [0.8.1]: https://github.com/t21dev/kitab/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/t21dev/kitab/compare/v0.7.0...v0.8.0
