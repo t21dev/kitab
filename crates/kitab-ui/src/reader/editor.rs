@@ -357,7 +357,7 @@ impl Reader {
     }
 
     /// After an edit: keep the caret in view and re-parse the preview soon.
-    fn edited(&mut self, cx: &mut Context<Self>) {
+    pub(super) fn edited(&mut self, cx: &mut Context<Self>) {
         let Some(edit) = self.md.as_mut().and_then(|m| m.edit.as_mut()) else {
             return;
         };

@@ -329,6 +329,10 @@ fn describe(handle: &Handle, format: Format, page_count: u32, reflowable: bool) 
         repaired,
         reflowable,
         right_to_left: false,
+        page_labels: match handle {
+            Handle::Pdf(pdf) => crate::page_labels::page_labels(pdf, page_count),
+            Handle::Other(_) => None,
+        },
     }
 }
 
@@ -571,7 +575,12 @@ fn page_index(doc: &OpenDoc, page: u32) -> Result<i32, String> {
 }
 
 /// Render one page, or one tile of it, to BGRA on white paper. Runs on a worker.
-pub(crate) fn render(doc: &OpenDoc, req: &RenderRequest) -> Result<Bitmap, String> {
+/// `cookie`: lets another thread stop the page part-way (`abort.rs`).
+pub(crate) fn render(
+    doc: &OpenDoc,
+    req: &RenderRequest,
+    cookie: Option<&mupdf::Cookie>,
+) -> Result<Bitmap, String> {
     if !(req.scale.is_finite() && req.scale > 0.0) {
         return Err(format!("bad scale {}", req.scale));
     }
@@ -625,7 +634,11 @@ pub(crate) fn render(doc: &OpenDoc, req: &RenderRequest) -> Result<Bitmap, Strin
     }
     {
         let device = Device::from_pixmap(&pixmap).map_err(|e| e.to_string())?;
-        page.run(&device, &ctm).map_err(|e| e.to_string())?;
+        match cookie {
+            Some(c) => page.run_with_cookie(&device, &ctm, c),
+            None => page.run(&device, &ctm),
+        }
+        .map_err(|e| e.to_string())?;
         // Dropping the device closes it and flushes pending drawing.
     }
     to_bgra(&pixmap)

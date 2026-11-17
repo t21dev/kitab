@@ -210,3 +210,44 @@ Measured, nothing to fix:
 - **CPU before `main`:** 0 or 15.6 ms, one tick of Windows' 15.6 ms process clock. The 30–47 ms seen once came from fresh builds' first launches.
 - **Page uploads at 160 Hz:** no frame over 6.25 ms while scrolling, at 61 % (722×1022 pages, slowest frame 5.1 ms) or 200 % (1786×2526, slowest 4.8 ms).
 - **Small images pinning page textures:** the atlas does pack small images into page textures' spare room (`directx_atlas.rs` `allocate`), but scrolling 40 pages with the Pages pane open holds 12 MB more GPU memory than without, about 9 MB of it the thumbnails themselves.
+
+## Rendering round from PdfCraft's ideas (17 November 2026)
+
+Three changes, measured against the released 0.8.1 (its portable build, `portable` marker removed so both run in a fresh profile) on the same machine:
+
+- **Renders nobody wants stop part-way** (`kitab-mupdf/src/abort.rs`): each render carries a MuPDF cookie, and a watchdog sets its abort flag once the page has left the view (± 2 pages) or the zoom changed.
+- **Only slow pages wait out a zoom**: a page whose sharp render took 250 ms or more keeps its stretched picture until zooming has paused 350 ms; a pinch settles after 60 ms (was 140 ms) for the rest.
+- **The pages on screen first**: thumbnails, link and field loading and the page ahead wait while a render for a page on screen is still out.
+
+### Heavy pages: `heavy.pdf`, 40 pages of 12,000 curves each (about 1.4 s to draw a page at 107 %), 1765×1294, `KITAB_TRACE_RENDER=1`
+
+Render work is the sum of the finished renders' times after the input started; "sharp at" is when the last sharp render finished, from the first input.
+
+| Scenario | Version | Render work (runs) | Renders stopped | Final page sharp at (runs) |
+|---|---|---|---|---|
+| Page Down × 12, 150 ms apart | 0.8.1 | 15.7, 21.6, 22.2, 22.2 s (median 21.9) | 2 | 4.4, 5.7, 5.7, 5.7 s (median 5.7) |
+| | new | 12.9, 13.0, 13.0, 16.4, 17.3 s (median 13.0) | 3–4 | 5.2, 5.3, 5.3, 5.6, 6.4 s (median 5.3) |
+| Zoom in × 6 (dock +), 150 ms apart | 0.8.1 | 6.7, 6.9, 9.7 s | 12 dropped before starting | 4.1, 4.4, 5.7 s |
+| | new | 5.0, 5.0, 6.7 s | 7 (stopped part-way) | 3.7, 3.7, 4.5 s |
+
+- Paging through heavy pages: about 40 % less render work (median 21.9 → 13.0 s), the final page sharp about 0.4 s sooner (median).
+- Zooming a heavy page: about 25–30 % less work, sharp 0.4–1.2 s sooner.
+
+### Ordinary reading: `python tools/bench_reading.py`, 1200×800, three runs each, interleaved
+
+| File | Version | Working set at open | Private at open | CPU scrolling | Private peak | Private settled |
+|---|---|---|---|---|---|---|
+| 01-text-outline.pdf | 0.8.1 | 95.9–96.9 MB | 107.2–107.8 MB | 9.4–10.1 % | 120.1–121.1 MB | 111.6–112.2 MB |
+| | new | 92.9–93.1 MB | 104.1–105.5 MB | 7.9–9.6 % | 117.7–119.3 MB | 108.7–110.5 MB |
+| 06-large-20mb.pdf | 0.8.1 | 112.1–116.2 MB | 132.6–136.3 MB | 6.3–7.7 % (7 earlier runs: median 7.7) | 146.7–150.8 MB | 110.9–138.2 MB |
+| | new | 112.1–122.6 MB | 129.7–151.7 MB | 6.8–9.2 % (7 earlier runs: median 7.4) | 143.7–146.8 MB | 107.6–110.3 MB |
+| either | SumatraPDF 3.6.1 | 33 / 56 MB | 15 / 37 MB | 1.8 / 2.6 % | 16 / 40 MB | 15 / 39 MB |
+
+- No regression in ordinary reading: idle stays 0–0.3 %, scrolling CPU is within run-to-run noise, memory is a few MB lower on 01 and the peak lower on 06. On 06, two of three new runs held 15–19 MB more 4 s after opening (the page ahead now renders after the visible one rather than beside it); peak and settled memory are lower.
+- Against SumatraPDF the gap is unchanged: about 90 MB more private memory, and more CPU while scrolling (GPUI draws the whole window each frame).
+
+### Found while measuring
+
+The first build of "pages on screen first" kept a page that was laid out blank and then scrolled away marked as waiting, so the page ahead, links and fields never loaded after a flick. Fixed before the numbers above: it now waits on the on-screen renders still out, which always come back (drawn, skipped or stopped).
+
+The start-up benchmark (`kitab-bench s2`) didn't run: it refuses while another Kitab is open (an installed one was).

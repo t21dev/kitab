@@ -15,6 +15,7 @@ mod editor;
 mod find;
 mod footnote;
 mod form;
+mod recover;
 pub use bookmarks::BookmarkRow;
 pub use dock::TOP_INSET;
 pub use info::human_size;
@@ -268,6 +269,19 @@ pub struct Reader {
     /// are drawn sharp once it settles, not at every step of the pinch.
     pinch_until: Option<std::time::Instant>,
     pinch_serial: u64,
+    /// When the scale last changed (pinch, Ctrl+wheel, a zoom step).
+    zoomed_at: Option<std::time::Instant>,
+    /// Each page's last sharp render time (ms): slow pages wait out a zoom.
+    page_ms: std::collections::HashMap<u32, f32>,
+    /// A wake-up is booked for when slow pages may render sharp again.
+    settle_wake: bool,
+    /// Unsaved work from a crash, put back once the document has opened.
+    pending_recovery: Option<crate::recovery::Unsaved>,
+    /// Renders asked for by pages on screen and not back yet. While any is
+    /// out, thumbnails, link and field loading and the page ahead wait, so
+    /// the page being read comes first. Every render comes back (drawn,
+    /// skipped or stopped), so this always empties.
+    on_screen_pending: HashSet<PageKey>,
     last_frame: Option<std::time::Instant>,
     /// The password that opened this document, if it needed one (memory only).
     unlock: Option<String>,
@@ -339,7 +353,14 @@ struct Glide {
 }
 
 /// A pinch counts as over when the fingers have been still this long.
-const PINCH_SETTLE: Duration = Duration::from_millis(140);
+/// Renders a pinch makes stale stop part-way (kitab-mupdf `abort.rs`), so
+/// this can be short: a page that draws fast is sharp soon after.
+const PINCH_SETTLE: Duration = Duration::from_millis(60);
+/// A page whose sharp render took this long or more is "slow" (a scan, a
+/// map): after a zoom it keeps its stretched picture until zooming has
+/// paused for [`SLOW_SETTLE`], instead of starting again at every step.
+const SLOW_PAGE_MS: f32 = 250.0;
+const SLOW_SETTLE: Duration = Duration::from_millis(350);
 
 /// Smooth scrolling covers 63 % of what is left in this many seconds.
 const GLIDE_TIME: f32 = 0.045;
@@ -418,6 +439,11 @@ impl Reader {
             glide: None,
             pinch_until: None,
             pinch_serial: 0,
+            zoomed_at: None,
+            page_ms: std::collections::HashMap::new(),
+            settle_wake: false,
+            on_screen_pending: HashSet::new(),
+            pending_recovery: None,
             last_frame: None,
             unlock: None,
             find: find::FindState::new(cx.focus_handle()),
@@ -505,6 +531,24 @@ impl Reader {
         let max = self.list.max_offset_for_scrollbar().height;
         let at = -self.list.scroll_px_offset_for_scrollbar().y;
         max <= px(1.0) || at >= max - px(1.0)
+    }
+
+    /// The document's page labels, when Settings › Reading › Page numbers
+    /// uses them and the file has any.
+    pub(crate) fn labels(&self, st: &Style) -> Option<&[String]> {
+        if !st.page_labels || self.md.is_some() {
+            return None;
+        }
+        self.info.as_ref()?.page_labels.as_deref()
+    }
+
+    /// A page (0-based) as shown: its label, or its number.
+    pub(crate) fn page_label(&self, page: usize, st: &Style) -> String {
+        self.labels(st)
+            .and_then(|l| l.get(page))
+            .filter(|l| !l.trim().is_empty())
+            .cloned()
+            .unwrap_or_else(|| (page + 1).to_string())
     }
 
     pub fn current_page(&self) -> usize {
@@ -620,6 +664,7 @@ impl Reader {
                         repaired: false,
                         reflowable: false,
                         right_to_left: false,
+                        page_labels: None,
                     };
                     let saved = library.opened(&path, &info);
                     Ok((doc, info, saved, text.into_owned(), mtime))
@@ -652,6 +697,7 @@ impl Reader {
                     this.list.reset(info.page_count as usize);
                     this.info = Some(info);
                     this.status = Status::Open;
+                    this.take_recovery(cx);
                     this.index_text_later(cx);
                     cx.emit(ReaderEvent::Opened);
                     cx.notify();
@@ -694,6 +740,7 @@ impl Reader {
                 self.info = Some(info);
                 self.status = Status::Open;
                 self.password.clear();
+                self.take_recovery(cx);
                 self.load_marks(cx);
                 self.load_bookmarks(cx);
                 self.check_signatures(cx);
@@ -925,6 +972,9 @@ impl Reader {
             self.rotation,
         );
         if self.layout_sig != Some(sig) {
+            if self.layout_sig.is_some() {
+                self.zoomed_at = Some(std::time::Instant::now());
+            }
             self.layout_sig = Some(sig);
             self.generation += 1;
             if let Some(doc) = self.doc {
@@ -1224,8 +1274,10 @@ impl Reader {
     }
 
     fn confirm_page(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let labels = self.labels(Style::get(cx)).map(<[String]>::to_vec);
         if let Some(text) = self.page_edit.take()
-            && let Some(n) = parse_page(&text, self.page_count())
+            && let Some(n) = parse_label(&text, labels.as_deref())
+                .or_else(|| parse_page(&text, self.page_count()))
         {
             self.jump(n, cx);
         }
@@ -1240,6 +1292,7 @@ impl Reader {
     }
 
     fn on_key_page(&mut self, e: &KeyDownEvent, _: &mut Window, cx: &mut Context<Self>) {
+        let st_labels = self.labels(Style::get(cx)).is_some();
         let Some(text) = self.page_edit.as_mut() else {
             return;
         };
@@ -1247,8 +1300,12 @@ impl Reader {
         if k.key == "backspace" {
             text.pop();
         } else if let Some(ch) = k.key_char.as_ref() {
-            let digits = ch.chars().all(|c| c.is_ascii_digit());
-            if !k.modifiers.control && !k.modifiers.alt && digits && text.len() < 7 {
+            // With page labels, letters too ("iv", "A-3").
+            let labels = st_labels;
+            let ok = ch.chars().all(|c| {
+                c.is_ascii_digit() || (labels && (c.is_alphanumeric() || "-. ".contains(c)))
+            });
+            if !k.modifiers.control && !k.modifiers.alt && ok && text.len() < 16 {
                 text.push_str(ch);
             }
         }
@@ -1603,6 +1660,13 @@ impl Reader {
             let (result, took) = result;
             let _ = this.update(cx, |this, cx| {
                 this.pending.remove(&key);
+                // The last on-screen render back: what waited for it starts.
+                if this.on_screen_pending.remove(&key) && this.on_screen_pending.is_empty() {
+                    cx.notify();
+                }
+                if let (Ok(Some(_)), Some(false)) = (&result, quick) {
+                    this.page_ms.insert(page, took);
+                }
                 if let (Ok(Some(_)), Some(quick)) = (&result, quick) {
                     let avg = if quick {
                         &mut this.quick_ms
@@ -1635,6 +1699,27 @@ impl Reader {
                     Ok(None) => {} // stale generation: the view moved on
                     Err(e) => log::warn!("render failed: {e}"),
                 }
+            });
+        })
+        .detach();
+    }
+
+    /// Whether the pages on screen have no render still out.
+    pub(crate) fn on_screen_ready(&self) -> bool {
+        self.on_screen_pending.is_empty()
+    }
+
+    /// Draw again after `d` (once, however many pages ask), so pages that
+    /// waited out a zoom render sharp.
+    fn wake_after(&mut self, d: Duration, cx: &mut Context<Self>) {
+        if std::mem::replace(&mut self.settle_wake, true) {
+            return;
+        }
+        cx.spawn(async move |this, cx| {
+            cx.background_executor().timer(d).await;
+            let _ = this.update(cx, |r, cx| {
+                r.settle_wake = false;
+                cx.notify();
             });
         })
         .detach();
@@ -1693,8 +1778,10 @@ impl Reader {
         let image = match self.cache.get(&key) {
             Some(i) => {
                 crate::fire_first_paint(window, cx);
-                self.ensure_links(ix as u32, cx);
-                self.ensure_fields(ix as u32, cx);
+                if self.on_screen_ready() {
+                    self.ensure_links(ix as u32, cx);
+                    self.ensure_fields(ix as u32, cx);
+                }
                 Some(i)
             }
             None => {
@@ -1723,9 +1810,21 @@ impl Reader {
                         .or_insert_with(std::time::Instant::now);
                 }
                 // Mid-pinch the size changes every frame: what there is
-                // stretches, and the sharp page is drawn once it settles.
-                if !pinching || any.is_none() {
+                // stretches, and the sharp page is drawn once it settles. A
+                // slow page also waits out a run of zoom steps.
+                let slow = self
+                    .page_ms
+                    .get(&(ix as u32))
+                    .is_some_and(|ms| *ms >= SLOW_PAGE_MS);
+                let slow_wait = self
+                    .zoomed_at
+                    .map(|t| t.elapsed())
+                    .filter(|d| slow && *d < SLOW_SETTLE);
+                if any.is_none() || (!pinching && slow_wait.is_none()) {
+                    self.on_screen_pending.insert(key);
                     self.request(ix, key, device_scale, cx);
+                } else if let Some(d) = slow_wait {
+                    self.wake_after(SLOW_SETTLE - d, cx);
                 }
                 any
             }
@@ -1739,7 +1838,7 @@ impl Reader {
         };
         // The next page is always ready before it scrolls in: rendering it
         // only once scrolling began showed it soft, then sharp (flicker).
-        if ahead < self.page_count() && !pinching {
+        if ahead < self.page_count() && !pinching && self.on_screen_ready() {
             let ppt_ahead = self.px_per_pt(ahead);
             let size_ahead = self.page_size(ahead);
             let (s, _) = tiles::picture_scale(
@@ -2168,7 +2267,31 @@ impl Focusable for Reader {
 }
 
 impl Render for Reader {
+    /// The frame guard (see `Workspace::render`): a panic while drawing this
+    /// document shows a note in its place instead of closing Kitab.
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let frame = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            self.render_frame(window, cx).into_any_element()
+        }));
+        frame.unwrap_or_else(|_| {
+            let st = Style::get(cx).clone();
+            div()
+                .size_full()
+                .flex()
+                .items_center()
+                .justify_center()
+                .p(px(24.0))
+                .bg(st.c(|c| c.bg))
+                .text_size(st.px(|m| m.ui_text))
+                .text_color(st.c(|c| c.muted))
+                .child("This document hit a problem while being drawn. Changes you hadn't saved are kept; close the tab and open it again.")
+                .into_any_element()
+        })
+    }
+}
+
+impl Reader {
+    fn render_frame(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let st = Style::get(cx).clone();
         self.scale_factor = window.scale_factor();
         // Settings › Reading › Markdown text size changed: an open Markdown
@@ -2288,6 +2411,7 @@ impl Render for Reader {
             let hi = (lo + on_screen).min(self.page_count().saturating_sub(1) as u64);
             self.visible
                 .store((hi << 32) | lo, std::sync::atomic::Ordering::Relaxed);
+
             // The cache must hold the pages on screen and the next ones,
             // whatever the window and screen: at fit width on a large
             // high-DPI screen one page is ~30 MB, and a fixed 64 MB evicted
@@ -2797,7 +2921,7 @@ impl Reader {
         let editing = self.page_edit.is_some();
         let focused = self.page_focus.is_focused(window);
         let typed = self.page_edit.clone().unwrap_or_default();
-        let current = format!("{}", self.current_page() + 1);
+        let current = self.page_label(self.current_page(), st);
         div()
             .id("page-field")
             .key_context(PAGE_FIELD)
@@ -2956,6 +3080,15 @@ pub fn png_from_bgra(width: u32, height: u32, mut bgra: Vec<u8>) -> Option<Vec<u
     )
     .ok()?;
     Some(out)
+}
+
+/// A typed page label ("iv", "A-3") as a page index: the first page whose
+/// label is the same, ignoring case.
+fn parse_label(text: &str, labels: Option<&[String]>) -> Option<usize> {
+    let text = text.trim();
+    labels?
+        .iter()
+        .position(|l| !text.is_empty() && l.trim().eq_ignore_ascii_case(text))
 }
 
 /// A typed page number (1-based) as a page index, clamped to the document.

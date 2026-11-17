@@ -42,12 +42,14 @@ mod djvu;
 mod doc;
 mod source;
 pub use source::{open_first_page, reads_itself, register as register_handlers};
+mod abort;
 pub mod epub;
 mod ffi;
 mod find;
 pub mod fonts;
 mod forms;
 pub mod marks;
+mod page_labels;
 pub mod pages;
 pub mod rar;
 pub mod sigs;
@@ -445,7 +447,22 @@ impl Engine {
                 .get(&doc)
                 .ok_or_else(|| "the document was closed".to_string())?;
             // The store is trimmed as the job ends (`worker_loop`).
-            let bitmap = doc::render(&slot.doc, &req)?;
+            // A cookie lets the page stop part-way once it's no longer
+            // wanted (scrolled past, zoomed): `abort.rs`.
+            let cookie = mupdf::Cookie::new().ok();
+            let watch = cookie
+                .as_ref()
+                .and_then(ffi::cookie_addr)
+                .map(|addr| abort::watch_render(addr, Box::new(stale_on_worker.clone())));
+            let bitmap = doc::render(&slot.doc, &req, cookie.as_ref());
+            let aborted = watch.as_ref().is_some_and(abort::Watch::aborted);
+            // The watch goes before the cookie it points at.
+            drop(watch);
+            drop(cookie);
+            if aborted {
+                return Ok(None);
+            }
+            let bitmap = bitmap?;
             Ok((!stale_on_worker()).then_some(bitmap))
         });
         counter.fetch_sub(1, Ordering::Relaxed);

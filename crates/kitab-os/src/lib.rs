@@ -71,6 +71,85 @@ pub fn local_today() -> String {
     }
 }
 
+/// The Windows session this process runs in (the screen, or a Remote
+/// Desktop sign-in); 0 elsewhere. Two sessions of one user are two Kitabs.
+pub fn session_id() -> u32 {
+    #[cfg(windows)]
+    {
+        use windows::Win32::System::RemoteDesktop::ProcessIdToSessionId;
+        use windows::Win32::System::Threading::GetCurrentProcessId;
+        let mut id = 0u32;
+        // SAFETY: plain Win32 calls; `id` outlives the call.
+        unsafe {
+            let _ = ProcessIdToSessionId(GetCurrentProcessId(), &mut id);
+        }
+        id
+    }
+    #[cfg(not(windows))]
+    {
+        0
+    }
+}
+
+/// The environment variable a relaunched Kitab finds its predecessor's
+/// process id in ([`relaunch`], [`wait_for_predecessor`]).
+const AFTER_PID: &str = "KITAB_AFTER_PID";
+
+/// Start Kitab again once this process has gone (a restart after a
+/// problem). The new one waits for this one to exit before it claims the
+/// single-instance pipe, so it doesn't hand itself back to the old one.
+pub fn relaunch() -> std::io::Result<()> {
+    let exe = std::env::current_exe()?;
+    std::process::Command::new(exe)
+        .env(AFTER_PID, std::process::id().to_string())
+        .spawn()
+        .map(|_| ())
+}
+
+/// In a relaunched Kitab: wait (at most 10 s) for the one that started it
+/// to exit. Does nothing otherwise.
+pub fn wait_for_predecessor() {
+    let Some(pid) = std::env::var(AFTER_PID)
+        .ok()
+        .and_then(|p| p.parse::<u32>().ok())
+    else {
+        return;
+    };
+    // SAFETY: removing an env var at start-up, before any other thread runs.
+    unsafe { std::env::remove_var(AFTER_PID) };
+    wait_for_exit(pid, std::time::Duration::from_secs(10));
+}
+
+fn wait_for_exit(pid: u32, limit: std::time::Duration) {
+    #[cfg(windows)]
+    {
+        use windows::Win32::Foundation::CloseHandle;
+        use windows::Win32::System::Threading::{
+            OpenProcess, PROCESS_SYNCHRONIZE, WaitForSingleObject,
+        };
+        // SAFETY: plain Win32 calls; the handle is closed before returning.
+        unsafe {
+            if let Ok(h) = OpenProcess(PROCESS_SYNCHRONIZE, false, pid) {
+                let _ = WaitForSingleObject(h, limit.as_millis() as u32);
+                let _ = CloseHandle(h);
+            }
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        let start = std::time::Instant::now();
+        // Linux shows live processes in /proc; elsewhere wait a moment.
+        let proc = std::path::Path::new("/proc").join(pid.to_string());
+        if std::path::Path::new("/proc/self").exists() {
+            while proc.exists() && start.elapsed() < limit {
+                std::thread::sleep(std::time::Duration::from_millis(50));
+            }
+        } else {
+            std::thread::sleep(std::time::Duration::from_millis(1500));
+        }
+    }
+}
+
 /// Kitab's data folder (PRIVACY.md): `%APPDATA%\t21\Kitab`,
 /// `~/Library/Application Support/dev.t21.kitab`, `$XDG_DATA_HOME/kitab`.
 /// A `portable` file next to the executable puts it in `data/` beside it.

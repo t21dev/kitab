@@ -869,6 +869,22 @@ fn reading(ws: &WeakEntity<Workspace>, st: &Style) -> AnyElement {
             st,
         ))
         .child(group(
+            "Page numbers",
+            Some("Many books number their front matter i, ii, iii and start 1 at the first chapter. With this on, Kitab shows those labels in the page box, the status bar and the contents list, and Go to page takes them (\"iv\" or a plain number)."),
+            well_row(
+                "Use the document's own page labels",
+                "",
+                switch(
+                    "page-labels",
+                    st.page_labels,
+                    st,
+                    change(ws, |s: &mut Style| s.page_labels = !s.page_labels),
+                ),
+                st,
+            ),
+            st,
+        ))
+        .child(group(
             "Read aloud",
             Some("Ctrl+Shift+U, or the speaker in the dock, reads from the selection or from the top of the page in view, and the pages follow along. The voices are your system's own: add more in its speech or language settings."),
             read_aloud_rows(ws, st),

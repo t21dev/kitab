@@ -38,8 +38,10 @@ mod page_tools_ui;
 mod palette_ui;
 mod password_ui;
 mod print_ui;
+mod recovery_ui;
 mod save_page;
 mod shelves_ui;
+mod side_search;
 mod sign_ui;
 mod signatures_ui;
 mod system;
@@ -129,6 +131,13 @@ pub struct Workspace {
     toc_reader: Option<Entity<Reader>>,
     /// Bumped when a section is folded or unfolded.
     toc_folds: u64,
+    /// The search field over Contents and Bookmarks.
+    side_search: side_search::SideSearch,
+    /// Frames in a row that panicked (the frame guard in `render`).
+    panics_in_row: u32,
+    /// Too many panics: the window shows only "restart", and closing it
+    /// keeps the unsaved work for the next start.
+    crashed: bool,
     /// Bumped whenever the look changes (theme, density, text size…).
     style_serial: u64,
     _style_watch: Subscription,
@@ -286,6 +295,9 @@ impl Workspace {
             toc_key: None,
             toc_reader: None,
             toc_folds: 0,
+            side_search: side_search::SideSearch::new(cx),
+            panics_in_row: 0,
+            crashed: false,
             style_serial: 0,
             _style_watch: cx.observe_global::<Style>(|ws, _| ws.style_serial += 1),
             side_pane: SidePane::Contents,
@@ -335,6 +347,8 @@ impl Workspace {
             shelves: Default::default(),
         };
         this.start_library(window, cx);
+        this.start_side_search(window, cx);
+        this.start_recovery(window, cx);
         // A library that didn't open looks like an empty Home: say why.
         let library = this.library.clone();
         cx.spawn(async move |this, cx| {
@@ -460,6 +474,15 @@ fn confirm_close(me: &gpui::WeakEntity<Workspace>, window: &mut Window, cx: &mut
     save_window_place(crate::window_place(window), true, cx);
     // Unsaved Markdown edits or a form filled in: ask before they go.
     let Some(ws) = me.upgrade() else { return true };
+    // After a crash the unsaved work stays on disk for the next start.
+    if ws.read(cx).crashed {
+        return true;
+    }
+    let forget = |ws: &Entity<Workspace>, cx: &App| {
+        if !ws.read(cx).crashed {
+            crate::recovery::forget(ws.entity_id().as_u64());
+        }
+    };
     ws.read(cx).save_for_quit(cx);
     let dirty: Vec<Entity<Reader>> = ws
         .read(cx)
@@ -469,6 +492,7 @@ fn confirm_close(me: &gpui::WeakEntity<Workspace>, window: &mut Window, cx: &mut
         .cloned()
         .collect();
     if dirty.is_empty() || ws.read(cx).close_anyway {
+        forget(&ws, cx);
         return true;
     }
     let names: Vec<String> = dirty
@@ -511,8 +535,11 @@ fn confirm_close(me: &gpui::WeakEntity<Workspace>, window: &mut Window, cx: &mut
             }
         }
         let quit = ws
-            .update(cx, |ws, _| {
+            .update(cx, |ws, cx| {
                 ws.close_anyway = true;
+                if !ws.crashed {
+                    crate::recovery::forget(cx.entity_id().as_u64());
+                }
                 ws.quit_after
             })
             .unwrap_or(false);
@@ -1551,6 +1578,11 @@ impl Workspace {
         }
         if self.side_pane == SidePane::Bookmarks {
             let pane = self.bookmarks_pane(&reader, st, cx);
+            let pane = if reader.read(cx).bookmarks().is_empty() {
+                pane
+            } else {
+                self.with_side_search(pane, st)
+            };
             return self.sidebar_frame(tabs_panel, Some(pane), st, cx);
         }
         if self.side_pane == SidePane::Signatures {
@@ -1568,7 +1600,14 @@ impl Workspace {
             folds: self.toc_folds,
             serial: self.sidebar_serial,
             style: self.style_serial,
+            query: {
+                use std::hash::{Hash, Hasher};
+                let mut h = std::collections::hash_map::DefaultHasher::new();
+                self.side_search.query.hash(&mut h);
+                h.finish()
+            },
         };
+        let has_outline = !r.outline().is_empty();
         self.toc_reader = Some(reader.clone());
         let view = match &self.toc_view {
             Some(v) => v.clone(),
@@ -1587,6 +1626,11 @@ impl Workspace {
             self.toc_key = Some(key);
             view.into_any_element()
         };
+        let pane = if has_outline {
+            self.with_side_search(pane, st)
+        } else {
+            pane
+        };
         self.sidebar_frame(tabs_panel, Some(pane), st, cx)
     }
 
@@ -1598,17 +1642,23 @@ impl Workspace {
             return div().into_any_element();
         };
         let mut rows = Vec::new();
+        let query = self.side_search.query.clone();
         let (current, markdown) = {
             let r = reader.read(cx);
-            flatten(
-                r.outline(),
-                0,
-                &mut Vec::new(),
-                self.toc_toggled.get(&r.path),
-                &mut rows,
-            );
+            if query.is_empty() {
+                flatten(
+                    r.outline(),
+                    0,
+                    &mut Vec::new(),
+                    self.toc_toggled.get(&r.path),
+                    &mut rows,
+                );
+            } else {
+                side_search::filter_outline(r.outline(), &query, 0, &mut Vec::new(), &mut rows);
+            }
             (r.current_page() as u32, r.is_markdown())
         };
+        let labels = reader.read(cx).labels(st).map(<[String]>::to_vec);
         // The current entry: the last one whose page is at or before the current page.
         let active_ix = rows
             .iter()
@@ -1621,7 +1671,11 @@ impl Workspace {
                     .py(px(6.0))
                     .text_size(st.px(|m| m.ui_text))
                     .text_color(st.c(|c| c.faint))
-                    .child("This document has no contents list."),
+                    .child(if query.is_empty() {
+                        "This document has no contents list."
+                    } else {
+                        "No headings match."
+                    }),
             );
         }
         let stagger = st.animations && self.sidebar_serial > 0;
@@ -1749,7 +1803,14 @@ impl Workspace {
                     div()
                         .text_size(px(11.5))
                         .text_color(st.c(|c| c.faint))
-                        .child(format!("{}", p + 1))
+                        .child(labels.as_ref().map_or_else(
+                            || format!("{}", p + 1),
+                            |l| {
+                                l.get(p as usize)
+                                    .cloned()
+                                    .unwrap_or_else(|| format!("{}", p + 1))
+                            },
+                        ))
                 }));
             col = col.child(motion::enter(
                 row,
@@ -1981,7 +2042,8 @@ impl Workspace {
         st: &Style,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let (rows, current, can) = {
+        let query = self.side_search.query.clone();
+        let (all, current, can) = {
             let r = reader.read(cx);
             (
                 r.bookmarks().to_vec(),
@@ -1989,8 +2051,23 @@ impl Workspace {
                 r.can_bookmark(),
             )
         };
+        let rows: Vec<_> = all
+            .iter()
+            .filter(|b| side_search::matches(&b.title, &query))
+            .cloned()
+            .collect();
         let mut col = div().flex().flex_col().gap(px(1.0)).p(px(8.0));
-        if rows.is_empty() {
+        if rows.is_empty() && !all.is_empty() {
+            col = col.child(
+                div()
+                    .px(px(8.0))
+                    .py(px(6.0))
+                    .text_size(st.px(|m| m.ui_text))
+                    .text_color(st.c(|c| c.faint))
+                    .child("No bookmarks match."),
+            );
+        }
+        if all.is_empty() {
             let hint = if can {
                 "No bookmarks. Press Ctrl+D on a page to add one."
             } else {
@@ -3164,6 +3241,8 @@ struct TocKey {
     folds: u64,
     serial: u64,
     style: u64,
+    /// The sidebar search's text.
+    query: u64,
 }
 
 /// A fingerprint of an outline: titles, pages and nesting.
@@ -3195,8 +3274,121 @@ impl Render for TocView {
     }
 }
 
+/// Debug builds: `KITAB_DEBUG_PANIC=n` panics the first `n` frames, to try
+/// the frame guard and crash recovery by hand. Not in release builds.
+#[cfg(debug_assertions)]
+fn debug_panic() {
+    use std::sync::atomic::{AtomicI64, Ordering};
+    static LEFT: AtomicI64 = AtomicI64::new(-1);
+    if LEFT.load(Ordering::Relaxed) < 0 {
+        let n = std::env::var("KITAB_DEBUG_PANIC")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(0);
+        LEFT.store(n, Ordering::Relaxed);
+    }
+    if LEFT.load(Ordering::Relaxed) > 0 {
+        LEFT.fetch_sub(1, Ordering::Relaxed);
+        panic!("KITAB_DEBUG_PANIC: a test panic in the window's frame");
+    }
+}
+
+/// Frames in a row that may panic before the window gives up and asks to
+/// restart (a panic can leave GPUI without an entity it lent out).
+const PANICS_BEFORE_RESTART: u32 = 3;
+
 impl Render for Workspace {
+    /// The frame guard: a panic while drawing doesn't take Kitab down. The
+    /// panic hook has written the unsaved work by then (`recovery`); the
+    /// window says so and carries on, and after a few panics in a row it
+    /// offers a restart instead of crashing.
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        if self.crashed {
+            return self.crashed_view(cx);
+        }
+        let frame = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            self.render_frame(window, cx).into_any_element()
+        }));
+        match frame {
+            Ok(el) => {
+                self.panics_in_row = 0;
+                el
+            }
+            Err(_) => {
+                self.panics_in_row += 1;
+                if self.panics_in_row >= PANICS_BEFORE_RESTART {
+                    self.crashed = true;
+                    return self.crashed_view(cx);
+                }
+                self.toast(
+                    "Something went wrong drawing the window. Your unsaved changes are kept.",
+                    true,
+                    None,
+                    cx,
+                );
+                cx.notify();
+                div()
+                    .size_full()
+                    .bg(Style::get(cx).c(|c| c.bg))
+                    .into_any_element()
+            }
+        }
+    }
+}
+
+impl Workspace {
+    /// After too many panics: only a way to restart. The unsaved work is on
+    /// disk and offered back when Kitab opens again.
+    fn crashed_view(&self, cx: &mut Context<Self>) -> AnyElement {
+        let st = Style::get(cx).clone();
+        div()
+            .size_full()
+            .flex()
+            .flex_col()
+            .items_center()
+            .justify_center()
+            .gap(px(14.0))
+            .bg(st.c(|c| c.bg))
+            .text_color(st.c(|c| c.text))
+            .child(
+                div()
+                    .text_size(px(18.0))
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .child("Kitab ran into a problem"),
+            )
+            .child(
+                div()
+                    .max_w(px(460.0))
+                    .text_center()
+                    .text_size(st.px(|m| m.ui_text))
+                    .text_color(st.c(|c| c.muted))
+                    .child("It has to start again. Changes you hadn't saved are kept, and Kitab offers them back when it opens."),
+            )
+            .child(
+                div()
+                    .id("crash-restart")
+                    .px(px(16.0))
+                    .h(st.px(|m| m.control_height))
+                    .flex()
+                    .items_center()
+                    .rounded(st.px(|m| m.control_radius))
+                    .bg(st.c(|c| c.accent))
+                    .text_color(st.c(|c| c.bg))
+                    .cursor_pointer()
+                    .child("Restart Kitab")
+                    .on_click(|_, _, cx| {
+                        if let Err(e) = kitab_os::relaunch() {
+                            log::warn!("could not start Kitab again: {e}");
+                        }
+                        cx.quit();
+                    }),
+            )
+            .into_any_element()
+    }
+
+    fn render_frame(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        #[cfg(debug_assertions)]
+        debug_panic();
         let st = Style::get(cx).clone();
         kitab_os::trace::mark("frame");
         if let Some(last) = &self.ui_trace {

@@ -37,6 +37,12 @@ pub(crate) fn context_ptr() -> Option<*mut fz_context> {
     parse_inner(&format!("{ctx:?}"), "Context").map(|p| p as *mut fz_context)
 }
 
+/// A cookie's `fz_cookie` address, to abort its render from another thread
+/// (`abort.rs`).
+pub(crate) fn cookie_addr(cookie: &mupdf::Cookie) -> Option<usize> {
+    parse_inner(&format!("{cookie:?}"), "Cookie")
+}
+
 fn document_ptr(doc: &Document) -> Option<*mut fz_document> {
     parse_inner(&format!("{doc:?}"), "Document").map(|p| p as *mut fz_document)
 }
@@ -113,5 +119,7 @@ mod tests {
     #[test]
     fn debug_format_is_understood() {
         assert!(context_ptr().is_some(), "{:?}", Context::get());
+        let cookie = mupdf::Cookie::new().expect("a cookie");
+        assert!(cookie_addr(&cookie).is_some(), "{cookie:?}");
     }
 }

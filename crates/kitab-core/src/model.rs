@@ -205,6 +205,9 @@ pub struct DocInfo {
     pub reflowable: bool,
     /// Pages advance right to left (an EPUB's `page-progression-direction`).
     pub right_to_left: bool,
+    /// The file's own page labels ("i", "ii", "1"…), one per page, when it
+    /// has any that differ from the page numbers.
+    pub page_labels: Option<Vec<String>>,
 }
 
 /// Why a document could not be opened. Every variant is a placeholder in the UI,

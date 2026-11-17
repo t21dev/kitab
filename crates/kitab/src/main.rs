@@ -55,6 +55,10 @@ fn main() {
     }
 
     kitab_os::trace::mark("main");
+    // Restarted after a problem: let the old one go first.
+    kitab_os::wait_for_predecessor();
+    // A panic anywhere writes unsaved work to disk at once (crash recovery).
+    kitab_ui::recovery::install_panic_hook();
     let mut files: Vec<PathBuf> = Vec::new();
     for arg in std::env::args_os().skip(1) {
         let s = arg.to_string_lossy();

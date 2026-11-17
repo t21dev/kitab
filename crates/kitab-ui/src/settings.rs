@@ -815,6 +815,9 @@ pub struct Settings {
     /// Going on past the last page offers the next file in the folder, and
     /// a second press opens it (GitHub #9).
     pub next_book: bool,
+    /// Show a PDF's own page labels (i, ii, 1…) instead of plain page
+    /// numbers, where it has them.
+    pub page_labels: bool,
     pub page_colour: PageColour,
     /// The main window's last place (none before the first close).
     pub window: Option<WindowPlace>,
@@ -917,6 +920,7 @@ impl Default for Settings {
             code_font: String::new(),
             comic_rtl: false,
             next_book: true,
+            page_labels: true,
             page_colour: PageColour::Original,
             window: None,
         }
@@ -985,6 +989,7 @@ struct File {
     code_font: String,
     comic_rtl: bool,
     next_book: bool,
+    page_labels: bool,
     page_colour: PageColour,
     window: Option<WindowPlace>,
 }
@@ -1102,6 +1107,7 @@ impl From<Settings> for File {
             code_font: s.code_font,
             comic_rtl: s.comic_rtl,
             next_book: s.next_book,
+            page_labels: s.page_labels,
             page_colour: s.page_colour,
             window: s.window,
         }
@@ -1179,6 +1185,7 @@ impl Settings {
             code_font: f.code_font.chars().take(200).collect(),
             comic_rtl: f.comic_rtl,
             next_book: f.next_book,
+            page_labels: f.page_labels,
             page_colour: f.page_colour,
             window: f.window,
         })
@@ -1272,6 +1279,7 @@ mod tests {
             code_font: "Cascadia Code".into(),
             comic_rtl: true,
             next_book: false,
+            page_labels: false,
             page_colour: PageColour::Dark,
             window: Some(WindowPlace {
                 x: 40.0,

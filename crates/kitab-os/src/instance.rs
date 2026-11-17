@@ -126,8 +126,15 @@ mod imp {
     // SAFETY: the handle is moved to the listener thread and used only there.
     unsafe impl Send for Inner {}
 
+    /// One Kitab per user per Windows session: pipe names are seen across
+    /// sessions, so without the session the same user signed in at the
+    /// screen and over Remote Desktop would hand files to the other screen.
     fn pipe_name() -> HSTRING {
-        HSTRING::from(format!(r"\\.\pipe\kitab-{}-v1", user_key()))
+        HSTRING::from(format!(
+            r"\\.\pipe\kitab-{}-s{}-v1",
+            user_key(),
+            crate::session_id()
+        ))
     }
 
     fn send(name: &HSTRING, bytes: &[u8]) -> bool {

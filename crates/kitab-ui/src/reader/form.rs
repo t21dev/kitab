@@ -162,7 +162,13 @@ impl Reader {
     }
 
     /// Fill in a field: into the open document now, the page drawn again.
-    fn write_field(&mut self, page: u32, index: u32, value: FieldValue, cx: &mut Context<Self>) {
+    pub(super) fn write_field(
+        &mut self,
+        page: u32,
+        index: u32,
+        value: FieldValue,
+        cx: &mut Context<Self>,
+    ) {
         let Some(doc) = self.doc else { return };
         let edit = FieldEdit { page, index, value };
         if !edit.is_valid() {

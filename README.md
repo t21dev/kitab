@@ -191,7 +191,9 @@ Kitab is a document reader, so it leaves image files to your image viewer.
 - Remembers the page, zoom and layout of every file, and reopens your tabs after a restart (or starts on Home, or the last file)
 - Find (Ctrl+F) with match case and whole word, hits highlighted on the page
 - Read aloud (Ctrl+Shift+U) with your system's voices, Markdown too. The dock's speaker opens play, pause, a sentence back or on, and the speed, tone and voice, which change as it reads. The word being read is marked and the pages follow (or stay put)
-- Contents (with folding sections), page thumbnails, bookmarks (Ctrl+D) and your marks, all in the sidebar
+- Contents (with folding sections), page thumbnails, bookmarks (Ctrl+D) and your marks, all in the sidebar; search the contents and bookmarks as you type
+- A PDF's own page labels (i, ii, 1, 2…) in the page box, status bar and contents, and Go to page takes them
+- Unsaved form fields and Markdown edits survive a crash: Kitab offers them back when it opens
 - PDFs reload by themselves when another program changes them
 - Back and forward through where you've been, with Alt+Left and the mouse's side buttons
 - Presentation mode (F5): one page at a time, full screen on black; type a page number to jump, B or W to blank the screen

@@ -156,7 +156,7 @@ impl Reader {
     }
 
     /// The right side: where you are.
-    pub(super) fn status_right(&self, items: StatusItems) -> Vec<String> {
+    pub(super) fn status_right(&self, items: StatusItems, st: &Style) -> Vec<String> {
         let mut parts = Vec::new();
         let count = self.page_count().max(1);
         if items.position {
@@ -169,7 +169,14 @@ impl Reader {
                 };
                 parts.push(format!("{percent} %"));
             } else {
-                parts.push(format!("Page {} of {count}", self.current_page() + 1));
+                let at = self.current_page();
+                let label = self.page_label(at, st);
+                if label == (at + 1).to_string() {
+                    parts.push(format!("Page {label} of {count}"));
+                } else {
+                    // The label, and where it is: "Page iv (4 of 312)".
+                    parts.push(format!("Page {label} ({} of {count})", at + 1));
+                }
             }
         }
         // A book's zoom is its text size, shown on the left.
@@ -192,7 +199,7 @@ impl Reader {
         }
         let badge = self.signature_badge(st, cx);
         let left = self.status_left(st.status_items).join("  ·  ");
-        let right = self.status_right(st.status_items).join("  ·  ");
+        let right = self.status_right(st.status_items, st).join("  ·  ");
         let path: SharedString = self.path.to_string_lossy().to_string().into();
         Some(
             div()

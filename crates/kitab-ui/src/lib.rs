@@ -17,6 +17,7 @@ pub mod menu;
 pub mod motion;
 pub mod palette;
 pub mod reader;
+pub mod recovery;
 pub mod settings;
 pub mod settings_view;
 pub mod shell;
