@@ -83,11 +83,25 @@ impl Format {
             "cbr" => Format::Cbr,
             "cb7" => Format::Cb7,
             "djvu" | "djv" => Format::Djvu,
+            // A plain archive of pictures reads as a comic when opened from
+            // inside Kitab (GitHub #7). Kitab never claims these in the OS
+            // and folder scans skip them: see [`Format::is_plain_archive`].
+            "zip" => Format::Cbz,
+            "rar" => Format::Cbr,
+            "7z" => Format::Cb7,
             "png" | "jpg" | "jpeg" | "gif" | "bmp" | "tif" | "tiff" | "webp" => Format::Image,
             "txt" => Format::Txt,
             "md" | "markdown" | "mdown" | "mkd" => Format::Markdown,
             _ => return None,
         })
+    }
+
+    /// A general archive (.zip, .rar, .7z) rather than a comic: it opens as
+    /// one when asked to, but a folder scan doesn't take it for a book.
+    pub fn is_plain_archive(ext: &str) -> bool {
+        ["zip", "rar", "7z"]
+            .iter()
+            .any(|a| ext.eq_ignore_ascii_case(a))
     }
 }
 
@@ -108,9 +122,11 @@ mod tests {
         assert_eq!(Format::from_extension("cb7"), Some(Format::Cb7));
         assert_eq!(Format::from_extension("djv"), Some(Format::Djvu));
         assert_eq!(Format::from_extension("djvu"), Some(Format::Djvu));
-        // .rar and .7z are archives, not comics: Kitab doesn't claim them.
-        assert_eq!(Format::from_extension("rar"), None);
-        assert_eq!(Format::from_extension("7z"), None);
+        // Plain archives open as comics, but are marked as archives.
+        assert_eq!(Format::from_extension("ZIP"), Some(Format::Cbz));
+        assert_eq!(Format::from_extension("rar"), Some(Format::Cbr));
+        assert_eq!(Format::from_extension("7z"), Some(Format::Cb7));
+        assert!(Format::is_plain_archive("Zip") && !Format::is_plain_archive("cbz"));
         for f in [Format::Cbr, Format::Cb7, Format::Djvu] {
             assert_eq!(f.default_layout(), LayoutKind::Fixed);
         }

@@ -624,6 +624,35 @@ fn comics_and_djvu_draw_through_kitabs_page_source() {
     let _ = std::fs::remove_file(&out);
 }
 
+/// GitHub #7: a plain .zip, .rar or .7z of pictures opens as a comic; one
+/// with no pictures in it is refused, not shown empty.
+#[test]
+fn plain_archives_of_pictures_open_as_comics() {
+    let other = fixtures_dir().join("other");
+    let dir = std::env::temp_dir().join(format!("kitab-archives-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    for (from, to, format) in [
+        ("03-comic.cbz", "pictures.zip", Format::Cbz),
+        ("08-stored-rar5.cbr", "pictures.rar", Format::Cbr),
+        ("07-comic.cb7", "pictures.7z", Format::Cb7),
+    ] {
+        let path = dir.join(to);
+        std::fs::copy(other.join(from), &path).unwrap();
+        let (id, info) = engine().open(&path, None).unwrap();
+        assert_eq!(info.format, format, "{to}");
+        assert!(info.page_count > 0, "{to}");
+        assert!(ink_ratio(&render(id, 0, 0.5, None)) > 0.001, "{to}");
+        engine().close(id);
+    }
+    // An empty ZIP: just the end-of-central-directory record.
+    let empty = dir.join("nothing.zip");
+    let mut eocd = b"PK\x05\x06".to_vec();
+    eocd.resize(22, 0);
+    std::fs::write(&empty, eocd).unwrap();
+    assert!(engine().open(&empty, None).is_err());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 #[test]
 fn djvu_links_go_to_pages_and_web_addresses() {
     use djvu_rs::annotation::{Annotation, MapArea, Rect, Shape};
