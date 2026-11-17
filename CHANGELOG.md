@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-11-17
+
 ### Added
 - Open a plain ZIP, RAR or 7z archive of pictures as a comic, from Open, drag and drop or a link (#7). Kitab doesn't claim these files in the system, and watched folders skip them.
 - Home: + From folder makes a collection of every document in a folder (and its subfolders), and a collection's menu has Add a folder… (#10). The folder isn't watched.
@@ -419,7 +421,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fit width and fit page follow a window resize even when no new page has to be drawn.
 - The Settings window shrinks to fit small windows instead of running off the left edge.
 
-[Unreleased]: https://github.com/t21dev/kitab/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/t21dev/kitab/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/t21dev/kitab/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/t21dev/kitab/compare/v0.6.2...v0.7.0
 [0.6.2]: https://github.com/t21dev/kitab/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/t21dev/kitab/compare/v0.6.0...v0.6.1
