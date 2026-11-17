@@ -517,7 +517,9 @@ fn walk_documents(dir: &Path, depth: u32, out: &mut Vec<(PathBuf, kitab_core::Fo
             walk_documents(&path, depth + 1, out);
         } else if let Some(format) = path
             .extension()
-            .and_then(|x| kitab_core::Format::from_extension(&x.to_string_lossy()))
+            .map(|x| x.to_string_lossy())
+            .filter(|x| !kitab_core::Format::is_plain_archive(x))
+            .and_then(|x| kitab_core::Format::from_extension(&x))
             .filter(|f| *f != kitab_core::Format::Image)
         {
             out.push((path, format));
@@ -1016,6 +1018,66 @@ impl Library for StoreLibrary {
         .unwrap_or(0)
     }
 
+    fn collect_folder(&self, dir: &Path, id: i64) -> usize {
+        let mut found = Vec::new();
+        walk_documents(dir, 0, &mut found);
+        found.sort_by(|a, b| a.0.cmp(&b.0));
+        // Known files keep their row (and title); new ones are read for
+        // their identity here, off the io thread, like a folder scan.
+        let known: Vec<bool> = {
+            let paths: Vec<PathBuf> = found.iter().map(|(p, _)| p.clone()).collect();
+            self.call(move |s| {
+                let store = s.store.as_ref()?;
+                Some(
+                    paths
+                        .iter()
+                        .map(|p| store.document_by_path(p).ok().flatten().is_some())
+                        .collect(),
+                )
+            })
+            .flatten()
+            .unwrap_or_default()
+        };
+        if known.len() != found.len() {
+            return 0;
+        }
+        let docs: Vec<_> = found
+            .into_iter()
+            .zip(known)
+            .filter_map(|((p, f), known)| {
+                if known {
+                    Some((p, f, None))
+                } else {
+                    kitab_store::identify(&p).ok().map(|i| (p, f, Some(i)))
+                }
+            })
+            .collect();
+        self.call(move |s| {
+            let store = s.store.as_mut()?;
+            let mut n = 0;
+            for (path, format, ident) in docs {
+                let doc = match ident {
+                    None => Self::doc_id(store, &path),
+                    Some(ident) => {
+                        let mut meta = kitab_store::DocMeta::new(format);
+                        meta.title = path.file_stem().map(|s| s.to_string_lossy().to_string());
+                        store.upsert_document(&ident, &path, &meta).ok()
+                    }
+                };
+                if let Some(doc) = doc
+                    && store
+                        .set_in_collection(kitab_store::CollectionId(id), doc, true)
+                        .is_ok()
+                {
+                    n += 1;
+                }
+            }
+            Some(n)
+        })
+        .flatten()
+        .unwrap_or(0)
+    }
+
     fn recent(&self, limit: usize) -> Vec<RecentItem> {
         self.call(move |s| {
             let store = s.store.as_ref()?;
@@ -1142,6 +1204,40 @@ mod tests {
         assert_eq!(lib.opened(&path, &info), Some(state));
         assert_eq!(lib.recent(10).len(), 1);
         engine.close(h);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// GitHub #10: a folder's documents, known or new, all go into one
+    /// collection; archives and other files in it don't, and nothing
+    /// starts watching the folder.
+    #[test]
+    fn a_folder_becomes_a_collection() {
+        let dir = std::env::temp_dir().join(format!("kitab-collect-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let books = dir.join("books");
+        std::fs::create_dir_all(books.join("more")).unwrap();
+        std::fs::copy(fixture(), books.join("a.pdf")).unwrap();
+        std::fs::copy(fixture(), books.join("more").join("b.pdf")).unwrap();
+        std::fs::write(books.join("c.txt"), "Plain text").unwrap();
+        std::fs::write(books.join("archive.zip"), b"PK\x05\x06").unwrap();
+        std::fs::write(books.join("notes.docx"), b"not read").unwrap();
+
+        let lib = StoreLibrary::start(Some(dir.join("library.sqlite3")));
+        let engine = MupdfEngine::new();
+        // One of them is already in the library, with its own title.
+        let (h, info) = engine.open(&books.join("a.pdf"), None).unwrap();
+        let _ = lib.opened(&books.join("a.pdf"), &info);
+        engine.close(h);
+
+        let id = lib.create_collection("books").unwrap();
+        assert_eq!(lib.collect_folder(&books, id), 3);
+        let shelf = lib.shelf(kitab_ui::ShelfKind::Collection(id));
+        assert_eq!(shelf.len(), 3);
+        // Again: nothing doubles.
+        assert_eq!(lib.collect_folder(&books, id), 3);
+        assert_eq!(lib.shelf(kitab_ui::ShelfKind::Collection(id)).len(), 3);
+        assert!(lib.watched_folders().is_empty());
+        drop(lib);
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

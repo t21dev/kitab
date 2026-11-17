@@ -11,6 +11,7 @@ use crate::library::{CollectionInfo, RecentItem, ShelfKind};
 use crate::menu::MenuItem;
 use crate::style::Style;
 use crate::text_field::{FieldEvent, TextField};
+use crate::tooltip::Tip;
 use gpui::{
     AnyElement, AppContext, Context, Entity, FontWeight, InteractiveElement, IntoElement,
     MouseButton, MouseDownEvent, ParentElement, Pixels, Point, StatefulInteractiveElement, Styled,
@@ -285,6 +286,22 @@ impl Workspace {
                 )
                 .child("+ Collection"),
         );
+        row = row.child(
+            div()
+                .id("shelf-from-folder")
+                .h(px(28.0))
+                .px(px(12.0))
+                .flex()
+                .items_center()
+                .rounded_full()
+                .text_size(px(12.5))
+                .text_color(st.c(|c| c.faint))
+                .cursor_pointer()
+                .hover(|d| d.bg(st.hover_bg()).text_color(st.c(|c| c.text)))
+                .tip("A new collection with every document in a folder")
+                .on_click(cx.listener(|ws, _, _, cx| ws.collect_folder(None, cx)))
+                .child("+ From folder"),
+        );
         let missing = self.shown_missing().len();
         if missing > 0 {
             row = row.child(
@@ -553,6 +570,11 @@ impl Workspace {
     ) {
         let items = vec![
             MenuItem::new(
+                "Add a folder…",
+                self.on_ws(cx, move |ws, _, cx| ws.collect_folder(Some(id), cx)),
+            )
+            .icon("folder-open"),
+            MenuItem::new(
                 "Rename…",
                 self.on_ws(cx, move |ws, window, cx| {
                     ws.name_collection(Some(id), None, window, cx)
@@ -582,6 +604,66 @@ impl Workspace {
             .icon("trash"),
         ];
         self.open_menu(at, false, 220.0, items, window, cx);
+    }
+
+    /// GitHub #10: pick a folder and put every document in it in a
+    /// collection: `into`, or a new one named after the folder. The folder
+    /// isn't watched; its documents join the library like opened ones.
+    pub(crate) fn collect_folder(&mut self, into: Option<i64>, cx: &mut Context<Self>) {
+        self.menu = None;
+        self.menu_closing = None;
+        let rx = cx.prompt_for_paths(gpui::PathPromptOptions {
+            files: false,
+            directories: true,
+            multiple: false,
+            prompt: Some("Add".into()),
+        });
+        let library = self.library.clone();
+        cx.spawn(async move |this, cx| {
+            let Ok(Ok(Some(mut picked))) = rx.await else {
+                return;
+            };
+            let Some(dir) = picked.pop() else { return };
+            let folder = dir
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_else(|| dir.display().to_string());
+            let _ = this.update(cx, |ws, cx| {
+                ws.toast(format!("Looking in {folder}…"), false, None, cx);
+            });
+            let name = folder.clone();
+            let done = cx
+                .background_spawn(async move {
+                    let id = match into {
+                        Some(id) => id,
+                        None => library.create_collection(&name)?,
+                    };
+                    Some((id, library.collect_folder(&dir, id)))
+                })
+                .await;
+            let _ = this.update(cx, |ws, cx| {
+                let Some((id, n)) = done else {
+                    ws.toast("Kitab couldn't make that collection.", true, None, cx);
+                    return;
+                };
+                let name = ws
+                    .shelves
+                    .collections
+                    .iter()
+                    .find(|c| c.id == id)
+                    .map(|c| c.name.clone())
+                    .unwrap_or(folder);
+                let what = match n {
+                    0 => format!("{name}: no documents Kitab reads in that folder."),
+                    1 => format!("1 document in {name}."),
+                    n => format!("{n} documents in {name}."),
+                };
+                ws.toast(what, false, None, cx);
+                ws.shelves.kind = ShelfKind::Collection(id);
+                ws.refresh_shelves(cx);
+            });
+        })
+        .detach();
     }
 
     /// The name sheet: a new collection (with `add` in it), or a rename.

@@ -252,6 +252,13 @@ pub trait Library: Send + Sync + 'static {
     fn scan_watched(&self) -> u32 {
         0
     }
+    /// Put every document in `dir` (and its subfolders) in collection `id`,
+    /// adding the ones the library doesn't know yet (GitHub #10). The
+    /// folder isn't watched. Returns how many documents the folder held.
+    fn collect_folder(&self, dir: &Path, id: i64) -> usize {
+        let _ = (dir, id);
+        0
+    }
 }
 
 /// A library that remembers nothing (tests, or when the data folder can't be opened).
