@@ -52,6 +52,7 @@ pub mod marks;
 mod page_labels;
 pub mod pages;
 pub mod rar;
+mod script_ap;
 pub mod sigs;
 pub mod tools;
 

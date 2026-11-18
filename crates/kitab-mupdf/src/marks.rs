@@ -210,6 +210,18 @@ fn annotate(
                 .create_annotation(subtype(&m.shape))
                 .map_err(|e| format!("could not add a {}: {e}", m.kind()))?;
             fill(&mut annot, m).map_err(|e| format!("could not add a {}: {e}", m.kind()))?;
+            // Text MuPDF draws as "?" (Bangla, Hindi, Arabic, Thai…):
+            // Kitab draws it (script_ap.rs).
+            if let MarkShape::Text { text, size, .. } = &m.shape {
+                let c = m.color;
+                let rgb = (
+                    f32::from(c.r) / 255.0,
+                    f32::from(c.g) / 255.0,
+                    f32::from(c.b) / 255.0,
+                );
+                crate::script_ap::draw_text_box(&mut doc, &mut annot.object(), text, *size, rgb)
+                    .map_err(|e| format!("could not add a {}: {e}", m.kind()))?;
+            }
             written += 1;
         }
     }
@@ -328,6 +340,83 @@ mod tests {
         page.annotations()
             .map(|a| (a.r#type().expect("type"), a.rect().expect("rect")))
             .collect()
+    }
+
+    /// A text box in Bangla (issue #13): drawn by Kitab with its letters
+    /// joined, and read back as the same words, not MuPDF's "?".
+    #[cfg(windows)]
+    #[test]
+    fn a_bangla_text_box_is_drawn_and_read_back() {
+        let src = fixture("01-text-outline.pdf");
+        let out = temp("bangla-box.pdf");
+        let text = "আমার সোনার বাংলা, আমি তোমায় ভালোবাসি";
+        let mark = Mark {
+            page: 0,
+            shape: MarkShape::Text {
+                rect: RectPt {
+                    x: 72.0,
+                    y: 600.0,
+                    w: 220.0,
+                    h: 60.0,
+                },
+                text: text.into(),
+                size: 14.0,
+            },
+            color: Rgb8 {
+                r: 20,
+                g: 40,
+                b: 160,
+            },
+            width: 1.0,
+            opacity: 1.0,
+        };
+        write_marks(&src, None, &[mark], &[], &out).expect("writes");
+        let doc = PdfDocument::open(out.to_str().expect("utf-8")).expect("reopens");
+        let page = doc.load_pdf_page(0).expect("page");
+        let ours = page.annotations().any(|a| {
+            a.object()
+                .get_dict("AP")
+                .ok()
+                .flatten()
+                .and_then(|ap| ap.get_dict("N").ok().flatten())
+                .and_then(|n| n.read_stream().ok())
+                .is_some_and(|s| String::from_utf8_lossy(&s).contains("/KitabF"))
+        });
+        assert!(ours, "Kitab draws the text box");
+        let stext = doc
+            .load_page(0)
+            .expect("page")
+            .to_display_list(true)
+            .expect("list")
+            .to_text_page(mupdf::TextPageFlags::empty())
+            .expect("text");
+        let mut read = String::new();
+        for block in stext.blocks() {
+            for line in block.lines() {
+                read.extend(line.chars().filter_map(|c| c.char()));
+                read.push(' ');
+            }
+        }
+        for word in ["সোনার", "বাংলা", "তোমায়", "ভালোবাসি"]
+        {
+            assert!(read.contains(word), "{word} in {read}");
+        }
+        assert!(!read.contains(char::REPLACEMENT_CHARACTER), "{read}");
+        if let Ok(dir) = std::env::var("KITAB_SHOT") {
+            let pix = doc
+                .load_page(0)
+                .expect("page")
+                .to_pixmap(
+                    &mupdf::Matrix::new_scale(3.0, 3.0),
+                    &mupdf::Colorspace::device_rgb(),
+                    false,
+                    true,
+                )
+                .expect("draws");
+            pix.save_as(&format!("{dir}/bangla-box.png"), mupdf::ImageFormat::PNG)
+                .expect("png");
+        }
+        let _ = std::fs::remove_file(&out);
     }
 
     #[test]

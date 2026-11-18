@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Form fields and text boxes in Bangla, Hindi, Tamil, Arabic, Thai and other scripts are saved as written, conjuncts and joined letters included ([#13](https://github.com/t21dev/kitab/issues/13)): they came out as "?" in the saved PDF. Kitab now draws that text itself, in the system's font for the script, with only the letters used embedded, so every reader shows it and can still search and copy it.
+
 ## [1.0.1] - 2026-11-19
 
 ### Fixed

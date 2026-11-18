@@ -96,6 +96,27 @@ pub(crate) fn shrink_store(percent: u32) -> bool {
     true
 }
 
+/// A character's Unicode script (`UCDN_SCRIPT_*`), from MuPDF's own table.
+pub(crate) fn script_of(c: char) -> u32 {
+    // SAFETY: `ucdn_get_script` is a pure table lookup on a code point: no
+    // context, no allocation, it never throws.
+    unsafe { mupdf_sys::ucdn_get_script(c as u32) as u32 }
+}
+
+/// Mark `obj` clean, so MuPDF doesn't take a change Kitab made to it (an
+/// appearance it drew itself, `script_ap.rs`) as a reason to draw the
+/// annotation again. False if the pointers could not be read.
+pub(crate) fn clean_obj(obj: &mupdf::pdf::PdfObject) -> bool {
+    let (Some(ctx), Some(raw)) = (context_ptr(), parse_inner(&format!("{obj:?}"), "PdfObject"))
+    else {
+        return false;
+    };
+    // SAFETY: `ctx` is this thread's live context and `raw` the live object
+    // borrowed through `obj`; `pdf_clean_obj` clears one flag and never throws.
+    unsafe { mupdf_sys::pdf_clean_obj(ctx, raw as *mut mupdf_sys::pdf_obj) };
+    true
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -121,5 +142,10 @@ mod tests {
         assert!(context_ptr().is_some(), "{:?}", Context::get());
         let cookie = mupdf::Cookie::new().expect("a cookie");
         assert!(cookie_addr(&cookie).is_some(), "{cookie:?}");
+        let obj = mupdf::pdf::PdfObject::new_int(1).expect("an object");
+        assert!(
+            parse_inner(&format!("{obj:?}"), "PdfObject").is_some(),
+            "{obj:?}"
+        );
     }
 }

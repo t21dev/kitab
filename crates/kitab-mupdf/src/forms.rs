@@ -34,7 +34,7 @@ fn rect_of(w: &PdfWidget) -> RectPt {
         .unwrap_or_default()
 }
 
-fn inheritable(obj: &PdfObject, key: &str) -> Option<PdfObject> {
+pub(crate) fn inheritable(obj: &PdfObject, key: &str) -> Option<PdfObject> {
     obj.get_dict_inheritable(key).ok().flatten()
 }
 
@@ -77,7 +77,7 @@ fn is_on(w: &PdfWidget) -> bool {
 }
 
 /// The text size in the field's default appearance ("/Helv 9 Tf 0 g").
-fn font_size(obj: &PdfObject) -> f32 {
+pub(crate) fn font_size(obj: &PdfObject) -> f32 {
     let Some(da) = inheritable(obj, "DA").and_then(|d| d.as_string().ok()) else {
         return 0.0;
     };
@@ -235,6 +235,29 @@ pub(crate) fn apply(
     }
     w.update().map_err(|e| e.to_string())?;
     p.update().map_err(|e| e.to_string())?;
+    // Bangla, Hindi, Arabic, Thai…: MuPDF drew "?", so Kitab draws the
+    // text itself, on this widget and the field's others (script_ap.rs).
+    if matches!(kind, WidgetType::Text | WidgetType::Combobox)
+        && !crate::script_ap::mupdf_draws(&value)
+    {
+        crate::script_ap::settle_form(pdf, page_count, MAX_LINKED_PAGES);
+        match name.as_deref() {
+            Some(name) => {
+                for pg in std::iter::once(&p).chain(linked.iter().map(|(_, lp)| lp)) {
+                    for ow in pg.widgets().take(MAX_WIDGETS) {
+                        if ow.name().ok().flatten().as_deref() == Some(name) {
+                            let mut obj = ow.annotation().object();
+                            crate::script_ap::draw_widget(pdf, &mut obj, &value)?;
+                        }
+                    }
+                }
+            }
+            None => {
+                let mut obj = w.annotation().object();
+                crate::script_ap::draw_widget(pdf, &mut obj, &value)?;
+            }
+        }
+    }
     let mut changed = vec![edit.page];
     for (n, mut lp) in linked {
         let _ = lp.update();
@@ -357,6 +380,74 @@ mod tests {
     }
 
     /// Page `n` as drawn, annotations and fields included.
+    /// Bangla (issue #13): drawn by Kitab, not as MuPDF's "?", joined into
+    /// its conjuncts, kept through a save and a reopen, and read back as
+    /// the same letters (search and copy in other readers).
+    #[cfg(windows)]
+    #[test]
+    fn bangla_is_drawn_kept_and_read_back() {
+        let ours = |pdf: &PdfDocument| -> bool {
+            page(pdf, 0).expect("page").widgets().any(|w| {
+                w.annotation()
+                    .object()
+                    .get_dict("AP")
+                    .ok()
+                    .flatten()
+                    .and_then(|ap| ap.get_dict("N").ok().flatten())
+                    .and_then(|n| n.read_stream().ok())
+                    .is_some_and(|s| String::from_utf8_lossy(&s).contains("/KitabF"))
+            })
+        };
+        let page_text = |pdf: &PdfDocument| -> String {
+            // Through a display list with the fields in it (the page's
+            // own text leaves them out).
+            let stext = pdf
+                .load_page(0)
+                .expect("page")
+                .to_display_list(true)
+                .expect("list")
+                .to_text_page(mupdf::TextPageFlags::empty())
+                .expect("text");
+            let mut s = String::new();
+            for block in stext.blocks() {
+                for line in block.lines() {
+                    s.extend(line.chars().filter_map(|c| c.char()));
+                    s.push('\n');
+                }
+            }
+            s
+        };
+        let text = "আমার সোনার বাংলা, ক্ষমা";
+        let mut pdf = open("03-forms.pdf");
+        let name = find(&pdf, 0, "full_name");
+        apply(&mut pdf, 1, &edit(&name, FieldValue::Text(text.into()))).expect("fills");
+        assert!(ours(&pdf), "Kitab draws the field");
+        let out = std::env::temp_dir().join(format!("kitab-bangla-{}.pdf", std::process::id()));
+        crate::tools::save_pdf(&pdf, &out).expect("saves");
+        let again = PdfDocument::open(out.to_str().expect("utf-8")).expect("reopens");
+        assert!(ours(&again), "the look is still Kitab's after a reopen");
+        assert_eq!(find(&again, 0, "full_name").value, text);
+        let read = page_text(&again);
+        assert!(read.contains("সোনার") && read.contains("ক্ষমা"), "{read}");
+        assert!(!read.contains('?'), "{read}");
+        // For a look at it: KITAB_SHOT=dir writes the page as a picture.
+        if let Ok(dir) = std::env::var("KITAB_SHOT") {
+            let pix = again
+                .load_page(0)
+                .expect("page")
+                .to_pixmap(
+                    &mupdf::Matrix::new_scale(3.0, 3.0),
+                    &mupdf::Colorspace::device_rgb(),
+                    false,
+                    true,
+                )
+                .expect("draws");
+            pix.save_as(&format!("{dir}/bangla-field.png"), mupdf::ImageFormat::PNG)
+                .expect("png");
+        }
+        let _ = std::fs::remove_file(out);
+    }
+
     fn pixels(pdf: &PdfDocument, n: i32) -> Vec<u8> {
         pdf.load_page(n)
             .expect("page")

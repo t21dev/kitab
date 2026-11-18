@@ -15,6 +15,8 @@ Third-party components and assets (updated as they are added):
 - sevenz-rust2 and lzma-rust2 (7z archives, for comic books in .cb7), Copyright (c) the sevenz-rust2 and lzma-rust2 authors. Apache-2.0. https://github.com/hasenbanck/sevenz-rust
 - djvu-rs (DjVu documents; written from the public DjVu v3 specification), Copyright (c) Lev Matyushkin. MIT. https://github.com/matyushkin/djvu-rs
 - image-webp (WebP pages in comic books; already part of GPUI), Copyright (c) the image-rs developers. MIT OR Apache-2.0. https://github.com/image-rs/image-webp
+- rustybuzz (shaping Bangla, Hindi, Arabic, Thai and other scripts in form fields and text boxes; a port of HarfBuzz), Copyright (c) the rustybuzz and HarfBuzz authors. MIT. https://github.com/harfbuzz/rustybuzz
+- subsetter (embedding only the glyphs a field's text uses), Copyright (c) Laurenz Mädje and Laurenz Stampfl. MIT OR Apache-2.0. https://github.com/typst/subsetter
 - Nord colour palette, Copyright (c) Arctic Ice Studio and Sven Greb. MIT. https://www.nordtheme.com/
   (Used for the "Nord" theme. "Noctua" and "Vampire" are Kitab's own palettes.)
 

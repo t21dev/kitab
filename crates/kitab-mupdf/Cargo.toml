@@ -34,6 +34,12 @@ djvu-rs = { version = "0.45", default-features = false, features = ["std"] }
 # WebP pages in comics, which MuPDF can't decode. Already in kitab.exe through
 # GPUI's image crate, so it adds no size. MIT/Apache-2.0.
 image-webp = "0.2"
+# Form fields and text boxes in scripts MuPDF's own appearance writer can't
+# draw (Bangla, Hindi, Arabic, Thai...): shaped with rustybuzz (a pure-Rust
+# HarfBuzz port; already in kitab.exe through GPUI's Linux text stack), and
+# only the glyphs used embedded. MIT; MIT OR Apache-2.0.
+rustybuzz = "0.20.1"
+subsetter = { version = "0.2.6", default-features = false }
 
 [dev-dependencies]
 serde_json = { workspace = true }
