@@ -25,8 +25,15 @@ pub enum Inline {
         link: Option<String>,
     },
     /// An image: a path relative to the document or an http(s) address
-    /// (remote images stay blocked until allowed).
-    Image { src: String, alt: String },
+    /// (remote images stay blocked until allowed). `width` and `height`
+    /// are an HTML `<img>`'s, in CSS pixels, when it gives them (a README's
+    /// logo shrunk with `width="96"`).
+    Image {
+        src: String,
+        alt: String,
+        width: Option<f32>,
+        height: Option<f32>,
+    },
     /// A hard line break.
     Break,
     /// A reference to a footnote, by label; drawn as its number.

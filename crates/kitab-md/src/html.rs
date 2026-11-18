@@ -14,7 +14,12 @@ pub enum Piece {
     Open(Tag),
     Close(Tag),
     Break,
-    Image { src: String, alt: String },
+    Image {
+        src: String,
+        alt: String,
+        width: Option<f32>,
+        height: Option<f32>,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -62,6 +67,16 @@ pub fn safe_target(target: &str) -> bool {
         }
         _ => true,
     }
+}
+
+/// An HTML size in CSS pixels: "96" or "96px". Percentages and other
+/// units give `None` (the image keeps its own size, up to the column).
+pub(crate) fn css_px(value: &str) -> Option<f32> {
+    let v = value.trim();
+    let v = v.strip_suffix("px").unwrap_or(v).trim();
+    v.parse::<f32>()
+        .ok()
+        .filter(|n| n.is_finite() && *n > 0.0 && *n <= 10_000.0)
 }
 
 fn attr(tag: &str, name: &str) -> Option<String> {
@@ -204,7 +219,17 @@ pub fn pieces(fragment: &str, swallowing: &mut Option<String>) -> Vec<(Piece, Op
                 let src = attr(tag, "src").unwrap_or_default();
                 if safe_target(&src) {
                     let alt = decode_entities(&attr(tag, "alt").unwrap_or_default());
-                    out.push((Piece::Image { src, alt }, None));
+                    let width = attr(tag, "width").and_then(|v| css_px(&v));
+                    let height = attr(tag, "height").and_then(|v| css_px(&v));
+                    out.push((
+                        Piece::Image {
+                            src,
+                            alt,
+                            width,
+                            height,
+                        },
+                        None,
+                    ));
                 }
             }
             _ => {

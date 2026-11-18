@@ -586,7 +586,12 @@ impl Builder {
             TagEnd::Image => {
                 if let Some((src, alt)) = self.image.take() {
                     if html::safe_target(&src) {
-                        self.push_inline(Inline::Image { src, alt });
+                        self.push_inline(Inline::Image {
+                            src,
+                            alt,
+                            width: None,
+                            height: None,
+                        });
                     } else {
                         let style = self.styles.span();
                         self.push_text(&alt, style);
@@ -623,7 +628,17 @@ impl Builder {
                     }
                 }
                 Piece::Break => self.push_inline(Inline::Break),
-                Piece::Image { src, alt } => self.push_inline(Inline::Image { src, alt }),
+                Piece::Image {
+                    src,
+                    alt,
+                    width,
+                    height,
+                } => self.push_inline(Inline::Image {
+                    src,
+                    alt,
+                    width,
+                    height,
+                }),
                 Piece::Open(HtmlTag::Link) => self.links.push(href),
                 Piece::Close(HtmlTag::Link) => {
                     self.links.pop();

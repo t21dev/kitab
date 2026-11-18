@@ -278,3 +278,39 @@ fn every_block_knows_its_source_line() {
     assert_eq!(doc.block_lines.len(), doc.blocks.len());
     assert_eq!(doc.block_lines, vec![0, 3, 5, 7]);
 }
+
+#[test]
+fn html_image_size_is_kept() {
+    let doc = crate::parse(
+        "<div align=\"center\">\n\n<img src=\"logo.png\" width=\"96\" alt=\"Logo\" />\n\n<img src=\"b.png\" width=\"40px\" height=\"20\" />\n\n<img src=\"c.png\" width=\"50%\" />\n\n</div>\n",
+    );
+    let mut sizes = Vec::new();
+    fn walk(blocks: &[Block], out: &mut Vec<(String, Option<f32>, Option<f32>)>) {
+        for b in blocks {
+            match b {
+                Block::Paragraph(i) | Block::Heading { content: i, .. } => {
+                    for x in i {
+                        if let Inline::Image {
+                            src, width, height, ..
+                        } = x
+                        {
+                            out.push((src.clone(), *width, *height));
+                        }
+                    }
+                }
+                Block::Quote(b) | Block::Details { body: b, .. } => walk(b, out),
+                _ => {}
+            }
+        }
+    }
+    walk(&doc.blocks, &mut sizes);
+    assert_eq!(
+        sizes,
+        vec![
+            ("logo.png".to_string(), Some(96.0), None),
+            ("b.png".to_string(), Some(40.0), Some(20.0)),
+            // A percentage: the image's own size, up to the column.
+            ("c.png".to_string(), None, None),
+        ]
+    );
+}

@@ -1218,15 +1218,23 @@ fn inline_el(d: &Draw, inlines: &[Inline], base: Base, cx: &mut Context<Reader>)
     let mut parts: Vec<AnyElement> = Vec::new();
     let mut start = 0;
     for (i, inl) in inlines.iter().enumerate() {
-        if let Inline::Image { src, alt } = inl {
-            if i > start {
+        if let Inline::Image {
+            src,
+            alt,
+            width,
+            height,
+        } = inl
+        {
+            if i > start && !blank(&inlines[start..i]) {
                 parts.push(text_el(d, &inlines[start..i], base, cx));
             }
-            parts.push(image_el(d, src, alt));
+            parts.push(image_el(d, src, alt, (*width, *height)));
             start = i + 1;
         }
     }
-    if start < inlines.len() {
+    // Only whitespace beside an image (the line break after an HTML
+    // `<img>`) isn't a line of its own: it left a tall gap under a logo.
+    if start < inlines.len() && !(start > 0 && blank(&inlines[start..])) {
         parts.push(text_el(d, &inlines[start..], base, cx));
     }
     if parts.len() == 1 {
@@ -1241,7 +1249,18 @@ fn inline_el(d: &Draw, inlines: &[Inline], base: Base, cx: &mut Context<Reader>)
     }
 }
 
-fn image_el(d: &Draw, src: &str, alt: &str) -> AnyElement {
+/// Whether a run of inlines shows nothing: whitespace and line breaks.
+fn blank(inlines: &[Inline]) -> bool {
+    inlines.iter().all(|i| match i {
+        Inline::Text { text, .. } => text.trim().is_empty(),
+        Inline::Break => true,
+        _ => false,
+    })
+}
+
+/// `size`: an HTML `<img>`'s width and height in CSS pixels, if it gave
+/// them; scaled like the rest of the page, never wider than the column.
+fn image_el(d: &Draw, src: &str, alt: &str, size: (Option<f32>, Option<f32>)) -> AnyElement {
     let st = d.st;
     let lower = src.to_ascii_lowercase();
     let placeholder = |text: String| {
@@ -1321,7 +1340,13 @@ fn image_el(d: &Draw, src: &str, alt: &str) -> AnyElement {
             .into_any_element();
     }
     if path.is_file() {
-        img(path).max_w_full().rounded(px(6.0)).into_any_element()
+        let (w, h) = size;
+        img(path)
+            .max_w_full()
+            .when_some(w, |el, w| el.w(d.px(w)))
+            .when_some(h, |el, h| el.h(d.px(h)))
+            .rounded(px(6.0))
+            .into_any_element()
     } else {
         placeholder(format!(
             "Image not found: {}",
