@@ -106,6 +106,166 @@ pub fn merge(inputs: &[(PathBuf, Option<String>)], out: &Path) -> Result<u32, St
     Ok(total)
 }
 
+/// The most pictures one PDF is made from.
+pub const MAX_IMAGES: usize = 2_000;
+/// A picture's page is at most this long on its longer side, in points (A4's
+/// long side): a phone photo at 72 dpi would otherwise make a page over a
+/// metre tall. The picture keeps all its pixels; only the page is smaller.
+const MAX_PAGE_PT: f32 = 842.0;
+
+/// The rotation a JPEG's EXIF data asks for (1 upright, 3 upside down, 6 a
+/// quarter turn clockwise, 8 anticlockwise; the mirrored ones read as their
+/// unmirrored turn). 1 when there's none.
+fn jpeg_orientation(data: &[u8]) -> u8 {
+    // Walk the markers up to the first APP1 "Exif" segment.
+    let mut i = 2;
+    if data.get(..2) != Some(&[0xFF, 0xD8]) {
+        return 1;
+    }
+    while i + 4 <= data.len() && data[i] == 0xFF {
+        let marker = data[i + 1];
+        let len = usize::from(u16::from_be_bytes([data[i + 2], data[i + 3]]));
+        if marker == 0xDA || len < 2 {
+            break;
+        }
+        let seg = data.get(i + 4..i + 2 + len).unwrap_or(&[]);
+        if marker == 0xE1 && seg.starts_with(b"Exif\0\0") {
+            let tiff = &seg[6..];
+            let le = tiff.starts_with(b"II");
+            let u16_at = |o: usize| -> Option<u16> {
+                let b = tiff.get(o..o + 2)?;
+                Some(if le {
+                    u16::from_le_bytes([b[0], b[1]])
+                } else {
+                    u16::from_be_bytes([b[0], b[1]])
+                })
+            };
+            let u32_at = |o: usize| -> Option<u32> {
+                let b = tiff.get(o..o + 4)?;
+                let b = [b[0], b[1], b[2], b[3]];
+                Some(if le {
+                    u32::from_le_bytes(b)
+                } else {
+                    u32::from_be_bytes(b)
+                })
+            };
+            let Some(ifd) = u32_at(4).map(|o| o as usize) else {
+                return 1;
+            };
+            let count = usize::from(u16_at(ifd).unwrap_or(0)).min(256);
+            for k in 0..count {
+                let entry = ifd + 2 + k * 12;
+                if u16_at(entry) == Some(0x0112) {
+                    return match u16_at(entry + 8).unwrap_or(1) {
+                        3 | 4 => 3,
+                        5 | 6 => 6,
+                        7 | 8 => 8,
+                        _ => 1,
+                    };
+                }
+            }
+            return 1;
+        }
+        i += 2 + len;
+    }
+    1
+}
+
+/// A picture as a MuPDF image: MuPDF decodes most formats itself; WebP is
+/// decoded by Kitab, as for comic books.
+fn picture(path: &Path, data: &[u8]) -> Result<mupdf::Image, String> {
+    let webp = path
+        .extension()
+        .is_some_and(|e| e.eq_ignore_ascii_case("webp"));
+    if !webp {
+        return mupdf::Image::from_bytes(data).map_err(|e| e.to_string());
+    }
+    let (w, h, rgba) = crate::source::webp_pixels(data).ok_or("not a picture Kitab can read")?;
+    let (wi, hi) = (
+        i32::try_from(w).map_err(|e| e.to_string())?,
+        i32::try_from(h).map_err(|e| e.to_string())?,
+    );
+    let mut pix = mupdf::Pixmap::new_with_w_h(&mupdf::Colorspace::device_rgb(), wi, hi, false)
+        .map_err(|e| e.to_string())?;
+    let samples = pix.samples_mut();
+    for (dst, src) in samples
+        .as_chunks_mut::<3>()
+        .0
+        .iter_mut()
+        .zip(rgba.as_chunks::<4>().0)
+    {
+        dst.copy_from_slice(&src[..3]);
+    }
+    mupdf::Image::from_pixmap(&pix).map_err(|e| e.to_string())
+}
+
+/// A PDF with one page for each picture in `inputs`, in order: each page the
+/// picture's own size (from its resolution, at most A4's long side), photos
+/// turned upright as their camera recorded. Returns the page count.
+pub fn images_to_pdf(inputs: &[PathBuf], out: &Path) -> Result<u32, String> {
+    if inputs.is_empty() {
+        return Err("choose at least one picture".into());
+    }
+    if inputs.len() > MAX_IMAGES {
+        return Err(format!("choose at most {MAX_IMAGES} pictures"));
+    }
+    if inputs.iter().any(|p| same_file(p, out)) {
+        return Err("choose a file name that isn't one of the pictures".into());
+    }
+    let mut doc = PdfDocument::new();
+    for path in inputs {
+        let fail = |e: String| format!("could not add {}: {e}", file_name(path));
+        let data = std::fs::read(path).map_err(|e| fail(e.to_string()))?;
+        let image = picture(path, &data).map_err(fail)?;
+        let (px_w, px_h) = (image.width() as f32, image.height() as f32);
+        if px_w < 1.0 || px_h < 1.0 {
+            return Err(fail("it has no pixels".into()));
+        }
+        let (xres, yres) = image.resolution();
+        let dpi = |r: i32| if r > 0 { r as f32 } else { 96.0 };
+        let (mut w, mut h) = (px_w * 72.0 / dpi(xres), px_h * 72.0 / dpi(yres));
+        let long = w.max(h);
+        if long > MAX_PAGE_PT {
+            let k = MAX_PAGE_PT / long;
+            (w, h) = (w * k, h * k);
+        }
+        let turn = jpeg_orientation(&data);
+        // The page (turned pictures swap its sides) and where the picture
+        // goes on it (`cm` maps the picture's unit square onto the page).
+        let ((pw, ph), cm) = match turn {
+            3 => ((w, h), format!("{} 0 0 {} {w} {h}", -w, -h)),
+            6 => ((h, w), format!("0 {} {h} 0 0 {w}", -w)),
+            8 => ((h, w), format!("0 {w} {} 0 {h} 0", -h)),
+            _ => ((w, h), format!("{w} 0 0 {h} 0 0")),
+        };
+        let img = doc.add_image(&image).map_err(|e| fail(e.to_string()))?;
+        let img = img.as_indirect().map_err(|e| fail(e.to_string()))?;
+        let content = format!("q {cm} cm /Im0 Do Q\n");
+        let mut buf = mupdf::Buffer::with_capacity(content.len());
+        std::io::Write::write_all(&mut buf, content.as_bytes()).map_err(|e| fail(e.to_string()))?;
+        let dict = doc
+            .new_object_from_str("<< >>")
+            .map_err(|e| fail(e.to_string()))?;
+        let contents = doc
+            .add_stream(&buf, Some(&dict), false)
+            .map_err(|e| fail(e.to_string()))?
+            .as_indirect()
+            .map_err(|e| fail(e.to_string()))?;
+        let page = doc
+            .new_object_from_str(&format!(
+                "<< /Type /Page /MediaBox [0 0 {pw:.2} {ph:.2}] /Resources << /XObject << /Im0 {img} 0 R >> >> /Contents {contents} 0 R >>"
+            ))
+            .map_err(|e| fail(e.to_string()))?;
+        let page = doc.add_object(&page).map_err(|e| fail(e.to_string()))?;
+        // At the end: the count, not -1, which the wrapper refuses.
+        let at = doc.page_count().map_err(|e| fail(e.to_string()))?;
+        doc.insert_page(at, &page)
+            .map_err(|e| fail(e.to_string()))?;
+    }
+    save(&doc, out)?;
+    Ok(inputs.len() as u32)
+}
+
 /// The longest password Kitab writes, in bytes (MuPDF holds 128).
 pub const MAX_PASSWORD_BYTES: usize = 100;
 
@@ -264,6 +424,105 @@ mod tests {
         extract_pages(&fixture("01-text-outline.pdf"), None, &[0, 4, 9], &out).expect("extracts");
         assert_eq!(page_count(&out), 3);
         let _ = std::fs::remove_file(&out);
+    }
+
+    /// A `w` × `h` PNG, filled with grey `shade`, at `path`.
+    fn png(path: &Path, w: i32, h: i32, shade: u8) {
+        let mut pix = mupdf::Pixmap::new_with_w_h(&mupdf::Colorspace::device_rgb(), w, h, false)
+            .expect("pixmap");
+        pix.samples_mut().fill(shade);
+        pix.save_as(path.to_str().expect("utf-8"), mupdf::ImageFormat::PNG)
+            .expect("png");
+    }
+
+    #[test]
+    fn pictures_become_pages_in_order_at_their_own_shape() {
+        let (a, b) = (temp("one.png"), temp("two.png"));
+        png(&a, 400, 300, 200);
+        png(&b, 300, 600, 90);
+        let out = temp("pictures.pdf");
+        assert_eq!(
+            images_to_pdf(&[a.clone(), b.clone()], &out).expect("makes"),
+            2
+        );
+        let doc = PdfDocument::open(out.to_str().expect("utf-8")).expect("opens");
+        assert_eq!(doc.page_count().expect("count"), 2);
+        let size = |i: i32| {
+            let r = doc.load_page(i).expect("page").bounds().expect("bounds");
+            (r.x1 - r.x0, r.y1 - r.y0)
+        };
+        // Landscape then portrait, 96 dpi: 300 × 225 pt and 225 × 450 pt.
+        let (w0, h0) = size(0);
+        let (w1, h1) = size(1);
+        assert!(
+            (w0 - 300.0).abs() < 1.0 && (h0 - 225.0).abs() < 1.0,
+            "{w0} × {h0}"
+        );
+        assert!(
+            (w1 - 225.0).abs() < 1.0 && (h1 - 450.0).abs() < 1.0,
+            "{w1} × {h1}"
+        );
+        // The picture fills the page: its middle has the picture's grey.
+        let pix = doc
+            .load_page(1)
+            .expect("page")
+            .to_pixmap(
+                &mupdf::Matrix::IDENTITY,
+                &mupdf::Colorspace::device_rgb(),
+                false,
+                true,
+            )
+            .expect("draws");
+        let (pw, ph) = (pix.width() as usize, pix.height() as usize);
+        let mid = (ph / 2 * pw + pw / 2) * 3;
+        assert!((i32::from(pix.samples()[mid]) - 90).abs() < 8);
+        for p in [a, b, out] {
+            let _ = std::fs::remove_file(p);
+        }
+    }
+
+    #[test]
+    fn pictures_to_pdf_refuses_nothing_and_its_own_inputs() {
+        let a = temp("self.png");
+        png(&a, 10, 10, 0);
+        assert!(images_to_pdf(&[], &temp("none.pdf")).is_err());
+        assert!(images_to_pdf(std::slice::from_ref(&a), &a).is_err());
+        assert!(images_to_pdf(&[temp("missing.png")], &temp("x.pdf")).is_err());
+        let _ = std::fs::remove_file(a);
+    }
+
+    #[test]
+    fn exif_turns_are_read() {
+        // A JPEG start, then an APP1 Exif segment with one IFD entry:
+        // Orientation (0x0112) = `o`, big- or little-endian.
+        let jpeg = |o: u16, le: bool| -> Vec<u8> {
+            let w16 = |v: u16| if le { v.to_le_bytes() } else { v.to_be_bytes() };
+            let w32 = |v: u32| if le { v.to_le_bytes() } else { v.to_be_bytes() };
+            let mut tiff = Vec::new();
+            tiff.extend_from_slice(if le { b"II" } else { b"MM" });
+            tiff.extend_from_slice(&w16(42));
+            tiff.extend_from_slice(&w32(8));
+            tiff.extend_from_slice(&w16(1));
+            tiff.extend_from_slice(&w16(0x0112));
+            tiff.extend_from_slice(&w16(3));
+            tiff.extend_from_slice(&w32(1));
+            tiff.extend_from_slice(&w16(o));
+            tiff.extend_from_slice(&[0, 0]);
+            tiff.extend_from_slice(&w32(0));
+            let mut seg = b"Exif\0\0".to_vec();
+            seg.extend_from_slice(&tiff);
+            let mut d = vec![0xFF, 0xD8, 0xFF, 0xE1];
+            d.extend_from_slice(&((seg.len() + 2) as u16).to_be_bytes());
+            d.extend_from_slice(&seg);
+            d.extend_from_slice(&[0xFF, 0xDA, 0, 2]);
+            d
+        };
+        assert_eq!(jpeg_orientation(&jpeg(6, false)), 6);
+        assert_eq!(jpeg_orientation(&jpeg(8, true)), 8);
+        assert_eq!(jpeg_orientation(&jpeg(3, true)), 3);
+        assert_eq!(jpeg_orientation(&jpeg(1, false)), 1);
+        assert_eq!(jpeg_orientation(b"\x89PNG"), 1);
+        assert_eq!(jpeg_orientation(&[0xFF, 0xD8, 0xFF]), 1);
     }
 
     #[test]

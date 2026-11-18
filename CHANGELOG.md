@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Make a PDF from pictures (File menu, or Ctrl+K): JPEG, PNG, WebP, TIFF, BMP and GIF, one page each, in name order (scan 2 before scan 10), each page the picture's own shape, and phone photos turned upright. Page tools › Move changes the order afterwards ([#13](https://github.com/t21dev/kitab/issues/13)).
+
 ### Fixed
 - Form fields and text boxes in Bangla, Hindi, Tamil, Arabic, Thai and other scripts are saved as written, conjuncts and joined letters included ([#13](https://github.com/t21dev/kitab/issues/13)): they came out as "?" in the saved PDF. Kitab now draws that text itself, in the system's font for the script, with only the letters used embedded, so every reader shows it and can still search and copy it.
 

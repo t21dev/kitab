@@ -78,6 +78,45 @@ fn dir_of(p: &Path) -> PathBuf {
     p.parent().map(Path::to_path_buf).unwrap_or_default()
 }
 
+/// A picture Images to PDF takes, by its extension.
+fn is_picture(p: &Path) -> bool {
+    const EXT: &[&str] = &[
+        "jpg", "jpeg", "jfif", "png", "webp", "tif", "tiff", "bmp", "gif", "jp2", "jpx", "pnm",
+        "pbm", "pgm", "ppm", "pam",
+    ];
+    p.extension()
+        .and_then(|e| e.to_str())
+        .is_some_and(|e| EXT.iter().any(|x| x.eq_ignore_ascii_case(e)))
+}
+
+/// A file name to sort by as people expect: case aside, and runs of digits
+/// by their value ("scan 2" before "scan 10").
+fn natural_key(p: &Path) -> Vec<(u8, u64, String)> {
+    let name = p
+        .file_name()
+        .map(|n| n.to_string_lossy().to_lowercase())
+        .unwrap_or_default();
+    let mut key = Vec::new();
+    let mut chars = name.chars().peekable();
+    while let Some(&c) = chars.peek() {
+        let digits = c.is_ascii_digit();
+        let mut run = String::new();
+        while let Some(&d) = chars.peek() {
+            if d.is_ascii_digit() != digits {
+                break;
+            }
+            run.push(d);
+            chars.next();
+        }
+        if digits {
+            key.push((0, run.parse().unwrap_or(u64::MAX), run));
+        } else {
+            key.push((1, 0, run));
+        }
+    }
+    key
+}
+
 /// Cancel (secondary) or the dialog's action (primary), DESIGN.md § Buttons.
 pub(super) fn dialog_button(
     st: &Style,
@@ -854,6 +893,73 @@ impl Workspace {
         .detach();
     }
 
+    // ── pictures to PDF ──
+
+    /// Pick pictures and write them, one a page, to a new PDF (sorted by
+    /// name, as a folder of scans or photos lists them; Page tools › Move
+    /// changes the order afterwards).
+    pub(super) fn images_to_pdf(&mut self, cx: &mut Context<Self>) {
+        let rx = cx.prompt_for_paths(PathPromptOptions {
+            files: true,
+            directories: false,
+            multiple: true,
+            prompt: Some("Make a PDF".into()),
+        });
+        let engine = self.engine.clone();
+        cx.spawn(async move |this, cx| {
+            let picked = rx.await;
+            // The picker couldn't open (Linux without a desktop portal): say so.
+            if matches!(picked, Ok(Err(_)) | Err(_)) {
+                let _ = this.update(cx, |ws, cx| ws.picker_failed(cx));
+            }
+            let Ok(Ok(Some(paths))) = picked else { return };
+            let mut pictures: Vec<PathBuf> = paths.into_iter().filter(|p| is_picture(p)).collect();
+            if pictures.is_empty() {
+                let _ = this.update(cx, |ws, cx| {
+                    ws.report(
+                        Err("those aren't pictures Kitab can put in a PDF (JPEG, PNG, WebP, TIFF, BMP, GIF)".into()),
+                        "",
+                        cx,
+                    )
+                });
+                return;
+            }
+            pictures.sort_by_cached_key(|p| natural_key(p));
+            let first = pictures[0].clone();
+            let name = format!("{}.pdf", stem(&first));
+            let Ok(save_rx) = this.update(cx, |_, cx| {
+                cx.prompt_for_new_path(&dir_of(&first), Some(&name))
+            }) else {
+                return;
+            };
+            let picked = save_rx.await;
+            if matches!(picked, Ok(Err(_)) | Err(_)) {
+                let _ = this.update(cx, |ws, cx| ws.picker_failed(cx));
+            }
+            let Ok(Ok(Some(mut out))) = picked else {
+                return;
+            };
+            if out.extension().is_none() {
+                out.set_extension("pdf");
+            }
+            let n = pictures.len();
+            let result = cx
+                .background_spawn(async move {
+                    engine.images_to_pdf(&pictures, &out).map(|_| out)
+                })
+                .await;
+            let _ = this.update(cx, |ws, cx| {
+                let what = if n == 1 {
+                    "Made a PDF of 1 picture:".to_string()
+                } else {
+                    format!("Made a PDF of {n} pictures:")
+                };
+                ws.report(result, &what, cx)
+            });
+        })
+        .detach();
+    }
+
     // ── split view ──
 
     /// Show `reader` beside the active tab.
@@ -946,6 +1052,11 @@ impl Workspace {
             )
             .icon("copy")
             .disabled(!is_pdf),
+            MenuItem::new(
+                "Make a PDF from pictures…",
+                self.on_ws(cx, |ws, _, cx| ws.images_to_pdf(cx)),
+            )
+            .icon("file"),
         ];
         items.push(MenuItem::Separator);
         if side {
@@ -968,5 +1079,35 @@ impl Workspace {
             );
         }
         items
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pictures_sort_as_a_folder_lists_them() {
+        let mut names: Vec<PathBuf> = ["Scan 10.jpg", "scan 2.jpg", "Scan 1.jpg", "cover.png"]
+            .iter()
+            .map(PathBuf::from)
+            .collect();
+        names.sort_by_cached_key(|p| natural_key(p));
+        let got: Vec<_> = names
+            .iter()
+            .map(|p| p.to_string_lossy().to_string())
+            .collect();
+        assert_eq!(
+            got,
+            ["cover.png", "Scan 1.jpg", "scan 2.jpg", "Scan 10.jpg"]
+        );
+    }
+
+    #[test]
+    fn only_pictures_are_taken() {
+        assert!(is_picture(Path::new("a/IMG_0001.JPG")));
+        assert!(is_picture(Path::new("page.webp")));
+        assert!(!is_picture(Path::new("book.pdf")));
+        assert!(!is_picture(Path::new("noext")));
     }
 }

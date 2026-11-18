@@ -3722,6 +3722,7 @@ impl Workspace {
             .text_color(st.c(|c| c.text))
             .font_family("Segoe UI")
             .on_action(cx.listener(|ws, _: &OpenFile, window, cx| ws.open_dialog(window, cx)))
+            .on_action(cx.listener(|ws, _: &ImagesToPdf, _, cx| ws.images_to_pdf(cx)))
             .on_action(cx.listener(|ws, _: &CloseTab, window, cx| {
                 if let Some(i) = ws.active {
                     ws.close_tab(i, window, cx)

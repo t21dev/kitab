@@ -40,6 +40,13 @@ pub const COMMANDS: &[Command] = &[
         false,
         OpenFile
     ),
+    cmd!(
+        "File",
+        "Make a PDF from pictures…",
+        "images to pdf photos pictures jpg jpeg png webp scan scans convert receipt",
+        false,
+        ImagesToPdf
+    ),
     cmd!("File", "Close tab", "close", true, CloseTab),
     cmd!(
         "File",

@@ -95,6 +95,7 @@ const MENUS: &[BarMenu] = &[
                 ExtractPages
             ),
             row!("Print…", "Ctrl+P", Doc, Print),
+            row!("Make a PDF from pictures…", "", Nothing, ImagesToPdf),
             None,
             row!("Close tab", "Ctrl+W", Doc, CloseTab),
             None,

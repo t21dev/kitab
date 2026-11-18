@@ -11,6 +11,8 @@ actions!(
     [
         // Files and tabs
         OpenFile,
+        // Make a PDF from pictures (one page each).
+        ImagesToPdf,
         CloseTab,
         NextTab,
         PrevTab,

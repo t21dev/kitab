@@ -614,7 +614,7 @@ fn webp_size(data: &[u8]) -> Option<(u32, u32)> {
     Some(d.dimensions())
 }
 
-fn webp_pixels(data: &[u8]) -> Option<(u32, u32, Vec<u8>)> {
+pub(crate) fn webp_pixels(data: &[u8]) -> Option<(u32, u32, Vec<u8>)> {
     let mut d = image_webp::WebPDecoder::new(std::io::Cursor::new(data)).ok()?;
     let (w, h) = d.dimensions();
     let has_alpha = d.has_alpha();

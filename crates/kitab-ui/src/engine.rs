@@ -187,6 +187,12 @@ pub trait DocEngine: Send + Sync + 'static {
     }
     /// Write all pages of `inputs` (path, password), in order, to `out`. Returns the page count.
     fn merge(&self, inputs: &[(PathBuf, Option<String>)], out: &Path) -> Result<u32, String>;
+    /// One page for each picture in `inputs`, in order, written to `out`.
+    /// Returns the page count.
+    fn images_to_pdf(&self, inputs: &[PathBuf], out: &Path) -> Result<u32, String> {
+        let _ = (inputs, out);
+        Err("this engine can't make PDFs from pictures".into())
+    }
     /// Write `marks` into the PDF at `src` as annotations and put it at `out`
     /// (which may be `src`; close the document first on Windows). Returns how
     /// many were written.

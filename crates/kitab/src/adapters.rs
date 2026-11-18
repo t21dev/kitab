@@ -370,6 +370,10 @@ impl DocEngine for MupdfEngine {
         kitab_mupdf::tools::merge(inputs, out)
     }
 
+    fn images_to_pdf(&self, inputs: &[PathBuf], out: &Path) -> Result<u32, String> {
+        kitab_mupdf::tools::images_to_pdf(inputs, out)
+    }
+
     fn release_extra(&self, doc: DocHandle) {
         let id = self.ids.lock().ok().and_then(|ids| ids.get(&doc).copied());
         if let Some(id) = id {
