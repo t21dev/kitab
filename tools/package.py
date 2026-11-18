@@ -21,6 +21,7 @@ import os
 import platform
 import shutil
 import subprocess
+import time
 import sys
 import zipfile
 
@@ -86,10 +87,19 @@ def macos(v: str) -> None:
     (stage / "Applications").symlink_to("/Applications")
     if dmg.exists():
         dmg.unlink()
-    subprocess.check_call([
-        "hdiutil", "create", "-volname", "Kitab Reader", "-srcfolder", str(stage),
-        "-ov", "-format", "UDZO", str(dmg),
-    ])
+    # hdiutil on GitHub's macOS runners sometimes fails with "Resource busy"
+    # (a disk-image service still holding something): wait and try again.
+    for attempt in range(5):
+        try:
+            subprocess.check_call([
+                "hdiutil", "create", "-volname", "Kitab Reader", "-srcfolder", str(stage),
+                "-ov", "-format", "UDZO", str(dmg),
+            ])
+            break
+        except subprocess.CalledProcessError:
+            if attempt == 4:
+                raise
+            time.sleep(10 * (attempt + 1))
     shutil.rmtree(stage)
     print(dmg)
 

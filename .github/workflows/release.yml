@@ -247,9 +247,16 @@ jobs:
             done
           (cd dl && sha256sum -- * | sort -k2) > SHA256SUMS.txt
           cat SHA256SUMS.txt
+          # A re-run (one system's build re-run after the rest published)
+          # replaces the old list rather than failing on it.
+          OLD=$(gh api "repos/$REPO/releases/$ID/assets" --paginate --jq '.[] | select(.name == "SHA256SUMS.txt") | .id')
+          if [ -n "$OLD" ]; then
+            gh api -X DELETE "repos/$REPO/releases/assets/$OLD"
+          fi
           gh api -X POST "https://uploads.github.com/repos/$REPO/releases/$ID/assets?name=SHA256SUMS.txt" \
             -H "Content-Type: text/plain" --input SHA256SUMS.txt --jq .name
-          gh api "repos/$REPO/releases/$ID" --jq .body > body.md
+          # The notes without a checksum list from an earlier run, then this one.
+          gh api "repos/$REPO/releases/$ID" --jq .body | sed '/^## SHA-256 checksums$/,$d' > body.md
           printf '\n## SHA-256 checksums\n\n```\n%s\n```\n' "$(cat SHA256SUMS.txt)" >> body.md
           gh api -X PATCH "repos/$REPO/releases/$ID" -f tag_name="$TAG" -F body=@body.md \
             -F draft=false -f make_latest=true --jq .html_url
