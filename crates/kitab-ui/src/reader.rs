@@ -1344,7 +1344,7 @@ impl Reader {
     /// One frame of smooth scrolling: cover a share of what is left that
     /// depends only on the time gone by (the same glide at 60 and 144 Hz),
     /// fast at first and easing out; about 150 ms in all.
-    fn glide_step(&mut self, cx: &mut Context<Self>) {
+    fn glide_step(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some(glide) = self.glide.as_mut() else {
             return;
         };
@@ -1360,6 +1360,9 @@ impl Reader {
         self.list.scroll_by(px(step));
         if done {
             self.glide = None;
+        } else if Style::get(cx).smooth_full_rate {
+            // Settings › Reading: every display refresh.
+            window.request_animation_frame();
         } else {
             self.glide_next_frame(cx);
         }
@@ -2343,7 +2346,7 @@ impl Reader {
             self.glide = None;
             return self.present_view(window, cx);
         }
-        self.glide_step(cx);
+        self.glide_step(window, cx);
         // Markdown's text units are collected afresh as the blocks draw.
         if self.md.is_some() {
             self.md_sel.units.borrow_mut().clear();

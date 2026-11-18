@@ -779,17 +779,32 @@ fn reading(ws: &WeakEntity<Workspace>, st: &Style) -> AnyElement {
         .child(group(
             "Smooth scrolling",
             Some("The mouse wheel and the arrow, Page Up and Page Down keys glide to where they scroll. A touchpad scrolls as it always does."),
-            well_row(
-                "Glide when scrolling",
-                "",
-                switch(
-                    "smooth-scroll",
-                    st.smooth_scroll,
+            div()
+                .flex()
+                .flex_col()
+                .gap(px(12.0))
+                .child(well_row(
+                    "Glide when scrolling",
+                    "",
+                    switch(
+                        "smooth-scroll",
+                        st.smooth_scroll,
+                        st,
+                        change(ws, |s: &mut Style| s.smooth_scroll = !s.smooth_scroll),
+                    ),
                     st,
-                    change(ws, |s: &mut Style| s.smooth_scroll = !s.smooth_scroll),
-                ),
-                st,
-            ),
+                ))
+                .child(well_row(
+                    "Glide at the screen's full refresh rate",
+                    "Smoother on 120 to 165 Hz screens, at about three times the CPU while scrolling. Off, the glide draws 60 frames a second.",
+                    switch(
+                        "smooth-full-rate",
+                        st.smooth_full_rate,
+                        st,
+                        change(ws, |s: &mut Style| s.smooth_full_rate = !s.smooth_full_rate),
+                    ),
+                    st,
+                )),
             st,
         ))
         .child(group(

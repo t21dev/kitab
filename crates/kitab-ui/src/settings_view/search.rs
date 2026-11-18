@@ -97,7 +97,7 @@ const INDEX: &[(Section, &str, &str)] = &[
     (
         Section::Reading,
         "Smooth scrolling",
-        "glide wheel mouse animation scroll inertia fluid",
+        "glide wheel mouse animation scroll inertia fluid refresh rate hz 120 144 165 fps frames",
     ),
     (
         Section::Reading,
