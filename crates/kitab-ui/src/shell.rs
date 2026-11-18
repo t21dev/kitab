@@ -66,6 +66,9 @@ impl gpui::Global for SettingsSink {}
 
 /// Closed tabs remembered for Ctrl+Shift+T.
 const CLOSED_MAX: usize = 20;
+/// How long after it opens a tab may still slide in: its slide takes
+/// [`motion::BASE`] from its first frame, with room for a slow first frame.
+const TAB_FRESH: std::time::Duration = std::time::Duration::from_millis(600);
 
 pub struct Workspace {
     /// The next book offered at the end of one (`next_book.rs`).
@@ -147,6 +150,11 @@ pub struct Workspace {
     home_serial: u64,
     /// Set after the first frame: tabs opened later fade in.
     booted: bool,
+    /// Tabs the user opened in the last moment, with when: only these slide
+    /// in. Restored tabs and tabs already showing don't (GPUI forgets an
+    /// element's animation when its place in the window changes, which
+    /// would replay it).
+    fresh_tabs: Vec<(gpui::EntityId, std::time::Instant)>,
     hex: HexState,
     tools: ToolsState,
     /// The tab strip scrolls sideways once tabs reach their minimum width.
@@ -307,6 +315,7 @@ impl Workspace {
             side_pane: SidePane::Contents,
             home_serial: 0,
             booted: false,
+            fresh_tabs: Vec::new(),
             hex: HexState {
                 edit: None,
                 focus: cx.focus_handle(),
@@ -836,6 +845,14 @@ impl Workspace {
             },
         ));
         let ix = at.unwrap_or(self.tabs.len()).min(self.tabs.len());
+        // Tabs coming back from the last session appear in place: they were
+        // already open, and a slide for each, 40 ms apart, read as the strip
+        // loading slowly while the page was already up.
+        self.fresh_tabs.retain(|(_, at)| at.elapsed() < TAB_FRESH);
+        if !self.restore_staging {
+            self.fresh_tabs
+                .push((reader.entity_id(), std::time::Instant::now()));
+        }
         self.tabs.insert(ix, reader);
         if show {
             self.activate(ix, window, cx);
@@ -846,6 +863,10 @@ impl Workspace {
                 && a >= ix
             {
                 self.active = Some(a + 1);
+                // Pushed along by a tab before it (a restore puts the old
+                // tabs in front of the file Kitab was opened with): keep it
+                // in view, or a full strip hid the tab being read.
+                self.reveal_tab = true;
             }
             self.watch_active(cx);
             self.save_session(cx);
@@ -1446,7 +1467,12 @@ impl Workspace {
                 None => name,
             };
             let tab_icon = tab_icon_for(&r.path);
-            let animate = self.booted && st.animations;
+            let animate = self.booted
+                && st.animations
+                && self
+                    .fresh_tabs
+                    .iter()
+                    .any(|(id, at)| *id == tab.entity_id() && at.elapsed() < TAB_FRESH);
             let tab_id = tab.entity_id().as_u64();
             let tab_el = crate::kbd::stop(div().id(("tab", ix)), st)
                 .group("tab")

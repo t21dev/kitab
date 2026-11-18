@@ -7,7 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- The command palette (Ctrl+K) finds settings too, by name or by the words Settings' own search knows ("dark" finds Theme and Page colour). Picking one opens Settings at it.
+
 ### Changed
+- Starting Kitab with tabs to restore: the old tabs appear in place instead of each sliding in, 40 ms apart, after the page is already up, and the tab of the file Kitab was opened with stays in view on a full tab strip (it was scrolled out of sight).
+- The command palette opens with a visible fade and drop (it was a 4 px move most people didn't notice).
 - Smooth scrolling follows the screen's full refresh rate again by default, the smoothest on 120–165 Hz screens. The new Settings › Reading › Glide at 60 frames a second switch steps 60 times a second instead, for about half the CPU while scrolling. It replaces 1.0.0's full-refresh-rate switch, so everyone starts on full rate.
 
 ## [1.0.0] - 2026-11-18

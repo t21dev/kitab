@@ -28,6 +28,8 @@ pub(super) enum Hit {
     Recent(std::path::PathBuf, String),
     /// A heading in the document showing: its page (or Markdown block).
     Heading(u32, String),
+    /// A setting: its section and title, as Settings' search lists it.
+    Setting(crate::settings_view::Section, &'static str),
 }
 
 /// At most this many tabs, recent files and headings each (commands first).
@@ -155,10 +157,17 @@ impl Workspace {
             }
             walk(r.read(cx).outline(), q, &mut headings);
         }
-        // A tab or heading named exactly as typed beats a command that
-        // merely contains the letters.
+        // Settings by title and the other words Settings' search knows
+        // ("dark" finds Theme); a title that matches the letters ranks first.
+        let settings: Vec<(i32, Hit)> = crate::settings_view::find(q)
+            .into_iter()
+            .map(|(s, t)| (score(q, t).unwrap_or(0), Hit::Setting(s, t)))
+            .collect();
+        // A tab, heading or setting named exactly as typed beats a command
+        // that merely contains the letters.
         let mut extra: Vec<Hit> = best(tabs)
             .chain(best(headings))
+            .chain(best(settings))
             .chain(best(recent))
             .collect();
         let lead = extra
@@ -167,6 +176,7 @@ impl Workspace {
                 Hit::Tab(_, t) | Hit::Recent(_, t) | Hit::Heading(_, t) => {
                     t.to_lowercase().starts_with(&q.trim().to_lowercase())
                 }
+                Hit::Setting(_, t) => t.to_lowercase().starts_with(&q.trim().to_lowercase()),
                 Hit::Command(_) => false,
             })
             .map(|i| extra.remove(i));
@@ -202,6 +212,13 @@ impl Workspace {
                 if let Some(r) = self.active_reader().cloned() {
                     r.update(cx, |r, cx| r.jump_to(page, cx));
                 }
+                return;
+            }
+            Hit::Setting(section, title) => {
+                self.close_palette(window, cx);
+                // Settings open at its section, scrolled to it, glowing.
+                self.open_settings_at(section, window, cx);
+                self.pick_setting(section, title, window, cx);
                 return;
             }
         };
@@ -267,6 +284,7 @@ impl Workspace {
                 Hit::Tab(_, t) => ("Tab", t.clone().into(), None),
                 Hit::Recent(_, t) => ("Recent", t.clone().into(), None),
                 Hit::Heading(_, t) => ("Contents", t.clone().into(), None),
+                Hit::Setting(s, t) => ("Setting", format!("{} › {t}", s.label()).into(), None),
             };
             let Some(ix) = ix else {
                 list = list.child(
@@ -415,8 +433,9 @@ impl Workspace {
                     .font_weight(FontWeight::NORMAL)
                     .child("↑ ↓ to choose · Enter to run · Esc to close"),
             );
-        // It opens from a key, often many times a day: a quick fade and a
-        // 4 px drop, short enough never to be in the way.
+        // It opens from a key, often many times a day: a fade and a 12 px
+        // drop at dialog speed, enough to see it arrive (4 px at menu speed
+        // read as no animation), and a quick exit.
         let serial = self.palette.as_ref().map_or(0, |p| p.serial);
         self.modal_serials.insert("palette", serial);
         let leaving = self.modal_exit == Some(("palette", serial));
@@ -425,7 +444,7 @@ impl Workspace {
                 crate::motion::exit(
                     div().child(panel),
                     ElementId::NamedInteger("palette-out".into(), serial),
-                    crate::motion::From::Above(4.0),
+                    crate::motion::From::Above(8.0),
                     crate::motion::EXIT_FAST,
                 ),
                 crate::motion::exit(
@@ -441,8 +460,8 @@ impl Workspace {
                     div().child(panel),
                     ElementId::NamedInteger("palette-in".into(), serial),
                     st.animations,
-                    crate::motion::From::Above(4.0),
-                    crate::motion::FAST,
+                    crate::motion::From::Above(12.0),
+                    crate::motion::BASE,
                     std::time::Duration::ZERO,
                 ),
                 crate::motion::enter(
@@ -450,7 +469,7 @@ impl Workspace {
                     ElementId::NamedInteger("palette-scrim".into(), serial),
                     st.animations,
                     crate::motion::From::Fade,
-                    crate::motion::FAST,
+                    crate::motion::BASE,
                     std::time::Duration::ZERO,
                 ),
             )

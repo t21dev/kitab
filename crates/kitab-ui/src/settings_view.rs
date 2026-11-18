@@ -55,7 +55,7 @@ impl Section {
         Section::About,
     ];
 
-    fn label(self) -> &'static str {
+    pub(crate) fn label(self) -> &'static str {
         match self {
             Section::Appearance => "Appearance",
             Section::Reading => "Reading",
@@ -168,6 +168,12 @@ fn found_marker(title: &str, outset: f32, radius: f32, st: &Style) -> Option<Any
 /// The first setting matching a search (Enter in the search field).
 pub fn first_match(query: &str) -> Option<(Section, &'static str)> {
     search::matches(query).into_iter().next()
+}
+
+/// Every setting matching `query`, as Settings' own search finds them (for
+/// the command palette).
+pub fn find(query: &str) -> Vec<(Section, &'static str)> {
+    search::matches(query)
 }
 
 /// The panel (without the scrim; the shell positions and animates both).
