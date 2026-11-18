@@ -53,7 +53,7 @@ pub struct Style {
     /// The scroll bar on the right of the pages.
     pub scroll_bar: bool,
     pub smooth_scroll: bool,
-    pub smooth_full_rate: bool,
+    pub scroll_60hz: bool,
     /// The open-tab count in the title bar.
     pub tab_count: bool,
     pub menu_bar: bool,
@@ -164,7 +164,7 @@ impl Style {
             skipped_update: s.skipped_update.clone(),
             scroll_bar: s.scroll_bar,
             smooth_scroll: s.smooth_scroll,
-            smooth_full_rate: s.smooth_full_rate,
+            scroll_60hz: s.scroll_60hz,
             tab_count: s.tab_count,
             menu_bar: s.menu_bar,
             read_aloud: s.read_aloud.clone(),
@@ -259,7 +259,7 @@ impl Style {
             skipped_update: self.skipped_update.clone(),
             scroll_bar: self.scroll_bar,
             smooth_scroll: self.smooth_scroll,
-            smooth_full_rate: self.smooth_full_rate,
+            scroll_60hz: self.scroll_60hz,
             tab_count: self.tab_count,
             menu_bar: self.menu_bar,
             read_aloud: self.read_aloud.clone(),

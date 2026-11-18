@@ -777,9 +777,10 @@ pub struct Settings {
     /// The mouse wheel and the keys glide to where they scroll, instead of
     /// jumping there (Settings › Reading).
     pub smooth_scroll: bool,
-    /// Smooth scrolling steps at every display refresh (120–165 Hz screens)
-    /// instead of 60 times a second: smoother, about three times the CPU.
-    pub smooth_full_rate: bool,
+    /// Smooth scrolling steps 60 times a second instead of at every display
+    /// refresh (120–165 Hz screens): about a third of the CPU, a little less
+    /// smooth. Off by default.
+    pub scroll_60hz: bool,
     /// How many tabs are open, as a small number in the title bar.
     pub tab_count: bool,
     /// File, Edit, View, Go, Tools and Help under the title bar
@@ -902,7 +903,7 @@ impl Default for Settings {
             skipped_update: String::new(),
             scroll_bar: true,
             smooth_scroll: true,
-            smooth_full_rate: false,
+            scroll_60hz: false,
             tab_count: false,
             menu_bar: false,
             read_aloud: ReadAloud::default(),
@@ -971,7 +972,7 @@ struct File {
     skipped_update: String,
     scroll_bar: bool,
     smooth_scroll: bool,
-    smooth_full_rate: bool,
+    scroll_60hz: bool,
     tab_count: bool,
     menu_bar: bool,
     read_aloud: ReadAloud,
@@ -1091,7 +1092,7 @@ impl From<Settings> for File {
             skipped_update: s.skipped_update,
             scroll_bar: s.scroll_bar,
             smooth_scroll: s.smooth_scroll,
-            smooth_full_rate: s.smooth_full_rate,
+            scroll_60hz: s.scroll_60hz,
             tab_count: s.tab_count,
             menu_bar: s.menu_bar,
             read_aloud: s.read_aloud,
@@ -1161,7 +1162,7 @@ impl Settings {
             skipped_update: f.skipped_update.chars().take(32).collect(),
             scroll_bar: f.scroll_bar,
             smooth_scroll: f.smooth_scroll,
-            smooth_full_rate: f.smooth_full_rate,
+            scroll_60hz: f.scroll_60hz,
             tab_count: f.tab_count,
             menu_bar: f.menu_bar,
             read_aloud: f.read_aloud.clamped(),
@@ -1259,7 +1260,7 @@ mod tests {
             skipped_update: "0.2.0".into(),
             scroll_bar: false,
             smooth_scroll: false,
-            smooth_full_rate: true,
+            scroll_60hz: true,
             tab_count: true,
             menu_bar: true,
             read_aloud: ReadAloud {

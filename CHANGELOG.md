@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Smooth scrolling follows the screen's full refresh rate again by default, the smoothest on 120–165 Hz screens. The new Settings › Reading › Glide at 60 frames a second switch steps 60 times a second instead, for about half the CPU while scrolling. It replaces 1.0.0's full-refresh-rate switch, so everyone starts on full rate.
+
 ## [1.0.0] - 2026-11-18
 
 ### Changed

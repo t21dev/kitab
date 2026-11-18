@@ -795,13 +795,13 @@ fn reading(ws: &WeakEntity<Workspace>, st: &Style) -> AnyElement {
                     st,
                 ))
                 .child(well_row(
-                    "Glide at the screen's full refresh rate",
-                    "Smoother on 120 to 165 Hz screens, at about three times the CPU while scrolling. Off, the glide draws 60 frames a second.",
+                    "Glide at 60 frames a second",
+                    "Uses about a third of the CPU while scrolling on 120 to 165 Hz screens, a little less smooth. Off, the glide follows the screen's refresh rate.",
                     switch(
-                        "smooth-full-rate",
-                        st.smooth_full_rate,
+                        "scroll-60hz",
+                        st.scroll_60hz,
                         st,
-                        change(ws, |s: &mut Style| s.smooth_full_rate = !s.smooth_full_rate),
+                        change(ws, |s: &mut Style| s.scroll_60hz = !s.scroll_60hz),
                     ),
                     st,
                 )),

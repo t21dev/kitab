@@ -160,10 +160,10 @@ xychart-beta
 | Page first seen | 253 ms | by 401 ms |
 | CPU used to reach the page | 234 ms | 187 ms |
 | CPU while idle | 0 % | 0 % |
-| CPU while scrolling | about 6 % of one core, with smooth scrolling | about 2 %, which jumps instead of gliding |
+| CPU while scrolling | about 6 % of one core, gliding at 60 frames a second | about 2 %, which jumps instead of gliding |
 | Private memory, one document | 107 MB (115 MB after scrolling) | 16 MB |
 
-Smooth scrolling steps at 60 frames a second by default; Settings › Reading can make it follow the screen's full refresh rate (about 16 % on the test machine's screen), or turn it off (about 4 %).
+Since 1.0.1, smooth scrolling follows the screen's full refresh rate by default (about 16 % on the test machine's 160 Hz screen). Settings › Reading › Glide at 60 frames a second brings it to the figure above, and turning smooth scrolling off to about 4 %.
 
 SumatraPDF starts sooner and is lighter: it draws with GDI, while Kitab first sets up the GPU (about 150 ms before its window exists), and about 88 MB of its memory is the GPU device, the graphics driver and DirectWrite, paid once whatever you open.
 
@@ -188,7 +188,7 @@ Kitab is a document reader, so it leaves image files to your image viewer.
 - Fit width, fit page, actual size, Ctrl+wheel zoom and rotation; choose how new documents open
 - One page across, two side by side, or a book's spreads with the cover alone (Ctrl+6, Ctrl+7, Ctrl+8)
 - Page colour: the document's own, dark pages, or your theme's paper and ink
-- Smooth scrolling with the mouse wheel and the keys, at 60 frames a second or the screen's full refresh rate (or off)
+- Smooth scrolling with the mouse wheel and the keys, at the screen's full refresh rate or 60 frames a second to save CPU (or off)
 - Touch screens on Windows: drag to scroll, pinch to zoom
 - Remembers the page, zoom and layout of every file, and reopens your tabs after a restart (or starts on Home, or the last file)
 - Find (Ctrl+F) with match case and whole word, hits highlighted on the page

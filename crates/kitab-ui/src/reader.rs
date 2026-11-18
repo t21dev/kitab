@@ -359,7 +359,7 @@ const PINCH_SETTLE: Duration = Duration::from_millis(60);
 const SLOW_PAGE_MS: f32 = 250.0;
 const SLOW_SETTLE: Duration = Duration::from_millis(350);
 
-/// Smooth scrolling steps at most this often (60 Hz).
+/// With Glide at 60 frames a second on, smooth scrolling steps this often.
 const GLIDE_FRAME: Duration = Duration::from_micros(16_667);
 
 /// Smooth scrolling covers 63 % of what is left in this many seconds.
@@ -1360,17 +1360,18 @@ impl Reader {
         self.list.scroll_by(px(step));
         if done {
             self.glide = None;
-        } else if Style::get(cx).smooth_full_rate {
-            // Settings › Reading: every display refresh.
-            window.request_animation_frame();
-        } else {
+        } else if Style::get(cx).scroll_60hz {
+            // Settings › Reading: 60 steps a second, to save CPU.
             self.glide_next_frame(cx);
+        } else {
+            window.request_animation_frame();
         }
     }
 
-    /// The glide's next step, a 60 Hz frame from now: on a 120 to 165 Hz
-    /// screen a step every refresh redrew the whole window two to three
-    /// times as often for a glide that looks the same (it moves by time).
+    /// The glide's next step, a 60 Hz frame from now (Settings › Reading ›
+    /// Glide at 60 frames a second): on a 120 to 165 Hz screen that redraws
+    /// the window a third as often, for a glide that covers the same distance
+    /// in the same time.
     fn glide_next_frame(&mut self, cx: &mut Context<Self>) {
         if std::mem::replace(&mut self.glide_tick, true) {
             return;
