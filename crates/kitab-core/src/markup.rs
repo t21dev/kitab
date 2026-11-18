@@ -61,12 +61,50 @@ pub enum MarkShape {
         rect: RectPt,
         text: String,
         size: f32,
+        style: TextStyle,
     },
     /// A note pinned at a point, its text shown on demand.
     Note {
         at: PointPt,
         text: String,
     },
+}
+
+/// How a text box's text is set: bold, italic, and its lines' alignment.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct TextStyle {
+    pub bold: bool,
+    pub italic: bool,
+    pub align: TextAlign,
+}
+
+/// A text box's lines: against its left edge, centred, or against its right.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum TextAlign {
+    #[default]
+    Left,
+    Centre,
+    Right,
+}
+
+impl TextAlign {
+    /// PDF's quadding (/Q): 0 left, 1 centred, 2 right.
+    pub fn quadding(self) -> i32 {
+        match self {
+            TextAlign::Left => 0,
+            TextAlign::Centre => 1,
+            TextAlign::Right => 2,
+        }
+    }
+
+    /// From a quadding value; anything else is left.
+    pub fn from_quadding(q: i64) -> Self {
+        match q {
+            1 => TextAlign::Centre,
+            2 => TextAlign::Right,
+            _ => TextAlign::Left,
+        }
+    }
 }
 
 /// One mark on one page.
@@ -206,7 +244,9 @@ impl Mark {
             | MarkShape::Strike { rects } => {
                 !rects.is_empty() && rects.len() <= MAX_RECTS && rects.iter().all(ok_rect)
             }
-            MarkShape::Text { rect, text, size } => {
+            MarkShape::Text {
+                rect, text, size, ..
+            } => {
                 ok_rect(rect)
                     && text.chars().count() <= MAX_TEXT_CHARS
                     && size.is_finite()
@@ -343,10 +383,16 @@ impl Mark {
             MarkShape::Strike { rects } => MarkShape::Strike {
                 rects: rects.iter().map(mr).collect(),
             },
-            MarkShape::Text { rect, text, size } => MarkShape::Text {
+            MarkShape::Text {
+                rect,
+                text,
+                size,
+                style,
+            } => MarkShape::Text {
                 rect: mr(rect),
                 text: text.clone(),
                 size: *size,
+                style: *style,
             },
             MarkShape::Note { at, text } => MarkShape::Note {
                 at: mv(at),

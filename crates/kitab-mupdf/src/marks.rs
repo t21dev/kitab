@@ -81,10 +81,18 @@ fn fill(a: &mut PdfAnnotation, m: &Mark) -> Result<(), mupdf::Error> {
             }
             a.set_color(c)?;
         }
-        MarkShape::Text { rect, text, size } => {
+        MarkShape::Text {
+            rect,
+            text,
+            size,
+            style,
+        } => {
             a.set_rect(r(rect))?;
             a.set_contents(text)?;
             a.set_default_appearance("Helv", *size, Some(c))?;
+            // Alignment is standard (/Q), and MuPDF's own look follows it.
+            a.object()
+                .dict_put("Q", mupdf::pdf::PdfObject::new_int(style.align.quadding())?)?;
         }
         MarkShape::Note { at, text } => {
             a.set_rect(Rect::new(at.x, at.y, at.x + 18.0, at.y + 18.0))?;
@@ -212,15 +220,26 @@ fn annotate(
             fill(&mut annot, m).map_err(|e| format!("could not add a {}: {e}", m.kind()))?;
             // Text MuPDF draws as "?" (Bangla, Hindi, Arabic, Thai…):
             // Kitab draws it (script_ap.rs).
-            if let MarkShape::Text { text, size, .. } = &m.shape {
+            // and bold or italic text, which MuPDF's text boxes don't have.
+            if let MarkShape::Text {
+                text, size, style, ..
+            } = &m.shape
+            {
                 let c = m.color;
                 let rgb = (
                     f32::from(c.r) / 255.0,
                     f32::from(c.g) / 255.0,
                     f32::from(c.b) / 255.0,
                 );
-                crate::script_ap::draw_text_box(&mut doc, &mut annot.object(), text, *size, rgb)
-                    .map_err(|e| format!("could not add a {}: {e}", m.kind()))?;
+                crate::script_ap::draw_text_box(
+                    &mut doc,
+                    &mut annot.object(),
+                    text,
+                    *size,
+                    rgb,
+                    *style,
+                )
+                .map_err(|e| format!("could not add a {}: {e}", m.kind()))?;
             }
             written += 1;
         }
@@ -310,6 +329,7 @@ mod tests {
                 },
                 text: "Kitab text".into(),
                 size: 14.0,
+                style: kitab_core::TextStyle::default(),
             },
             MarkShape::Note {
                 at: pt(500.0, 100.0),
@@ -342,6 +362,117 @@ mod tests {
             .collect()
     }
 
+    /// Bold, italic and centred text boxes (issue #13): Kitab draws the bold
+    /// and italic ones (MuPDF's are plain), alignment is the standard /Q,
+    /// and a plain box keeps MuPDF's own look.
+    #[cfg(windows)]
+    #[test]
+    fn styled_text_boxes_are_drawn_and_aligned() {
+        let src = fixture("01-text-outline.pdf");
+        let out = temp("styled-box.pdf");
+        let boxed = |y: f32, text: &str, style: kitab_core::TextStyle| Mark {
+            page: 0,
+            shape: MarkShape::Text {
+                rect: RectPt {
+                    x: 72.0,
+                    y,
+                    w: 300.0,
+                    h: 30.0,
+                },
+                text: text.into(),
+                size: 16.0,
+                style,
+            },
+            color: Rgb8 {
+                r: 160,
+                g: 20,
+                b: 20,
+            },
+            width: 1.0,
+            opacity: 1.0,
+        };
+        let styled = kitab_core::TextStyle {
+            bold: true,
+            italic: true,
+            align: kitab_core::TextAlign::Centre,
+        };
+        let plain_right = kitab_core::TextStyle {
+            align: kitab_core::TextAlign::Right,
+            ..Default::default()
+        };
+        let marks = [
+            boxed(560.0, "Bold and slanted", styled),
+            boxed(620.0, "Plain on the right", plain_right),
+        ];
+        write_marks(&src, None, &marks, &[], &out).expect("writes");
+        let doc = PdfDocument::open(out.to_str().expect("utf-8")).expect("reopens");
+        let page = doc.load_pdf_page(0).expect("page");
+        let looks: Vec<(i64, String)> = page
+            .annotations()
+            .map(|a| {
+                let o = a.object();
+                let q = o
+                    .get_dict("Q")
+                    .ok()
+                    .flatten()
+                    .and_then(|v| v.as_int().ok())
+                    .unwrap_or(0);
+                let ap = o
+                    .get_dict("AP")
+                    .ok()
+                    .flatten()
+                    .and_then(|ap| ap.get_dict("N").ok().flatten())
+                    .and_then(|n| n.read_stream().ok())
+                    .map(|s| String::from_utf8_lossy(&s).into_owned())
+                    .unwrap_or_default();
+                (i64::from(q), ap)
+            })
+            .collect();
+        assert_eq!(looks.len(), 2);
+        let (q0, ap0) = &looks[0];
+        assert_eq!(*q0, 1, "centred");
+        assert!(
+            ap0.contains("/KitabF") && ap0.contains("2 Tr") && ap0.contains(" 0.21 "),
+            "{ap0}"
+        );
+        let (q1, ap1) = &looks[1];
+        assert_eq!(*q1, 2, "right");
+        assert!(!ap1.contains("/KitabF"), "a plain box keeps MuPDF's look");
+        let stext = doc
+            .load_page(0)
+            .expect("page")
+            .to_display_list(true)
+            .expect("list")
+            .to_text_page(mupdf::TextPageFlags::empty())
+            .expect("text");
+        let mut read = String::new();
+        for block in stext.blocks() {
+            for line in block.lines() {
+                read.extend(line.chars().filter_map(|c| c.char()));
+                read.push(' ');
+            }
+        }
+        assert!(
+            read.contains("Bold and slanted") && read.contains("Plain on the right"),
+            "{read}"
+        );
+        if let Ok(dir) = std::env::var("KITAB_SHOT") {
+            let pix = doc
+                .load_page(0)
+                .expect("page")
+                .to_pixmap(
+                    &mupdf::Matrix::new_scale(3.0, 3.0),
+                    &mupdf::Colorspace::device_rgb(),
+                    false,
+                    true,
+                )
+                .expect("draws");
+            pix.save_as(&format!("{dir}/styled-box.png"), mupdf::ImageFormat::PNG)
+                .expect("png");
+        }
+        let _ = std::fs::remove_file(&out);
+    }
+
     /// A text box in Bangla (issue #13): drawn by Kitab with its letters
     /// joined, and read back as the same words, not MuPDF's "?".
     #[cfg(windows)]
@@ -361,6 +492,7 @@ mod tests {
                 },
                 text: text.into(),
                 size: 14.0,
+                style: kitab_core::TextStyle::default(),
             },
             color: Rgb8 {
                 r: 20,

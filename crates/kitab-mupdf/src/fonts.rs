@@ -46,6 +46,8 @@ pub enum Need {
     Korean,
     /// Anything else (symbols, Greek and Cyrillic the base fonts lack).
     General,
+    /// Latin text Kitab draws itself (a bold or italic text box).
+    Latin,
 }
 
 /// The need for a MuPDF script/language pair (`UCDN_SCRIPT_*`, `FZ_LANG_*`).
@@ -118,6 +120,7 @@ fn candidates(need: Need) -> &'static [(&'static str, i32)] {
         Need::Japanese => &[("YuGothR.ttc", 0), ("msgothic.ttc", 0)],
         Need::Korean => &[("malgun.ttf", 0)],
         Need::General => &[("seguisym.ttf", 0), ("segoeui.ttf", 0)],
+        Need::Latin => &[("segoeui.ttf", 0), ("arial.ttf", 0)],
     }
 }
 
@@ -146,6 +149,7 @@ fn candidates(need: Need) -> &'static [(&'static str, i32)] {
         }
         Need::Japanese => &[("ヒラギノ角ゴシック W3.ttc", 0)],
         Need::Korean => &[("AppleSDGothicNeo.ttc", 0)],
+        Need::Latin => &[("Helvetica.ttc", 0), ("Arial.ttf", 0)],
         _ => &[("Apple Symbols.ttf", 0), ("Helvetica.ttc", 0)],
     }
 }
@@ -191,7 +195,7 @@ pub fn file_for(need: Need) -> Option<(PathBuf, i32)> {
         Need::ChineseTraditional => "zh-tw",
         Need::Japanese => "ja",
         Need::Korean => "ko",
-        Need::General => "en",
+        Need::General | Need::Latin => "en",
     };
     let out = std::process::Command::new("fc-match")
         .args(["-f", "%{file}\n%{index}", &format!(":lang={lang}")])

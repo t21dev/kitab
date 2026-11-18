@@ -57,8 +57,10 @@ fn font_for(text: &str) -> Option<(Arc<Vec<u8>>, u32)> {
             *s,
             UCDN_SCRIPT_COMMON | UCDN_SCRIPT_INHERITED | UCDN_SCRIPT_UNKNOWN | UCDN_SCRIPT_LATIN
         )
-    })?;
-    let (path, index) = fonts::file_for(fonts::need_for(script, 0))?;
+    });
+    // Latin only (a bold or italic text box): the system's sans.
+    let need = script.map_or(fonts::Need::Latin, |s| fonts::need_for(s, 0));
+    let (path, index) = fonts::file_for(need)?;
     static CACHE: OnceLock<Mutex<HashMap<PathBuf, Arc<Vec<u8>>>>> = OnceLock::new();
     let cache = CACHE.get_or_init(|| Mutex::new(HashMap::new()));
     if let Some(bytes) = cache.lock().ok()?.get(&path) {
@@ -246,6 +248,10 @@ struct Look {
     pad: f32,
     /// Drawn under the text (a field's background and border).
     under: String,
+    /// Bold: the letters also outlined, a little, in their own colour.
+    bold: bool,
+    /// Italic: the letters slanted, as fonts without an italic are.
+    italic: bool,
 }
 
 /// The rectangle of annotation `obj`: its width and height.
@@ -297,20 +303,24 @@ pub(crate) fn draw_widget(
         // Twice the border, as MuPDF leaves for its own text.
         pad: 2.0 * border_width(obj),
         under: field_box(obj, w, h),
+        bold: false,
+        italic: false,
     };
     draw(doc, obj, text, &look)
 }
 
-/// Draw text box (FreeText) `obj` ourselves when MuPDF can't draw `text`:
-/// wrapped in its rectangle, `size` points, in colour `rgb` (0–1).
+/// Draw text box (FreeText) `obj` ourselves when MuPDF can't: text in a
+/// script it doesn't draw, or bold or italic (its text boxes are plain).
+/// Wrapped in its rectangle, `size` points, in colour `rgb` (0–1).
 pub(crate) fn draw_text_box(
     doc: &mut PdfDocument,
     obj: &mut PdfObject,
     text: &str,
     size: f32,
     rgb: (f32, f32, f32),
+    style: kitab_core::TextStyle,
 ) -> Result<bool, String> {
-    if text.is_empty() || mupdf_draws(text) {
+    if text.is_empty() || (mupdf_draws(text) && !style.bold && !style.italic) {
         return Ok(false);
     }
     let (w, h) = rect_size(obj)?;
@@ -318,11 +328,16 @@ pub(crate) fn draw_text_box(
         w,
         h,
         size,
-        colour: format!("{} {} {} rg", rgb.0, rgb.1, rgb.2),
-        q: 0,
+        colour: format!(
+            "{} {} {} rg {} {} {} RG",
+            rgb.0, rgb.1, rgb.2, rgb.0, rgb.1, rgb.2
+        ),
+        q: i64::from(style.align.quadding()),
         multiline: true,
         pad: 2.0,
         under: String::new(),
+        bold: style.bold,
+        italic: style.italic,
     };
     draw(doc, obj, text, &look)
 }
@@ -430,10 +445,12 @@ fn draw(
                     utf16_hex(letters)
                 );
             }
+            // Italic: slanted about 12°, as a font without an italic is.
+            let skew = if look.italic { 0.21 } else { 0.0 };
             for (g, new) in glyphs[i..j].iter().zip(&news) {
                 let _ = writeln!(
                     ops,
-                    "1 0 0 1 {:.3} {:.3} Tm <{new:04X}> Tj",
+                    "1 0 {skew} 1 {:.3} {:.3} Tm <{new:04X}> Tj",
                     x0 + g.x * scale,
                     base + g.y * scale
                 );
@@ -519,11 +536,18 @@ fn draw(
     // The look: clipped to the field, as MuPDF's own (/Tx marks it as a
     // field's variable text).
     let content = format!(
-        "{}/Tx BMC q {pad:.2} {pad:.2} {:.2} {:.2} re W n BT /KitabF {size:.2} Tf {}\n{ops}ET Q EMC\n",
+        "{}/Tx BMC q {pad:.2} {pad:.2} {:.2} {:.2} re W n BT /KitabF {size:.2} Tf {}{}\n{ops}ET Q EMC\n",
         look.under,
         (w - 2.0 * pad).max(0.0),
         (h - 2.0 * pad).max(0.0),
         look.colour,
+        // Bold: fill and outline the letters (render mode 2), the outline
+        // about 3 % of the size, in the text's colour.
+        if look.bold {
+            format!(" 2 Tr {:.3} w 1 j", size * 0.03)
+        } else {
+            String::new()
+        },
     );
     let mut buf = mupdf::Buffer::with_capacity(content.len());
     std::io::Write::write_all(&mut buf, content.as_bytes()).map_err(err)?;

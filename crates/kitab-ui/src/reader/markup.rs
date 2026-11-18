@@ -103,6 +103,8 @@ pub(super) struct Writing {
     pub replaces: Option<u64>,
     pub colour: (u8, u8, u8),
     pub size: f32,
+    /// Bold, italic and alignment, for a text box.
+    pub style: kitab_core::TextStyle,
     _sub: gpui::Subscription,
 }
 
@@ -144,6 +146,9 @@ pub(super) struct MarkupState {
     pub pen_colour: usize,
     pub highlighter_colour: usize,
     pub size: usize,
+    /// Bold, italic and alignment for the next text box (and the picked
+    /// one, with Select).
+    pub text_style: kitab_core::TextStyle,
     pub marks: Vec<Placed>,
     /// A mark being drawn, and the page point the drag started at.
     pub drawing: Option<(Mark, PointPt)>,
@@ -515,6 +520,125 @@ impl Reader {
         self.markup.selected = Some(local);
         self.markup.moving = Some((local, at, mark));
         cx.notify();
+    }
+
+    /// The text box picked with Select, if one is.
+    fn selected_text(&self) -> Option<Mark> {
+        if self.markup.tool != Some(Tool::Select) {
+            return None;
+        }
+        let local = self.markup.selected?;
+        self.markup
+            .marks
+            .iter()
+            .find(|p| p.local == local)
+            .map(|p| p.mark.clone())
+            .filter(|m| matches!(m.shape, MarkShape::Text { .. }))
+    }
+
+    /// Bold, italic or alignment chosen in the bar: for the next text box,
+    /// the one being written, and the one picked with Select (one undo step).
+    pub(super) fn set_text_style(
+        &mut self,
+        change: impl Fn(&mut kitab_core::TextStyle),
+        cx: &mut Context<Self>,
+    ) {
+        change(&mut self.markup.text_style);
+        if let Some(w) = self.markup.writing.as_mut() {
+            change(&mut w.style);
+        }
+        if let Some(old) = self.selected_text() {
+            let mut new = old.clone();
+            if let MarkShape::Text { style, .. } = &mut new.shape {
+                change(style);
+            }
+            if new != old && new.is_valid() {
+                self.replace_mark(&old, new.clone(), cx);
+                self.markup.undo.push(Edit::Moved(old, new));
+                self.markup.redo.clear();
+            }
+        }
+        cx.notify();
+    }
+
+    /// The style the bar shows: the picked text box's, the one being
+    /// written, or the next one's.
+    fn shown_text_style(&self) -> kitab_core::TextStyle {
+        if let Some(MarkShape::Text { style, .. }) = self.selected_text().map(|m| m.shape) {
+            return style;
+        }
+        self.markup
+            .writing
+            .as_ref()
+            .map_or(self.markup.text_style, |w| w.style)
+    }
+
+    /// Bold, italic and the three alignments, while the Text tool is on, a
+    /// text box is being written, or one is picked with Select.
+    fn text_style_buttons(&self, st: &Style, cx: &mut Context<Self>) -> Vec<gpui::AnyElement> {
+        let writing_text = self.markup.writing.as_ref().is_some_and(|w| !w.note);
+        if !(self.markup.tool == Some(Tool::Text) || writing_text || self.selected_text().is_some())
+        {
+            return Vec::new();
+        }
+        let s = self.shown_text_style();
+        let letter = |id: &'static str, label: &'static str, on: bool, tip: &'static str| {
+            div()
+                .id(id)
+                .size(px(28.0))
+                .flex_none()
+                .flex()
+                .items_center()
+                .justify_center()
+                .rounded(px(7.0))
+                .text_size(px(14.0))
+                .text_color(st.c(|c| c.text))
+                .when(on, |d| d.bg(st.c(|c| c.hover)))
+                .hover(|d| d.bg(st.hover_bg()))
+                .tip(tip)
+                .child(label)
+        };
+        let mut out: Vec<gpui::AnyElement> = vec![
+            letter("text-bold", "B", s.bold, "Bold")
+                .font_weight(gpui::FontWeight::BOLD)
+                .on_click(cx.listener(|r, _, _, cx| r.set_text_style(|s| s.bold = !s.bold, cx)))
+                .into_any_element(),
+            letter("text-italic", "I", s.italic, "Italic")
+                .italic()
+                .on_click(cx.listener(|r, _, _, cx| r.set_text_style(|s| s.italic = !s.italic, cx)))
+                .into_any_element(),
+        ];
+        // One button for the alignment: it shows the current one and goes
+        // on to the next (left, centre, right), so the bar stays short.
+        use kitab_core::TextAlign;
+        let (icon, tip, next) = match s.align {
+            TextAlign::Left => (
+                "align-left",
+                "Aligned left (click: centre)",
+                TextAlign::Centre,
+            ),
+            TextAlign::Centre => ("align-centre", "Centred (click: right)", TextAlign::Right),
+            TextAlign::Right => (
+                "align-right",
+                "Aligned right (click: left)",
+                TextAlign::Left,
+            ),
+        };
+        out.push(
+            div()
+                .flex_none()
+                .child(
+                    dock::dock_button("text-align", icon, false, st)
+                        .tip(tip)
+                        .on_click(
+                            cx.listener(move |r, _, _, cx| {
+                                r.set_text_style(|s| s.align = next, cx)
+                            }),
+                        ),
+                )
+                .into_any_element(),
+        );
+        out
     }
 
     /// Select is on with a mark picked: a colour or a thickness chosen in
@@ -907,6 +1031,13 @@ impl Reader {
             },
         );
         let m = &self.markup;
+        let style = replaces
+            .and_then(|l| m.marks.iter().find(|p| p.local == l))
+            .and_then(|p| match &p.mark.shape {
+                MarkShape::Text { style, .. } => Some(*style),
+                _ => None,
+            })
+            .unwrap_or(m.text_style);
         self.markup.writing = Some(Writing {
             page,
             at,
@@ -915,6 +1046,7 @@ impl Reader {
             replaces,
             colour: m.colour(false),
             size: TEXT_SIZES[m.size % 3],
+            style,
             _sub: sub,
         });
         cx.notify();
@@ -954,6 +1086,7 @@ impl Reader {
                 },
                 text,
                 size: w.size,
+                style: w.style,
             }
         };
         let mark = Mark {
@@ -1445,6 +1578,7 @@ impl Reader {
                         div()
                             .id(("markup-size", i))
                             .size(px(28.0))
+                            .flex_none()
                             .flex()
                             .items_center()
                             .justify_center()
@@ -1481,6 +1615,26 @@ impl Reader {
             .clone()
             .or_else(|| (!self.is_pdf() && !m.marks.is_empty()).then(|| "Kept in Kitab".into()))
             .filter(|_| !m.picker);
+        // Bold, italic and alignment for text boxes: a small row under the
+        // bar (the bar itself is full with the sidebar open).
+        let text_style = self.text_style_buttons(st, cx);
+        let text_style = (!text_style.is_empty() && !m.picker).then(|| {
+            div()
+                .id("markup-text-style")
+                .flex()
+                .items_center()
+                .gap(px(2.0))
+                .p(px(3.0))
+                .rounded(px(10.0))
+                .bg(st.c(|c| c.raised))
+                .shadow(st.elev())
+                .border_1()
+                .border_color(st.c(|c| c.line))
+                .occlude()
+                .cursor_default()
+                .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                .children(text_style)
+        });
         bar = bar.child(
             div()
                 .absolute()
@@ -1489,6 +1643,9 @@ impl Reader {
                 .right_0()
                 .flex()
                 .justify_center()
+                .items_center()
+                .gap(px(8.0))
+                .children(text_style)
                 .children(note.map(|n| {
                     div()
                         .px(px(10.0))
@@ -1980,14 +2137,25 @@ fn paint_mark(
                 window,
             )
         }),
-        MarkShape::Text { rect, text, size } => {
-            let font = window.text_style().font();
+        MarkShape::Text {
+            rect,
+            text,
+            size,
+            style,
+        } => {
+            let mut font = window.text_style().font();
+            if style.bold {
+                font.weight = gpui::FontWeight::BOLD;
+            }
+            if style.italic {
+                font.style = gpui::FontStyle::Italic;
+            }
             let colour: gpui::Hsla = colour.into();
             for (i, line) in text.lines().enumerate() {
                 if line.is_empty() {
                     continue;
                 }
-                let origin = to_px(PointPt {
+                let mut origin = to_px(PointPt {
                     x: rect.x,
                     y: rect.y + i as f32 * size * TEXT_LINE,
                 });
@@ -2005,6 +2173,13 @@ fn paint_mark(
                     &[run],
                     None,
                 );
+                // Centred or right: within the box, as the saved PDF has it.
+                let room = px(rect.w * ppt) - shaped.width;
+                match style.align {
+                    kitab_core::TextAlign::Left => {}
+                    kitab_core::TextAlign::Centre => origin.x += room / 2.0,
+                    kitab_core::TextAlign::Right => origin.x += room,
+                }
                 let _ = shaped.paint(origin, px(size * TEXT_LINE * ppt), window, cx);
             }
         }

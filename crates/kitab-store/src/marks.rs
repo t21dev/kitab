@@ -45,7 +45,22 @@ pub(crate) fn encode_mark(m: &Mark) -> String {
             rect: r,
             text,
             size,
-        } => json!({ "rect": rect(r), "text": text, "size": size }),
+            style,
+        } => {
+            let mut v = json!({ "rect": rect(r), "text": text, "size": size });
+            // Only what differs from plain left-aligned text, so marks saved
+            // before styles existed and plain ones read the same.
+            if style.bold {
+                v["bold"] = json!(true);
+            }
+            if style.italic {
+                v["italic"] = json!(true);
+            }
+            if style.align != kitab_core::TextAlign::Left {
+                v["align"] = json!(style.align.quadding());
+            }
+            v
+        }
         MarkShape::Note { at, text } => json!({ "at": point(at), "text": text }),
     };
     if let (Some(o), Value::Object(e)) = (v.as_object_mut(), extra) {
@@ -134,6 +149,13 @@ pub(crate) fn decode_mark(page: u32, kind: &str, data: &str) -> Option<Mark> {
             rect: get_rect(v.get("rect")?)?,
             text: text("text")?,
             size: f(v.get("size")?)?,
+            style: kitab_core::TextStyle {
+                bold: v.get("bold").and_then(Value::as_bool).unwrap_or(false),
+                italic: v.get("italic").and_then(Value::as_bool).unwrap_or(false),
+                align: kitab_core::TextAlign::from_quadding(
+                    v.get("align").and_then(Value::as_i64).unwrap_or(0),
+                ),
+            },
         },
         "note" => MarkShape::Note {
             at: get_point(v.get("at")?)?,
@@ -251,6 +273,17 @@ mod tests {
                 rect: r,
                 text: "কিতাব \"quoted\"".into(),
                 size: 14.0,
+                style: kitab_core::TextStyle::default(),
+            },
+            MarkShape::Text {
+                rect: r,
+                text: "Bold, slanted, centred".into(),
+                size: 16.0,
+                style: kitab_core::TextStyle {
+                    bold: true,
+                    italic: true,
+                    align: kitab_core::TextAlign::Centre,
+                },
             },
             MarkShape::Note {
                 at: p(5.0, 6.0),
@@ -272,6 +305,32 @@ mod tests {
                 opacity: 0.4,
             })
             .collect()
+    }
+
+    /// A plain text box is written as before styles existed (no style
+    /// keys), and a record without them reads as plain, left-aligned.
+    #[test]
+    fn an_older_text_box_reads_as_plain() {
+        let plain = Mark {
+            page: 0,
+            shape: MarkShape::Text {
+                rect: RectPt {
+                    x: 1.0,
+                    y: 2.0,
+                    w: 30.0,
+                    h: 10.0,
+                },
+                text: "old".into(),
+                size: 12.0,
+                style: kitab_core::TextStyle::default(),
+            },
+            color: Rgb8 { r: 0, g: 0, b: 0 },
+            width: 1.0,
+            opacity: 1.0,
+        };
+        let data = encode_mark(&plain);
+        assert!(!data.contains("bold") && !data.contains("italic") && !data.contains("align"));
+        assert_eq!(decode_mark(0, "text", &data), Some(plain));
     }
 
     #[test]

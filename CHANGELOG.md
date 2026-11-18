@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Text boxes can be bold, italic, and aligned left, centred or right: the B, I and alignment buttons under the markup bar, for the next text box or (with Select) the one picked. Saved into the PDF so other readers show it too ([#13](https://github.com/t21dev/kitab/issues/13)).
 - Make a PDF from pictures (File menu, or Ctrl+K): JPEG, PNG, WebP, TIFF, BMP and GIF, one page each, in name order (scan 2 before scan 10), each page the picture's own shape, and phone photos turned upright. Page tools › Move changes the order afterwards ([#13](https://github.com/t21dev/kitab/issues/13)).
 
 ### Fixed
