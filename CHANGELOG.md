@@ -7,12 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Pages zoomed wider than the window scroll sideways ([#14](https://github.com/t21dev/kitab/issues/14)): with a tilting wheel, Shift+wheel, a touchpad or touch screen, the Left and Right arrows (which turn the page once its edge is reached, as before), and middle-click scrolling. Zooming keeps the same part of the page in the middle, and selecting text, links and marks follow the moved page.
+
 ### Added
 - The command palette (Ctrl+K) finds settings too, by name or by the words Settings' own search knows ("dark" finds Theme and Page colour). Picking one opens Settings at it.
 
 ### Changed
-- Starting Kitab with tabs to restore: the old tabs appear in place instead of each sliding in, 40 ms apart, after the page is already up, and the tab of the file Kitab was opened with stays in view on a full tab strip (it was scrolled out of sight).
-- The command palette opens with a visible fade and drop (it was a 4 px move most people didn't notice).
+- Starting Kitab with tabs to restore: the old tabs appear together, in place, instead of sliding in one by one after the page is already up (it looked like every file opening again), the strip settles in one go, and the tab of the file Kitab was opened with stays in view on a full tab strip (it was scrolled out of sight).
+- A new tab grows open as a closing one narrows away, so the tabs after it and the + button glide aside instead of jumping.
 - Smooth scrolling follows the screen's full refresh rate again by default, the smoothest on 120–165 Hz screens. The new Settings › Reading › Glide at 60 frames a second switch steps 60 times a second instead, for about half the CPU while scrolling. It replaces 1.0.0's full-refresh-rate switch, so everyone starts on full rate.
 
 ## [1.0.0] - 2026-11-18

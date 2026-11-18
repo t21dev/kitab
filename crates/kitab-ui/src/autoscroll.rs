@@ -35,17 +35,30 @@ impl AutoScroll {
 
     pub fn moved(&mut self, to: Point<Pixels>, held: bool) {
         self.pointer = to;
-        if held && (f32::from(to.y - self.anchor.y)).abs() > DEAD {
+        if held
+            && ((f32::from(to.y - self.anchor.y)).abs() > DEAD
+                || (f32::from(to.x - self.anchor.x)).abs() > DEAD)
+        {
             self.dragged = true;
         }
     }
 
     /// Pixels to scroll this tick (down is positive).
     pub fn step(&self) -> f32 {
-        let d = f32::from(self.pointer.y - self.anchor.y);
-        let far = (d.abs() - DEAD).max(0.0);
-        (far.powf(1.25) * 0.05).min(60.0) * d.signum()
+        speed(f32::from(self.pointer.y - self.anchor.y))
     }
+
+    /// Pixels to move sideways this tick (right is positive), for pages
+    /// zoomed wider than the window.
+    pub fn step_x(&self) -> f32 {
+        speed(f32::from(self.pointer.x - self.anchor.x))
+    }
+}
+
+/// Faster the further the pointer is from the mark, past the dead zone.
+fn speed(d: f32) -> f32 {
+    let far = (d.abs() - DEAD).max(0.0);
+    (far.powf(1.25) * 0.05).min(60.0) * d.signum()
 }
 
 /// The mark where scrolling started: a small round with up and down arrows.

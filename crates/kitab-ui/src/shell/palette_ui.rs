@@ -433,9 +433,8 @@ impl Workspace {
                     .font_weight(FontWeight::NORMAL)
                     .child("↑ ↓ to choose · Enter to run · Esc to close"),
             );
-        // It opens from a key, often many times a day: a fade and a 12 px
-        // drop at dialog speed, enough to see it arrive (4 px at menu speed
-        // read as no animation), and a quick exit.
+        // It opens from a key, often many times a day: a quick fade and a
+        // 4 px drop, short enough never to be in the way.
         let serial = self.palette.as_ref().map_or(0, |p| p.serial);
         self.modal_serials.insert("palette", serial);
         let leaving = self.modal_exit == Some(("palette", serial));
@@ -444,7 +443,7 @@ impl Workspace {
                 crate::motion::exit(
                     div().child(panel),
                     ElementId::NamedInteger("palette-out".into(), serial),
-                    crate::motion::From::Above(8.0),
+                    crate::motion::From::Above(4.0),
                     crate::motion::EXIT_FAST,
                 ),
                 crate::motion::exit(
@@ -460,8 +459,8 @@ impl Workspace {
                     div().child(panel),
                     ElementId::NamedInteger("palette-in".into(), serial),
                     st.animations,
-                    crate::motion::From::Above(12.0),
-                    crate::motion::BASE,
+                    crate::motion::From::Above(4.0),
+                    crate::motion::FAST,
                     std::time::Duration::ZERO,
                 ),
                 crate::motion::enter(
@@ -469,7 +468,7 @@ impl Workspace {
                     ElementId::NamedInteger("palette-scrim".into(), serial),
                     st.animations,
                     crate::motion::From::Fade,
-                    crate::motion::BASE,
+                    crate::motion::FAST,
                     std::time::Duration::ZERO,
                 ),
             )

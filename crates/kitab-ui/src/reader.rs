@@ -240,6 +240,11 @@ pub struct Reader {
     /// Dragging the scroll bar: where the pointer holds the thumb (pixels
     /// from its top).
     bar_grab: Option<f32>,
+    /// How far the pages are moved sideways, in pixels (more shows more of
+    /// their right side), when zoomed wider than the window (issue #14).
+    /// Each row keeps it within its own overhang, so a narrower page stays
+    /// centred.
+    pan_x: f32,
     /// Middle-click scrolling, and which run of it is current.
     autoscroll: Option<crate::autoscroll::AutoScroll>,
     autoscroll_serial: u64,
@@ -423,6 +428,7 @@ impl Reader {
             dragging: false,
             bar: Rc::new(Cell::new(None)),
             bar_grab: None,
+            pan_x: 0.0,
             autoscroll: None,
             autoscroll_serial: 0,
             back: Vec::new(),
@@ -920,7 +926,61 @@ impl Reader {
                 }
             }
         };
+        // Moved sideways with its row (the row is drawn moved as much).
+        let x = x - px(self.row_shift(lead));
         Some(Bounds::new(gpui::point(x, y), gpui::size(px(w), px(h))))
+    }
+
+    /// Row `lead`'s width: its page, or both pages of a spread and the gap.
+    fn row_width(&self, lead: usize) -> f32 {
+        let w = |p: usize| self.page_size(p).w * self.px_per_pt(p);
+        match self.row_partner(lead) {
+            None => w(lead),
+            Some(p) => w(lead) + GAP + w(p),
+        }
+    }
+
+    /// How far row `lead` reaches past the window on each side, with a gap
+    /// left at its edges (0 when it fits, the usual case).
+    fn row_overhang(&self, lead: usize) -> f32 {
+        if self.md.is_some() || self.status != Status::Open {
+            return 0.0;
+        }
+        // The noted viewport, not the list's: a row asks while the list is
+        // drawing it, and the list's state is borrowed then.
+        let view = self.viewport.0;
+        if view <= 0.0 {
+            return 0.0;
+        }
+        // Only a page wider than the window moves (fit width can leave it a
+        // hair over its margins, which mustn't make the arrows nudge it
+        // before turning the page); then a gap is left at its edges.
+        let w = self.row_width(lead);
+        if w <= view + 0.5 {
+            return 0.0;
+        }
+        (w + 2.0 * GAP - view) / 2.0
+    }
+
+    /// How far row `lead` is drawn moved left (right when negative).
+    fn row_shift(&self, lead: usize) -> f32 {
+        let o = self.row_overhang(lead);
+        self.pan_x.clamp(-o, o)
+    }
+
+    /// Move the pages sideways by `dx` pixels (positive shows more of the
+    /// right). False when the page in view can't move that way.
+    fn pan_by(&mut self, dx: f32, cx: &mut Context<Self>) -> bool {
+        let o = self.row_overhang(self.row_lead(self.current_page()));
+        let before = self.pan_x.clamp(-o, o);
+        let after = (before + dx).clamp(-o, o);
+        self.pan_x = after;
+        if (after - before).abs() < 0.01 {
+            return false;
+        }
+        self.scrolled = true;
+        cx.notify();
+        true
     }
 
     /// Page `ix`'s size in points as shown (rotation applied).
@@ -1002,7 +1062,13 @@ impl Reader {
             }
             return;
         }
+        // The part of the page in the middle of the window stays there.
+        let before = self.px_per_pt(self.current_page());
         self.zoom = zoom;
+        let after = self.px_per_pt(self.current_page());
+        if before > 0.0 {
+            self.pan_x *= after / before;
+        }
         self.relayout(cx);
         self.schedule_save(cx);
     }
@@ -1185,6 +1251,11 @@ impl Reader {
     /// Right or left arrow: next or previous page, the other way round in a
     /// book whose pages advance right to left (MANIFEST 04).
     fn page_arrow(&mut self, right: bool, cx: &mut Context<Self>) {
+        // A page wider than the window moves sideways first, as in other
+        // readers; at its edge the arrow turns the page as usual.
+        if self.pan_by(if right { 60.0 } else { -60.0 }, cx) {
+            return;
+        }
         if page_arrow_goes_forward(right, self.right_to_left(cx)) {
             if self.at_end() {
                 cx.emit(ReaderEvent::PastEnd);
@@ -1410,11 +1481,14 @@ impl Reader {
                         else {
                             return false;
                         };
-                        let step = a.step();
+                        let (step, step_x) = (a.step(), a.step_x());
                         if step != 0.0 {
                             r.list.scroll_by(px(step));
                             r.scrolled = true;
                             cx.notify();
+                        }
+                        if step_x != 0.0 {
+                            r.pan_by(step_x, cx);
                         }
                         true
                     })
@@ -1986,25 +2060,32 @@ impl Reader {
         if lead != ix {
             return div().h(px(0.0)).into_any_element();
         }
+        let shift = self.row_shift(ix);
         let row = div()
             .w_full()
             .flex()
             .justify_center()
             .gap(px(GAP))
             .pt(px(self.sheet_top_pad(ix)))
-            .pb(px(GAP / 2.0));
+            .pb(px(GAP / 2.0))
+            // Zoomed wider than the window: moved sideways (sheet_bounds
+            // moves the hit-testing with it).
+            .when(shift != 0.0, |d| d.relative().left(px(-shift)));
         let first = self.page_sheet(ix, window, cx);
-        match self.row_partner(ix) {
-            None => row.child(first).into_any_element(),
+        let row = match self.row_partner(ix) {
+            None => row.child(first),
             Some(p) => {
                 let second = self.page_sheet(p, window, cx);
                 if self.spread_rtl {
-                    row.child(second).child(first).into_any_element()
+                    row.child(second).child(first)
                 } else {
-                    row.child(first).child(second).into_any_element()
+                    row.child(first).child(second)
                 }
             }
-        }
+        };
+        // In a plain wrapper: a list item's own root ignores a relative
+        // offset (it has no parent to be offset from).
+        div().w_full().child(row).into_any_element()
     }
 
     // ── actions ───────────────────────────────────────────────────────────
@@ -2313,6 +2394,10 @@ impl Reader {
             }
         }
         self.spread_rtl = self.right_to_left(cx);
+        // Within what the page in view allows: a value past it (the window
+        // grew, or a zoom out) would otherwise jump back on the next zoom.
+        let o = self.row_overhang(self.row_lead(self.current_page()));
+        self.pan_x = self.pan_x.clamp(-o, o);
         self.note_seen_pages();
         // Page colour or theme changed: the pages are drawn again in it.
         let tint = self.page_tint(cx);
@@ -2747,6 +2832,22 @@ impl Reader {
                             }
                             cx.stop_propagation();
                             return;
+                        }
+                        // Sideways (a tilting wheel, Shift+wheel, a touchpad
+                        // or touch screen): the pages move when they're wider
+                        // than the window. The list itself only scrolls up
+                        // and down, so a touchpad's up-and-down part still
+                        // goes on to it.
+                        let dx = f32::from(e.delta.pixel_delta(px(20.0)).x);
+                        if dx != 0.0
+                            && r.present.is_none()
+                            && r.list.viewport_bounds().contains(&e.position)
+                        {
+                            r.pan_by(-dx, cx);
+                            if matches!(e.delta, gpui::ScrollDelta::Lines(_)) {
+                                cx.stop_propagation();
+                                return;
+                            }
                         }
                         // A mouse wheel turns in notches: glide to where it
                         // scrolls instead of jumping there. A touchpad sends

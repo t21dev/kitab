@@ -167,6 +167,9 @@ pub struct Workspace {
     left_tab: Option<gpui::EntityId>,
     /// The width the tabs got last frame (crowded tabs fill the strip).
     tab_w: f32,
+    /// How many tabs there were last frame: the strip's measured width is
+    /// for that many.
+    tab_n: usize,
     /// The strip's lined-up scroll offset, held for up to this many frames.
     tab_snap: Option<(f32, u32)>,
     /// Minimal mode: the pointer is at the top edge, so the window buttons show.
@@ -326,6 +329,7 @@ impl Workspace {
             shown_tab: None,
             left_tab: None,
             tab_w: 0.0,
+            tab_n: 0,
             tab_snap: None,
             peek: false,
             system: SystemInfo::default(),
@@ -648,34 +652,23 @@ impl Workspace {
             if !opened {
                 return;
             }
-            // The rest, in session order around the one already open, a
-            // few frames apart so the page that shows isn't kept waiting.
+            // The rest, in session order around the one already open, once
+            // the page that shows has had time to paint. All in one frame:
+            // one at a time, they looked like every file opening again.
             cx.background_executor()
                 .timer(Duration::from_millis(350))
                 .await;
-            for (i, path) in plan.iter().enumerate() {
-                if i == first {
-                    continue;
-                }
-                let done = handle
-                    .update(cx, |_, window, cx| {
-                        this.update(cx, |ws, cx| {
+            let _ = handle.update(cx, |_, window, cx| {
+                this.update(cx, |ws, cx| {
+                    for (i, path) in plan.iter().enumerate() {
+                        if i != first {
                             let at = ws.restored_position(&plan, i, cx);
                             ws.insert_tab(path.clone(), Some(at), false, window, cx);
-                        })
-                        .is_err()
-                    })
-                    .unwrap_or(true);
-                if done {
-                    return;
-                }
-                cx.background_executor()
-                    .timer(Duration::from_millis(40))
-                    .await;
-            }
-            let _ = this.update(cx, |ws, cx| {
-                ws.restore_staging = false;
-                ws.save_session(cx);
+                        }
+                    }
+                    ws.restore_staging = false;
+                    ws.save_session(cx);
+                })
             });
         })
         .detach();
@@ -1343,7 +1336,15 @@ impl Workspace {
         // it last frame, so the strip never ends on half a tab (whose empty
         // end looked like a gap after Home). Scrolling to the active tab then
         // lands on a tab's edge too.
-        let strip_w = f32::from(self.tab_scroll.bounds().size.width);
+        let measured = f32::from(self.tab_scroll.bounds().size.width);
+        // Tabs came or went since it was measured (a restore adds them all
+        // at once): last frame's width is for the old strip, which took
+        // three frames of tabs changing width to settle. Crowded, the strip
+        // takes the room, so start from that; the next frame refines it by
+        // a pixel or two.
+        let stale = self.tabs.len() != self.tab_n;
+        self.tab_n = self.tabs.len();
+        let strip_w = if stale && crowded { room } else { measured };
         let tab_w = if crowded && strip_w > 0.0 {
             let k = ((strip_w + 4.0) / 124.0).floor().max(1.0);
             ((strip_w + 4.0) / k - 4.0).max(120.0)
@@ -1358,7 +1359,10 @@ impl Workspace {
             self.reveal_tab = true;
             cx.notify();
         }
-        if self.reveal_tab && !resized && crowded && strip_w > 0.0 {
+        // Lined up at once, with this frame's width (the snap needs no
+        // layout), and again on the next frame if the width was still
+        // settling.
+        if self.reveal_tab && crowded && strip_w > 0.0 {
             // Snap so the strip starts on a tab's edge with the active tab in
             // view (GPUI's scroll_to_item does nothing for a tab already in
             // view, which left half a tab showing after a resize). Only here,
@@ -1381,7 +1385,8 @@ impl Workspace {
                 // clamps the offset to that: hold it until it sticks.
                 self.tab_snap = Some((x, 30));
             }
-            self.reveal_tab = false;
+            // The width moved this frame: line up again on the next one.
+            self.reveal_tab = resized;
             cx.notify();
         } else if let Some((x, frames)) = self.tab_snap {
             let off = -f32::from(self.tab_scroll.offset().x);
@@ -1547,11 +1552,13 @@ impl Workspace {
                                 .text_color(st.c(|c| c.faint)),
                         ),
                 );
-            strip = strip.child(motion::slide_in(
-                tab_el,
+            // A new tab grows open as a closing one narrows away, so the
+            // tabs after it and the + button glide aside instead of jumping.
+            strip = strip.child(motion::grow_in(
+                tab_el.when(animate, |d| d.overflow_hidden()),
                 ElementId::NamedInteger("tab-in".into(), tab_id),
                 animate,
-                28.0,
+                if crowded { tab_w } else { 220.0 },
                 motion::BASE,
             ));
         }

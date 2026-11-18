@@ -127,13 +127,15 @@ where
     .into_any_element()
 }
 
-/// Slide `el` in from the left by `dx` without fading (tabs): it is all
-/// there from the start, only moving into place. `el` should be `relative()`.
-pub fn slide_in<E>(
+/// Open `el` from nothing to `full` px wide (tabs): the mirror of a closing
+/// tab, which narrows to nothing, so what follows it glides aside instead of
+/// jumping. `full` is a cap, so a tab narrower than it settles at its own
+/// width. `el` should clip its content (`overflow_hidden`).
+pub fn grow_in<E>(
     el: E,
     id: impl Into<ElementId>,
     on: bool,
-    dx: f32,
+    full: f32,
     duration: Duration,
 ) -> AnyElement
 where
@@ -151,7 +153,7 @@ where
     el.with_animation(
         id,
         Animation::new(duration).with_easing(ease_out_quint()),
-        move |el, v| el.left(px(-dx * (1.0 - v))),
+        move |el, v| el.max_w(px(full * v)),
     )
     .into_any_element()
 }
