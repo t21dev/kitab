@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-11-18
+
 ### Changed
 - Scrolling uses about two thirds less CPU on high-refresh screens (120–165 Hz): smooth scrolling now steps at 60 frames a second instead of at every refresh, with the same distance and feel (16.7 % → 5.6 % of a core in the reading benchmark on a 160 Hz screen). Settings › Reading › Smooth scrolling › Glide at the screen's full refresh rate brings back gliding at every refresh, for the smoothest scrolling on those screens.
 - Faster and lighter underneath, from fixes in Zed's GPUI (the UI framework): no full-speed redraws for a second after every click or mouse move, building each frame takes about half the time, finished background work can no longer hold up input and drawing, and freed image space is reused.
@@ -458,7 +460,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fit width and fit page follow a window resize even when no new page has to be drawn.
 - The Settings window shrinks to fit small windows instead of running off the left edge.
 
-[Unreleased]: https://github.com/t21dev/kitab/compare/v0.9.1...HEAD
+[Unreleased]: https://github.com/t21dev/kitab/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/t21dev/kitab/compare/v0.9.1...v1.0.0
 [0.9.1]: https://github.com/t21dev/kitab/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/t21dev/kitab/compare/v0.8.1...v0.9.0
 [0.8.1]: https://github.com/t21dev/kitab/compare/v0.8.0...v0.8.1
