@@ -17,7 +17,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 SPDX = "SPDX-License-Identifier: AGPL-3.0-or-later"
 # vendor: third-party code copied in locally (e.g. spikes/spike-a/vendor/gpui, Apache-2.0), never committed.
-SKIP_DIRS = {"target", ".git", ".venv", "node_modules", "__pycache__", "real", "vendor", ".claude"}
+# gpui_backports: files taken whole from Zed (Apache-2.0, like gpui), committed
+# on purpose so tools/patch_gpui.py can copy them in; they keep Zed's licence.
+SKIP_DIRS = {"target", ".git", ".venv", "node_modules", "__pycache__", "real", "vendor", ".claude", "gpui_backports"}
 THEME_CRATE = ROOT / "crates" / "kitab-theme"
 
 # Hex colours in string literals, and the colour constructors GPUI and our
