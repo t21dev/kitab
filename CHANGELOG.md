@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Linux: Bangla, Arabic and Thai vowel signs and accents drawn on their letter, not beside it; Japanese, Chinese and other input-method text no longer typed twice (X11 and Wayland); no jump on the first scroll after switching windows (X11); window controls and decorations as the desktop offers them (Wayland); links open with xdg-open first; dialog buttons no longer pass clicks to the window behind.
 - macOS: Cmd shortcuts work on non-US keyboard layouts with an input method; a freeze when a window lost focus; the Backspace and Delete symbols in menus.
 - A crash when hovering just past the end of a wrapped line of text.
+- Markdown: HTML alignment is followed, as on GitHub: a README's `<div align="center">` top (logo, title, tagline) is centred, and `<p align="right">` and `<center>` work too. Selecting centred text picks the letters under the pointer.
 - Markdown: an HTML image's `width` and `height` are kept (a README's logo given `width="96"` filled the page), and the line break after an `<img>` no longer leaves an empty line under it.
 
 ## [0.9.1] - 2026-11-18

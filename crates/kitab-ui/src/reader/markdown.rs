@@ -302,6 +302,27 @@ impl Reader {
             hdrag: self.md_hdrag.map(|g| g.key),
         };
         let el = block_el(&d, block, 0, cx);
+        // HTML around it can centre or right-align it (a README's top, as
+        // GitHub shows it): its images and its text.
+        let el = match md.doc.aligns.get(ix).copied() {
+            Some(kitab_md::Align::Center) => div()
+                .w_full()
+                .flex()
+                .flex_col()
+                .items_center()
+                .text_center()
+                .child(el)
+                .into_any_element(),
+            Some(kitab_md::Align::Right) => div()
+                .w_full()
+                .flex()
+                .flex_col()
+                .items_end()
+                .text_right()
+                .child(el)
+                .into_any_element(),
+            _ => el,
+        };
         let last = ix + 1 == md.doc.blocks.len();
         // Read aloud: the block being read is shaded, with a rule beside it.
         let reading = self.speech_block() == Some(ix);
@@ -366,6 +387,8 @@ fn block_el(d: &Draw, block: &Block, depth: usize, cx: &mut Context<Reader>) -> 
                 },
             };
             div()
+                // The rule under it runs the column's width, centred or not.
+                .w_full()
                 .pt(d.px(top))
                 .pb(d.px(10.0))
                 .when(*level <= 2, |el| {

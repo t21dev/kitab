@@ -138,6 +138,10 @@ pub struct MdDoc {
     pub blocks: Vec<Block>,
     /// The source line (0-based) each top-level block starts on, for the editor.
     pub block_lines: Vec<usize>,
+    /// Each top-level block's alignment from HTML around it (`<div
+    /// align="center">`, `<p align="right">`, `<center>`), as GitHub shows a
+    /// README's centred top. `Align::None` for most.
+    pub aligns: Vec<Align>,
     pub outline: Vec<Heading>,
     pub title: Option<String>,
     pub author: Option<String>,

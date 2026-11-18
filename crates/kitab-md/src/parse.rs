@@ -94,6 +94,10 @@ struct Builder {
     offset: usize,
     pending: Option<usize>,
     starts: Vec<usize>,
+    /// The HTML block tags open now, each with the alignment it set.
+    html_aligns: Vec<Option<Align>>,
+    /// The alignment of each block added to the root.
+    aligns: Vec<Align>,
 }
 
 pub fn blocks(text: &str) -> MdDoc {
@@ -116,6 +120,8 @@ pub fn blocks(text: &str) -> MdDoc {
         offset: 0,
         pending: None,
         starts: Vec::new(),
+        html_aligns: Vec::new(),
+        aligns: Vec::new(),
     };
     for (event, range) in Parser::new_ext(text, options).into_offset_iter() {
         b.offset = range.start;
@@ -144,9 +150,12 @@ pub fn blocks(text: &str) -> MdDoc {
     };
     let mut block_lines: Vec<usize> = b.starts.iter().map(|o| line_of(*o)).collect();
     block_lines.resize(blocks.len(), block_lines.last().copied().unwrap_or(0));
+    let mut aligns = b.aligns;
+    aligns.resize(blocks.len(), Align::None);
     MdDoc {
         blocks,
         block_lines,
+        aligns,
         outline: b.outline,
         title: None,
         author: None,
@@ -167,6 +176,14 @@ impl Builder {
         for frame in self.stack.iter_mut().rev() {
             if let Frame::Root(_) = frame {
                 self.starts.push(self.pending.take().unwrap_or(self.offset));
+                // The innermost HTML block tag that set an alignment.
+                let align = self
+                    .html_aligns
+                    .iter()
+                    .rev()
+                    .find_map(|a| *a)
+                    .unwrap_or(Align::None);
+                self.aligns.push(align);
             }
             match frame {
                 Frame::Root(blocks)
@@ -671,7 +688,19 @@ impl Builder {
                         *in_summary = open;
                     }
                 }
-                Piece::Open(HtmlTag::Block) | Piece::Close(HtmlTag::Block) => self.close_implicit(),
+                Piece::OpenBlock(align) => {
+                    self.close_implicit();
+                    // Bounded, like the containers (a hostile file can open thousands).
+                    if self.html_aligns.len() < 256 {
+                        self.html_aligns.push(align);
+                    }
+                }
+                Piece::Close(HtmlTag::Block) => {
+                    // What it held is finished (with its alignment), then it closes.
+                    self.close_implicit();
+                    self.html_aligns.pop();
+                }
+                Piece::Open(HtmlTag::Block) => self.close_implicit(),
                 Piece::Open(tag) => {
                     if let Some(n) = self.styles.counter(tag) {
                         *n += 1;

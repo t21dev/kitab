@@ -38,6 +38,8 @@ an environment switch to turn it off so it can still be benchmarked:
   MenuKey macOS's menu bar shows a command's key only when it has Ctrl or Cmd
           in it. A key equivalent there is live: with a plain one (N for the
           next page) the menu could take the letter while it is being typed.
+  Align   Centred and right-aligned text is hit-tested where it's drawn
+          (TextLayout::index_for_position undoes each row's shift).
   Pixels  RenderImage::kitab_husk: an image that is only on the GPU. Once a page
           has been uploaded its pixels in RAM are let go and a husk (same id and
           size, no bytes) stands in for it. Painting a husk whose texture is
@@ -668,9 +670,97 @@ struct WindowInvalidatorInner {"""),
     path_patch()
     touch_patch()
     menu_key_patch()
+    aligned_hit_test_patch()
     zed_backports()
     print(f"patched gpui copy: {DEST}")
     xim_ctext_fix()
+
+
+def aligned_hit_test_patch() -> None:
+    """16. Align: text centred or right-aligned (`text_align`, a Markdown
+    `<div align="center">`) is drawn with each wrapped row shifted, but
+    `TextLayout::index_for_position` and `position_for_index` mapped as if
+    it were left-aligned, so selecting centred text picked the wrong
+    letters. The alignment is kept when the text paints, and each row's
+    shift (the one `aligned_origin_x` paints with) is taken off the
+    pointer, or put on the position."""
+    edit("src/elements/text.rs", [
+        ("""    size: Option<Size<Pixels>>,
+    bounds: Option<Bounds<Pixels>>,
+}""",
+         """    size: Option<Size<Pixels>>,
+    bounds: Option<Bounds<Pixels>>,
+    // Kitab patch: the alignment it painted with.
+    kitab_align: crate::TextAlign,
+}
+
+/// Kitab patch: how far row `row` of `line` is shifted right by `align`
+/// in `width` (as `aligned_origin_x` paints it).
+fn kitab_row_shift(line: &WrappedLine, row: usize, align: crate::TextAlign, width: Pixels) -> Pixels {
+    if align == crate::TextAlign::Left {
+        return Pixels::ZERO;
+    }
+    let layout = &line.layout.unwrapped_layout;
+    let x_at = |b: &crate::WrapBoundary| layout.runs[b.run_ix].glyphs[b.glyph_ix].position.x;
+    let bounds = &line.layout.wrap_boundaries;
+    let start = if row == 0 {
+        Pixels::ZERO
+    } else {
+        bounds.get(row - 1).map(x_at).unwrap_or(Pixels::ZERO)
+    };
+    let end = bounds.get(row).map(x_at).unwrap_or(layout.width);
+    let row_width = end - start;
+    match align {
+        crate::TextAlign::Left => Pixels::ZERO,
+        crate::TextAlign::Center => (width - row_width) / 2.0,
+        crate::TextAlign::Right => width - row_width,
+    }
+}"""),
+        ("""                        size: Some(Size::default()),
+                        bounds: None,
+                    });""",
+         """                        size: Some(Size::default()),
+                        bounds: None,
+                        kitab_align: crate::TextAlign::Left,
+                    });"""),
+        ("""                    size: Some(size),
+                    bounds: None,
+                });""",
+         """                    size: Some(size),
+                    bounds: None,
+                    kitab_align: crate::TextAlign::Left,
+                });"""),
+        ("""    fn paint(&self, text: &str, window: &mut Window, cx: &mut App) {
+        let element_state = self.0.borrow();""",
+         """    fn paint(&self, text: &str, window: &mut Window, cx: &mut App) {
+        // Kitab patch: hit-testing needs the alignment it paints with.
+        if let Some(state) = self.0.borrow_mut().as_mut() {
+            state.kitab_align = window.text_style().text_align;
+        }
+        let element_state = self.0.borrow();"""),
+        ("""            } else {
+                let position_within_line = position - line_origin;
+                match line.index_for_position(position_within_line, line_height) {""",
+         """            } else {
+                let mut position_within_line = position - line_origin;
+                // Kitab patch: undo the row's alignment shift.
+                if element_state.kitab_align != crate::TextAlign::Left {
+                    let row = (position_within_line.y / line_height).floor().max(0.0) as usize;
+                    position_within_line.x -=
+                        kitab_row_shift(line, row, element_state.kitab_align, bounds.size.width);
+                }
+                match line.index_for_position(position_within_line, line_height) {"""),
+        ("""                let ix_within_line = index - line_start_ix;
+                return Some(line_origin + line.position_for_index(ix_within_line, line_height)?);""",
+         """                let ix_within_line = index - line_start_ix;
+                let mut p = line.position_for_index(ix_within_line, line_height)?;
+                // Kitab patch: and put it on for a position.
+                if element_state.kitab_align != crate::TextAlign::Left {
+                    let row = (p.y / line_height).floor().max(0.0) as usize;
+                    p.x += kitab_row_shift(line, row, element_state.kitab_align, bounds.size.width);
+                }
+                return Some(line_origin + p);"""),
+    ])
 
 
 def zed_backports() -> None:

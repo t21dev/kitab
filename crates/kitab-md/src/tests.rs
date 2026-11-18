@@ -314,3 +314,24 @@ fn html_image_size_is_kept() {
         ]
     );
 }
+
+#[test]
+fn html_alignment_follows_the_blocks() {
+    let doc = crate::parse(
+        "<div align=\"center\">\n\n<img src=\"logo.png\" width=\"96\" />\n\n# Title\n\n**Tagline.**\n\n</div>\n\nAfter.\n\n<p align=\"right\">Signed</p>\n\n<center>\n\nMiddle\n\n</center>\n",
+    );
+    assert_eq!(doc.aligns.len(), doc.blocks.len());
+    assert_eq!(
+        doc.aligns,
+        vec![
+            Align::Center,
+            Align::Center,
+            Align::Center,
+            Align::None,
+            Align::Right,
+            Align::Center,
+        ]
+    );
+    // The heading inside stays in the outline, as it was.
+    assert_eq!(doc.outline.len(), 1);
+}

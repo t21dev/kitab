@@ -45,6 +45,7 @@ pub fn parse(source: &str) -> MdDoc {
                 .filter(|v| !v.is_empty());
             doc.blocks.insert(0, Block::Frontmatter(pairs));
             doc.block_lines.insert(0, 0);
+            doc.aligns.insert(0, crate::Align::None);
             doc.shift_outline(1);
         }
         Some(front::Front::Invalid(raw)) => {
@@ -57,6 +58,7 @@ pub fn parse(source: &str) -> MdDoc {
                 },
             );
             doc.block_lines.insert(0, 0);
+            doc.aligns.insert(0, crate::Align::None);
             doc.shift_outline(1);
         }
         None => {}

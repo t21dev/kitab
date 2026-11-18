@@ -11,6 +11,9 @@
 #[derive(Debug, Clone, PartialEq)]
 pub enum Piece {
     Text(String),
+    /// A block tag (`<div>`, `<p>`…) opening, with its `align` (or
+    /// `<center>`'s) when it has one.
+    OpenBlock(Option<crate::Align>),
     Open(Tag),
     Close(Tag),
     Break,
@@ -236,6 +239,20 @@ pub fn pieces(fragment: &str, swallowing: &mut Option<String>) -> Vec<(Piece, Op
                 if let Some(kind) = kind {
                     if closing {
                         out.push((Piece::Close(kind), None));
+                    } else if kind == Tag::Block {
+                        let align = if name == "center" {
+                            Some(crate::Align::Center)
+                        } else {
+                            attr(tag, "align").and_then(|a| {
+                                match a.trim().to_ascii_lowercase().as_str() {
+                                    "center" | "middle" => Some(crate::Align::Center),
+                                    "right" => Some(crate::Align::Right),
+                                    "left" => Some(crate::Align::Left),
+                                    _ => None,
+                                }
+                            })
+                        };
+                        out.push((Piece::OpenBlock(align), None));
                     } else {
                         let href = (kind == Tag::Link)
                             .then(|| attr(tag, "href"))
