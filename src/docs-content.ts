@@ -65,7 +65,7 @@ export const DOCS: DocSection[] = [
           { p: "The Windows installer installs for your account only, so it never asks for an administrator. `kitab.exe` carries its own C runtime: a clean Windows needs nothing else installed first." },
           { p: "Or install with a package manager:" },
           { code: "# macOS, Homebrew\nbrew install --cask t21dev/tap/kitab\n\n# Windows, Scoop\nscoop bucket add t21dev https://github.com/t21dev/scoop-bucket\nscoop install t21dev/kitab" },
-          { note: "WinGet and Flathub listings are planned for version 1.0. Until then, use the installer, the portable zip or Scoop on Windows, and the Flatpak bundle from the release on Linux." },
+          { note: "WinGet and Flathub listings are planned. Until then, use the installer, the portable zip or Scoop on Windows, and the Flatpak bundle from the release on Linux." },
         ],
       },
       {

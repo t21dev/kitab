@@ -22,8 +22,8 @@ export const SITE = {
   org: { name: "Team 21", short: "t21", url: "https://t21.dev", github: "https://github.com/t21dev", email: "contact@t21.dev" },
   author: { name: "TriptoAfsin", github: "https://github.com/TriptoAfsin" },
   license: { name: "AGPL-3.0-or-later", url: "https://www.gnu.org/licenses/agpl-3.0.html" },
-  status: "Released for Windows, macOS and Linux; still in development toward 1.0.0.",
-  phase: "Phase 10, polish, accessibility and distribution before 1.0.0",
+  status: "Released for Windows, macOS and Linux.",
+  phase: "1.0.0 is out; next: accessibility, signed installers, WinGet and Flathub",
   /** The hero badge. The release in it comes from GitHub at build time when GitHub answers. */
   latest: "0.2",
   locale: "en",
@@ -185,7 +185,7 @@ export const FAQ: FaqItem[] = [
   },
   {
     q: "Which operating systems are supported?",
-    a: "Windows 10 and 11, macOS on Apple silicon and Intel, and Linux on x86_64 and aarch64, from the same code. Windows on Arm runs the x64 build. WinGet and Flathub listings are planned for version 1.0.",
+    a: "Windows 10 and 11, macOS on Apple silicon and Intel, and Linux on x86_64 and aarch64, from the same code. Windows on Arm runs the x64 build. WinGet and Flathub listings are planned.",
   },
   {
     q: "Who makes it?",
@@ -208,7 +208,7 @@ export const ROADMAP: Phase[] = [
   { n: 7, title: "Native print", release: "0.1.0, 0.2.0", summary: "Print on all three systems, with each system's own print dialog since 0.2.0.", state: "done" },
   { n: 8, title: "Signatures", release: "0.1.0", summary: "Verify and sign PDFs, locally.", state: "done" },
   { n: 9, title: "PDF tools and library search", release: "0.1.0", summary: "Merge, split, compress, full-text library search, collections, reading stats.", state: "done" },
-  { n: 10, title: "Polish and distribution", summary: "Accessibility, the full published benchmark, signed installers, winget and Flathub, then 1.0.0.", state: "now" },
+  { n: 10, title: "1.0 and distribution", release: "1.0.0", summary: "1.0.0 released. Still to come: accessibility (screen readers), signed installers, and WinGet and Flathub listings.", state: "now" },
 ];
 
 export type ShortcutGroup = { area: string; keys: [string, string][] };
@@ -224,7 +224,7 @@ export const PLATFORMS: Platform[] = [
   { os: "macOS", formats: "DMG for Apple silicon and for Intel", when: "Every release" },
   { os: "Linux", formats: "Flatpak, AppImage, deb, rpm and tar.gz for x86_64; all but the Flatpak also for aarch64", when: "Every release" },
   { os: "Package managers", formats: "brew install --cask t21dev/tap/kitab · scoop install t21dev/kitab", when: "Every release" },
-  { os: "WinGet and Flathub", formats: "Listings in the WinGet and Flathub catalogues", when: "Planned for 1.0" },
+  { os: "WinGet and Flathub", formats: "Listings in the WinGet and Flathub catalogues", when: "Planned" },
 ];
 
 export type Route = {

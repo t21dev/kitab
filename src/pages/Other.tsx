@@ -77,7 +77,7 @@ export function Download({ data }: { data: PageData }) {
           </table>
         </div>
         <p className="mt-4 max-w-2xl text-[14px] text-faint">
-          Homebrew and Scoop install it today; WinGet and Flathub listings are planned for version 1.0. The builds are not
+          Homebrew and Scoop install it today; WinGet and Flathub listings are planned. The builds are not
           code-signed yet, so Windows SmartScreen and macOS Gatekeeper may warn before the first run (the{" "}
           <a href="/docs#first-run" className="underline decoration-accent underline-offset-2">docs</a> say what to do). Every release lists SHA-256 checksums.
         </p>
