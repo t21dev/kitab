@@ -276,3 +276,20 @@ Heavy pages again without it (new build at 177c59c, three runs each; 0.8.1 as ab
 | Zoom in × 6 | 5.0, 5.0, 5.0 s (0.8.1 6.7–9.7) | 3.6, 3.7, 3.7 s (0.8.1 4.1–5.7) |
 
 Part of the 40 % saving when paging came from not drawing the page ahead early; without the gate the saving is about 23 %, and the final page is sharp about 0.8 s sooner than 0.8.1 (sooner than with the gate, which held the page ahead back).
+
+## Zed backports, round 1: speed and memory (18 November 2026)
+
+Five fixes from Zed's main branch since gpui 0.2.2, applied by `tools/patch_gpui.py` (`zed_backports`). Before and after were built locally the same way (`tools/build_release.py`), differing only in the gpui copy, and run alternately in fresh profiles, 1200×800.
+
+| Fix | How it was checked | Before | After |
+|---|---|---|---|
+| Present after input only when input is fast (zed#45369) | CPU while the pointer moves now and then, and after single clicks (`round1.py`, 5 runs) | README.md: pointer 6.2 %, clicks 5.7 % (medians; runs up to 8.7 %) | 0 %, 0.3 % (runs at most 0.9 %) |
+| | | 01-text-outline.pdf: runs up to 6.2 % / 6.9 % | at most 0.9 % / 1.5 % |
+| Main-thread tasks in 10 ms turns (zed#43678, #43682, #43883, #43886, #46609) | Find "reading" across 400 pages while scrolling 80 notches; frame gaps from `KITAB_TRACE_RENDER`, 10 runs | 5 of 10 runs froze over 150 ms; 14 frames over 33 ms in all | 2 of 10; 7 frames over 33 ms; p95 6.6 ms both |
+| Scene building: zed#44655's bounds tree and zed#66898's sort | `Scene` insert + finish of a text-like frame (5,112 primitives), release, 300 frames | 1.88–1.98 ms a frame | 0.85 ms (−55 %) |
+| Atlas tile space freed on remove (zed#58874) | Zed's test (big image removed, the next one fits the same texture) on gpui 0.2.2 | fails | passes |
+| Background work at normal priority (zed#44121) | — (a scheduling priority, not a speed) | High | Normal |
+
+- Screens are pixel-identical before and after (01-text-outline.pdf, L12-scripts-fonts-emoji.pdf, README.md).
+- Scrolling CPU: 01-text-outline.pdf 17.35 → 17.34 %, README.md 26.7 → 24.9 % (medians); idle 0 % in both; private memory 1 MB lower.
+- gpui's own tests: 70 pass; `test_clipboard` fails before and after alike (it uses the real Windows clipboard).

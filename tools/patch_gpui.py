@@ -668,7 +668,370 @@ struct WindowInvalidatorInner {"""),
     path_patch()
     touch_patch()
     menu_key_patch()
+    zed_backports()
     print(f"patched gpui copy: {DEST}")
+
+
+def zed_backports() -> None:
+    """Fixes from Zed's main branch since gpui 0.2.2 (crates.io has nothing
+    newer), each kept as Zed wrote it where the code still matches. Each was
+    measured or tested before it stayed (docs/perf/baseline.md)."""
+    input_rate_backport()
+    thread_priority_backport()
+    atlas_free_backport()
+    task_budget_backport()
+    scene_backport()
+
+
+def input_rate_backport() -> None:
+    """zed#45369: keep presenting for a second after input only when input
+    comes fast (60 a second or more: a scroll, a drag). Any input did it
+    before, and with the Frames patch a single click or mouse move asked for
+    a frame on every display refresh for a whole second."""
+    edit("src/window.rs", [
+        ("""    pub(crate) last_input_timestamp: Rc<Cell<Instant>>,""",
+         """    // Kitab backport (zed#45369): input rate, not the last input's time.
+    pub(crate) last_input_timestamp: Rc<RefCell<InputRateTracker>>,"""),
+        ("""        let last_input_timestamp = Rc::new(Cell::new(Instant::now()));""",
+         """        let last_input_timestamp = Rc::new(RefCell::new(InputRateTracker::default()));"""),
+        ("""                    || (active.get()
+                        && last_input_timestamp.get().elapsed() < Duration::from_secs(1));""",
+         """                    || (active.get() && last_input_timestamp.borrow().is_high_rate());"""),
+        ("""    pub fn dispatch_event(&mut self, event: PlatformInput, cx: &mut App) -> DispatchEventResult {
+        self.last_input_timestamp.set(Instant::now());
+""",
+         """    pub fn dispatch_event(&mut self, event: PlatformInput, cx: &mut App) -> DispatchEventResult {
+"""),
+        ("""            self.dispatch_key_event(any_key_event, cx);
+        }
+
+        DispatchEventResult {
+            propagate: cx.propagate_event,""",
+         """            self.dispatch_key_event(any_key_event, cx);
+        }
+
+        // Kitab backport (zed#45369): input that changed something counts
+        // towards the rate.
+        if self.invalidator.is_dirty() {
+            self.last_input_timestamp.borrow_mut().record_input();
+        }
+
+        DispatchEventResult {
+            propagate: cx.propagate_event,"""),
+        ("""#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum DrawPhase {""",
+         """/// Kitab backport (zed#45369): whether input is arriving at a high rate
+/// (60 a second or more over the last 100 ms), sustained for a second after.
+#[derive(Clone, Debug)]
+pub(crate) struct InputRateTracker {
+    timestamps: Vec<Instant>,
+    window: Duration,
+    inputs_per_second: u32,
+    sustain_until: Instant,
+    sustain_duration: Duration,
+}
+
+impl Default for InputRateTracker {
+    fn default() -> Self {
+        Self {
+            timestamps: Vec::new(),
+            window: Duration::from_millis(100),
+            inputs_per_second: 60,
+            sustain_until: Instant::now(),
+            sustain_duration: Duration::from_secs(1),
+        }
+    }
+}
+
+impl InputRateTracker {
+    pub fn record_input(&mut self) {
+        let now = Instant::now();
+        self.timestamps.push(now);
+        let window = self.window;
+        self.timestamps.retain(|&t| now.duration_since(t) <= window);
+        let min_events = self.inputs_per_second as u128 * self.window.as_millis() / 1000;
+        if self.timestamps.len() as u128 >= min_events {
+            self.sustain_until = now + self.sustain_duration;
+        }
+    }
+
+    pub fn is_high_rate(&self) -> bool {
+        Instant::now() < self.sustain_until
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum DrawPhase {"""),
+    ])
+
+
+def thread_priority_backport() -> None:
+    """zed#44121: background work at normal priority, not High: a long
+    search or thumbnail run no longer competes with every other program."""
+    edit("src/platform/windows/dispatcher.rs", [
+        ("""        ThreadPool, ThreadPoolTimer, TimerElapsedHandler, WorkItemHandler, WorkItemPriority,
+""",
+         """        ThreadPool, ThreadPoolTimer, TimerElapsedHandler, WorkItemHandler,
+"""),
+        ("""ThreadPool::RunWithPriorityAsync(&handler, WorkItemPriority::High).log_err();""",
+         """ThreadPool::RunAsync(&handler).log_err(); // Kitab backport (zed#44121)"""),
+    ])
+
+
+def task_budget_backport() -> None:
+    """zed#43678, #43682, #43883, #43886, #46609: the main thread runs its
+    queued tasks in 10 ms turns; between turns it takes the window's paint
+    and input messages, so a burst of finished work (renders, search hits)
+    can't hold input and painting back. Before, every queued task ran in
+    one go. Messages are dispatched as GPUI's own loop does (no
+    TranslateMessage here: 0.2.2 doesn't use it)."""
+    edit("src/platform/windows/platform.rs", [
+        ("""    fn run_foreground_task(&self) -> Option<isize> {
+        for runnable in self.main_receiver.drain() {
+            runnable.run();
+        }
+        Some(0)
+    }""",
+         """    fn run_foreground_task(&self) -> Option<isize> {
+        // Kitab backport (zed#43678 and follow-ups): a 10 ms budget.
+        const MAIN_TASK_TIMEOUT: u128 = 10;
+        let mut start = std::time::Instant::now();
+        loop {
+            if start.elapsed().as_millis() >= MAIN_TASK_TIMEOUT {
+                let mut msg = MSG::default();
+                let process_message = |msg: &MSG| unsafe {
+                    DispatchMessageW(msg);
+                };
+                let peek_msg = |msg: &mut MSG, kind| unsafe {
+                    PeekMessageW(msg, None, 0, 0, PM_REMOVE | kind).as_bool()
+                };
+                // A paint first and last only, so animations can't loop here.
+                if peek_msg(&mut msg, PM_QS_PAINT) {
+                    process_message(&msg);
+                }
+                while peek_msg(&mut msg, PM_QS_INPUT) {
+                    process_message(&msg);
+                }
+                if peek_msg(&mut msg, PM_QS_PAINT) {
+                    process_message(&msg);
+                }
+                start = std::time::Instant::now();
+            }
+            match self.main_receiver.try_recv() {
+                Err(_) => break,
+                Ok(runnable) => {
+                    runnable.run();
+                }
+            }
+        }
+        Some(0)
+    }"""),
+    ])
+
+
+def scene_backport() -> None:
+    """Building the scene each frame: zed#44655's bounds tree (finding each
+    primitive's draw order; an R-tree with 12 children a node instead of a
+    binary tree), taken whole from Zed (tools/gpui_backports/bounds_tree.rs,
+    same interface), and zed#66898's sort: small (key, index) pairs sorted,
+    then each primitive moved once. 0.2.2's primitives aren't Copy, so they
+    are swapped along each cycle instead of copied (the same order, ties
+    still in insertion order)."""
+    tree = pathlib.Path(__file__).resolve().parent / "gpui_backports" / "bounds_tree.rs"
+    (DEST / "src" / "bounds_tree.rs").write_text(tree.read_text(encoding="utf8"), encoding="utf8")
+    edit("src/scene.rs", [
+        ("""    pub fn finish(&mut self) {
+        self.shadows.sort_by_key(|shadow| shadow.order);
+        self.quads.sort_by_key(|quad| quad.order);
+        self.paths.sort_by_key(|path| path.order);
+        self.underlines.sort_by_key(|underline| underline.order);
+        self.monochrome_sprites
+            .sort_by_key(|sprite| (sprite.order, sprite.tile.tile_id));
+        self.polychrome_sprites
+            .sort_by_key(|sprite| (sprite.order, sprite.tile.tile_id));
+        self.surfaces.sort_by_key(|surface| surface.order);
+    }
+""",
+         """    pub fn finish(&mut self) {
+        // Kitab backport (zed#66898): sort keys, then move each primitive once.
+        let keys = &mut Vec::new();
+        kitab_sort_in_place(&mut self.shadows, keys, |shadow| (shadow.order, 0));
+        kitab_sort_in_place(&mut self.quads, keys, |quad| (quad.order, 0));
+        self.paths.sort_by_key(|path| path.order);
+        kitab_sort_in_place(&mut self.underlines, keys, |underline| (underline.order, 0));
+        kitab_sort_in_place(&mut self.monochrome_sprites, keys, |sprite| {
+            (sprite.order, sprite.tile.tile_id.0)
+        });
+        kitab_sort_in_place(&mut self.polychrome_sprites, keys, |sprite| {
+            (sprite.order, sprite.tile.tile_id.0)
+        });
+        self.surfaces.sort_by_key(|surface| surface.order);
+    }
+"""),
+    ])
+    scene = DEST / "src" / "scene.rs"
+    scene.write_text(scene.read_text(encoding="utf8") + SORT_IN_PLACE, encoding="utf8")
+
+
+SORT_IN_PLACE = """
+/// Kitab backport (zed#66898): sort small `(key, index)` pairs instead of
+/// the primitives, then put each primitive in place. Ties keep insertion
+/// order (the index is part of the key), as `sort_by_key` did.
+pub(crate) fn kitab_sort_in_place<T>(
+    primitives: &mut [T],
+    keys: &mut Vec<(u64, u32)>,
+    key: impl Fn(&T) -> (u32, u32),
+) {
+    if primitives.is_sorted_by_key(&key) {
+        return;
+    }
+    keys.clear();
+    keys.extend(primitives.iter().enumerate().map(|(index, primitive)| {
+        let (major, minor) = key(primitive);
+        (((major as u64) << 32) | minor as u64, index as u32)
+    }));
+    keys.sort_unstable();
+    // `keys[target].1` is where `target`'s primitive comes from. Follow each
+    // cycle of that permutation, swapping (0.2.2's primitives aren't Copy),
+    // and mark visited slots by pointing them at themselves.
+    for start in 0..primitives.len() {
+        if keys[start].1 as usize == start {
+            continue;
+        }
+        let mut target = start;
+        loop {
+            let source = keys[target].1 as usize;
+            keys[target].1 = target as u32;
+            if source == start {
+                break;
+            }
+            primitives.swap(target, source);
+            target = source;
+        }
+    }
+}
+
+#[cfg(test)]
+mod kitab_sort_tests {
+    use super::kitab_sort_in_place;
+
+    #[test]
+    fn sorts_like_a_stable_sort() {
+        let mut seed = 12345u64;
+        for len in [0usize, 1, 2, 3, 10, 100, 1000] {
+            let mut v: Vec<(u32, u32, usize)> = (0..len)
+                .map(|i| {
+                    seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+                    (((seed >> 33) % 20) as u32, ((seed >> 13) % 3) as u32, i)
+                })
+                .collect();
+            let mut expected = v.clone();
+            expected.sort_by_key(|p| (p.0, p.1));
+            let keys = &mut Vec::new();
+            kitab_sort_in_place(&mut v, keys, |p| (p.0, p.1));
+            assert_eq!(v, expected, "len {len}");
+        }
+    }
+}
+"""
+
+
+def atlas_free_backport() -> None:
+    """zed#58874: removing an image from the atlas gives its space back. The
+    allocator kept it before, so thumbnails and small images scrolled past
+    kept growing the shared textures."""
+    edit("src/platform/windows/directx_atlas.rs", [
+        ("""        let Some(id) = lock.tiles_by_key.remove(key).map(|tile| tile.texture_id) else {
+            return;
+        };
+""",
+         """        // Kitab backport (zed#58874): keep the tile to free its space.
+        let Some(tile) = lock.tiles_by_key.remove(key) else {
+            return;
+        };
+        let id = tile.texture_id;
+"""),
+        ("""        if let Some(mut texture) = texture_slot.take() {
+            texture.decrement_ref_count();
+            if texture.is_unreferenced() {
+                textures.free_list.push(texture.id.index as usize);""",
+         """        if let Some(mut texture) = texture_slot.take() {
+            texture.allocator.deallocate(tile.tile_id.into());
+            texture.decrement_ref_count();
+            if texture.is_unreferenced() {
+                textures.free_list.push(texture.id.index as usize);"""),
+    ])
+    # zed#58874's test: a big image removed leaves room for the next one in
+    # the same texture (before, the next went to a new texture).
+    atlas = DEST / "src/platform/windows/directx_atlas.rs"
+    atlas.write_text(atlas.read_text(encoding="utf8") + ATLAS_TEST, encoding="utf8")
+
+
+ATLAS_TEST = """
+#[cfg(test)]
+mod kitab_atlas_tests {
+    use super::*;
+    use crate::{ImageId, RenderImageParams};
+    use std::borrow::Cow;
+    use windows::Win32::{
+        Foundation::HMODULE,
+        Graphics::{
+            Direct3D::D3D_DRIVER_TYPE_WARP,
+            Direct3D11::{D3D11_CREATE_DEVICE_BGRA_SUPPORT, D3D11_SDK_VERSION, D3D11CreateDevice},
+        },
+    };
+
+    fn create_atlas() -> Option<DirectXAtlas> {
+        let mut device: Option<ID3D11Device> = None;
+        let mut device_context: Option<ID3D11DeviceContext> = None;
+        unsafe {
+            D3D11CreateDevice(
+                None,
+                D3D_DRIVER_TYPE_WARP,
+                HMODULE::default(),
+                D3D11_CREATE_DEVICE_BGRA_SUPPORT,
+                None,
+                D3D11_SDK_VERSION,
+                Some(&mut device),
+                None,
+                Some(&mut device_context),
+            )
+        }
+        .ok()?;
+        Some(DirectXAtlas::new(&device?, &device_context?))
+    }
+
+    fn key(image_id: usize) -> AtlasKey {
+        AtlasKey::Image(RenderImageParams {
+            image_id: ImageId(image_id),
+            frame_index: 0,
+        })
+    }
+
+    fn insert(atlas: &DirectXAtlas, key: &AtlasKey, size: Size<DevicePixels>) -> AtlasTile {
+        atlas
+            .get_or_insert_with(key, &mut || {
+                let n = (size.width.0 as usize) * (size.height.0 as usize) * 4;
+                Ok(Some((size, Cow::Owned(vec![0u8; n]))))
+            })
+            .expect("allocation should succeed")
+            .expect("callback returns Some")
+    }
+
+    #[test]
+    fn removed_tile_space_is_reused() {
+        let Some(atlas) = create_atlas() else { return };
+        let small = Size { width: DevicePixels(64), height: DevicePixels(64) };
+        let big = Size { width: DevicePixels(700), height: DevicePixels(700) };
+        let keeper = insert(&atlas, &key(1), small);
+        let a = insert(&atlas, &key(2), big);
+        assert_eq!(keeper.texture_id, a.texture_id);
+        atlas.remove(&key(2));
+        let b = insert(&atlas, &key(3), big);
+        assert_eq!(b.texture_id, keeper.texture_id);
+    }
+}
+"""
 
 
 def husk_patch() -> None:
