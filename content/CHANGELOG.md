@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Form fields and text boxes in Bangla, Hindi, Tamil, Arabic, Thai and other scripts are saved as written, conjuncts and joined letters included ([#13](https://github.com/t21dev/kitab/issues/13)): they came out as "?" in the saved PDF. Kitab now draws that text itself, in the system's font for the script, with only the letters used embedded, so every reader shows it and can still search and copy it.
+
+## [1.0.1] - 2026-11-19
+
+### Fixed
+- Pages zoomed wider than the window scroll sideways ([#14](https://github.com/t21dev/kitab/issues/14)): with a tilting wheel, Shift+wheel, a touchpad or touch screen, the Left and Right arrows (which turn the page once its edge is reached, as before), and middle-click scrolling. Zooming keeps the same part of the page in the middle, and selecting text, links and marks follow the moved page.
+
+### Added
+- A hand tool for moving the page: hold Space and drag (a tap of Space still moves down a screen), or turn on the dock's hand (also in Ctrl+K) to drag with the left button.
+- The command palette (Ctrl+K) finds settings too, by name or by the words Settings' own search knows ("dark" finds Theme and Page colour). Picking one opens Settings at it.
+
+### Changed
+- Starting Kitab with tabs to restore: the old tabs appear together, in place, instead of sliding in one by one after the page is already up (it looked like every file opening again), the strip settles in one go, and the tab of the file Kitab was opened with stays in view on a full tab strip (it was scrolled out of sight).
+- A new tab grows open as a closing one narrows away, so the tabs after it and the + button glide aside instead of jumping.
+- Smooth scrolling follows the screen's full refresh rate again by default, the smoothest on 120–165 Hz screens. The new Settings › Reading › Glide at 60 frames a second switch steps 60 times a second instead, for about half the CPU while scrolling. It replaces 1.0.0's full-refresh-rate switch, so everyone starts on full rate.
+
 ## [1.0.0] - 2026-11-18
 
 ### Changed
@@ -460,7 +477,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fit width and fit page follow a window resize even when no new page has to be drawn.
 - The Settings window shrinks to fit small windows instead of running off the left edge.
 
-[Unreleased]: https://github.com/t21dev/kitab/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/t21dev/kitab/compare/v1.0.1...HEAD
+[1.0.1]: https://github.com/t21dev/kitab/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/t21dev/kitab/compare/v0.9.1...v1.0.0
 [0.9.1]: https://github.com/t21dev/kitab/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/t21dev/kitab/compare/v0.8.1...v0.9.0

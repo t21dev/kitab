@@ -84,6 +84,10 @@ export const KEY_GROUPS: KeyGroup[] = [
         "PgUp / Shift+Space"
       ],
       [
+        "Move the page (hand)",
+        "Hold Space and drag"
+      ],
+      [
         "Go to page",
         "Ctrl+G"
       ],
@@ -540,6 +544,12 @@ export const PALETTE: PaletteCommand[] = [
   {
     "group": "View",
     "label": "Fit width",
+    "doc": true,
+    "keys": []
+  },
+  {
+    "group": "View",
+    "label": "Hand tool",
     "doc": true,
     "keys": []
   },
