@@ -144,7 +144,7 @@ flowchart LR
 
 ### Measured
 
-Against SumatraPDF 3.6.1 on the same Windows 11 machine (Ryzen 9 9900X, RTX 5070), re-run for 0.6.0 on 15 November 2026: the 40-page `01-text-outline.pdf` in a 1200×800 window, timed from outside the app by [`kitab-bench`](crates/kitab-bench) and `tools/bench_reading.py`, each app in a fresh profile. The full runs are in [docs/perf/baseline.md](docs/perf/baseline.md).
+Against SumatraPDF 3.6.1 on the same Windows 11 machine (Ryzen 9 9900X, RTX 5070), re-run for 1.0.0 on 18 November 2026: the 40-page `01-text-outline.pdf` in a 1200×800 window, timed from outside the app by [`kitab-bench`](crates/kitab-bench) and `tools/bench_reading.py`, each app in a fresh profile. The full runs are in [docs/perf/baseline.md](docs/perf/baseline.md).
 
 ```mermaid
 xychart-beta
@@ -154,14 +154,16 @@ xychart-beta
     bar [2.2, 0.0, 0.0]
 ```
 
-| | Kitab 0.6.0 | SumatraPDF 3.6.1 |
+| | Kitab 1.0.0 | SumatraPDF 3.6.1 |
 |---|---|---|
-| Window on screen | 241 ms, with the page already in it | 68 ms, blank at first |
-| Page first seen | 268 ms | by 359 ms |
+| Window on screen | 240 ms, with the page already in it | 84 ms, blank at first |
+| Page first seen | 253 ms | by 401 ms |
 | CPU used to reach the page | 234 ms | 187 ms |
 | CPU while idle | 0 % | 0 % |
-| CPU while scrolling | about 8 % of one core | about 6 % |
-| Private memory, one document | 103 MB (117 MB after scrolling) | 16 MB |
+| CPU while scrolling | about 6 % of one core, with smooth scrolling | about 2 %, which jumps instead of gliding |
+| Private memory, one document | 107 MB (115 MB after scrolling) | 16 MB |
+
+Smooth scrolling steps at 60 frames a second by default; Settings › Reading can make it follow the screen's full refresh rate (about 16 % on the test machine's screen), or turn it off (about 4 %).
 
 SumatraPDF starts sooner and is lighter: it draws with GDI, while Kitab first sets up the GPU (about 150 ms before its window exists), and about 88 MB of its memory is the GPU device, the graphics driver and DirectWrite, paid once whatever you open.
 
@@ -186,7 +188,7 @@ Kitab is a document reader, so it leaves image files to your image viewer.
 - Fit width, fit page, actual size, Ctrl+wheel zoom and rotation; choose how new documents open
 - One page across, two side by side, or a book's spreads with the cover alone (Ctrl+6, Ctrl+7, Ctrl+8)
 - Page colour: the document's own, dark pages, or your theme's paper and ink
-- Smooth scrolling with the mouse wheel and the keys (it can be turned off)
+- Smooth scrolling with the mouse wheel and the keys, at 60 frames a second or the screen's full refresh rate (or off)
 - Touch screens on Windows: drag to scroll, pinch to zoom
 - Remembers the page, zoom and layout of every file, and reopens your tabs after a restart (or starts on Home, or the last file)
 - Find (Ctrl+F) with match case and whole word, hits highlighted on the page
@@ -210,6 +212,7 @@ Kitab is a document reader, so it leaves image files to your image viewer.
 - Math typeset natively, Mermaid diagrams drawn in your theme's colours
 - Edit beside a live preview (Ctrl+E), and it reloads when another editor saves the file
 - Choose the typeface for code
+- READMEs look as they do on GitHub: HTML images keep their width and height, and `align="center"` and `<center>` are followed
 
 **Marks and notes**
 - Highlight, underline or strike through text, add notes and text boxes
@@ -244,11 +247,11 @@ Kitab is a document reader, so it leaves image files to your image viewer.
 - One window: double-clicking another file opens it as a tab
 - Page thumbnails in File Explorer, and Settings to make Kitab the default app per file type
 
-**Coming next:** an accessibility pass for screen readers, a short first-run tour, and code-signed downloads. The [roadmap](docs/PLAN.md#12-roadmap) has the order.
+**Coming next:** an accessibility pass for screen readers, a short first-run tour, code-signed downloads, and WinGet and Flathub listings. The [roadmap](docs/PLAN.md#12-roadmap) has the order.
 
 ## Privacy
 
-Your files stay on your computer, and there is no account, no analytics and no telemetry. Kitab connects to one service on its own: GitHub, shortly after start-up and every six hours, to ask for the latest version number. Settings › About turns that off. Links you click open in your browser. The details are in [PRIVACY.md](PRIVACY.md).
+Your files stay on your computer, and there is no account, no analytics and no telemetry. Kitab connects to the internet on its own for one thing: shortly after start-up and every six hours, it asks kitab.t21.dev and GitHub for the latest version number. Settings › About turns that off. Links you click open in your browser. The details are in [PRIVACY.md](PRIVACY.md).
 
 ## Build from source
 
