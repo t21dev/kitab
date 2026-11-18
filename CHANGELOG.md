@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Scrolling uses about two thirds less CPU on high-refresh screens (120–165 Hz): smooth scrolling now steps at 60 frames a second instead of at every refresh, with the same distance and feel (16.7 % → 5.6 % of a core in the reading benchmark on a 160 Hz screen).
+- Faster and lighter underneath, from fixes in Zed's GPUI (the UI framework): no full-speed redraws for a second after every click or mouse move, building each frame takes about half the time, finished background work can no longer hold up input and drawing, and freed image space is reused.
+
+### Fixed
+- Linux: Bangla, Arabic and Thai vowel signs and accents drawn on their letter, not beside it; Japanese, Chinese and other input-method text no longer typed twice (X11 and Wayland); no jump on the first scroll after switching windows (X11); window controls and decorations as the desktop offers them (Wayland); links open with xdg-open first; dialog buttons no longer pass clicks to the window behind.
+- macOS: Cmd shortcuts work on non-US keyboard layouts with an input method; a freeze when a window lost focus; the Backspace and Delete symbols in menus.
+- A crash when hovering just past the end of a wrapped line of text.
+
 ## [0.9.1] - 2026-11-18
 
 ### Fixed

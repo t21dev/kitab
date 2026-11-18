@@ -265,6 +265,8 @@ pub struct Reader {
     scrolled: bool,
     /// Smooth scrolling under way: how far is left to go.
     glide: Option<Glide>,
+    /// The glide's next step is booked (`glide_next_frame`).
+    glide_tick: bool,
     /// A pinch is under way until then: pages stretch to the new size and
     /// are drawn sharp once it settles, not at every step of the pinch.
     pinch_until: Option<std::time::Instant>,
@@ -357,6 +359,9 @@ const PINCH_SETTLE: Duration = Duration::from_millis(60);
 const SLOW_PAGE_MS: f32 = 250.0;
 const SLOW_SETTLE: Duration = Duration::from_millis(350);
 
+/// Smooth scrolling steps at most this often (60 Hz).
+const GLIDE_FRAME: Duration = Duration::from_micros(16_667);
+
 /// Smooth scrolling covers 63 % of what is left in this many seconds.
 const GLIDE_TIME: f32 = 0.045;
 
@@ -432,6 +437,7 @@ impl Reader {
             last_top: 0,
             scrolled: false,
             glide: None,
+            glide_tick: false,
             pinch_until: None,
             pinch_serial: 0,
             zoomed_at: None,
@@ -1338,7 +1344,7 @@ impl Reader {
     /// One frame of smooth scrolling: cover a share of what is left that
     /// depends only on the time gone by (the same glide at 60 and 144 Hz),
     /// fast at first and easing out; about 150 ms in all.
-    fn glide_step(&mut self, window: &mut Window) {
+    fn glide_step(&mut self, cx: &mut Context<Self>) {
         let Some(glide) = self.glide.as_mut() else {
             return;
         };
@@ -1355,8 +1361,25 @@ impl Reader {
         if done {
             self.glide = None;
         } else {
-            window.request_animation_frame();
+            self.glide_next_frame(cx);
         }
+    }
+
+    /// The glide's next step, a 60 Hz frame from now: on a 120 to 165 Hz
+    /// screen a step every refresh redrew the whole window two to three
+    /// times as often for a glide that looks the same (it moves by time).
+    fn glide_next_frame(&mut self, cx: &mut Context<Self>) {
+        if std::mem::replace(&mut self.glide_tick, true) {
+            return;
+        }
+        cx.spawn(async move |this, cx| {
+            cx.background_executor().timer(GLIDE_FRAME).await;
+            let _ = this.update(cx, |r, cx| {
+                r.glide_tick = false;
+                cx.notify();
+            });
+        })
+        .detach();
     }
 
     /// Start middle-click scrolling at `at`, or end it.
@@ -2320,7 +2343,7 @@ impl Reader {
             self.glide = None;
             return self.present_view(window, cx);
         }
-        self.glide_step(window);
+        self.glide_step(cx);
         // Markdown's text units are collected afresh as the blocks draw.
         if self.md.is_some() {
             self.md_sel.units.borrow_mut().clear();

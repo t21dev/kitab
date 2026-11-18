@@ -308,3 +308,25 @@ Correctness fixes, not speed; checked by tests where they run on Windows, and by
 | Links open with xdg-open first, the portal after (zed#49752) | Linux | CI build |
 | Cmd+key skips the IME; no deadlock on key-status change; Backspace/Delete menu symbols (zed#51394, #51035, #65744) | macOS | CI build |
 | X11 preedit text repeated (zed issue #66087, Riey/xim-rs@9ec8406) | X11 | Upstream's test: 0.3.0 decodes 知ってるつもり as 知って知ってるつもり; the patched copy decodes it right |
+
+## Scrolling CPU: smooth scrolling at 60 Hz (18 November 2026)
+
+Where scrolling CPU went (01-text-outline.pdf, 60 wheel notches in 3 s, 1200×800, a 160 Hz screen; `scrollcpu.py` splits the UI thread from the rest; medians of 3):
+
+| Setting | Total CPU | UI thread |
+|---|---|---|
+| Default | 15.1 % | 10.7 % |
+| Smooth scrolling off | 4.0 % | 2.7 % |
+| Sidebar closed | 11.6 % | 9.4 % |
+| Both | 2.7 % | 1.3 % |
+
+Smooth scrolling was most of it: each step asked for the next display refresh, so on this screen the whole window was drawn 160 times a second while gliding. The glide moves by time, so it now steps at most 60 times a second (`GLIDE_FRAME`); the distance, feel and end position are the same (end screens differ only in the scrollbar's fade).
+
+| Build (6 runs each, interleaved) | Total CPU, median (range) | UI thread |
+|---|---|---|
+| After round 1 | 16.7 % (15.6–18.7) | 12.3 % |
+| Glide at 60 Hz | **5.6 %** (4.9–10.2) | 4.5 % |
+| + contents list drawn from a snapshot | 6.5 % (4.5–10.3) | 4.2 % |
+
+- The contents-list snapshot (so the cached list stops reading the reader and isn't redrawn each frame) showed no clear gain on top and was not kept.
+- On a 60 Hz screen nothing changes: the glide already stepped at 60 Hz there. On 120–165 Hz screens scrolling animates at 60 frames a second instead of the screen's rate.
