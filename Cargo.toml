@@ -41,3 +41,6 @@ strip = "symbols"
 # `python tools/patch_gpui.py` after cloning; the folder is git-ignored.
 [patch.crates-io]
 gpui = { path = "vendor/gpui-0.2.2" }
+# The X11 input decoder with its fix for repeated preedit text (zed#66087);
+# made by tools/patch_gpui.py like the gpui copy.
+xim-ctext = { path = "vendor/xim-ctext-0.3.0" }

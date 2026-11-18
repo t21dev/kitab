@@ -293,3 +293,18 @@ Five fixes from Zed's main branch since gpui 0.2.2, applied by `tools/patch_gpui
 - Screens are pixel-identical before and after (01-text-outline.pdf, L12-scripts-fonts-emoji.pdf, README.md).
 - Scrolling CPU: 01-text-outline.pdf 17.35 → 17.34 %, README.md 26.7 → 24.9 % (medians); idle 0 % in both; private memory 1 MB lower.
 - gpui's own tests: 70 pass; `test_clipboard` fails before and after alike (it uses the real Windows clipboard).
+
+## Zed backports, round 2: Linux and macOS bugs (18 November 2026)
+
+Correctness fixes, not speed; checked by tests where they run on Windows, and by building every platform in CI.
+
+| Fix | Platform | Checked |
+|---|---|---|
+| Combining marks drawn over their letter (zed#66799) | Linux | Formula matches cosmic-text 0.14.2's own `physical()`; CI build |
+| Hit-testing past a wrapped line's end no longer panics (zed#64672) | all | gpui's tests; Markdown selection dragged past a wrapped line's end |
+| Window controls only as listed; client-side decorations where the compositor has none; one text input per seat (zed#50609, #39313, #46560) | Wayland | CI build |
+| First scroll after Alt-Tab doesn't jump (zed#43841) | X11 | CI build |
+| GPUI's own prompt doesn't pass clicks through (zed#41442) | Linux | gpui's tests |
+| Links open with xdg-open first, the portal after (zed#49752) | Linux | CI build |
+| Cmd+key skips the IME; no deadlock on key-status change; Backspace/Delete menu symbols (zed#51394, #51035, #65744) | macOS | CI build |
+| X11 preedit text repeated (zed issue #66087, Riey/xim-rs@9ec8406) | X11 | Upstream's test: 0.3.0 decodes 知ってるつもり as 知って知ってるつもり; the patched copy decodes it right |

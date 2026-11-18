@@ -670,6 +670,7 @@ struct WindowInvalidatorInner {"""),
     menu_key_patch()
     zed_backports()
     print(f"patched gpui copy: {DEST}")
+    xim_ctext_fix()
 
 
 def zed_backports() -> None:
@@ -681,6 +682,14 @@ def zed_backports() -> None:
     atlas_free_backport()
     task_budget_backport()
     scene_backport()
+    # Round 2: Linux and macOS bugs.
+    glyph_offsets_backport()
+    wrapped_hit_test_backport()
+    wayland_backports()
+    x11_scroll_focus_backport()
+    prompt_click_backport()
+    open_uri_backport()
+    mac_backports()
 
 
 def input_rate_backport() -> None:
@@ -934,6 +943,305 @@ mod kitab_sort_tests {
     }
 }
 """
+
+
+XIM_CTEXT_SHA256 = "2ac61a7062c40f3c37b6e82eeeef835d5cc7824b632a72784a89b3963c33284c"
+
+
+def xim_ctext_fix() -> None:
+    """zed issue #66087: on X11 with an input method (IBus, fcitx), Japanese
+    and other multi-byte preedit text repeated ("nihongo" showed にほんにほんご).
+    The bug is in xim-ctext 0.3.0, which gpui's X11 input uses; its fix
+    (Riey/xim-rs@9ec8406, MIT) was never released, so the workspace patches
+    xim-ctext to this fixed copy, made from the crates.io crate (checked
+    against Cargo.lock's checksum) beside the gpui copy."""
+    import hashlib
+    import io
+    import tarfile
+    import urllib.request
+
+    dest = ROOT / "vendor" / "xim-ctext-0.3.0"
+    url = "https://static.crates.io/crates/xim-ctext/xim-ctext-0.3.0.crate"
+    data = urllib.request.urlopen(url, timeout=120).read()
+    digest = hashlib.sha256(data).hexdigest()
+    if digest != XIM_CTEXT_SHA256:
+        sys.exit(f"xim-ctext-0.3.0.crate has SHA-256 {digest}, expected {XIM_CTEXT_SHA256}")
+    if dest.exists():
+        shutil.rmtree(dest)
+    with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as tar:
+        tar.extractall(dest.parent, filter="data")
+    lib = dest / "src" / "lib.rs"
+    s = lib.read_text(encoding="utf8")
+    for old, new in [
+        ("""    ($decoder:expr, $out:expr, $bytes:expr, $last:expr) => {
+        loop {
+            let (ret, _, _) = $decoder.decode_to_string($bytes, $out, $last);
+""",
+         """    ($decoder:expr, $out:expr, $bytes:expr, $last:expr) => {
+        // Kitab: Riey/xim-rs@9ec8406, decode each byte once.
+        let mut _current_bytes: &[u8] = $bytes;
+        loop {
+            let (ret, nread, _) = $decoder.decode_to_string(_current_bytes, $out, $last);
+"""),
+        ("""                            .unwrap_or_default(),
+                    );
+                }""",
+         """                            .unwrap_or_default(),
+                    );
+                    _current_bytes = &_current_bytes[nread..];
+                }"""),
+    ]:
+        if s.count(old) != 1:
+            sys.exit(f"xim-ctext: patch anchor not found: {old[:60]!r}")
+        s = s.replace(old, new)
+    # Upstream's test for it: a long ISO-2022-JP string decodes once.
+    marker = "\n#[cfg(test)]\nmod tests {"
+    if marker not in s:
+        sys.exit("xim-ctext: tests module not found")
+    s = s.replace(marker, marker + """
+    #[test]
+    fn kitab_iso_2022_jp_long() {
+        const UTF8: &str = "知ってるつもり";
+        const COMP: &[u8] = &[
+            27, 36, 40, 66, 67, 78, 36, 67, 36, 70, 36, 107, 36, 68, 36, 98, 36, 106, 27, 40, 66,
+        ];
+        assert_eq!(crate::compound_text_to_utf8(COMP).unwrap(), UTF8);
+    }
+""", 1)
+    lib.write_text(s, encoding="utf8")
+    print(f"patched xim-ctext copy: {dest}")
+
+
+def glyph_offsets_backport() -> None:
+    """zed#66799: Linux shaping kept cosmic-text's glyph positions but
+    dropped each glyph's mark offset, so combining marks (Bangla vowel
+    signs, Arabic and Thai marks, accents) drew beside their letter. The
+    offsets are in ems; cosmic-text 0.14's own `physical()` applies them
+    the same way."""
+    edit("src/platform/linux/text_system.rs", [
+        ("""                position: point(glyph.x.into(), glyph.y.into()),""",
+         """                // Kitab backport (zed#66799): the mark offsets too.
+                position: point(
+                    (glyph.x + glyph.x_offset * f32::from(font_size)).into(),
+                    (glyph.y - glyph.y_offset * f32::from(font_size)).into(),
+                ),"""),
+    ])
+
+
+def wrapped_hit_test_backport() -> None:
+    """zed#64672: hit-testing just past a wrapped line's last glyph (a
+    zero-width glyph at a wrap) panicked on `unwrap`; it now answers the
+    row's end."""
+    edit("src/text_system/line_layout.rs", [
+        ("""                Ok(self
+                    .unwrapped_layout
+                    .index_for_x(position_in_unwrapped_line.x)
+                    .unwrap())""",
+         """                // Kitab backport (zed#64672): past the last glyph, the row's end.
+                self.unwrapped_layout
+                    .index_for_x(position_in_unwrapped_line.x)
+                    .ok_or(wrapped_line_end_index)"""),
+    ])
+
+
+def wayland_backports() -> None:
+    """Wayland: zed#50609, window controls start as none (the compositor
+    lists the ones it has), so unsupported buttons don't show; zed#39313,
+    a compositor without server-side decorations (GNOME) gets client-side
+    ones instead of none; zed#46560, a seat announced again doesn't leave a
+    second text input behind (characters typed twice with an IME)."""
+    edit("src/platform/linux/wayland/window.rs", [
+        ("""                let mut window_controls = WindowControls::default();
+
+                let states = extract_states::<xdg_toplevel::WmCapabilities>(&capabilities);""",
+         """                // Kitab backport (zed#50609): only what the compositor lists.
+                let mut window_controls = WindowControls {
+                    maximize: false,
+                    minimize: false,
+                    fullscreen: false,
+                    window_menu: false,
+                };
+
+                let states = extract_states::<xdg_toplevel::WmCapabilities>(&capabilities);"""),
+        ("""        state.decorations = decorations;
+        if let Some(decoration) = state.decoration.as_ref() {
+            decoration.set_mode(decorations.to_xdg());
+            update_window(state);
+        }""",
+         """        // Kitab backport (zed#39313): no server-side decorations, client-side ones.
+        match state.decoration.as_ref() {
+            Some(decoration) => {
+                decoration.set_mode(decorations.to_xdg());
+                state.decorations = decorations;
+                update_window(state);
+            }
+            None => {
+                if matches!(decorations, WindowDecorations::Server) {
+                    log::info!(
+                        "Server-side decorations requested, but the Wayland server does not support them. Falling back to client-side decorations."
+                    );
+                }
+                state.decorations = WindowDecorations::Client;
+                update_window(state);
+            }
+        }"""),
+    ])
+    edit("src/platform/linux/wayland/client.rs", [
+        ("""                let keyboard = seat.get_keyboard(qh, ());
+
+                state.text_input = state""",
+         """                let keyboard = seat.get_keyboard(qh, ());
+
+                // Kitab backport (zed#46560): one text input per seat.
+                if let Some(text_input) = state.text_input.take() {
+                    text_input.destroy();
+                    state.ime_pre_edit = None;
+                    state.composing = false;
+                }
+
+                state.text_input = state"""),
+        ("""                let pointer = seat.get_pointer(qh, ());
+                state.cursor_shape_device = state""",
+         """                let pointer = seat.get_pointer(qh, ());
+                // Kitab backport (zed#46560): and one cursor shape device.
+                if let Some(cursor_shape_device) = state.cursor_shape_device.take() {
+                    cursor_shape_device.destroy();
+                }
+                state.cursor_shape_device = state"""),
+    ])
+
+
+def x11_scroll_focus_backport() -> None:
+    """zed#43841: X11's scroll valuator is global; after scrolling in another
+    window, the first scroll back in Kitab jumped by all of it. Focus out
+    forgets the last positions."""
+    edit("src/platform/linux/x11/client.rs", [
+        ("""            Event::FocusOut(event) => {
+                let window = self.get_window(event.event)?;
+                window.set_active(false);
+                let mut state = self.0.borrow_mut();
+                state.keyboard_focused_window = None;""",
+         """            Event::FocusOut(event) => {
+                let window = self.get_window(event.event)?;
+                window.set_active(false);
+                let mut state = self.0.borrow_mut();
+                // Kitab backport (zed#43841): no huge delta on the next scroll.
+                reset_all_pointer_device_scroll_positions(&mut state.pointer_device_states);
+                state.keyboard_focused_window = None;"""),
+    ])
+
+
+def prompt_click_backport() -> None:
+    """zed#41442: GPUI's own prompt (Linux without a native one) let a click
+    on its button through to the window below."""
+    edit("src/window/prompts.rs", [
+        ("""                    .on_click(cx.listener(move |_, _, _, cx| {
+                        cx.emit(PromptResponse(ix));
+                    }))""",
+         """                    .on_click(cx.listener(move |_, _, _, cx| {
+                        cx.emit(PromptResponse(ix));
+                        cx.stop_propagation(); // Kitab backport (zed#41442)
+                    }))"""),
+    ])
+
+
+def open_uri_backport() -> None:
+    """zed#49752: links open with xdg-open first and the desktop portal only
+    if that fails. The portal first showed "No apps available" where it has
+    no backend for the type (the same missing-portal case as the file
+    picker). The portal call is 0.2.2's (its ashpd version)."""
+    edit("src/platform/linux/platform.rs", [
+        ("""                match ashpd::desktop::open_uri::OpenFileRequest::default()
+                    .activation_token(activation_token.clone().map(ashpd::ActivationToken::from))
+                    .send_uri(&uri)
+                    .await
+                {
+                    Ok(_) => return,
+                    Err(e) => log::error!("Failed to open with dbus: {}", e),
+                }
+
+                for mut command in open::commands(uri.to_string()) {
+                    if let Some(token) = activation_token.as_ref() {
+                        command.env("XDG_ACTIVATION_TOKEN", token);
+                    }
+                    let program = format!("{:?}", command.get_program());
+                    match smol::process::Command::from(command).spawn() {
+                        Ok(mut cmd) => {
+                            cmd.status().await.log_err();
+                            return;
+                        }
+                        Err(e) => {
+                            log::error!("Failed to open with {}: {}", program, e)
+                        }
+                    }
+                }""",
+         """                // Kitab backport (zed#49752): xdg-open first, the portal after.
+                for mut command in open::commands(uri.to_string()) {
+                    if let Some(token) = activation_token.as_ref() {
+                        command.env("XDG_ACTIVATION_TOKEN", token);
+                    }
+                    let program = format!("{:?}", command.get_program());
+                    match smol::process::Command::from(command).spawn() {
+                        Ok(mut cmd) => match cmd.status().await {
+                            Ok(status) if status.success() => return,
+                            Ok(status) => {
+                                log::error!("Command {} exited with status: {}", program, status)
+                            }
+                            Err(e) => log::error!("Failed to get status from {}: {}", program, e),
+                        },
+                        Err(e) => {
+                            log::error!("Failed to open with {}: {}", program, e)
+                        }
+                    }
+                }
+                if let Err(e) = ashpd::desktop::open_uri::OpenFileRequest::default()
+                    .activation_token(activation_token.map(ashpd::ActivationToken::from))
+                    .send_uri(&uri)
+                    .await
+                {
+                    log::error!("Failed to open with dbus: {}", e);
+                }"""),
+    ])
+
+
+def mac_backports() -> None:
+    """macOS: zed#51394, Cmd+key isn't handed to the input method (it ate
+    shortcuts on non-US and dead-key layouts); zed#51035, no deadlock when
+    resigning key status re-enters the window; zed#65744, Backspace and
+    Delete show their own symbols in the menu bar (0.2.2 uses key_to_native
+    only for menu key equivalents)."""
+    edit("src/platform/mac/window.rs", [
+        ("""                || (key_down_event.keystroke.key_char.is_none()
+                    && !key_down_event.keystroke.modifiers.control
+                    && !key_down_event.keystroke.modifiers.function)""",
+         """                || (key_down_event.keystroke.key_char.is_none()
+                    && !key_down_event.keystroke.modifiers.control
+                    && !key_down_event.keystroke.modifiers.function
+                    // Kitab backport (zed#51394): Cmd+key skips the IME.
+                    && !key_down_event.keystroke.modifiers.platform)"""),
+        ("""    if selector == sel!(windowDidBecomeKey:) && !is_active {
+        unsafe {
+            let _: () = msg_send![lock.native_window, resignKeyWindow];
+            return;
+        }
+    }""",
+         """    if selector == sel!(windowDidBecomeKey:) && !is_active {
+        // Kitab backport (zed#51035): not under the lock (it re-enters).
+        let native_window = lock.native_window;
+        drop(lock);
+        unsafe {
+            let _: () = msg_send![native_window, resignKeyWindow];
+        }
+        return;
+    }"""),
+    ])
+    edit("src/platform/mac/events.rs", [
+        ("""        "backspace" => BACKSPACE_KEY,""",
+         """        // Kitab backport (zed#65744): menu key equivalents' own codes.
+        "backspace" => 0x08,"""),
+        ("""        "delete" => NSDeleteFunctionKey,""",
+         """        "delete" => 0x7f,"""),
+    ])
 
 
 def atlas_free_backport() -> None:
