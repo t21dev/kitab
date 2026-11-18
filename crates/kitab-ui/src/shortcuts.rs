@@ -36,6 +36,7 @@ pub const GROUPS: &[Group] = &[
             ("Scroll", "Down / Up / J / K"),
             ("Screen down", "PgDn / Space"),
             ("Screen up", "PgUp / Shift+Space"),
+            ("Move the page (hand)", "Hold Space and drag"),
             ("Go to page", "Ctrl+G"),
             ("Back", "Alt+Left"),
             ("Forward", "Alt+Right"),

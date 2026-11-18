@@ -57,6 +57,11 @@ actions!(
         ScrollUp,
         ScreenDown,
         ScreenUp,
+        // Space: a tap moves down a screen (on release); held, dragging
+        // moves the page, as in Acrobat (issue #14).
+        SpaceHand,
+        // The hand tool: dragging moves the page instead of selecting.
+        ToggleHand,
         GoToPage,
         HistoryBack,
         HistoryForward,
@@ -207,7 +212,7 @@ pub fn bind_default_keys(cx: &mut App) {
         key("up", ScrollUp, r),
         key("pagedown", ScreenDown, r),
         key("pageup", ScreenUp, r),
-        key("space", ScreenDown, r),
+        key("space", SpaceHand, r),
         key("shift-space", ScreenUp, r),
         key("ctrl-g", GoToPage, r),
         key("alt-left", HistoryBack, r),

@@ -245,6 +245,14 @@ pub struct Reader {
     /// Each row keeps it within its own overhang, so a narrower page stays
     /// centred.
     pan_x: f32,
+    /// The hand tool (the dock's hand, or Ctrl+K): dragging moves the page
+    /// instead of selecting text.
+    hand: bool,
+    /// Space is held: the hand works until it's let go. `true` once it was
+    /// used, so letting go doesn't also move down a screen.
+    space_hand: Option<bool>,
+    /// Dragging with the hand: where the pointer was last.
+    hand_drag: Option<Point<Pixels>>,
     /// Middle-click scrolling, and which run of it is current.
     autoscroll: Option<crate::autoscroll::AutoScroll>,
     autoscroll_serial: u64,
@@ -429,6 +437,9 @@ impl Reader {
             bar: Rc::new(Cell::new(None)),
             bar_grab: None,
             pan_x: 0.0,
+            hand: false,
+            space_hand: None,
+            hand_drag: None,
             autoscroll: None,
             autoscroll_serial: 0,
             back: Vec::new(),
@@ -981,6 +992,36 @@ impl Reader {
         self.scrolled = true;
         cx.notify();
         true
+    }
+
+    /// The hand is out: the hand tool, or Space held.
+    fn hand_on(&self) -> bool {
+        (self.hand || self.space_hand.is_some()) && self.status == Status::Open
+    }
+
+    /// The dock's hand, or Ctrl+K › Hand tool.
+    pub(super) fn toggle_hand(&mut self, cx: &mut Context<Self>) {
+        self.hand = !self.hand;
+        self.hand_drag = None;
+        cx.notify();
+    }
+
+    /// The pointer's cursor over the pages while the hand is out.
+    fn hand_cursor(&self) -> gpui::CursorStyle {
+        if self.hand_drag.is_some() {
+            gpui::CursorStyle::ClosedHand
+        } else {
+            gpui::CursorStyle::OpenHand
+        }
+    }
+
+    /// Space or Page Down: down a screen, or on to the next file at the end.
+    fn screen_down(&mut self, cx: &mut Context<Self>) {
+        if self.at_end() {
+            cx.emit(ReaderEvent::PastEnd);
+        } else {
+            self.glide_by(self.viewport.1 * 0.9, cx)
+        }
     }
 
     /// Page `ix`'s size in points as shown (rotation applied).
@@ -1960,13 +2001,13 @@ impl Reader {
             .shadow(st.sheet())
             .overflow_hidden()
             .relative()
-            .cursor(
-                if self.placing || self.markup.open && self.markup.tool.is_some() {
-                    gpui::CursorStyle::Crosshair
-                } else {
-                    gpui::CursorStyle::IBeam
-                },
-            )
+            .cursor(if self.hand_on() {
+                self.hand_cursor()
+            } else if self.placing || self.markup.open && self.markup.tool.is_some() {
+                gpui::CursorStyle::Crosshair
+            } else {
+                gpui::CursorStyle::IBeam
+            })
             .on_mouse_down(
                 MouseButton::Left,
                 cx.listener(move |r, e: &MouseDownEvent, window, cx| {
@@ -2703,6 +2744,22 @@ impl Reader {
                     a.moved(e.position, e.pressed_button == Some(MouseButton::Middle));
                 }
                 r.wake_dock(cx);
+                if let Some(last) = r.hand_drag {
+                    if e.pressed_button == Some(MouseButton::Left) {
+                        // The page follows the pointer, both ways.
+                        let d = e.position - last;
+                        r.pan_by(-f32::from(d.x), cx);
+                        if d.y != px(0.0) {
+                            r.list.scroll_by(-d.y);
+                            r.scrolled = true;
+                        }
+                        r.hand_drag = Some(e.position);
+                        cx.notify();
+                    } else {
+                        r.hand_drag = None;
+                        cx.notify();
+                    }
+                }
                 if r.markup.drawing.is_some() || r.markup.moving.is_some() {
                     if e.pressed_button == Some(MouseButton::Left) {
                         r.markup_move(e.position, e.modifiers.shift, cx);
@@ -2752,6 +2809,9 @@ impl Reader {
                 MouseButton::Left,
                 cx.listener(|r, _, _, cx| {
                     r.dragging = false;
+                    if r.hand_drag.take().is_some() {
+                        cx.notify();
+                    }
                     if r.bar_grab.take().is_some() {
                         cx.notify();
                     }
@@ -2766,13 +2826,27 @@ impl Reader {
             )
             .on_action(cx.listener(|r, _: &ScrollDown, _, cx| r.glide_by(64.0, cx)))
             .on_action(cx.listener(|r, _: &ScrollUp, _, cx| r.glide_by(-64.0, cx)))
-            .on_action(cx.listener(|r, _: &ScreenDown, _, cx| {
-                if r.at_end() {
-                    cx.emit(ReaderEvent::PastEnd);
-                } else {
-                    r.glide_by(r.viewport.1 * 0.9, cx)
+            .on_action(cx.listener(|r, _: &ScreenDown, _, cx| r.screen_down(cx)))
+            // Space: held, the hand is out; let go without having used it,
+            // down a screen (on key up). Repeats while held change nothing.
+            .on_action(cx.listener(|r, _: &SpaceHand, _, cx| {
+                if r.space_hand.is_none() {
+                    r.space_hand = Some(false);
+                    cx.notify();
                 }
             }))
+            .on_key_up(cx.listener(|r, e: &gpui::KeyUpEvent, _, cx| {
+                if e.keystroke.key == "space"
+                    && let Some(used) = r.space_hand.take()
+                {
+                    r.hand_drag = None;
+                    if !used {
+                        r.screen_down(cx);
+                    }
+                    cx.notify();
+                }
+            }))
+            .on_action(cx.listener(|r, _: &ToggleHand, _, cx| r.toggle_hand(cx)))
             .on_action(cx.listener(|r, _: &ScreenUp, _, cx| r.glide_by(-r.viewport.1 * 0.9, cx)))
             .on_action(cx.listener(|r, _: &ZoomIn, _, cx| r.step_zoom(true, cx)))
             .on_action(cx.listener(|r, _: &ZoomOut, _, cx| r.step_zoom(false, cx)))
@@ -2799,11 +2873,30 @@ impl Reader {
                         .into_any_element(),
                     None => pages.into_any_element(),
                 };
+                let hand = self.hand_on();
                 div()
                     .flex_1()
                     .min_h_0()
                     .w_full()
                     .relative()
+                    .when(hand, |d| d.cursor(self.hand_cursor()))
+                    // The hand takes a press on the pages (not the scroll
+                    // bar) before text selection, links or fields see it.
+                    .capture_any_mouse_down(cx.listener(|r, e: &MouseDownEvent, _, cx| {
+                        let on_bar = r.bar.get().is_some_and(|b| b.contains(&e.position));
+                        if e.button == MouseButton::Left
+                            && r.hand_on()
+                            && !on_bar
+                            && r.list.viewport_bounds().contains(&e.position)
+                        {
+                            r.hand_drag = Some(e.position);
+                            if let Some(used) = r.space_hand.as_mut() {
+                                *used = true;
+                            }
+                            cx.stop_propagation();
+                            cx.notify();
+                        }
+                    }))
                     .child(body)
                     .children(self.scroll_bar(&st, cx))
                     .children(status.map(|s| div().absolute().inset_0().child(s)))

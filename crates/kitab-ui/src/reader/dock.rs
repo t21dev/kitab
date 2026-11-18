@@ -392,6 +392,11 @@ impl Reader {
                                     }),
                                 ),
                             )
+                            .child(
+                                dock_button("dock-hand", "hand", self.hand, st)
+                                    .tip("Hand tool: drag to move the page (or hold Space)")
+                                    .on_click(cx.listener(|r, _, _, cx| r.toggle_hand(cx))),
+                            )
                         }),
                 )
             })

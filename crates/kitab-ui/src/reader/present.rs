@@ -235,6 +235,7 @@ impl Reader {
             .on_action(cx.listener(|r, _: &ScrollDown, _, cx| r.present_step(true, cx)))
             .on_action(cx.listener(|r, _: &ScrollUp, _, cx| r.present_step(false, cx)))
             .on_action(cx.listener(|r, _: &ScreenDown, _, cx| r.present_step(true, cx)))
+            .on_action(cx.listener(|r, _: &SpaceHand, _, cx| r.present_step(true, cx)))
             .on_action(cx.listener(|r, _: &ScreenUp, _, cx| r.present_step(false, cx)))
             .on_action(cx.listener(|r, _: &FirstPage, _, cx| r.present_go(0, cx)))
             .on_action(cx.listener(|r, _: &LastPage, _, cx| r.present_go(usize::MAX, cx)))

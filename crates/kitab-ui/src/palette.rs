@@ -127,6 +127,13 @@ pub const COMMANDS: &[Command] = &[
         BookView
     ),
     cmd!("View", "Fit width", "wide", true, FitWidth),
+    cmd!(
+        "View",
+        "Hand tool",
+        "drag move pan grab scroll sideways space",
+        true,
+        ToggleHand
+    ),
     cmd!("View", "Actual size", "100 one", true, ActualSize),
     cmd!("View", "Rotate clockwise", "turn right", true, RotateRight),
     cmd!(
