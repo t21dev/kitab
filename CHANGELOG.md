@@ -7,10 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-11-19
+
 ### Fixed
 - Pages zoomed wider than the window scroll sideways ([#14](https://github.com/t21dev/kitab/issues/14)): with a tilting wheel, Shift+wheel, a touchpad or touch screen, the Left and Right arrows (which turn the page once its edge is reached, as before), and middle-click scrolling. Zooming keeps the same part of the page in the middle, and selecting text, links and marks follow the moved page.
 
 ### Added
+- A hand tool for moving the page: hold Space and drag (a tap of Space still moves down a screen), or turn on the dock's hand (also in Ctrl+K) to drag with the left button.
 - The command palette (Ctrl+K) finds settings too, by name or by the words Settings' own search knows ("dark" finds Theme and Page colour). Picking one opens Settings at it.
 
 ### Changed
@@ -471,7 +474,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fit width and fit page follow a window resize even when no new page has to be drawn.
 - The Settings window shrinks to fit small windows instead of running off the left edge.
 
-[Unreleased]: https://github.com/t21dev/kitab/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/t21dev/kitab/compare/v1.0.1...HEAD
+[1.0.1]: https://github.com/t21dev/kitab/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/t21dev/kitab/compare/v0.9.1...v1.0.0
 [0.9.1]: https://github.com/t21dev/kitab/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/t21dev/kitab/compare/v0.8.1...v0.9.0
