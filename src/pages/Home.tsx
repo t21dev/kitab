@@ -189,9 +189,9 @@ function Roadmap() {
             Where it stands
           </h2>
           <p className="band__lede">
-            Two releases are out. 0.1.0 brought the reader, books, Markdown, markup, printing, signatures and the PDF tools;
-            0.2.0 added each system's own print dialog, more downloads and a Home built for big libraries. What is left before
-            1.0.0 is the last phase: accessibility, the published benchmark, signed installers, winget and Flathub. The{" "}
+            1.0.0 is out: the reader, books, Markdown, markup, printing, signatures, the PDF tools, read aloud and a Home
+            built for big libraries, on Windows, macOS and Linux. Still to come: accessibility for screen readers, signed
+            installers, and WinGet and Flathub listings. The{" "}
             <a href={SITE.plan}>plan is public</a>, and so is every line of code.
           </p>
         </div>
