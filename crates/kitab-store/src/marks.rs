@@ -59,6 +59,15 @@ pub(crate) fn encode_mark(m: &Mark) -> String {
             if style.align != kitab_core::TextAlign::Left {
                 v["align"] = json!(style.align.quadding());
             }
+            if style.underline {
+                v["underline"] = json!(true);
+            }
+            if style.strike {
+                v["strike"] = json!(true);
+            }
+            if style.valign != kitab_core::TextVAlign::Top {
+                v["valign"] = json!(style.valign.index());
+            }
             v
         }
         MarkShape::Note { at, text } => json!({ "at": point(at), "text": text }),
@@ -154,6 +163,11 @@ pub(crate) fn decode_mark(page: u32, kind: &str, data: &str) -> Option<Mark> {
                 italic: v.get("italic").and_then(Value::as_bool).unwrap_or(false),
                 align: kitab_core::TextAlign::from_quadding(
                     v.get("align").and_then(Value::as_i64).unwrap_or(0),
+                ),
+                underline: v.get("underline").and_then(Value::as_bool).unwrap_or(false),
+                strike: v.get("strike").and_then(Value::as_bool).unwrap_or(false),
+                valign: kitab_core::TextVAlign::from_index(
+                    v.get("valign").and_then(Value::as_i64).unwrap_or(0),
                 ),
             },
         },
@@ -283,6 +297,18 @@ mod tests {
                     bold: true,
                     italic: true,
                     align: kitab_core::TextAlign::Centre,
+                    ..Default::default()
+                },
+            },
+            MarkShape::Text {
+                rect: r,
+                text: "Underlined, struck, at the bottom".into(),
+                size: 12.0,
+                style: kitab_core::TextStyle {
+                    underline: true,
+                    strike: true,
+                    valign: kitab_core::TextVAlign::Bottom,
+                    ..Default::default()
                 },
             },
             MarkShape::Note {
@@ -329,7 +355,13 @@ mod tests {
             opacity: 1.0,
         };
         let data = encode_mark(&plain);
-        assert!(!data.contains("bold") && !data.contains("italic") && !data.contains("align"));
+        assert!(
+            !data.contains("bold")
+                && !data.contains("italic")
+                && !data.contains("align")
+                && !data.contains("underline")
+                && !data.contains("strike")
+        );
         assert_eq!(decode_mark(0, "text", &data), Some(plain));
     }
 

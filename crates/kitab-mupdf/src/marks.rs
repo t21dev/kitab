@@ -362,6 +362,61 @@ mod tests {
             .collect()
     }
 
+    /// A text box sized with the screen's font (narrower than the system
+    /// font Kitab saves with) grows to fit, top-left kept, instead of its
+    /// last word wrapping out of sight and its underline being clipped
+    /// (found running the app: "kitab text box" saved as "kitab text b").
+    #[cfg(windows)]
+    #[test]
+    fn a_tight_text_box_grows_to_fit_its_text() {
+        let src = fixture("01-text-outline.pdf");
+        let out = temp("tight-box.pdf");
+        let (x, y, w, h) = (100.0, 500.0, 60.0, 12.0);
+        let mark = Mark {
+            page: 0,
+            shape: MarkShape::Text {
+                rect: RectPt { x, y, w, h },
+                text: "kitab text box".into(),
+                size: 14.0,
+                style: kitab_core::TextStyle {
+                    underline: true,
+                    ..Default::default()
+                },
+            },
+            color: Rgb8 { r: 0, g: 0, b: 0 },
+            width: 1.0,
+            opacity: 1.0,
+        };
+        write_marks(&src, None, &[mark], &[], &out).expect("writes");
+        let doc = PdfDocument::open(out.to_str().expect("utf-8")).expect("reopens");
+        let page = doc.load_pdf_page(0).expect("page");
+        let annot = page.annotations().next().expect("the box");
+        let o = annot.object();
+        let rect = o.get_dict("Rect").expect("rect").expect("rect");
+        let at = |i| {
+            rect.get_array(i)
+                .expect("n")
+                .expect("n")
+                .as_float()
+                .expect("f")
+        };
+        let (rw, rh) = ((at(2) - at(0)).abs(), (at(3) - at(1)).abs());
+        assert!(rw > w + 20.0 && rh > h, "grew to {rw} × {rh}");
+        // The left edge stays put.
+        assert!((at(0).min(at(2)) - x).abs() < 0.5, "left {}", at(0));
+        let ap = o
+            .get_dict("AP")
+            .ok()
+            .flatten()
+            .and_then(|ap| ap.get_dict("N").ok().flatten())
+            .and_then(|n| n.read_stream().ok())
+            .map(|s| String::from_utf8_lossy(&s).into_owned())
+            .unwrap_or_default();
+        // One line of text, so one underline.
+        assert_eq!(ap.matches(" l S").count(), 1, "{ap}");
+        let _ = std::fs::remove_file(&out);
+    }
+
     /// Bold, italic and centred text boxes (issue #13): Kitab draws the bold
     /// and italic ones (MuPDF's are plain), alignment is the standard /Q,
     /// and a plain box keeps MuPDF's own look.
@@ -395,14 +450,22 @@ mod tests {
             bold: true,
             italic: true,
             align: kitab_core::TextAlign::Centre,
+            ..Default::default()
         };
         let plain_right = kitab_core::TextStyle {
             align: kitab_core::TextAlign::Right,
             ..Default::default()
         };
+        let lined = kitab_core::TextStyle {
+            underline: true,
+            strike: true,
+            valign: kitab_core::TextVAlign::Bottom,
+            ..Default::default()
+        };
         let marks = [
             boxed(560.0, "Bold and slanted", styled),
             boxed(620.0, "Plain on the right", plain_right),
+            boxed(680.0, "Underlined and struck", lined),
         ];
         write_marks(&src, None, &marks, &[], &out).expect("writes");
         let doc = PdfDocument::open(out.to_str().expect("utf-8")).expect("reopens");
@@ -428,7 +491,7 @@ mod tests {
                 (i64::from(q), ap)
             })
             .collect();
-        assert_eq!(looks.len(), 2);
+        assert_eq!(looks.len(), 3);
         let (q0, ap0) = &looks[0];
         assert_eq!(*q0, 1, "centred");
         assert!(
@@ -438,6 +501,10 @@ mod tests {
         let (q1, ap1) = &looks[1];
         assert_eq!(*q1, 2, "right");
         assert!(!ap1.contains("/KitabF"), "a plain box keeps MuPDF's look");
+        // Underline and strikethrough: Kitab draws the box, two lines a line.
+        let (_, ap2) = &looks[2];
+        assert!(ap2.contains("/KitabF"), "{ap2}");
+        assert_eq!(ap2.matches(" l S").count(), 2, "{ap2}");
         let stext = doc
             .load_page(0)
             .expect("page")
@@ -453,7 +520,9 @@ mod tests {
             }
         }
         assert!(
-            read.contains("Bold and slanted") && read.contains("Plain on the right"),
+            read.contains("Bold and slanted")
+                && read.contains("Plain on the right")
+                && read.contains("Underlined and struck"),
             "{read}"
         );
         if let Ok(dir) = std::env::var("KITAB_SHOT") {

@@ -70,12 +70,57 @@ pub enum MarkShape {
     },
 }
 
-/// How a text box's text is set: bold, italic, and its lines' alignment.
+/// How a text box's text is set: bold, italic, underlined, struck through,
+/// and where its lines sit across and down the box.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct TextStyle {
     pub bold: bool,
     pub italic: bool,
+    pub underline: bool,
+    pub strike: bool,
     pub align: TextAlign,
+    pub valign: TextVAlign,
+}
+
+impl TextStyle {
+    /// Whether MuPDF's own plain text box can show it (left, centred or
+    /// right, nothing else); otherwise Kitab draws the box.
+    pub fn is_plain(self) -> bool {
+        !self.bold
+            && !self.italic
+            && !self.underline
+            && !self.strike
+            && self.valign == TextVAlign::Top
+    }
+}
+
+/// A text box's lines: from its top, in the middle, or down at its bottom.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum TextVAlign {
+    #[default]
+    Top,
+    Middle,
+    Bottom,
+}
+
+impl TextVAlign {
+    /// 0 top, 1 middle, 2 bottom (as saved).
+    pub fn index(self) -> i64 {
+        match self {
+            TextVAlign::Top => 0,
+            TextVAlign::Middle => 1,
+            TextVAlign::Bottom => 2,
+        }
+    }
+
+    /// From a saved index; anything else is top.
+    pub fn from_index(i: i64) -> Self {
+        match i {
+            1 => TextVAlign::Middle,
+            2 => TextVAlign::Bottom,
+            _ => TextVAlign::Top,
+        }
+    }
 }
 
 /// A text box's lines: against its left edge, centred, or against its right.

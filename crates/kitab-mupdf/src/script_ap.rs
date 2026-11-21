@@ -252,6 +252,16 @@ struct Look {
     bold: bool,
     /// Italic: the letters slanted, as fonts without an italic are.
     italic: bool,
+    /// A line under each line of text.
+    underline: bool,
+    /// A line through each line of text.
+    strike: bool,
+    /// Down the box (multi-line text): 0 top, 1 middle, 2 bottom.
+    valign: i64,
+    /// A text box: grows (its top-left corner kept) to fit its text in the
+    /// font drawn with. Kitab sized it with the screen's font, which is
+    /// often narrower, and the saved look is clipped to the box.
+    grow: bool,
 }
 
 /// The rectangle of annotation `obj`: its width and height.
@@ -268,6 +278,31 @@ fn rect_size(obj: &PdfObject) -> Result<(f32, f32), String> {
             .unwrap_or(0.0)
     };
     Ok(((at(2) - at(0)).abs(), (at(3) - at(1)).abs()))
+}
+
+/// Make annotation `obj`'s rectangle `w` × `h`, its top-left corner where it
+/// was.
+fn grow_rect(doc: &mut PdfDocument, obj: &mut PdfObject, w: f32, h: f32) -> Result<(), String> {
+    let rect = obj
+        .get_dict("Rect")
+        .map_err(err)?
+        .ok_or_else(|| err("no rectangle"))?;
+    let at = |i: i32| -> f32 {
+        rect.get_array(i)
+            .ok()
+            .flatten()
+            .and_then(|v| v.as_float().ok())
+            .unwrap_or(0.0)
+    };
+    let (left, top) = (at(0).min(at(2)), at(1).max(at(3)));
+    let new = doc
+        .new_object_from_str(&format!(
+            "[{left:.2} {:.2} {:.2} {top:.2}]",
+            top - h,
+            left + w
+        ))
+        .map_err(err)?;
+    obj.dict_put("Rect", new).map_err(err)
 }
 
 /// Draw text widget `obj`'s value `text` ourselves when MuPDF can't (it has
@@ -305,6 +340,10 @@ pub(crate) fn draw_widget(
         under: field_box(obj, w, h),
         bold: false,
         italic: false,
+        underline: false,
+        strike: false,
+        valign: 0,
+        grow: false,
     };
     draw(doc, obj, text, &look)
 }
@@ -320,7 +359,7 @@ pub(crate) fn draw_text_box(
     rgb: (f32, f32, f32),
     style: kitab_core::TextStyle,
 ) -> Result<bool, String> {
-    if text.is_empty() || (mupdf_draws(text) && !style.bold && !style.italic) {
+    if text.is_empty() || (mupdf_draws(text) && style.is_plain()) {
         return Ok(false);
     }
     let (w, h) = rect_size(obj)?;
@@ -338,6 +377,10 @@ pub(crate) fn draw_text_box(
         under: String::new(),
         bold: style.bold,
         italic: style.italic,
+        underline: style.underline,
+        strike: style.strike,
+        valign: style.valign.index(),
+        grow: true,
     };
     draw(doc, obj, text, &look)
 }
@@ -355,11 +398,26 @@ fn draw(
     };
     let face = rustybuzz::Face::from_slice(&bytes, index).ok_or_else(|| err("unreadable font"))?;
     let upem = (face.units_per_em() as f32).max(1.0);
-    let (w, h, q, multiline, pad) = (look.w, look.h, look.q, look.multiline, look.pad);
+    let (mut w, mut h, q, multiline, pad) = (look.w, look.h, look.q, look.multiline, look.pad);
     if w < 1.0 || h < 1.0 {
         return Ok(false);
     }
     let (ascent, descent) = (f32::from(face.ascender()), f32::from(face.descender()));
+    if look.grow && look.size > 0.0 {
+        // Each line unwrapped, and the lines' height, in this font.
+        let paras: Vec<&str> = text.split('\n').map(|p| p.trim_end_matches('\r')).collect();
+        let widest = paras
+            .iter()
+            .map(|p| shape(&face, p).1 / upem * look.size)
+            .fold(0.0_f32, f32::max);
+        let tall = (ascent - descent) / upem * look.size
+            + paras.len().saturating_sub(1) as f32 * look.size * 1.15;
+        let (need_w, need_h) = (widest + 2.0 * pad + 1.0, tall + 2.0 * pad);
+        if need_w > w || need_h > h {
+            (w, h) = (w.max(need_w), h.max(need_h));
+            grow_rect(doc, obj, w, h)?;
+        }
+    }
 
     // The size: the field's own, else (0, "auto") as MuPDF picks it: 12 in
     // a multi-line field, else the largest that fits.
@@ -385,11 +443,31 @@ fn draw(
     let mut seen_gids: HashMap<u16, ()> = HashMap::new();
     let mut widths: Vec<(u16, f32)> = Vec::new();
     let mut ops = String::new();
-    let first_base = if multiline {
+    let mut first_base = if multiline {
         h - pad - ascent * scale
     } else {
         (h - (ascent - descent) * scale) / 2.0 - descent * scale
     };
+    // Middle or bottom of a text box: the lines moved down by part or all
+    // of the room under them (never above the top).
+    if multiline && look.valign != 0 {
+        let used = (ascent - descent) * scale + lines.len().saturating_sub(1) as f32 * leading;
+        let room = (h - 2.0 * pad - used).max(0.0);
+        first_base -= if look.valign == 1 { room / 2.0 } else { room };
+    }
+    // Underline and strikethrough: where and how thick, from the font
+    // (in font units), else usual values.
+    let under = face
+        .underline_metrics()
+        .map_or((-0.12 * upem, 0.06 * upem), |m| {
+            (f32::from(m.position), f32::from(m.thickness))
+        });
+    let through = face
+        .strikeout_metrics()
+        .map_or((0.28 * upem, 0.06 * upem), |m| {
+            (f32::from(m.position), f32::from(m.thickness))
+        });
+    let mut deco = String::new();
     for (n, line) in lines.iter().enumerate() {
         let (glyphs, width) = shape(&face, line);
         let width = width * scale;
@@ -399,6 +477,20 @@ fn draw(
             _ => pad,
         };
         let base = first_base - n as f32 * leading;
+        if !line.trim().is_empty() {
+            for (on, (pos, thick)) in [(look.underline, under), (look.strike, through)] {
+                if on {
+                    let _ = writeln!(
+                        deco,
+                        "{:.3} w {x0:.3} {:.3} m {:.3} {:.3} l S",
+                        (thick * scale).max(0.4),
+                        base + pos * scale,
+                        x0 + width,
+                        base + pos * scale
+                    );
+                }
+            }
+        }
         let mut starts: Vec<usize> = glyphs.iter().map(|g| g.cluster).collect();
         starts.sort_unstable();
         starts.dedup();
@@ -536,7 +628,7 @@ fn draw(
     // The look: clipped to the field, as MuPDF's own (/Tx marks it as a
     // field's variable text).
     let content = format!(
-        "{}/Tx BMC q {pad:.2} {pad:.2} {:.2} {:.2} re W n BT /KitabF {size:.2} Tf {}{}\n{ops}ET Q EMC\n",
+        "{}/Tx BMC q {pad:.2} {pad:.2} {:.2} {:.2} re W n BT /KitabF {size:.2} Tf {}{}\n{ops}ET\n{deco}Q EMC\n",
         look.under,
         (w - 2.0 * pad).max(0.0),
         (h - 2.0 * pad).max(0.0),

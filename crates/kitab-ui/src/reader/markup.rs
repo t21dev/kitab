@@ -573,7 +573,8 @@ impl Reader {
             .map_or(self.markup.text_style, |w| w.style)
     }
 
-    /// Bold, italic and the three alignments, while the Text tool is on, a
+    /// Bold, italic, underline, strikethrough and the alignments across and
+    /// down the box, while the Text tool is on, a
     /// text box is being written, or one is picked with Select.
     fn text_style_buttons(&self, st: &Style, cx: &mut Context<Self>) -> Vec<gpui::AnyElement> {
         let writing_text = self.markup.writing.as_ref().is_some_and(|w| !w.note);
@@ -607,6 +608,16 @@ impl Reader {
                 .italic()
                 .on_click(cx.listener(|r, _, _, cx| r.set_text_style(|s| s.italic = !s.italic, cx)))
                 .into_any_element(),
+            letter("text-underline", "U", s.underline, "Underline")
+                .underline()
+                .on_click(
+                    cx.listener(|r, _, _, cx| r.set_text_style(|s| s.underline = !s.underline, cx)),
+                )
+                .into_any_element(),
+            letter("text-strike", "S", s.strike, "Strikethrough")
+                .line_through()
+                .on_click(cx.listener(|r, _, _, cx| r.set_text_style(|s| s.strike = !s.strike, cx)))
+                .into_any_element(),
         ];
         // One button for the alignment: it shows the current one and goes
         // on to the next (left, centre, right), so the bar stays short.
@@ -635,6 +646,37 @@ impl Reader {
                                 r.set_text_style(|s| s.align = next, cx)
                             }),
                         ),
+                )
+                .into_any_element(),
+        );
+        // Down the box, the same way: top, middle, bottom.
+        use kitab_core::TextVAlign;
+        let (icon, tip, next) = match s.valign {
+            TextVAlign::Top => (
+                "valign-top",
+                "At the top (click: middle)",
+                TextVAlign::Middle,
+            ),
+            TextVAlign::Middle => (
+                "valign-middle",
+                "In the middle (click: bottom)",
+                TextVAlign::Bottom,
+            ),
+            TextVAlign::Bottom => (
+                "valign-bottom",
+                "At the bottom (click: top)",
+                TextVAlign::Top,
+            ),
+        };
+        out.push(
+            div()
+                .flex_none()
+                .child(
+                    dock::dock_button("text-valign", icon, false, st)
+                        .tip(tip)
+                        .on_click(cx.listener(move |r, _, _, cx| {
+                            r.set_text_style(|s| s.valign = next, cx)
+                        })),
                 )
                 .into_any_element(),
         );
@@ -2151,21 +2193,37 @@ fn paint_mark(
                 font.style = gpui::FontStyle::Italic;
             }
             let colour: gpui::Hsla = colour.into();
+            // Middle or bottom: the lines moved down into the room under them.
+            let used = text.lines().count() as f32 * size * TEXT_LINE;
+            let room = (rect.h - used).max(0.0);
+            let down = match style.valign {
+                kitab_core::TextVAlign::Top => 0.0,
+                kitab_core::TextVAlign::Middle => room / 2.0,
+                kitab_core::TextVAlign::Bottom => room,
+            };
+            let thickness = px((size * 0.06 * ppt).max(1.0));
             for (i, line) in text.lines().enumerate() {
                 if line.is_empty() {
                     continue;
                 }
                 let mut origin = to_px(PointPt {
                     x: rect.x,
-                    y: rect.y + i as f32 * size * TEXT_LINE,
+                    y: rect.y + down + i as f32 * size * TEXT_LINE,
                 });
                 let run = gpui::TextRun {
                     len: line.len(),
                     font: font.clone(),
                     color: colour,
                     background_color: None,
-                    underline: None,
-                    strikethrough: None,
+                    underline: style.underline.then_some(gpui::UnderlineStyle {
+                        thickness,
+                        color: Some(colour),
+                        wavy: false,
+                    }),
+                    strikethrough: style.strike.then_some(gpui::StrikethroughStyle {
+                        thickness,
+                        color: Some(colour),
+                    }),
                 };
                 let shaped = window.text_system().shape_line(
                     SharedString::from(line.to_string()),
