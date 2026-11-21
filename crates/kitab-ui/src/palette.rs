@@ -48,6 +48,22 @@ pub const COMMANDS: &[Command] = &[
         ImagesToPdf
     ),
     cmd!("File", "Close tab", "close", true, CloseTab),
+    #[cfg(windows)]
+    cmd!(
+        "File",
+        "Move to Recycle Bin…",
+        "delete remove trash bin recycle file",
+        true,
+        MoveToTrashAsk
+    ),
+    #[cfg(not(windows))]
+    cmd!(
+        "File",
+        "Move to Trash…",
+        "delete remove trash bin recycle file",
+        true,
+        MoveToTrashAsk
+    ),
     cmd!(
         "File",
         "Reopen closed tab",

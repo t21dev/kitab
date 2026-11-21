@@ -29,6 +29,11 @@ actions!(
         SelectTab7,
         SelectTab8,
         SelectLastTab,
+        // Del, twice: the file to the Recycle Bin / Trash, and on to the
+        // next one in its folder (GitHub #17).
+        MoveToTrash,
+        // The same from the command palette and File menu, asked in a dialog.
+        MoveToTrashAsk,
         // Navigate
         NextPage,
         PrevPage,
@@ -207,6 +212,7 @@ pub fn bind_default_keys(cx: &mut App) {
         key("ctrl-y", MarkupRedo, r),
         key("ctrl-shift-z", MarkupRedo, r),
         key("ctrl-s", SaveMarks, r),
+        key("delete", MoveToTrash, r),
         key("right", PageRight, r),
         key("left", PageLeft, r),
         key("n", NextPage, r),
@@ -320,6 +326,8 @@ pub fn bind_default_keys(cx: &mut App) {
         [
             "space",
             "backspace",
+            // Typing, Del deletes a letter, not the file.
+            "delete",
             "enter",
             "escape",
             "left",

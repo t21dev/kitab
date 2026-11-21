@@ -10,6 +10,7 @@ pub mod instance;
 #[cfg(windows)]
 pub mod splash;
 pub mod trace;
+pub mod trash;
 pub mod update;
 pub mod xdg;
 

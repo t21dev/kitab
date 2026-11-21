@@ -2654,6 +2654,15 @@ impl Reader {
             .on_action(cx.listener(|r, _: &MarkupRedo, _, cx| r.markup_redo(cx)))
             .on_action(cx.listener(|r, _: &SaveMarks, _, cx| r.save_marks(cx)))
             .on_action(cx.listener(|r, _: &ToggleBookmark, _, cx| r.toggle_bookmark(cx)))
+            // Del with a mark picked deletes the mark; otherwise the
+            // workspace takes it (the file to the trash, GitHub #17).
+            .on_action(cx.listener(|r, _: &MoveToTrash, _, cx| {
+                if r.markup.selected.is_some() {
+                    r.delete_selected_mark(cx);
+                } else if !r.placing {
+                    cx.propagate();
+                }
+            }))
             .on_action(cx.listener(|r, _: &ReadAloud, _, cx| r.toggle_read_aloud(cx)))
             .on_action(cx.listener(|r, _: &StopReading, _, cx| r.stop_read_aloud(cx)))
             .on_action(cx.listener(|r, _: &HighlightSelection, _, cx| {

@@ -23,6 +23,14 @@ pub const GROUPS: &[Group] = &[
             ("Go to tab 1–8", "Alt+1–8"),
             ("Go to the last tab", "Alt+9"),
             ("Home", "Ctrl+Shift+H"),
+            (
+                if cfg!(windows) {
+                    "Move the file to the Recycle Bin (press twice)"
+                } else {
+                    "Move the file to the Trash (press twice)"
+                },
+                "Del",
+            ),
             ("Quit Kitab", "Ctrl+Q"),
         ],
     },
@@ -319,6 +327,7 @@ mod tests {
                 .map(|p| match p {
                     "pagedown" => "pgdn".to_string(),
                     "pageup" => "pgup".to_string(),
+                    "delete" => "del".to_string(),
                     other => other.to_string(),
                 })
                 .collect();

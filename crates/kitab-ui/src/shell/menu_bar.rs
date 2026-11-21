@@ -101,6 +101,10 @@ const MENUS: &[BarMenu] = &[
             row!("Make a PDF from pictures…", "", Nothing, ImagesToPdf),
             None,
             row!("Close tab", "Ctrl+W", Doc, CloseTab),
+            #[cfg(windows)]
+            row!("Move to Recycle Bin…", "Del", Doc, MoveToTrashAsk),
+            #[cfg(not(windows))]
+            row!("Move to Trash…", "Del", Doc, MoveToTrashAsk),
             None,
             row!("Settings…", "Ctrl+,", Nothing, OpenSettings),
         ],

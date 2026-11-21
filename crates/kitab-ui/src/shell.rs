@@ -47,6 +47,7 @@ mod signatures_ui;
 mod system;
 mod title_actions;
 mod tools_ui;
+mod trash_file;
 pub use system::VERSION;
 use tools_ui::ToolsState;
 
@@ -73,6 +74,8 @@ const TAB_FRESH: std::time::Duration = std::time::Duration::from_millis(600);
 pub struct Workspace {
     /// The next book offered at the end of one (`next_book.rs`).
     next_book: Option<next_book::Offer>,
+    /// Del pressed once on a book: pressed again, it goes to the trash (`trash_file.rs`).
+    trash_armed: Option<trash_file::Armed>,
     /// The menu bar's menu that is open (see `menu_bar.rs`).
     bar_open: Option<usize>,
     /// Where the menu bar's titles are on screen, from the last frame.
@@ -294,6 +297,7 @@ impl Workspace {
             ui_trace: std::env::var_os("KITAB_TRACE_UI")
                 .map(|_| std::cell::Cell::new(std::time::Instant::now())),
             next_book: None,
+            trash_armed: None,
             bar_open: None,
             bar_bounds: Rc::default(),
             alt_down: false,
@@ -3511,6 +3515,10 @@ impl Workspace {
                 .size_full()
                 .relative()
                 .bg(gpui::black())
+                .on_action(cx.listener(|ws, _: &MoveToTrash, window, cx| ws.trash_key(window, cx)))
+                .on_action(
+                    cx.listener(|ws, _: &MoveToTrashAsk, window, cx| ws.trash_asked(window, cx)),
+                )
                 .on_action(cx.listener(|ws, _: &Present, window, cx| ws.toggle_present(window, cx)))
                 .on_action(cx.listener(|ws, _: &Print, window, cx| ws.open_print(window, cx)))
                 .on_action(
@@ -3734,6 +3742,8 @@ impl Workspace {
             .font_family("Segoe UI")
             .on_action(cx.listener(|ws, _: &OpenFile, window, cx| ws.open_dialog(window, cx)))
             .on_action(cx.listener(|ws, _: &ImagesToPdf, _, cx| ws.images_to_pdf(cx)))
+            .on_action(cx.listener(|ws, _: &MoveToTrash, window, cx| ws.trash_key(window, cx)))
+            .on_action(cx.listener(|ws, _: &MoveToTrashAsk, window, cx| ws.trash_asked(window, cx)))
             .on_action(cx.listener(|ws, _: &CloseTab, window, cx| {
                 if let Some(i) = ws.active {
                     ws.close_tab(i, window, cx)
@@ -5580,6 +5590,18 @@ impl Workspace {
                 }),
             )
             .icon("trash"),
+        );
+        // GitHub #17: the file itself, to where it can be put back from.
+        let binned = path.clone();
+        items.push(
+            MenuItem::new(
+                format!("Move to {}", kitab_os::trash::TRASH_NAME),
+                self.on_ws(cx, move |ws, window, cx| {
+                    ws.trash_from_menu(binned.clone(), window, cx)
+                }),
+            )
+            .icon("trash")
+            .disabled(!exists),
         );
         self.open_menu(at, false, 240.0, items, window, cx);
     }
