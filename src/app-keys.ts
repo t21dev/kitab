@@ -369,6 +369,12 @@ export const PALETTE: PaletteCommand[] = [
   },
   {
     "group": "File",
+    "label": "Make a PDF from pictures…",
+    "doc": false,
+    "keys": []
+  },
+  {
+    "group": "File",
     "label": "Close tab",
     "doc": true,
     "keys": []
@@ -412,6 +418,24 @@ export const PALETTE: PaletteCommand[] = [
   {
     "group": "File",
     "label": "Save pages as a new PDF…",
+    "doc": true,
+    "keys": []
+  },
+  {
+    "group": "File",
+    "label": "Export as Markdown…",
+    "doc": true,
+    "keys": []
+  },
+  {
+    "group": "File",
+    "label": "Export as text…",
+    "doc": true,
+    "keys": []
+  },
+  {
+    "group": "File",
+    "label": "Make a smaller copy…",
     "doc": true,
     "keys": []
   },

@@ -7,7 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-11-21
+
+### Added
+- The `kitab` command, for scripts and AI agents: read (`info`, `text`, `markdown`, `search`, `render`), change pages (`pages keep|delete|rotate|move|insert`, `merge`, `split`), files (`compress`, `password`, `images-to-pdf`, `images`, `watermark`, `number`), marks (`annotate`, `annotations`) and signatures (`sign`, `verify`). Every command takes `--json`, has stable exit codes and help with examples, and never changes its inputs. The Windows installer adds it to the terminal (on by default), Settings › Advanced › Command line turns it on or off, the Microsoft Store version and the Linux packages include it, and macOS gets it from Settings.
+- An agent skill for the `kitab` command (`skills/kitab/SKILL.md`): `kitab agent-skill --install claude` (or `codex`, `agents`) puts it where the agent looks. Also published as `docs/llms.txt`.
+- Export as Markdown… and Export as text… (File menu, the page menu, Ctrl+K) for PDF, EPUB, MOBI, FB2 and XPS: headings from the fonts, bold and italic, lists, tables and paragraphs, running headers and page numbers left out, and the pictures saved beside the Markdown and linked.
+- Text boxes can be bold, italic, and aligned left, centred or right: the B, I and alignment buttons under the markup bar, for the next text box or (with Select) the one picked. Saved into the PDF so other readers show it too ([#13](https://github.com/t21dev/kitab/issues/13)).
+- Make a PDF from pictures (File menu, or Ctrl+K): JPEG, PNG, WebP, TIFF, BMP and GIF, one page each, in name order (scan 2 before scan 10), each page the picture's own shape, and phone photos turned upright. Page tools › Move changes the order afterwards ([#13](https://github.com/t21dev/kitab/issues/13)).
+- Underline and strikethrough for text boxes (U and S under the markup bar), and where the text sits down the box: at the top, in the middle or at the bottom. Saved into the PDF like bold and italic ([#13](https://github.com/t21dev/kitab/issues/13)).
+- Page tools › Compress makes PDFs with pictures much smaller: Balanced scales pictures down to 150 dpi (fine for reading and printing), Smallest to 96 dpi (for email), and Same quality is the lossless compress from before. Text, drawings and fonts are not changed, and the message says how many pictures were made smaller. File › Make a smaller copy… and Ctrl+K open it too ([#13](https://github.com/t21dev/kitab/issues/13)).
+- Kitab in 12 languages: English, Spanish, Portuguese, French, German, Bangla, Hindi, Japanese, Simplified and Traditional Chinese, Arabic and Urdu. Settings › Appearance › Language picks one; by default Kitab follows the computer's language. Arabic and Urdu read right to left, with "…", shortcuts and names on the correct side. The menu bar, the command palette and Settings are translated so far, and the rest shows in English until it is. The translations are first drafts that native speakers are welcome to improve. Translating needs no Rust: each language is one JSON file in `assets/locales/` that Kitab picks up by itself, and `tools/check_i18n.py` starts a language or fills in what one is missing. See README › Translating ([#12](https://github.com/t21dev/kitab/issues/12)).
+
 ### Fixed
+- Find in a document (Ctrl+F or /) types spaces, so you can search for a phrase like "Hells angels" ([#16](https://github.com/t21dev/kitab/issues/16)); only pasting worked before. Letters that are reading shortcuts (h for highlight) type too, in the find field and the Markdown editor.
+- Page tools › Move pages moves the pages: the new PDF came out in the original order. Save pages as a new PDF also keeps the order typed ("3,1" puts page 3 first).
+- Presentation mode goes on to the next book in the folder, as reading does ([#9](https://github.com/t21dev/kitab/issues/9)): going on past the last page offers it, and going on again opens it, still presenting and full screen. The offer shows while presenting too.
 - Form fields and text boxes in Bangla, Hindi, Tamil, Arabic, Thai and other scripts are saved as written, conjuncts and joined letters included ([#13](https://github.com/t21dev/kitab/issues/13)): they came out as "?" in the saved PDF. Kitab now draws that text itself, in the system's font for the script, with only the letters used embedded, so every reader shows it and can still search and copy it.
 
 ## [1.0.1] - 2026-11-19
@@ -477,7 +492,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fit width and fit page follow a window resize even when no new page has to be drawn.
 - The Settings window shrinks to fit small windows instead of running off the left edge.
 
-[Unreleased]: https://github.com/t21dev/kitab/compare/v1.0.1...HEAD
+[Unreleased]: https://github.com/t21dev/kitab/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/t21dev/kitab/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/t21dev/kitab/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/t21dev/kitab/compare/v0.9.1...v1.0.0
 [0.9.1]: https://github.com/t21dev/kitab/compare/v0.9.0...v0.9.1
