@@ -517,22 +517,7 @@ fn appearance(
         .child(group(
             "Language",
             Some("Kitab's menus and settings. System follows your computer's language."),
-            div()
-                .id("language")
-                .child(segmented_wrapping(
-                    std::iter::once((crate::i18n::SYSTEM, crate::i18n::tr("System")))
-                        .chain(crate::i18n::languages().iter().map(|l| (l.code, l.name)))
-                        .map(|(code, name)| {
-                            (
-                                SharedString::from(name),
-                                st.language == code,
-                                change(ws, move |s: &mut Style| s.language = code.to_string()),
-                            )
-                        })
-                        .collect(),
-                    st,
-                ))
-                .into_any_element(),
+            language_picker(ws, st),
             st,
         ))
         .child(group(
@@ -1355,6 +1340,56 @@ fn code_preview(t: kitab_theme::CodeTheme, st: &Style) -> AnyElement {
 pub(crate) type Click = Box<dyn Fn(&mut Window, &mut App)>;
 
 /// A click handler that changes the look and saves settings.json.
+/// Settings › Appearance › Language: a dropdown, as twelve languages and
+/// System don't fit a row of buttons. It names the language System picked.
+fn language_picker(ws: &WeakEntity<Workspace>, st: &Style) -> AnyElement {
+    let name = language_label(&st.language);
+    let ws = ws.clone();
+    crate::kbd::stop_solid(div().id("language"), st)
+        .h(st.px(|m| m.control_height))
+        .max_w(px(300.0))
+        .px(px(12.0))
+        .flex()
+        .items_center()
+        .gap(px(6.0))
+        .rounded(st.px(|m| m.control_radius))
+        .bg(st.c(|c| c.raised))
+        .shadow(st.well())
+        .border_1()
+        .border_color(st.c(|c| c.line))
+        .cursor_pointer()
+        .text_size(st.px(|m| m.ui_text))
+        .text_color(st.c(|c| c.text))
+        .hover(|d| d.bg(st.raised_hover()))
+        .child(div().truncate().child(name))
+        .child(
+            svg()
+                .path(icon("chevron-down"))
+                .size(px(12.0))
+                .flex_none()
+                .text_color(st.c(|c| c.muted)),
+        )
+        .on_click(move |e: &gpui::ClickEvent, window, cx| {
+            let at = e.position();
+            let _ = ws.update(cx, |ws, cx| ws.language_menu(at, window, cx));
+        })
+        .into_any_element()
+}
+
+/// The language setting as the dropdown shows it: a language's own name, or
+/// System with the language it follows ("System (English)").
+pub(crate) fn language_label(setting: &str) -> String {
+    if setting == crate::i18n::SYSTEM {
+        format!(
+            "{} ({})",
+            crate::i18n::tr("System"),
+            crate::i18n::resolve(crate::i18n::SYSTEM).name
+        )
+    } else {
+        crate::i18n::resolve(setting).name.to_string()
+    }
+}
+
 /// Settings › Reading › Code font: a button that lists the monospace fonts.
 fn code_font_row(ws: &WeakEntity<Workspace>, st: &Style) -> AnyElement {
     let name = if st.code_font.trim().is_empty() {
@@ -1635,23 +1670,9 @@ fn icon_row(
 
 /// A row of choices, one of them on (Settings › Reading › Books).
 pub(crate) fn segmented(choices: Vec<(SharedString, bool, Click)>, st: &Style) -> AnyElement {
-    segmented_row(choices, false, st)
-}
-
-/// `segmented` for many choices (the languages): it wraps onto more lines
-/// instead of running past the panel.
-pub(crate) fn segmented_wrapping(
-    choices: Vec<(SharedString, bool, Click)>,
-    st: &Style,
-) -> AnyElement {
-    segmented_row(choices, true, st)
-}
-
-fn segmented_row(choices: Vec<(SharedString, bool, Click)>, wrap: bool, st: &Style) -> AnyElement {
     let mut row = div()
         .flex()
-        .when(wrap, |d| d.flex_wrap())
-        .when(!wrap, |d| d.flex_none())
+        .flex_none()
         .p(px(2.0))
         .gap(px(2.0))
         .rounded(px(8.0))

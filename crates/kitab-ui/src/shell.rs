@@ -5281,6 +5281,37 @@ impl Workspace {
 
     /// Settings › Reading › Code font: the system's monospace fonts (by
     /// name: "Mono", "Code" and the well-known ones), each shown in itself.
+    /// Settings › Appearance › Language: System first (with the language it
+    /// follows), then every language by its own name, the current one checked.
+    pub(crate) fn language_menu(
+        &mut self,
+        at: Point<Pixels>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let current = Style::get(cx).language.clone();
+        let pick = |code: &'static str| {
+            move |ws: &mut Self, _: &mut Window, cx: &mut Context<Self>| {
+                ws.change_style(&move |s: &mut Style| s.language = code.to_string(), cx)
+            }
+        };
+        let mut items = vec![
+            MenuItem::new(
+                crate::settings_view::language_label(crate::i18n::SYSTEM),
+                self.on_ws(cx, pick(crate::i18n::SYSTEM)),
+            )
+            .checked(current == crate::i18n::SYSTEM),
+            MenuItem::Separator,
+        ];
+        for lang in crate::i18n::languages() {
+            items.push(
+                MenuItem::new(lang.name, self.on_ws(cx, pick(lang.code)))
+                    .checked(current == lang.code),
+            );
+        }
+        self.open_menu(at, false, 240.0, items, window, cx);
+    }
+
     pub(crate) fn code_font_menu(
         &mut self,
         at: Point<Pixels>,
