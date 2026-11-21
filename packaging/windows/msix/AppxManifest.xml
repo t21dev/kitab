@@ -78,7 +78,9 @@
     <!-- The kitab command (crate kitab-cli) in terminals: bin\kitab.exe, a
          console program, under the alias kitab.exe. No Start menu entry:
          AppListEntry="none" keeps it off the app list. -->
-    <Application Id="KitabCli" Executable="bin\kitab.exe" EntryPoint="Windows.FullTrustApplication">
+    <!-- A console alias needs SupportsMultipleInstances, or makeappx rejects
+         the manifest (it did, and 1.1.0 shipped without a Store package). -->
+    <Application Id="KitabCli" Executable="bin\kitab.exe" EntryPoint="Windows.FullTrustApplication" desktop4:SupportsMultipleInstances="true">
       <uap:VisualElements
         DisplayName="Kitab command line"
         Description="The kitab command: read, convert and change documents from a terminal."

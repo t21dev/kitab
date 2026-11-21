@@ -142,6 +142,9 @@ jobs:
         with:
           name: kitab-msstore
           path: dist/*.msix
+          # Shows as a failed step when there's no package (1.1.0's manifest
+          # error went unnoticed as a warning); the release still goes on.
+          if-no-files-found: error
       - name: Collect downloads
         shell: bash
         run: |
