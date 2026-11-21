@@ -12,9 +12,9 @@
 
   kitab.exe is a full-trust desktop app. The manifest replaces what Kitab
   writes to the registry when it isn't packaged (kitab-os assoc.rs): the file
-  types, Print, and kitab_shell.dll as Explorer's thumbnail provider. A second
-  application, KitabCli, gives terminals the kitab command through an app
-  execution alias (what the installer's PATH entry does otherwise).
+  types, Print, and kitab_shell.dll as Explorer's thumbnail provider. Its app
+  execution alias, kitab.exe, gives terminals the kitab command (bin\kitab.exe),
+  which the installer's PATH entry does otherwise.
 -->
 <Package
   xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
@@ -52,7 +52,7 @@
   </Resources>
 
   <Applications>
-    <Application Id="Kitab" Executable="kitab.exe" EntryPoint="Windows.FullTrustApplication">
+    <Application Id="Kitab" Executable="kitab.exe" EntryPoint="Windows.FullTrustApplication" desktop4:SupportsMultipleInstances="true">
       <uap:VisualElements
         DisplayName="Kitab Reader"
         Description="A fast, native reader for PDF, ebooks and Markdown."
@@ -71,29 +71,19 @@
             </com:SurrogateServer>
           </com:ComServer>
         </com:Extension>
-@FILE_TYPES@
-      </Extensions>
-    </Application>
-
-    <!-- The kitab command (crate kitab-cli) in terminals: bin\kitab.exe, a
-         console program, under the alias kitab.exe. No Start menu entry:
-         AppListEntry="none" keeps it off the app list. -->
-    <!-- A console alias needs SupportsMultipleInstances, or makeappx rejects
-         the manifest (it did, and 1.1.0 shipped without a Store package). -->
-    <Application Id="KitabCli" Executable="bin\kitab.exe" EntryPoint="Windows.FullTrustApplication" desktop4:SupportsMultipleInstances="true">
-      <uap:VisualElements
-        DisplayName="Kitab command line"
-        Description="The kitab command: read, convert and change documents from a terminal."
-        BackgroundColor="transparent"
-        Square150x150Logo="Assets\Square150x150Logo.png"
-        Square44x44Logo="Assets\Square44x44Logo.png"
-        AppListEntry="none" />
-      <Extensions>
+        <!-- The kitab command (crate kitab-cli) in terminals: the alias
+             kitab.exe runs bin\kitab.exe, a console program. It belongs to
+             this application on purpose: a second, hidden application
+             (AppListEntry="none") is a "headless app" that Partner Center
+             refuses without a waiver. A console alias needs
+             SupportsMultipleInstances on its Application, or makeappx
+             rejects the manifest; Kitab handles one-window-per-user itself. -->
         <uap5:Extension Category="windows.appExecutionAlias" Executable="bin\kitab.exe" EntryPoint="Windows.FullTrustApplication">
           <uap5:AppExecutionAlias desktop4:Subsystem="console">
             <uap5:ExecutionAlias Alias="kitab.exe" />
           </uap5:AppExecutionAlias>
         </uap5:Extension>
+@FILE_TYPES@
       </Extensions>
     </Application>
   </Applications>

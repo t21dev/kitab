@@ -188,8 +188,8 @@ def main() -> int:
     layout.mkdir(parents=True)
     for f in ["kitab.exe", "kitab_shell.dll"]:
         shutil.copy2(REL / f, layout / f)
-    # The kitab command: the manifest's KitabCli application, which terminals
-    # reach through the kitab.exe app execution alias.
+    # The kitab command: bin\kitab.exe, which terminals reach through the
+    # main application's kitab.exe app execution alias.
     (layout / "bin").mkdir()
     shutil.copy2(REL / "kitab-cli.exe", layout / "bin" / "kitab.exe")
     shutil.copy2(ROOT / "LICENSE", layout / "LICENSE.txt")
