@@ -6,9 +6,7 @@
 //! is never changed. Files are written next to the target and renamed, so a
 //! failure never leaves half a PDF behind.
 
-use mupdf::pdf::{
-    Encryption, InsertPdfOptions, PageSelection, PdfDocument, PdfWriteOptions, Permission,
-};
+use mupdf::pdf::{Encryption, InsertPdfOptions, PdfDocument, PdfWriteOptions, Permission};
 use std::path::{Path, PathBuf};
 
 /// Open a PDF for a tool, with its password if it has one.
@@ -78,11 +76,9 @@ pub fn extract_pages(
     if same_file(src, out) {
         return Err("choose a different file name than the original".into());
     }
-    let mut doc = open(src, password)?;
-    let pages: Vec<usize> = pages.iter().map(|p| *p as usize).collect();
-    doc.select_pages(PageSelection::Pages(pages))
-        .map_err(|e| format!("could not select those pages: {e}"))?;
-    save(&doc, out)
+    // In the order given ("3,1": page 3 first). select_pages alone would put
+    // them back in document order.
+    crate::cli_ops::arrange_pages(src, password, pages, out).map(|_| ())
 }
 
 /// Write every page of `inputs`, in order, to a new PDF. Returns the page count.

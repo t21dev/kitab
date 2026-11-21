@@ -86,16 +86,14 @@ pub fn move_pages(
     out: &Path,
 ) -> Result<(), String> {
     guard(src, out)?;
-    let mut doc = open_pdf(src, password)?;
+    let doc = open_pdf(src, password)?;
     let total = count(&doc)?;
     check(pages, total)?;
-    let order: Vec<usize> = moved_order(total, pages, before)
-        .into_iter()
-        .map(|p| p as usize)
-        .collect();
-    doc.select_pages(PageSelection::Pages(order))
-        .map_err(|e| e.to_string())?;
-    save_pdf(&doc, out)
+    drop(doc);
+    // Not select_pages: it keeps pages in document order, so the move came
+    // out unchanged. arrange_pages puts each page where it's asked to go.
+    crate::cli_ops::arrange_pages(src, password, &moved_order(total, pages, before), out)
+        .map(|_| ())
 }
 
 /// Write the PDF with `pages` turned by `degrees` (a multiple of 90).
@@ -437,6 +435,44 @@ mod tests {
         assert_eq!(moved_order(5, &[0, 1], 5), [2, 3, 4, 0, 1]);
         assert_eq!(moved_order(5, &[1, 3], 2), [0, 1, 3, 2, 4]);
         assert_eq!(moved_order(3, &[2], 2), [0, 1, 2]);
+    }
+
+    /// Page `ix`'s text, to tell pages apart.
+    fn text_of(p: &Path, ix: i32) -> String {
+        open_pdf(p, None)
+            .unwrap()
+            .load_page(ix)
+            .unwrap()
+            .to_text_page(mupdf::TextPageFlags::empty())
+            .unwrap()
+            .to_text()
+            .unwrap()
+    }
+
+    /// Moving really reorders (found by the kitab CLI's tests): MuPDF's
+    /// select_pages keeps pages in document order, so the moved PDF used to
+    /// come out unchanged, with only its page count checked.
+    #[test]
+    fn moved_pages_are_in_their_new_place() {
+        let src = fixture("01-text-outline.pdf");
+        let total = pages_of(&src);
+        let out = temp("moved-order.pdf");
+        move_pages(&src, None, &[total - 1], 0, &out).unwrap();
+        assert_eq!(text_of(&out, 0), text_of(&src, total as i32 - 1));
+        assert_eq!(text_of(&out, 1), text_of(&src, 0));
+        let _ = std::fs::remove_file(out);
+    }
+
+    /// Save pages as a new PDF keeps the order typed ("3,1": page 3 first).
+    #[test]
+    fn saved_pages_keep_the_order_typed() {
+        let src = fixture("01-text-outline.pdf");
+        let out = temp("extract-order.pdf");
+        crate::tools::extract_pages(&src, None, &[2, 0], &out).unwrap();
+        assert_eq!(pages_of(&out), 2);
+        assert_eq!(text_of(&out, 0), text_of(&src, 2));
+        assert_eq!(text_of(&out, 1), text_of(&src, 0));
+        let _ = std::fs::remove_file(out);
     }
 
     #[test]
