@@ -339,6 +339,19 @@ pub fn bind_default_keys(cx: &mut App) {
         .map(String::from),
     );
     cx.bind_keys(keys.iter().map(|k| key(k, NoAction, hex)));
+    // The find field and the Markdown editor type every key too (their own
+    // lists above missed "h", which highlighted instead of typing, #16).
+    // Enter, Escape and Ctrl+F keep their find and editor actions.
+    cx.bind_keys(
+        keys.iter()
+            .filter(|k| !matches!(k.as_str(), "enter" | "escape" | "ctrl-f"))
+            .map(|k| key(k, NoAction, Some(FIND_BAR))),
+    );
+    cx.bind_keys(
+        keys.iter()
+            .filter(|k| !matches!(k.as_str(), "ctrl-f"))
+            .map(|k| key(k, NoAction, Some(MD_EDITOR))),
+    );
     // A text field (notes, text boxes) takes every key it types with.
     let field = Some(crate::text_field::TEXT_FIELD);
     cx.bind_keys(keys.iter().map(|k| key(k, NoAction, field)));

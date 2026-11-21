@@ -104,6 +104,22 @@ impl FindState {
     }
 }
 
+/// What a key press types into the find field, if anything. Space is its
+/// own case: on Windows GPUI reports it as the key "space" with no
+/// `key_char`, so a phrase like "Hells angels" lost its space (GitHub #16).
+/// Ctrl and Alt combinations are commands, never text.
+fn typed(k: &gpui::Keystroke) -> Option<&str> {
+    if k.modifiers.control || k.modifiers.alt || k.modifiers.platform {
+        return None;
+    }
+    if k.key == "space" {
+        return Some(" ");
+    }
+    k.key_char
+        .as_deref()
+        .filter(|ch| !ch.is_empty() && ch.chars().all(|c| !c.is_control()))
+}
+
 impl Reader {
     /// Ctrl+F or `/`: open the bar, or select the query in an open one.
     pub fn open_find(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -376,19 +392,15 @@ impl Reader {
                 f.query.push_str(&line);
                 !line.is_empty()
             }
-            _ => match k.key_char.as_ref() {
-                Some(ch)
-                    if !k.modifiers.control
-                        && !k.modifiers.alt
-                        && ch.chars().all(|c| !c.is_control()) =>
-                {
+            _ => match typed(k) {
+                Some(ch) => {
                     if f.all_selected {
                         f.query.clear();
                     }
                     f.query.push_str(ch);
                     true
                 }
-                _ => false,
+                None => false,
             },
         };
         if changed {
@@ -697,4 +709,33 @@ fn bar_button(
         .when(on, |d| d.bg(st.c(|c| c.hover)).shadow(st.well()))
         .when(!on && !disabled, |d| d.hover(|d| d.bg(st.hover_bg())))
         .child(svg().path(icon(name)).size(px(16.0)).text_color(fg))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::typed;
+    use gpui::{Keystroke, Modifiers};
+
+    fn key(key: &str, key_char: Option<&str>, modifiers: Modifiers) -> Keystroke {
+        Keystroke {
+            modifiers,
+            key: key.into(),
+            key_char: key_char.map(Into::into),
+        }
+    }
+
+    /// GitHub #16: Space types a space (Windows sends no key_char for it),
+    /// letters type themselves, and Ctrl, Alt and named keys type nothing.
+    #[test]
+    fn the_find_field_types_spaces_and_letters_only() {
+        let none = Modifiers::default();
+        assert_eq!(typed(&key("space", None, none)), Some(" "));
+        assert_eq!(typed(&key("h", Some("h"), none)), Some("h"));
+        assert_eq!(typed(&key("a", Some("A"), Modifiers::shift())), Some("A"));
+        assert_eq!(typed(&key("space", None, Modifiers::control())), None);
+        assert_eq!(typed(&key("a", Some("a"), Modifiers::control())), None);
+        assert_eq!(typed(&key("a", Some("a"), Modifiers::alt())), None);
+        assert_eq!(typed(&key("left", None, none)), None);
+        assert_eq!(typed(&key("tab", Some("\t"), none)), None);
+    }
 }
