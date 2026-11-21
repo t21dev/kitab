@@ -7,6 +7,7 @@
 
 use super::Workspace;
 use crate::actions::{CloseOverlay, OVERLAY};
+use crate::i18n::tr;
 use crate::palette::{COMMANDS, matches, score};
 use crate::shortcuts;
 use crate::style::Style;
@@ -274,17 +275,21 @@ impl Workspace {
                     .py(px(14.0))
                     .text_size(st.px(|m| m.ui_text))
                     .text_color(st.c(|c| c.faint))
-                    .child("Nothing by that name"),
+                    .child(tr("Nothing by that name")),
             );
         }
         for (row, hit) in p.hits.iter().enumerate() {
             let on = row == p.selected;
             let (group, label, ix): (&str, SharedString, Option<usize>) = match hit {
-                Hit::Command(ix) => (COMMANDS[*ix].group, COMMANDS[*ix].label.into(), Some(*ix)),
-                Hit::Tab(_, t) => ("Tab", t.clone().into(), None),
-                Hit::Recent(_, t) => ("Recent", t.clone().into(), None),
-                Hit::Heading(_, t) => ("Contents", t.clone().into(), None),
-                Hit::Setting(s, t) => ("Setting", format!("{} › {t}", s.label()).into(), None),
+                Hit::Command(ix) => (
+                    tr(COMMANDS[*ix].group),
+                    tr(COMMANDS[*ix].label).into(),
+                    Some(*ix),
+                ),
+                Hit::Tab(_, t) => (tr("Tab"), t.clone().into(), None),
+                Hit::Recent(_, t) => (tr("Recent"), t.clone().into(), None),
+                Hit::Heading(_, t) => (tr("Contents"), t.clone().into(), None),
+                Hit::Setting(s, t) => (tr("Setting"), format!("{} › {t}", s.label()).into(), None),
             };
             let Some(ix) = ix else {
                 list = list.child(
@@ -382,7 +387,7 @@ impl Workspace {
                             .flex_none()
                             .text_size(px(11.5))
                             .text_color(st.c(|c| c.faint))
-                            .child(c.group),
+                            .child(tr(c.group)),
                     )
                     .child(
                         div()
@@ -395,7 +400,7 @@ impl Workspace {
                             } else {
                                 st.c(|c| c.muted)
                             })
-                            .child(c.label),
+                            .child(tr(c.label)),
                     )
                     .child(caps),
             );

@@ -814,6 +814,8 @@ pub struct Settings {
     pub dark_theme: String,
     /// The font for code and the Markdown editor; empty for the system's own.
     pub code_font: String,
+    /// The interface's language: a code from `i18n::languages()`, or "system".
+    pub language: String,
     /// Comics read right to left (manga): the first page on the right.
     pub comic_rtl: bool,
     /// Going on past the last page offers the next file in the folder, and
@@ -923,6 +925,7 @@ impl Default for Settings {
             light_theme: "light".into(),
             dark_theme: "dark".into(),
             code_font: String::new(),
+            language: crate::i18n::SYSTEM.into(),
             comic_rtl: false,
             next_book: true,
             page_labels: true,
@@ -993,6 +996,8 @@ struct File {
     light_theme: String,
     dark_theme: String,
     code_font: String,
+    /// "system" or a language code ("zh-CN").
+    language: String,
     comic_rtl: bool,
     next_book: bool,
     page_labels: bool,
@@ -1112,6 +1117,7 @@ impl From<Settings> for File {
             light_theme: s.light_theme,
             dark_theme: s.dark_theme,
             code_font: s.code_font,
+            language: s.language,
             comic_rtl: s.comic_rtl,
             next_book: s.next_book,
             page_labels: s.page_labels,
@@ -1191,6 +1197,16 @@ impl Settings {
             light_theme: theme_id(f.light_theme, "light"),
             dark_theme: theme_id(f.dark_theme, "dark"),
             code_font: f.code_font.chars().take(200).collect(),
+            // A language Kitab doesn't have (hand-edited, a newer file)
+            // follows the system.
+            language: if crate::i18n::languages()
+                .iter()
+                .any(|l| l.code == f.language)
+            {
+                f.language
+            } else {
+                crate::i18n::SYSTEM.into()
+            },
             comic_rtl: f.comic_rtl,
             next_book: f.next_book,
             page_labels: f.page_labels,
@@ -1286,6 +1302,7 @@ mod tests {
             light_theme: "paper".into(),
             dark_theme: "nord".into(),
             code_font: "Cascadia Code".into(),
+            language: "zh-TW".into(),
             comic_rtl: true,
             next_book: false,
             page_labels: false,

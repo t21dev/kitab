@@ -344,7 +344,14 @@ pub fn matches(query: &str, has_doc: bool) -> Vec<usize> {
         .enumerate()
         .filter(|(_, c)| has_doc || !c.doc)
         .filter_map(|(i, c)| {
-            let by_label = score(query, c.label);
+            // The label in the interface's language finds it, and so does
+            // the English (shortcuts and help pages name it that way).
+            let shown = crate::i18n::tr(c.label);
+            let by_label = score(query, c.label).max(if shown == c.label {
+                None
+            } else {
+                score(query, shown)
+            });
             // Keywords find a command, but rank below a label match.
             let by_word = c
                 .keywords

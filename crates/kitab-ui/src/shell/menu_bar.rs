@@ -284,7 +284,7 @@ fn native_menus() -> Vec<Menu> {
                     let action = (e.action)();
                     if !in_app_menu.contains(&action.name()) {
                         items.push(OsItem::Action {
-                            name: e.label.into(),
+                            name: crate::i18n::tr(e.label).into(),
                             action,
                             os_action: None,
                         });
@@ -296,7 +296,7 @@ fn native_menus() -> Vec<Menu> {
             items.pop();
         }
         menus.push(Menu {
-            name: menu.title.into(),
+            name: crate::i18n::tr(menu.title).into(),
             items,
         });
     }
@@ -351,7 +351,15 @@ impl Workspace {
         for (ix, menu) in MENUS.iter().enumerate() {
             let on = open == Some(ix);
             let bounds = self.bar_bounds.clone();
-            let (first, rest) = menu.title.split_at(1);
+            // In another language the title is the translation with its Alt
+            // letter after it, as Windows programs show it: "文件(F)".
+            let shown = crate::i18n::tr(menu.title);
+            let (first, rest, after) = if shown == menu.title {
+                let (first, rest) = menu.title.split_at(1);
+                (first.to_string(), rest.to_string(), None)
+            } else {
+                (menu.key.to_uppercase(), String::new(), Some(shown))
+            };
             row = row.child(
                 div()
                     .id(("menu-bar-title", ix))
@@ -372,8 +380,10 @@ impl Workspace {
                             ws.open_bar_menu(ix, false, window, cx);
                         }
                     }))
+                    .when_some(after, |d, shown| d.child(shown).child("("))
                     .child(div().when(letters, |d| d.underline()).child(first))
                     .child(rest)
+                    .when(after.is_some(), |d| d.child(")"))
                     // Where the title is, for placing its menu under it and
                     // for the pointer moving along the bar while one is open.
                     .child(
@@ -428,7 +438,7 @@ impl Workspace {
                     };
                     // Once the menu has closed and the page has its focus
                     // back, so the action reaches it.
-                    let item = MenuItem::new(e.label, move |window, cx| {
+                    let item = MenuItem::new(crate::i18n::tr(e.label), move |window, cx| {
                         window.defer(cx, move |window, cx| {
                             window.dispatch_action(action(), cx);
                         });

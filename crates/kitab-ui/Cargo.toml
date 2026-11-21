@@ -18,6 +18,9 @@ kitab-os = { path = "../kitab-os" }
 kitab-speech = { path = "../kitab-speech" }
 serde = { workspace = true }
 serde_json = { workspace = true }
+# The system's languages, for the interface's (i18n.rs). Already in kitab.exe
+# through GPUI, so it adds no size. MIT/Apache-2.0.
+sys-locale = "0.3"
 # gpui 0.2.2's own image and error types (same versions, no new code in the binary).
 image = { version = "0.25", default-features = false, features = ["png"] }
 anyhow = "1"

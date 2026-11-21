@@ -55,7 +55,12 @@ impl Section {
         Section::About,
     ];
 
+    /// The section's name, in the interface's language.
     pub(crate) fn label(self) -> &'static str {
+        crate::i18n::tr(self.english())
+    }
+
+    fn english(self) -> &'static str {
         match self {
             Section::Appearance => "Appearance",
             Section::Reading => "Reading",
@@ -509,6 +514,27 @@ fn appearance(
         .flex()
         .flex_col()
         .gap(px(28.0))
+        .child(group(
+            "Language",
+            Some("Kitab's menus and settings. System follows your computer's language."),
+            div()
+                .id("language")
+                .child(segmented_wrapping(
+                    std::iter::once((crate::i18n::SYSTEM, crate::i18n::tr("System")))
+                        .chain(crate::i18n::languages().iter().map(|l| (l.code, l.name)))
+                        .map(|(code, name)| {
+                            (
+                                SharedString::from(name),
+                                st.language == code,
+                                change(ws, move |s: &mut Style| s.language = code.to_string()),
+                            )
+                        })
+                        .collect(),
+                    st,
+                ))
+                .into_any_element(),
+            st,
+        ))
         .child(group(
             "Layout",
             Some("A preset sets motion, depth, the dock and the page navigator. Change any of them and the layout becomes Custom."),
@@ -1461,14 +1487,15 @@ fn group(title: &str, note: Option<&str>, content: impl IntoElement, st: &Style)
                 .text_size(px(13.0))
                 .font_weight(FontWeight::SEMIBOLD)
                 .text_color(st.c(|c| c.text))
-                .child(title.to_string()),
+                // Found by its English title (search), shown translated.
+                .child(crate::i18n::tr_any(title).to_string()),
         )
         .children(note.map(|n| {
             div()
                 .mt(px(-4.0))
                 .text_size(px(12.0))
                 .text_color(st.c(|c| c.muted))
-                .child(n.to_string())
+                .child(crate::i18n::tr_any(n).to_string())
         }))
         .child(content)
         .into_any_element()
@@ -1608,9 +1635,23 @@ fn icon_row(
 
 /// A row of choices, one of them on (Settings › Reading › Books).
 pub(crate) fn segmented(choices: Vec<(SharedString, bool, Click)>, st: &Style) -> AnyElement {
+    segmented_row(choices, false, st)
+}
+
+/// `segmented` for many choices (the languages): it wraps onto more lines
+/// instead of running past the panel.
+pub(crate) fn segmented_wrapping(
+    choices: Vec<(SharedString, bool, Click)>,
+    st: &Style,
+) -> AnyElement {
+    segmented_row(choices, true, st)
+}
+
+fn segmented_row(choices: Vec<(SharedString, bool, Click)>, wrap: bool, st: &Style) -> AnyElement {
     let mut row = div()
         .flex()
-        .flex_none()
+        .when(wrap, |d| d.flex_wrap())
+        .when(!wrap, |d| d.flex_none())
         .p(px(2.0))
         .gap(px(2.0))
         .rounded(px(8.0))

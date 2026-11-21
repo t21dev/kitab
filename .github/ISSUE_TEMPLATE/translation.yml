@@ -1,0 +1,35 @@
+name: Translation
+description: Translate Kitab into your language, or fix a translation.
+labels: [translation]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for helping. You can send a pull request that edits `assets/locales/<code>.json` (see [docs/translating.md](https://github.com/t21dev/kitab/blob/main/docs/translating.md)), or use this form if you'd rather not use Git.
+  - type: input
+    id: language
+    attributes:
+      label: Language
+      description: Its name and code, for example "Bangla (bn)" or "Português do Brasil (pt-BR)".
+    validations:
+      required: true
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What is it?
+      options:
+        - A new language
+        - More of a language Kitab has
+        - A wrong or awkward translation
+    validations:
+      required: true
+  - type: textarea
+    id: text
+    attributes:
+      label: The translations
+      description: English text, then your translation, one per line. Or attach the .json file.
+      placeholder: |
+        Open a file… → ফাইল খুলুন…
+        Zoom in → বড় করুন
+    validations:
+      required: true

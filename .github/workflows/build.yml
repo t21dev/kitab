@@ -27,6 +27,8 @@ jobs:
           python-version: "3.12"
       # SPDX headers on every source file, no colour literals outside kitab-theme.
       - run: python tools/check_source.py
+      # Translations: no catalog keeps text Kitab no longer shows (docs/translating.md).
+      - run: python tools/check_i18n.py --strict
 
   check:
     name: Check (${{ matrix.os }})

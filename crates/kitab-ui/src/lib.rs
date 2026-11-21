@@ -9,6 +9,7 @@ pub mod autoscroll;
 pub mod cache;
 pub mod edit_buffer;
 pub mod engine;
+pub mod i18n;
 pub mod icons;
 pub mod kbd;
 pub mod keymap;
@@ -233,6 +234,8 @@ pub fn open_main_window(
 ) -> bool {
     // The interface size, before any window exists (gpui patch 10).
     gpui::kitab_set_ui_scale(f32::from(settings.ui_scale) / 100.0);
+    // The interface's language, before anything is drawn.
+    i18n::set_language(&settings.language);
     cx.set_global(Style::from_settings(theme, &settings));
     cx.set_global(shell::SettingsSink(save_settings));
     actions::bind_default_keys(cx);

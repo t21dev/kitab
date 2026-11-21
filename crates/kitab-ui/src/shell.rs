@@ -3839,12 +3839,59 @@ impl Workspace {
     }
 }
 
+/// A menu at least `width` wide, wider when a row needs it: labels in other
+/// languages are often longer than the English the widths were set for
+/// (German, Hindi, Arabic), and a cut label loses its end. Never wider than
+/// the window allows.
+fn menu_width_for(items: &[MenuItem], width: f32, window: &mut Window, cx: &App) -> f32 {
+    let st = Style::get(cx);
+    let font = window.text_style().font();
+    let ui = f32::from(st.px(|m| m.ui_text));
+    let measure = |text: &str, size: f32| -> f32 {
+        if text.is_empty() {
+            return 0.0;
+        }
+        let run = gpui::TextRun {
+            len: text.len(),
+            font: font.clone(),
+            color: gpui::black(),
+            background_color: None,
+            underline: None,
+            strikethrough: None,
+        };
+        let shaped = window.text_system().shape_line(
+            SharedString::from(text.to_string()),
+            px(size),
+            &[run],
+            None,
+        );
+        f32::from(shaped.width)
+    };
+    let mut need: f32 = 0.0;
+    for item in items {
+        if let MenuItem::Row {
+            label, shortcut, ..
+        } = item
+        {
+            let keys = shortcut
+                .map(|k| measure(&crate::shortcuts::for_os(k), 11.0) + 10.0)
+                .unwrap_or(0.0);
+            // Menu padding 4 + row padding 10, each side; the icon (16) and
+            // the gaps (10) around the label.
+            need = need.max(measure(label, ui) + keys + 16.0 + 10.0 + 28.0 + 8.0);
+        }
+    }
+    let most = (f32::from(window.viewport_size().width) - 32.0).max(width);
+    width.max(need.ceil()).min(most)
+}
+
 // ── settings, menus and motion ───────────────────────────────────────────
 
 impl Workspace {
     /// Change the look, redraw, and save settings.json off the UI thread.
     pub(crate) fn change_style(&mut self, f: &dyn Fn(&mut Style), cx: &mut Context<Self>) {
         let scale_before = Style::get(cx).ui_scale;
+        let language_before = Style::get(cx).language.clone();
         let voice_before = {
             let r = &Style::get(cx).read_aloud;
             (r.voice.clone(), r.rate, r.pitch)
@@ -3860,6 +3907,11 @@ impl Workspace {
             for t in self.tabs.clone() {
                 t.update(cx, |r, cx| r.read_aloud_settings_changed(cx));
             }
+        }
+        if Style::get(cx).language != language_before {
+            crate::i18n::set_language(&Style::get(cx).language);
+            #[cfg(target_os = "macos")]
+            init_native_menu(cx);
         }
         let scale = Style::get(cx).ui_scale;
         if scale != scale_before {
@@ -4288,6 +4340,7 @@ impl Workspace {
     ) {
         self.menu_serial += 1;
         self.menu_closing = None;
+        let width = menu_width_for(&items, width, window, cx);
         self.menu = Some(OpenMenu {
             at,
             align_right,
