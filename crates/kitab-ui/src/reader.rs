@@ -337,6 +337,8 @@ pub struct Reader {
     pages: pages::PagesState,
     /// Presentation mode (F5), when on.
     present: Option<present::Present>,
+    /// Start presenting once open (`present_when_open`).
+    present_pending: bool,
     /// This is the tab showing (Markdown live reload looks at its file).
     watched: bool,
     /// A footnote shown beside its mark.
@@ -485,6 +487,7 @@ impl Reader {
             bookmark_rows: Vec::new(),
             pages: pages::PagesState::default(),
             present: None,
+            present_pending: false,
             watched: false,
             note: None,
             watch_gen: 0,
@@ -767,6 +770,7 @@ impl Reader {
                 // Showing: look for the file changing on disk.
                 self.watch_gen += 1;
                 self.start_watch(cx);
+                self.present_if_pending(cx);
                 cx.emit(ReaderEvent::Opened);
             }
             Err(OpenError::NeedsPassword) => {

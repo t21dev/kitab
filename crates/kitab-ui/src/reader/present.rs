@@ -39,6 +39,29 @@ impl Reader {
         self.present.is_some()
     }
 
+    /// Opened as the next book while presenting: presents once open, and the
+    /// workspace shows it full screen meanwhile.
+    pub fn present_when_open(&mut self, cx: &mut Context<Self>) {
+        if self.status == Status::Open {
+            // Already open in another tab.
+            self.start_presenting(cx);
+        } else {
+            self.present_pending = true;
+        }
+    }
+
+    /// Still opening, to be presented (a password or an error shows as usual).
+    pub fn present_pending(&self) -> bool {
+        self.present_pending && self.status == Status::Opening
+    }
+
+    /// Called once the document is open.
+    pub(super) fn present_if_pending(&mut self, cx: &mut Context<Self>) {
+        if std::mem::take(&mut self.present_pending) {
+            self.start_presenting(cx);
+        }
+    }
+
     /// Whether this tab can present: an open paged document, not Markdown.
     pub fn can_present(&self) -> bool {
         self.status == Status::Open && self.md.is_none() && self.page_count() > 0
@@ -90,6 +113,12 @@ impl Reader {
         let Some(p) = self.present.as_ref() else {
             return;
         };
+        // On past the last page: the next book in the folder (GitHub #9),
+        // as when reading.
+        if forward && p.page + 1 >= self.page_count() {
+            cx.emit(ReaderEvent::PastEnd);
+            return;
+        }
         let page = if forward {
             p.page + 1
         } else {

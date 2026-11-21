@@ -184,6 +184,8 @@ pub struct Workspace {
     keymap_mtime: Option<std::time::SystemTime>,
     /// The window was full screen before presenting (it stays so after).
     was_fullscreen: bool,
+    /// The next book opens presenting, from a book that was (`next_book.rs`).
+    present_carried: bool,
     /// The sidebar's width this frame: its full width, or less in a narrow
     /// window so the page keeps most of it.
     sidebar_w: f32,
@@ -336,6 +338,7 @@ impl Workspace {
             palette: None,
             keymap_mtime: None,
             was_fullscreen: false,
+            present_carried: false,
             sidebar_w: crate::layout::SIDEBAR_W,
             born: std::time::Instant::now(),
             restoring: false,
@@ -3494,13 +3497,20 @@ impl Workspace {
         // Presenting: the page alone, full screen.
         if let Some(reader) = self
             .active_reader()
-            .filter(|r| r.read(cx).presenting())
+            .filter(|r| {
+                let r = r.read(cx);
+                r.presenting() || r.present_pending()
+            })
             .cloned()
         {
+            // Messages still show: the next book's offer comes while presenting.
+            let toast = self.toast_view(&st, cx);
             return div()
                 .id("workspace")
                 .key_context(WORKSPACE)
                 .size_full()
+                .relative()
+                .bg(gpui::black())
                 .on_action(cx.listener(|ws, _: &Present, window, cx| ws.toggle_present(window, cx)))
                 .on_action(cx.listener(|ws, _: &Print, window, cx| ws.open_print(window, cx)))
                 .on_action(
@@ -3511,6 +3521,7 @@ impl Workspace {
                     cx.listener(|ws, _: &PageTools, window, cx| ws.open_page_tools(window, cx)),
                 )
                 .child(reader)
+                .children(toast)
                 .into_any_element();
         }
         let side_tabs = st.tabs == TabsAt::Sidebar;
@@ -3949,7 +3960,11 @@ impl Workspace {
     /// The window follows presentation mode in and out of full screen; a
     /// window that was full screen already stays so.
     fn set_presenting(&mut self, on: bool, window: &mut Window, cx: &mut Context<Self>) {
-        if on {
+        if on && std::mem::take(&mut self.present_carried) {
+            // The next book, presented on from the last (GitHub #9): the
+            // window was full screen for that one, and leaving goes back to
+            // how it was before.
+        } else if on {
             self.was_fullscreen = window.is_fullscreen();
             if !self.was_fullscreen {
                 window.toggle_fullscreen();

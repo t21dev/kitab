@@ -49,8 +49,15 @@ impl Workspace {
                 let toast = offer.toast;
                 self.next_book = None;
                 self.dismiss_toast(toast, cx);
+                let presenting = reader.read(cx).presenting();
                 let ix = self.tabs.iter().position(|t| *t == reader);
-                self.insert_tab(next, ix.map(|i| i + 1), true, window, cx);
+                self.insert_tab(next.clone(), ix.map(|i| i + 1), true, window, cx);
+                // Presenting goes on into the next book, still full screen.
+                if presenting && let Some(new) = self.tabs.iter().find(|t| t.read(cx).path == next)
+                {
+                    new.update(cx, |r, cx| r.present_when_open(cx));
+                    self.present_carried = true;
+                }
                 if let Some(ix) = ix {
                     self.close_tab(ix, window, cx);
                 }
