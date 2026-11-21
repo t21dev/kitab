@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-11-21
+
+### Changed
+- Settings › Appearance › Language is a dropdown: System, showing the language it follows ("System (English)"), then each language by its own name, instead of a row of thirteen buttons.
+
+### Fixed
+- The Microsoft Store version builds again, with the `kitab` command for terminals: the 1.1.0 package was refused, first by Microsoft's packaging tool and then by the Store, because the command came as a second, hidden app. It is now part of Kitab itself.
+
 ## [1.1.0] - 2026-11-21
 
 ### Added
@@ -492,7 +500,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fit width and fit page follow a window resize even when no new page has to be drawn.
 - The Settings window shrinks to fit small windows instead of running off the left edge.
 
-[Unreleased]: https://github.com/t21dev/kitab/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/t21dev/kitab/compare/v1.1.1...HEAD
+[1.1.1]: https://github.com/t21dev/kitab/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/t21dev/kitab/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/t21dev/kitab/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/t21dev/kitab/compare/v0.9.1...v1.0.0
