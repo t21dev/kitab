@@ -232,8 +232,9 @@ Kitab is a document reader, so it leaves image files to your image viewer.
 **PDF tools, on your machine**
 - Print (Ctrl+P) through the system's own print dialog: all pages, this page or a range, fit to paper or actual size
 - Sign PDFs with a certificate file (.pfx, .p12), and see signatures checked when a PDF opens
-- Page tools: delete, move or turn pages, compress, add page numbers or a watermark
+- Page tools: delete, move or turn pages, compress (pictures scaled down to Balanced or Smallest, or Same quality), add page numbers or a watermark
 - Save pages as a new PDF, merge PDFs, save a page as PDF, image or text
+- Export any document (PDF, EPUB, MOBI, FB2, XPS) as Markdown, with its pictures beside it, or as plain text
 - Split view: two documents side by side
 
 **Keyboard and look**
@@ -242,12 +243,31 @@ Kitab is a document reader, so it leaves image files to your image viewer.
 - Ten themes (Dark, Gray, Light, Paper, Sand, Linen, Ink, Nord, Noctua, Vampire), any accent colour, three densities; it can follow the system's light and dark mode
 - A quick dock you can move to any edge, choose the buttons of, or tuck away
 - An optional menu bar (File, Edit, View, Go, Tools, Help) with Alt-key access, off until you turn it on; on macOS the same menus are in the system menu bar
+- In 12 languages, following your computer's language: English, Español, Português, Français, Deutsch, বাংলা, हिन्दी, 日本語, 简体中文, 繁體中文, العربية and اردو (Arabic and Urdu read right to left). The menus, command palette and Settings are translated so far; [help translate](#translating)
 
 **Windows**
 - One window: double-clicking another file opens it as a tab
 - Page thumbnails in File Explorer, and Settings to make Kitab the default app per file type
 
 **Coming next:** an accessibility pass for screen readers, a short first-run tour, code-signed downloads, and WinGet and Flathub listings. The [roadmap](docs/PLAN.md#12-roadmap) has the order.
+
+## Command line, for scripts and AI agents
+
+Installing Kitab also installs the `kitab` command (an option in the Windows installer, on by default; Settings › Advanced › Command line turns it on or off later). It does what Kitab's own tools do, from a terminal, and it's built for AI agents such as Claude Code and Codex: every command has `--json` output, stable exit codes and help with examples, and it never changes the files you give it.
+
+```sh
+kitab markdown report.pdf -o report.md          # headings, lists and pictures, ready for an LLM
+kitab search thesis.pdf "error rate" --json     # every hit with its page number
+kitab pages keep scan.pdf 1-3,7 -o short.pdf    # keep, delete, rotate, move or insert pages
+kitab merge a.pdf b.pdf -o both.pdf
+kitab compress big.pdf --quality smallest -o small.pdf
+kitab annotate paper.pdf highlight --page 3 --text "main result" -o marked.pdf
+kitab sign contract.pdf --key me.pfx --key-password-env PFX_PASS --page 2 --rect 72,700,272,760 -o signed.pdf
+```
+
+`kitab --help` lists everything: `info`, `text`, `markdown`, `search`, `render`, `pages`, `merge`, `split`, `compress`, `password`, `images-to-pdf`, `images`, `watermark`, `number`, `annotate`, `annotations`, `sign` and `verify`.
+
+**For AI agents:** `kitab agent-skill --install claude` (or `codex`, `agents`, or a folder) installs the [Kitab skill](skills/kitab/SKILL.md), which tells an agent when and how to use the command. A Markdown copy of a PDF is far smaller for a model to read than the PDF's page images, and page numbers come back exact. [docs/llms.txt](docs/llms.txt) has the same in the llms.txt format.
 
 ## Privacy
 
@@ -292,6 +312,8 @@ crates/
   kitab-os       Windows, macOS and Linux glue: data folder, file types, single instance
   kitab-shell    the File Explorer thumbnail provider
   kitab-bench    start-up and scroll benchmarks against SumatraPDF
+  kitab-cli      the kitab command (bin\kitab.exe on Windows)
+skills/kitab/    the agent skill for the kitab command
 docs/PLAN.md     decisions, architecture, performance budgets, roadmap
 docs/perf/       benchmark runs against SumatraPDF
 DESIGN.md        the design system: tokens, depth, type, components, motion
@@ -300,6 +322,37 @@ DESIGN.md        the design system: tokens, depth, type, components, motion
 ## Contributing
 
 Commits follow [Conventional Commits](https://www.conventionalcommits.org/), every user-visible change adds a line to [CHANGELOG.md](CHANGELOG.md), and a bug fix comes with a test that fails without it.
+
+### Translating
+
+You can translate Kitab without knowing Rust. Each language is one JSON file in [`assets/locales/`](assets/locales), mapping Kitab's English to your language, and the app picks up every file there by itself.
+
+Every translation below is a first draft and needs a native speaker's review. A pull request that fixes one is very welcome.
+
+| Language | File |
+|---|---|
+| English | built in |
+| Español (Spanish) | [`es.json`](assets/locales/es.json) |
+| Português (Brasil) | [`pt-BR.json`](assets/locales/pt-BR.json) |
+| Français (French) | [`fr.json`](assets/locales/fr.json) |
+| Deutsch (German) | [`de.json`](assets/locales/de.json) |
+| বাংলা (Bangla) | [`bn.json`](assets/locales/bn.json) |
+| हिन्दी (Hindi) | [`hi.json`](assets/locales/hi.json) |
+| 日本語 (Japanese) | [`ja.json`](assets/locales/ja.json) |
+| 简体中文 (Simplified Chinese) | [`zh-CN.json`](assets/locales/zh-CN.json) |
+| 繁體中文 (Traditional Chinese) | [`zh-TW.json`](assets/locales/zh-TW.json) |
+| العربية (Arabic, right to left) | [`ar.json`](assets/locales/ar.json) |
+| اردو (Urdu, right to left) | [`ur.json`](assets/locales/ur.json) |
+
+Run `python tools/check_i18n.py` to see how complete each one is.
+
+```
+python tools/check_i18n.py                  # how complete each language is
+python tools/check_i18n.py --fill zh-CN     # add what zh-CN is missing, blank, to translate
+python tools/check_i18n.py --new ja "日本語"  # start a new language
+```
+
+Blank entries show in English, so a partly translated language still works. Translate a few, open a pull request, and add your name to `"@translators"` in the file. If you'd rather not use Git, open a [Translation issue](https://github.com/t21dev/kitab/issues/new?template=translation.yml). [docs/translating.md](docs/translating.md) has the details, including how to make new UI text translatable.
 
 ## Support
 
