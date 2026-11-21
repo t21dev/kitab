@@ -10,7 +10,8 @@
 The manifest is packaging/windows/msix/AppxManifest.xml. Its file types come
 from FILE_TYPES in crates/kitab-os/src/assoc.rs (the same list Kitab writes to
 the registry when it isn't packaged), with each type's icon from
-packaging/windows/kitab.rc. The tile and Store icons are drawn from
+packaging/windows/kitab.rc. bin\\kitab.exe (kitab-cli.exe) is the kitab
+command, with an app execution alias so terminals find it. The tile and Store icons are drawn from
 assets/brand/kitab-1024.png. makepri and makeappx come from the Windows SDK.
 
 Run after tools/build_release.py: python tools/package_msix.py <version>
@@ -187,6 +188,10 @@ def main() -> int:
     layout.mkdir(parents=True)
     for f in ["kitab.exe", "kitab_shell.dll"]:
         shutil.copy2(REL / f, layout / f)
+    # The kitab command: the manifest's KitabCli application, which terminals
+    # reach through the kitab.exe app execution alias.
+    (layout / "bin").mkdir()
+    shutil.copy2(REL / "kitab-cli.exe", layout / "bin" / "kitab.exe")
     shutil.copy2(ROOT / "LICENSE", layout / "LICENSE.txt")
     shutil.copy2(ROOT / "NOTICE", layout / "NOTICE.txt")
     assets(layout / "Assets", types)

@@ -46,7 +46,10 @@ impl Workspace {
                 })
                 .detach();
             }
-            Section::Advanced => self.load_db_size(cx),
+            Section::Advanced => {
+                self.load_db_size(cx);
+                self.load_cli_status(cx);
+            }
             Section::Signing => self.load_trusted(cx),
             Section::Library => self.load_watched(cx),
             _ => {}
@@ -243,6 +246,69 @@ impl Workspace {
             let _ = this.update(cx, |ws, cx| {
                 ws.system.db_size = size;
                 cx.notify();
+            });
+        })
+        .detach();
+    }
+
+    /// Advanced › Command line: whether this install has the `kitab`
+    /// command and whether terminals find it (a file check and a registry
+    /// read, off the UI thread).
+    fn load_cli_status(&mut self, cx: &mut Context<Self>) {
+        cx.spawn(async move |this, cx| {
+            let status = cx
+                .background_spawn(async {
+                    crate::settings_view::CliStatus {
+                        available: kitab_os::cli_path::cli_exe().is_some(),
+                        on_path: kitab_os::cli_path::cli_on_path(),
+                    }
+                })
+                .await;
+            let _ = this.update(cx, |ws, cx| {
+                ws.system.cli = Some(status);
+                cx.notify();
+            });
+        })
+        .detach();
+    }
+
+    /// Advanced › Command line: put the `kitab` command on the user's PATH
+    /// or take it off, then show where it stands now.
+    pub(crate) fn set_cli_on_path(&mut self, on: bool, cx: &mut Context<Self>) {
+        // The switch moves at once; the status read afterwards confirms it.
+        if let Some(c) = self.system.cli.as_mut() {
+            c.on_path = on;
+        }
+        cx.notify();
+        cx.spawn(async move |this, cx| {
+            let result = cx
+                .background_spawn(async move { kitab_os::cli_path::set_cli_on_path(on) })
+                .await;
+            let _ = this.update(cx, |ws, cx| {
+                match result {
+                    Ok(()) if on => ws.toast(
+                        crate::i18n::tr("The kitab command is on. Open a new terminal to use it."),
+                        false,
+                        None,
+                        cx,
+                    ),
+                    Ok(()) => ws.toast(
+                        crate::i18n::tr("The kitab command is off."),
+                        false,
+                        None,
+                        cx,
+                    ),
+                    Err(e) => {
+                        log::warn!("kitab command on PATH: {e}");
+                        ws.toast(
+                            crate::i18n::tr("Couldn't change the kitab command."),
+                            true,
+                            None,
+                            cx,
+                        )
+                    }
+                }
+                ws.load_cli_status(cx);
             });
         })
         .detach();

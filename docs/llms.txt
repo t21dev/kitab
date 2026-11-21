@@ -1,0 +1,52 @@
+# Kitab Reader
+
+> Kitab Reader is a fast, private, open-source (AGPL-3.0) document reader for Windows, macOS and
+> Linux that opens PDF, EPUB, MOBI, FB2, XPS, CBZ/CBR/CB7, DjVu and Markdown. Its `kitab` command
+> reads, searches, converts (to Markdown or text) and edits documents from a terminal, a script
+> or an AI agent, with `--json` output and stable exit codes. Inputs are never overwritten.
+
+Kitab works offline and sends nothing anywhere. The command line uses the same engine (MuPDF)
+and tools as the app, so a page number, a search hit or a signature check means the same in both.
+
+## Install the CLI
+
+- Windows: install Kitab Reader; the installer puts `kitab` on PATH (`{app}\bin\kitab.exe`).
+  Open a new terminal and run `kitab --version`.
+- macOS and Linux: the app's own binary is the command; run it with a command name, e.g.
+  `kitab info file.pdf` (link or alias the app binary as `kitab` if it isn't on PATH).
+- For agents: `kitab agent-skill --install claude` (or `codex`, `agents`, or a folder) installs
+  the skill; `kitab --help` and `kitab help COMMAND` document every flag with examples.
+
+## Commands
+
+- `kitab info FILE`: format, title, author, pages, page sizes, outline, encryption, counts
+- `kitab text FILE [--pages R] [-o OUT]`: the text in reading order
+- `kitab markdown FILE [--page-markers] [--images DIR | --no-images] [-o OUT]`: Markdown
+- `kitab search FILE QUERY [--case] [--whole-word] [--limit N]`: hits with page and line
+- `kitab render FILE [--page N] [--width PX | --dpi D] -o OUT.png`: a page as a PNG
+- `kitab annotations list FILE`: annotations in a PDF
+- `kitab verify FILE [--trust CERT]`: check digital signatures
+- `kitab pages keep|delete|rotate|move|insert FILE ... -o OUT`: change a PDF's pages
+- `kitab merge A B ... -o OUT`: join PDFs
+- `kitab split FILE (--every N | --ranges R) -o DIR`: split a PDF
+- `kitab compress FILE [--quality balanced|smallest|same] -o OUT`: make a PDF smaller
+- `kitab password set|remove FILE -o OUT`: add or remove a password (from an env var or stdin)
+- `kitab images-to-pdf IMG... -o OUT`: pictures to a PDF
+- `kitab images FILE -o DIR`: save a PDF's pictures
+- `kitab watermark FILE TEXT -o OUT`: diagonal text on every page
+- `kitab number FILE [--start N] -o OUT`: page numbers
+- `kitab annotate FILE highlight|underline|strike|note|textbox ... -o OUT`: add annotations
+- `kitab annotations remove FILE (--all | --page N [--index I]) -o OUT`: remove annotations
+- `kitab sign FILE --key KEY.pfx --key-password-env VAR --page N --rect X0,Y0,X1,Y1 -o OUT`
+- `kitab agent-skill [--install claude|codex|agents|DIR]`: print or install the agent skill
+
+Global flags: `--json`, `-o/--out`, `--force`, `-q/--quiet`, `--password-env VAR`,
+`--password-stdin`. Exit codes: 0 ok, 1 failed, 2 usage, 3 input not found or unreadable,
+4 password needed or wrong, 5 output exists.
+
+## Docs
+
+- [Agent skill (SKILL.md)](https://github.com/t21dev/kitab/blob/main/skills/kitab/SKILL.md):
+  recipes, the full command list, the JSON and exit-code contract, coordinates and pitfalls
+- [README](https://github.com/t21dev/kitab/blob/main/README.md): what Kitab is, downloads and
+  building from source

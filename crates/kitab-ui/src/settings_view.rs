@@ -19,7 +19,7 @@ use kitab_theme::{Accent, AccentPreset, Appearance, Density, Theme, hue_swatch};
 
 mod search;
 mod system;
-pub use system::{SystemInfo, UpdateState};
+pub use system::{CliStatus, SystemInfo, UpdateState};
 
 /// The custom accent's hex field.
 pub struct HexState {

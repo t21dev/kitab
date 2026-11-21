@@ -1,0 +1,31 @@
+[package]
+name = "kitab-cli"
+description = "The kitab command: read, convert and change documents from a terminal or an AI agent"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[lib]
+path = "src/lib.rs"
+
+# Windows: a console program shipped as bin\kitab.exe beside the windowed
+# kitab.exe (which can't print to a terminal). macOS and Linux run the same
+# commands from the main kitab binary.
+[[bin]]
+name = "kitab-cli"
+path = "src/main.rs"
+
+[dependencies]
+kitab-core = { workspace = true }
+kitab-mupdf = { path = "../kitab-mupdf" }
+kitab-sign = { path = "../kitab-sign" }
+# Where the app keeps the certificates trusted in Settings › Signing, for
+# `kitab verify`. Already in the app, so it adds nothing to the install.
+kitab-os = { path = "../kitab-os" }
+serde_json = { workspace = true }
+
+[lints]
+workspace = true

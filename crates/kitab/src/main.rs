@@ -15,6 +15,19 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 fn main() {
+    // `kitab <command> ...` from a terminal or an AI agent (crate kitab-cli):
+    // run it and stop, before anything else. macOS and Linux only: there the
+    // app's binary is the `kitab` on PATH. On Windows the windowed kitab.exe
+    // can't print to a terminal, so the console bin\kitab.exe runs commands.
+    // `is_command` only compares a string, so opening a file stays as fast
+    // (AGENTS.md rule 1).
+    #[cfg(not(windows))]
+    if std::env::args_os()
+        .nth(1)
+        .is_some_and(|a| kitab_cli::is_command(&a))
+    {
+        std::process::exit(kitab_cli::run(std::env::args_os().skip(1).collect()));
+    }
     // Uninstalling: take Kitab's file types and thumbnails off this account
     // (the Windows uninstaller runs this), then stop.
     if std::env::args_os()

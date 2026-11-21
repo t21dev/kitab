@@ -12,18 +12,22 @@
 
   kitab.exe is a full-trust desktop app. The manifest replaces what Kitab
   writes to the registry when it isn't packaged (kitab-os assoc.rs): the file
-  types, Print, and kitab_shell.dll as Explorer's thumbnail provider.
+  types, Print, and kitab_shell.dll as Explorer's thumbnail provider. A second
+  application, KitabCli, gives terminals the kitab command through an app
+  execution alias (what the installer's PATH entry does otherwise).
 -->
 <Package
   xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
   xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
   xmlns:uap2="http://schemas.microsoft.com/appx/manifest/uap/windows10/2"
   xmlns:uap3="http://schemas.microsoft.com/appx/manifest/uap/windows10/3"
+  xmlns:uap5="http://schemas.microsoft.com/appx/manifest/uap/windows10/5"
   xmlns:desktop="http://schemas.microsoft.com/appx/manifest/desktop/windows10"
   xmlns:desktop2="http://schemas.microsoft.com/appx/manifest/desktop/windows10/2"
+  xmlns:desktop4="http://schemas.microsoft.com/appx/manifest/desktop/windows10/4"
   xmlns:com="http://schemas.microsoft.com/appx/manifest/com/windows10"
   xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
-  IgnorableNamespaces="uap uap2 uap3 desktop desktop2 com rescap">
+  IgnorableNamespaces="uap uap2 uap3 uap5 desktop desktop2 desktop4 com rescap">
 
   <Identity
     Name="TriptoAfsin.KitabReader"
@@ -68,6 +72,26 @@
           </com:ComServer>
         </com:Extension>
 @FILE_TYPES@
+      </Extensions>
+    </Application>
+
+    <!-- The kitab command (crate kitab-cli) in terminals: bin\kitab.exe, a
+         console program, under the alias kitab.exe. No Start menu entry:
+         AppListEntry="none" keeps it off the app list. -->
+    <Application Id="KitabCli" Executable="bin\kitab.exe" EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements
+        DisplayName="Kitab command line"
+        Description="The kitab command: read, convert and change documents from a terminal."
+        BackgroundColor="transparent"
+        Square150x150Logo="Assets\Square150x150Logo.png"
+        Square44x44Logo="Assets\Square44x44Logo.png"
+        AppListEntry="none" />
+      <Extensions>
+        <uap5:Extension Category="windows.appExecutionAlias" Executable="bin\kitab.exe" EntryPoint="Windows.FullTrustApplication">
+          <uap5:AppExecutionAlias desktop4:Subsystem="console">
+            <uap5:ExecutionAlias Alias="kitab.exe" />
+          </uap5:AppExecutionAlias>
+        </uap5:Extension>
       </Extensions>
     </Application>
   </Applications>

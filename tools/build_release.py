@@ -13,7 +13,11 @@ import os
 import subprocess
 import sys
 
-PACKAGES = ["-p", "kitab", "-p", "kitab-shell"]
+# kitab-cli: the `kitab` command. Windows ships its console kitab-cli.exe as
+# bin\kitab.exe (tools/package.py); macOS and Linux run the commands from the
+# main binary, so building it there only checks it. Same flags as the app, so
+# it carries its own C runtime too.
+PACKAGES = ["-p", "kitab", "-p", "kitab-shell", "-p", "kitab-cli"]
 
 
 def main() -> int:

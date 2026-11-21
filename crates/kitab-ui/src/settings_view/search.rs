@@ -243,6 +243,11 @@ const INDEX: &[(Section, &str, &str)] = &[
         "library database vacuum",
     ),
     (Section::Advanced, "Data folder", "location storage files"),
+    (
+        Section::Advanced,
+        "Command line",
+        "terminal cli agent ai path kitab command shell console",
+    ),
     (Section::About, "Check for updates", "update version new"),
     (Section::About, "Check on start-up", "automatic updates"),
     (Section::About, "Source code", "github"),
@@ -350,6 +355,9 @@ mod tests {
                 .iter()
                 .any(|(_, t)| *t == "Licence")
         );
+        for w in ["command line", "terminal", "CLI", "agent", "PATH"] {
+            assert!(matches(w).iter().any(|(_, t)| *t == "Command line"), "{w}");
+        }
         assert!(matches("   ").is_empty());
         assert!(matches("zzzz").is_empty());
     }

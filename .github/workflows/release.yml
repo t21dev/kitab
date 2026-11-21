@@ -108,12 +108,13 @@ jobs:
           else
             echo "version=$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)-dev" >> "$GITHUB_OUTPUT"
           fi
-      # Windows: C runtime linked in (no VC++ Redistributable needed).
+      # Windows: C runtime linked in (no VC++ Redistributable needed). Builds
+      # the kitab command (kitab-cli) too: bin\kitab.exe on Windows.
       - name: Build
         run: python tools/build_release.py
       - name: No Visual C++ runtime needed (Windows)
         if: runner.os == 'Windows'
-        run: python tools/check_imports.py target/release/kitab.exe target/release/kitab_shell.dll
+        run: python tools/check_imports.py target/release/kitab.exe target/release/kitab_shell.dll target/release/kitab-cli.exe
       - name: Package
         run: python tools/package.py ${{ steps.v.outputs.version }}
       - name: Installer (Windows)

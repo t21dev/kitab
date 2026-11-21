@@ -26,3 +26,11 @@ Every system uses `kitab --thumbnail` (crate `kitab-thumb`): page 1 of a documen
 - The tile and Store icons are drawn from `assets/brand/kitab-1024.png` at every scale and target size, and indexed in `resources.pri` by `makepri`. Both `makepri` and `makeappx` come from the Windows SDK.
 - When packaged, `kitab_os::packaged()` is true. `update::managed_by()` then says the Microsoft Store, so Kitab doesn't ask GitHub for updates, and Settings › File types points to Default apps instead of writing the registry.
 - To try it without signing, turn on Developer Mode, then run `Add-AppxPackage -Register dist\msix\AppxManifest.xml`. `Get-AppxPackage *KitabReader* | Remove-AppxPackage` removes it.
+
+## Command line
+
+The `kitab` command (crate `kitab-cli`) lets people, scripts and AI agents use Kitab from a terminal: `kitab markdown report.pdf`, `kitab merge a.pdf b.pdf -o both.pdf`, `kitab --help`.
+
+- Windows: the windowed `kitab.exe` can't print to a terminal, so the console `kitab-cli.exe` ships as `bin\kitab.exe` next to it (`tools/build_release.py` builds it with the same static C runtime; `tools/package.py` lays it out in `dist/Kitab/bin/` and the portable zip). The installer's task "Add the kitab command to the terminal", on by default, adds `{app}\bin` to the user PATH (`HKCU\Environment\Path`) and the uninstaller takes exactly that entry off again. Settings › Advanced › Command line turns the same entry on or off later (`kitab-os/src/cli_path.rs`) and tells running programs the environment changed, so new terminals see it.
+- Microsoft Store: packaged apps can't change PATH. The manifest's second application, `KitabCli` (`bin\kitab.exe`, no Start menu entry), declares the app execution alias `kitab.exe` as a console program, so `kitab` works in any terminal. Settings says the Store installs it and shows no switch.
+- macOS and Linux: the main `kitab` binary runs the commands itself when its first argument is a command (`crates/kitab/src/main.rs`). The Linux packages install it as `/usr/bin/kitab` (the `.tar.gz`'s `install.sh` as `~/.local/bin/kitab`); with the Flatpak it is `flatpak run dev.t21.kitab <command>`. On macOS, Settings › Advanced › Command line links `~/.local/bin/kitab` to `Kitab.app/Contents/MacOS/kitab`; that folder must be on PATH.

@@ -36,6 +36,17 @@ pub struct SystemInfo {
     pub confirm_unwatch: Option<std::path::PathBuf>,
     /// Restore default settings is waiting for its confirmation.
     pub confirm_reset: bool,
+    /// The `kitab` command in terminals; loaded when Advanced opens.
+    pub cli: Option<CliStatus>,
+}
+
+/// Where the `kitab` command stands (Settings › Advanced › Command line).
+#[derive(Debug, Clone, Copy, Default)]
+pub struct CliStatus {
+    /// This install has the command (Windows: bin\kitab.exe next to Kitab).
+    pub available: bool,
+    /// A terminal finds it through Kitab's entry (`kitab_os::cli_path`).
+    pub on_path: bool,
 }
 
 /// Where the update check stands.
@@ -654,6 +665,7 @@ pub(super) fn advanced(ws: &WeakEntity<Workspace>, info: &SystemInfo, st: &Style
             ),
             st,
         ))
+        .child(command_line(ws, info, st))
         .child(group(
             "Library database",
             None,
@@ -676,6 +688,99 @@ pub(super) fn advanced(ws: &WeakEntity<Workspace>, info: &SystemInfo, st: &Style
             st,
         ))
         .into_any_element()
+}
+
+/// Advanced › Command line: the `kitab` command for terminals and AI agents.
+fn command_line(ws: &WeakEntity<Workspace>, info: &SystemInfo, st: &Style) -> AnyElement {
+    use crate::i18n::tr;
+    let title = tr("The kitab command");
+    // Until the status has loaded (a moment after Advanced opens).
+    let loading = || div().into_any_element();
+    let row = if cfg!(windows) && kitab_os::packaged() {
+        icon_row(
+            Some("code"),
+            title,
+            tr("The Microsoft Store installs it. Open a new terminal and type kitab --help."),
+            div().into_any_element(),
+            st,
+        )
+    } else if cfg!(windows) {
+        match info.cli {
+            None => icon_row(
+                Some("code"),
+                tr("Add the kitab command to the terminal"),
+                "",
+                loading(),
+                st,
+            ),
+            Some(c) if !c.available => icon_row(
+                Some("code"),
+                title,
+                tr(
+                    "This copy of Kitab has no bin\\kitab.exe, so there is nothing to add. The installer includes it.",
+                ),
+                div().into_any_element(),
+                st,
+            ),
+            Some(c) => icon_row(
+                Some("code"),
+                tr("Add the kitab command to the terminal"),
+                tr("Puts Kitab's bin folder on your PATH. Terminals opened after this find kitab."),
+                switch("cli-path", c.on_path, st, cli_toggle(ws, !c.on_path)),
+                st,
+            ),
+        }
+    } else if cfg!(target_os = "macos") {
+        match info.cli {
+            None => icon_row(Some("code"), title, "", loading(), st),
+            Some(c) if c.on_path => icon_row(
+                Some("code"),
+                title,
+                tr("Installed as ~/.local/bin/kitab. That folder must be on your PATH."),
+                button("cli-remove", tr("Remove"), false, st, cli_toggle(ws, false)),
+                st,
+            ),
+            Some(_) => icon_row(
+                Some("code"),
+                title,
+                tr("Links ~/.local/bin/kitab to Kitab. That folder must be on your PATH."),
+                button(
+                    "cli-install",
+                    tr("Install the kitab command"),
+                    false,
+                    st,
+                    cli_toggle(ws, true),
+                ),
+                st,
+            ),
+        }
+    } else {
+        icon_row(
+            Some("code"),
+            title,
+            tr(
+                "The Kitab package installs kitab in /usr/bin. With the Flatpak, type flatpak run dev.t21.kitab and then the command.",
+            ),
+            div().into_any_element(),
+            st,
+        )
+    };
+    group(
+        "Command line",
+        Some(
+            "Lets you and AI agents use Kitab from a terminal: kitab markdown report.pdf, kitab merge a.pdf b.pdf -o both.pdf. Run kitab --help for everything it does.",
+        ),
+        row,
+        st,
+    )
+}
+
+/// Put the `kitab` command on PATH (`on`) or take it off, from a click.
+fn cli_toggle(ws: &WeakEntity<Workspace>, on: bool) -> Click {
+    let ws = ws.clone();
+    Box::new(move |_, cx| {
+        let _ = ws.update(cx, |ws, cx| ws.set_cli_on_path(on, cx));
+    })
 }
 
 // ── About ────────────────────────────────────────────────────────────────

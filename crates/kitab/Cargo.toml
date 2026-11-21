@@ -25,6 +25,12 @@ kitab-os = { path = "../kitab-os" }
 # `kitab --thumbnail`: file-manager thumbnails, sharing kitab.exe's MuPDF.
 kitab-thumb = { path = "../kitab-thumb" }
 
+# `kitab markdown a.pdf` and the other commands on macOS and Linux, where the
+# main binary is the one on PATH. Windows ships the console bin\kitab.exe
+# instead (the windowed kitab.exe can't print to a terminal).
+[target.'cfg(not(windows))'.dependencies]
+kitab-cli = { path = "../kitab-cli" }
+
 [build-dependencies]
 # Already in the tree through gpui: embeds the icons in kitab.exe.
 embed-resource = "3"

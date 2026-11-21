@@ -2,7 +2,8 @@
 """Lay out Kitab's downloads from a release build (release.yml runs this).
 
   Windows  dist/Kitab/ (for the Inno Setup installer, packaging/windows/kitab.iss)
-           and dist/Kitab_<v>_x64_portable.zip (data kept next to the exe).
+           and dist/Kitab_<v>_x64_portable.zip (data kept next to the exe),
+           with the console kitab command as bin/kitab.exe.
   macOS    dist/Kitab.app (Info.plist with the version, icons, ad-hoc signed)
            and dist/Kitab_<v>_<arch>.dmg.
   Linux    dist/Kitab_<v>_<arch>.tar.gz: the binary, desktop entry, MIME
@@ -47,13 +48,18 @@ def windows(v: str) -> None:
     app = fresh(DIST / "Kitab")
     for f in ["kitab.exe", "kitab_shell.dll"]:
         shutil.copy2(REL / f, app / f)
+    # The kitab command: the console kitab-cli.exe as bin\kitab.exe (the
+    # windowed kitab.exe can't print to a terminal). The installer puts bin\
+    # on the user PATH; so can Settings › Advanced › Command line.
+    (app / "bin").mkdir()
+    shutil.copy2(REL / "kitab-cli.exe", app / "bin" / "kitab.exe")
     shutil.copy2(ROOT / "LICENSE", app / "LICENSE.txt")
     shutil.copy2(ROOT / "NOTICE", app / "NOTICE.txt")
     # Portable: the same files plus `portable`, which keeps data in data\.
     zip_path = DIST / f"Kitab_{v}_{win_arch()}_portable.zip"
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as z:
-        for f in sorted(app.iterdir()):
-            z.write(f, f"Kitab/{f.name}")
+        for f in sorted(p for p in app.rglob("*") if p.is_file()):
+            z.write(f, f"Kitab/{f.relative_to(app).as_posix()}")
         z.writestr(
             "Kitab/portable",
             "Kitab keeps its data in the data folder next to it while this file is here.\n"
