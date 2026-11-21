@@ -404,6 +404,7 @@ Key facts:
 - Speed: built to show the first page as soon as the window opens, measured by a benchmark in CI. No results are published yet; do not quote any figure.
 - Privacy: no telemetry, no account. The only network request Kitab makes on its own is the update check (GitHub's latest version number), which the user can turn off. Signing keys never leave the computer.
 - Documentation: ${abs("/docs")} (Markdown: ${SITE.url}/docs.md) covers every feature, setting and keyboard shortcut.
+- Command line for scripts and AI agents (from 1.1.0): the \`kitab\` command reads, searches, converts documents to Markdown or text, and edits PDFs (pages, merge, split, compress, passwords, annotations, signatures), with \`--json\` output and stable exit codes; it never overwrites its inputs. \`kitab --help\` documents every command; \`kitab agent-skill --install claude\` (or codex, agents) installs the agent skill.
 - Licence: ${SITE.license.name}. Free, no paid tier.
 - Platforms: Windows, macOS and Linux, from the same code.
 - Made by ${SITE.org.name} (${SITE.org.url}, ${SITE.org.email}) and ${SITE.author.name}.
@@ -418,6 +419,8 @@ ${ROUTES.map(mdLink).join("\n")}
 - [Design system](${raw("DESIGN.md")}): colour tokens for the six themes, depth, type, density, icons, components and motion.
 - [README](${raw("README.md")}): what Kitab does, platforms and how to build.
 - [Privacy](${raw("PRIVACY.md")}): what the app stores and when it uses the network.
+- [Agent skill](${raw("skills/kitab/SKILL.md")}): when and how an AI agent should use the \`kitab\` command, with recipes, the JSON and exit-code contract, and pitfalls.
+- [Command-line reference for LLMs](${raw("docs/llms.txt")}): every \`kitab\` command in one page.
 
 ## Optional
 
