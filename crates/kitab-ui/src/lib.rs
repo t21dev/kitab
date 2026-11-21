@@ -34,7 +34,7 @@ use gpui::{
 use std::path::PathBuf;
 use std::sync::Arc;
 
-pub use engine::{DocEngine, DocHandle};
+pub use engine::{DocEngine, DocHandle, ExportKind, Exported, Shrink};
 
 /// Window and layout sizes the first frame (kitab-os splash) must match exactly.
 pub mod layout {

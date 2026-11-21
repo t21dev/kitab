@@ -3788,6 +3788,19 @@ impl Workspace {
                     ws.open_extract(r, window, cx);
                 }
             }))
+            .on_action(cx.listener(|ws, _: &ExportMarkdown, _, cx| {
+                if let Some(r) = ws.active_reader().cloned() {
+                    ws.export_document(r, crate::ExportKind::Markdown, cx);
+                }
+            }))
+            .on_action(cx.listener(|ws, _: &ExportText, _, cx| {
+                if let Some(r) = ws.active_reader().cloned() {
+                    ws.export_document(r, crate::ExportKind::Text, cx);
+                }
+            }))
+            .on_action(cx.listener(|ws, _: &CompressPdf, window, cx| {
+                ws.open_page_tools_on_compress(window, cx)
+            }))
             .on_action(
                 cx.listener(|ws, _: &ReopenClosedTab, window, cx| ws.reopen_closed(window, cx)),
             )

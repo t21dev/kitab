@@ -34,6 +34,9 @@ djvu-rs = { version = "0.45", default-features = false, features = ["std"] }
 # WebP pages in comics, which MuPDF can't decode. Already in kitab.exe through
 # GPUI's image crate, so it adds no size. MIT/Apache-2.0.
 image-webp = "0.2"
+# Make a PDF smaller: pictures scaled down and saved as JPEG. Already in
+# kitab.exe through GPUI (with its JPEG encoder), so it adds no size. MIT/Apache-2.0.
+image = { version = "0.25", default-features = false, features = ["jpeg"] }
 # Form fields and text boxes in scripts MuPDF's own appearance writer can't
 # draw (Bangla, Hindi, Arabic, Thai...): shaped with rustybuzz (a pure-Rust
 # HarfBuzz port; already in kitab.exe through GPUI's Linux text stack), and
@@ -42,6 +45,8 @@ rustybuzz = "0.20.1"
 subsetter = { version = "0.2.6", default-features = false }
 
 [dev-dependencies]
+# Tests make a large PNG to put in a PDF.
+image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
 serde_json = { workspace = true }
 # Local corpus test: check each file's SHA-256 before trusting a result. MIT/Apache-2.0.
 sha2 = "0.10"

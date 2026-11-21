@@ -75,6 +75,27 @@ pub const COMMANDS: &[Command] = &[
     ),
     cmd!(
         "File",
+        "Export as Markdown…",
+        "export convert markdown md save as llm ai agent pdf epub to markdown",
+        true,
+        ExportMarkdown
+    ),
+    cmd!(
+        "File",
+        "Export as text…",
+        "export convert text txt plain save as extract",
+        true,
+        ExportText
+    ),
+    cmd!(
+        "File",
+        "Make a smaller copy…",
+        "compress shrink reduce size smaller email optimise optimize file size",
+        true,
+        CompressPdf
+    ),
+    cmd!(
+        "File",
         "Split view with the next tab",
         "side by side compare",
         true,

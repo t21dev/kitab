@@ -893,6 +893,72 @@ impl Workspace {
         .detach();
     }
 
+    // ── export as Markdown or text ──
+
+    /// Ask where, then write the document in `reader` as Markdown (pictures
+    /// in `<name>_images/` beside it) or plain text. The message offers to
+    /// open the result, which Kitab reads too.
+    pub(super) fn export_document(
+        &mut self,
+        reader: Entity<Reader>,
+        kind: crate::ExportKind,
+        cx: &mut Context<Self>,
+    ) {
+        let r = reader.read(cx);
+        let (src, unlock) = (r.path.clone(), r.unlock());
+        let ext = match kind {
+            crate::ExportKind::Markdown => "md",
+            crate::ExportKind::Text => "txt",
+        };
+        let name = format!("{}.{ext}", stem(&src));
+        let save_rx = cx.prompt_for_new_path(&dir_of(&src), Some(&name));
+        let engine = self.engine.clone();
+        cx.spawn(async move |this, cx| {
+            let picked = save_rx.await;
+            // The picker couldn't open (Linux without a desktop portal): say so.
+            if matches!(picked, Ok(Err(_)) | Err(_)) {
+                let _ = this.update(cx, |ws, cx| ws.picker_failed(cx));
+            }
+            let Ok(Ok(Some(mut out))) = picked else {
+                return;
+            };
+            if out.extension().is_none() {
+                out.set_extension(ext);
+            }
+            let result = cx
+                .background_spawn(async move {
+                    engine
+                        .export_document(&src, unlock.as_deref(), kind, &out)
+                        .map(|done| (out, done))
+                })
+                .await;
+            let _ = this.update(cx, |ws, cx| match result {
+                Ok((out, done)) => {
+                    let pages = if done.pages == 1 {
+                        crate::i18n::tr("1 page").to_string()
+                    } else {
+                        crate::i18n::trf("{count} pages", &[("count", &done.pages.to_string())])
+                    };
+                    let what = match (kind, done.images) {
+                        (crate::ExportKind::Text, _) => {
+                            crate::i18n::trf("Exported {pages} as text:", &[("pages", &pages)])
+                        }
+                        (crate::ExportKind::Markdown, 0) => {
+                            crate::i18n::trf("Exported {pages} as Markdown:", &[("pages", &pages)])
+                        }
+                        (crate::ExportKind::Markdown, n) => crate::i18n::trf(
+                            "Exported {pages} as Markdown, with {count} pictures:",
+                            &[("pages", &pages), ("count", &n.to_string())],
+                        ),
+                    };
+                    ws.report(Ok(out), &what, cx);
+                }
+                Err(e) => ws.report(Err(e), "", cx),
+            });
+        })
+        .detach();
+    }
+
     // ── pictures to PDF ──
 
     /// Pick pictures and write them, one a page, to a new PDF (sorted by
@@ -1029,7 +1095,12 @@ impl Workspace {
         let is_pdf = reader.read(cx).is_pdf();
         let side = self.tools.split.as_ref() == Some(reader)
             || self.active_reader() == Some(reader) && self.tools.split.is_some();
-        let (r1, r2, r3) = (reader.clone(), reader.clone(), reader.clone());
+        let (r1, r2, r3, r4) = (
+            reader.clone(),
+            reader.clone(),
+            reader.clone(),
+            reader.clone(),
+        );
         let mut items = vec![
             MenuItem::new(
                 "Page tools…",
@@ -1046,6 +1117,13 @@ impl Workspace {
             .icon("file")
             .key("Ctrl+Shift+E")
             .disabled(!is_pdf),
+            MenuItem::new(
+                crate::i18n::tr("Export as Markdown…"),
+                self.on_ws(cx, move |ws, _, cx| {
+                    ws.export_document(r4.clone(), crate::ExportKind::Markdown, cx)
+                }),
+            )
+            .icon("file"),
             MenuItem::new(
                 "Merge with other PDFs…",
                 self.on_ws(cx, move |ws, _, cx| ws.merge_with(r2.clone(), cx)),

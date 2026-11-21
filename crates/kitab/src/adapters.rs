@@ -244,15 +244,31 @@ impl DocEngine for MupdfEngine {
                 p::rotate_pages(src, password, pages, *deg, out)?;
                 format!("Turned {}", n(pages.len(), "page", "pages"))
             }
-            PageOp::Compress => {
-                let (before, after) = p::compress(src, password, out)?;
-                let pct = (after * 100)
-                    .checked_div(before)
+            PageOp::Compress(shrink) => {
+                use kitab_mupdf::compress::{Strength, compress_pdf};
+                let strength = match shrink {
+                    kitab_ui::Shrink::Lossless => Strength::Lossless,
+                    kitab_ui::Shrink::Balanced => Strength::Balanced,
+                    kitab_ui::Shrink::Smallest => Strength::Smallest,
+                };
+                let done = compress_pdf(src, password, strength, out)?;
+                if done.after >= done.before {
+                    // Nothing gained: don't leave a second, larger copy.
+                    let _ = std::fs::remove_file(out);
+                    return Err("This PDF is already as small as Kitab can make it.".into());
+                }
+                let pct = (done.after * 100)
+                    .checked_div(done.before)
                     .map_or(0, |share| 100 - share.min(100));
+                let pictures = match done.pictures {
+                    0 => String::new(),
+                    1 => ", 1 picture made smaller".into(),
+                    n => format!(", {n} pictures made smaller"),
+                };
                 format!(
-                    "{} → {} ({pct}% smaller)",
-                    kitab_ui::reader::human_size(before),
-                    kitab_ui::reader::human_size(after)
+                    "{} → {} ({pct}% smaller{pictures})",
+                    kitab_ui::reader::human_size(done.before),
+                    kitab_ui::reader::human_size(done.after)
                 )
             }
             PageOp::Number(first) => {
@@ -372,6 +388,16 @@ impl DocEngine for MupdfEngine {
 
     fn images_to_pdf(&self, inputs: &[PathBuf], out: &Path) -> Result<u32, String> {
         kitab_mupdf::tools::images_to_pdf(inputs, out)
+    }
+
+    fn export_document(
+        &self,
+        src: &Path,
+        password: Option<&str>,
+        kind: kitab_ui::ExportKind,
+        out: &Path,
+    ) -> Result<kitab_ui::Exported, String> {
+        export_document(src, password, kind, out)
     }
 
     fn release_extra(&self, doc: DocHandle) {
@@ -1170,9 +1196,152 @@ impl Library for StoreLibrary {
     }
 }
 
+/// Export as Markdown or text (File menu): pictures go to `<name>_images/`
+/// beside a Markdown file, linked relatively, and the folder is removed again
+/// when there were none. Written next to `out` first, then renamed, so a
+/// failure leaves no half file.
+fn export_document(
+    src: &Path,
+    password: Option<&str>,
+    kind: kitab_ui::ExportKind,
+    out: &Path,
+) -> Result<kitab_ui::Exported, String> {
+    use kitab_mupdf::export::{ImageOut, MarkdownOptions, to_markdown, to_text};
+    if same_path(src, out) {
+        return Err("choose a different file name than the original".into());
+    }
+    let is_markdown_source = src
+        .extension()
+        .is_some_and(|e| e.eq_ignore_ascii_case("md") || e.eq_ignore_ascii_case("markdown"));
+    let done = if is_markdown_source {
+        // Markdown is already Markdown (and already text): a copy.
+        let text =
+            std::fs::read_to_string(src).map_err(|e| format!("could not read the file: {e}"))?;
+        kitab_mupdf::export::Exported {
+            text,
+            pages: 1,
+            images: 0,
+        }
+    } else {
+        match kind {
+            kitab_ui::ExportKind::Text => to_text(src, password, None)?,
+            kitab_ui::ExportKind::Markdown => {
+                let stem = out
+                    .file_stem()
+                    .map(|s| s.to_string_lossy().into_owned())
+                    .unwrap_or_else(|| "document".into());
+                let folder = format!("{stem}_images");
+                let dir = out.with_file_name(&folder);
+                let opts = MarkdownOptions {
+                    pages: None,
+                    images: Some(ImageOut {
+                        dir: dir.clone(),
+                        link_prefix: format!("{folder}/"),
+                    }),
+                    page_markers: false,
+                };
+                let done = to_markdown(src, password, &opts)?;
+                if done.images == 0 {
+                    // Created for nothing (a text-only document).
+                    let _ = std::fs::remove_dir(&dir);
+                }
+                done
+            }
+        }
+    };
+    let tmp = out.with_extension("kitab-tmp");
+    std::fs::write(&tmp, done.text.as_bytes())
+        .map_err(|e| format!("could not write the file: {e}"))?;
+    std::fs::rename(&tmp, out).map_err(|e| {
+        let _ = std::fs::remove_file(&tmp);
+        format!("could not save the file: {e}")
+    })?;
+    Ok(kitab_ui::Exported {
+        pages: done.pages,
+        images: done.images,
+    })
+}
+
+/// Whether `a` and `b` are the same file (the export would replace its source).
+fn same_path(a: &Path, b: &Path) -> bool {
+    match (a.canonicalize(), b.canonicalize()) {
+        (Ok(a), Ok(b)) => a == b,
+        _ => a == b,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn pdf(name: &str) -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/pdf")
+            .join(name)
+    }
+
+    /// File › Export as Markdown / text, as the app runs it: the file is
+    /// written, pictures land in `<name>_images/` and are linked from the
+    /// Markdown, a text-only export leaves no empty folder, and the source
+    /// can't be overwritten.
+    #[test]
+    fn export_writes_markdown_with_pictures_and_text() {
+        let dir = std::env::temp_dir().join(format!("kitab-export-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let md = dir.join("outline.md");
+        let done = export_document(
+            &pdf("01-text-outline.pdf"),
+            None,
+            kitab_ui::ExportKind::Markdown,
+            &md,
+        )
+        .unwrap();
+        assert_eq!(done.pages, 40);
+        assert!(
+            std::fs::read_to_string(&md)
+                .unwrap()
+                .contains("# Chapter 1")
+        );
+        assert!(
+            !dir.join("outline_images").exists(),
+            "no pictures, no folder"
+        );
+
+        let md = dir.join("scans.md");
+        let done = export_document(
+            &pdf("10-scanned-and-images.pdf"),
+            None,
+            kitab_ui::ExportKind::Markdown,
+            &md,
+        )
+        .unwrap();
+        assert!(done.images > 0);
+        let text = std::fs::read_to_string(&md).unwrap();
+        assert!(text.contains("](scans_images/"), "{text}");
+        assert_eq!(
+            std::fs::read_dir(dir.join("scans_images")).unwrap().count() as u32,
+            done.images
+        );
+
+        let txt = dir.join("outline.txt");
+        export_document(
+            &pdf("01-text-outline.pdf"),
+            None,
+            kitab_ui::ExportKind::Text,
+            &txt,
+        )
+        .unwrap();
+        assert!(
+            std::fs::read_to_string(&txt)
+                .unwrap()
+                .contains("kitab-needle-07")
+        );
+
+        let src = pdf("01-text-outline.pdf");
+        assert!(export_document(&src, None, kitab_ui::ExportKind::Text, &src).is_err());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     fn fixture() -> PathBuf {
         PathBuf::from(env!("CARGO_MANIFEST_DIR"))

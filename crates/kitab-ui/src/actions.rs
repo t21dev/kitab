@@ -112,6 +112,11 @@ actions!(
         PageTools,
         // PDF tools
         ExtractPages,
+        // Make a smaller copy of a PDF (pictures scaled down).
+        CompressPdf,
+        // The document's content as Markdown (pictures beside it) or text.
+        ExportMarkdown,
+        ExportText,
         ToggleSplit,
         CloseOverlay,
         // Keyboard focus: the next or previous button or control

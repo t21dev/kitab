@@ -77,7 +77,7 @@ impl Tool {
             Tool::Move => "A copy with the pages you list moved before another page.",
             Tool::Rotate => "A copy with the pages you list turned.",
             Tool::Compress => {
-                "A smaller copy: unused and repeated parts dropped, fonts, pictures and streams compressed. Pictures keep their quality."
+                "A smaller copy. Balanced and Smallest scale down pictures larger than the pages need; text, drawings and fonts stay as sharp as before. Same quality only drops unused and repeated parts."
             }
             Tool::Number => "A copy with a number at the bottom of every page.",
             Tool::Watermark => "A copy with light text across every page.",
@@ -99,6 +99,8 @@ pub(super) struct PageToolsSheet {
     first: Entity<TextField>,
     mark: Entity<TextField>,
     turn: i32,
+    /// Compress: how much smaller.
+    shrink: crate::Shrink,
     serial: u64,
     _subs: Vec<Subscription>,
 }
@@ -142,9 +144,23 @@ impl Workspace {
             first,
             mark,
             turn: 90,
+            shrink: crate::Shrink::Balanced,
             serial: self.page_tools_serial,
             _subs: subs,
         });
+        cx.notify();
+    }
+
+    /// File › Make a smaller copy… (and Ctrl+K): Page tools, on Compress.
+    pub(super) fn open_page_tools_on_compress(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.open_page_tools(window, cx);
+        if let Some(s) = self.page_tools.as_mut() {
+            s.tool = Tool::Compress;
+        }
         cx.notify();
     }
 
@@ -182,7 +198,7 @@ impl Workspace {
                 PageOp::Move(p, before - 1)
             }
             Tool::Rotate => PageOp::Rotate(pages()?, s.turn),
-            Tool::Compress => PageOp::Compress,
+            Tool::Compress => PageOp::Compress(s.shrink),
             Tool::Number => PageOp::Number(
                 number(&s.first).ok_or("Start at a whole number, like 1.".to_string())?,
             ),
@@ -250,7 +266,7 @@ impl Workspace {
             PageOp::Delete(_) => format!("{name} (pages deleted).pdf"),
             PageOp::Move(..) => format!("{name} (reordered).pdf"),
             PageOp::Rotate(..) => format!("{name} (turned).pdf"),
-            PageOp::Compress => format!("{name} (compressed).pdf"),
+            PageOp::Compress(_) => format!("{name} (compressed).pdf"),
             PageOp::Number(_) => format!("{name} (numbered).pdf"),
             PageOp::Watermark(_) => format!("{name} (watermarked).pdf"),
             PageOp::Images => unreachable!("handled above"),
@@ -446,6 +462,55 @@ impl Workspace {
                         st,
                     ),
                 ))
+            })
+            .when(s.tool == Tool::Compress, |d| {
+                use crate::Shrink;
+                let shrink = |to: Shrink| -> Click {
+                    let ws = ws.clone();
+                    Box::new(move |_, cx| {
+                        let _ = ws.update(cx, |ws, cx| {
+                            if let Some(s) = ws.page_tools.as_mut() {
+                                s.shrink = to;
+                            }
+                            cx.notify();
+                        });
+                    })
+                };
+                d.child(row(
+                    "Quality",
+                    segmented(
+                        vec![
+                            (
+                                SharedString::from("Balanced"),
+                                s.shrink == Shrink::Balanced,
+                                shrink(Shrink::Balanced),
+                            ),
+                            (
+                                SharedString::from("Smallest"),
+                                s.shrink == Shrink::Smallest,
+                                shrink(Shrink::Smallest),
+                            ),
+                            (
+                                SharedString::from("Same quality"),
+                                s.shrink == Shrink::Lossless,
+                                shrink(Shrink::Lossless),
+                            ),
+                        ],
+                        st,
+                    ),
+                ))
+                .child(
+                    div()
+                        .text_size(px(12.0))
+                        .text_color(st.c(|c| c.faint))
+                        .child(match s.shrink {
+                            Shrink::Balanced => {
+                                "Pictures at most 150 dpi: fine for reading and printing."
+                            }
+                            Shrink::Smallest => "Pictures at most 96 dpi: for sending by email.",
+                            Shrink::Lossless => "Pictures unchanged.",
+                        }),
+                )
             })
             .when(s.tool == Tool::Number, |d| {
                 d.child(row("Start at", field(&s.first).into_any_element()))

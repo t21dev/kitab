@@ -94,6 +94,9 @@ const MENUS: &[BarMenu] = &[
                 Pdf,
                 ExtractPages
             ),
+            row!("Make a smaller copy…", "", Pdf, CompressPdf),
+            row!("Export as Markdown…", "", Doc, ExportMarkdown),
+            row!("Export as text…", "", Doc, ExportText),
             row!("Print…", "Ctrl+P", Doc, Print),
             row!("Make a PDF from pictures…", "", Nothing, ImagesToPdf),
             None,

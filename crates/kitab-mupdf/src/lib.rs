@@ -37,9 +37,12 @@
 //! values, panics in a job are caught on the worker and reported as errors, and
 //! a document whose jobs panic twice is closed (quarantined).
 
+pub mod cli_ops;
 mod comic;
+pub mod compress;
 mod djvu;
 mod doc;
+pub mod export;
 mod source;
 pub use source::{open_first_page, reads_itself, register as register_handlers};
 mod abort;

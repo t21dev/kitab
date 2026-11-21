@@ -9,6 +9,33 @@ use kitab_core::{
     SignatureCheck, TextChar,
 };
 
+/// What Export as… writes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExportKind {
+    /// Markdown, pictures saved beside it in `<name>_images/`.
+    Markdown,
+    /// Plain text.
+    Text,
+}
+
+/// What an export did.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Exported {
+    pub pages: u32,
+    pub images: u32,
+}
+
+/// How much smaller Page tools › Compress makes a PDF (GitHub #13).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Shrink {
+    /// A clean rewrite; pictures unchanged.
+    Lossless,
+    /// Pictures at most 150 dpi.
+    Balanced,
+    /// Pictures at most 96 dpi.
+    Smallest,
+}
+
 /// A signature to add (Sign…): where it goes and what it says. The key's
 /// password travels with the request only (AGENTS.md rule 13).
 #[derive(Clone)]
@@ -41,7 +68,8 @@ pub enum PageOp {
     Move(Vec<u32>, u32),
     /// Pages and degrees clockwise.
     Rotate(Vec<u32>, i32),
-    Compress,
+    /// A smaller copy: pictures scaled down as much as this says.
+    Compress(Shrink),
     /// Page numbers, starting at this one.
     Number(u32),
     Watermark(String),
@@ -187,6 +215,17 @@ pub trait DocEngine: Send + Sync + 'static {
     }
     /// Write all pages of `inputs` (path, password), in order, to `out`. Returns the page count.
     fn merge(&self, inputs: &[(PathBuf, Option<String>)], out: &Path) -> Result<u32, String>;
+    /// The document at `src` as Markdown or text at `out`.
+    fn export_document(
+        &self,
+        src: &Path,
+        password: Option<&str>,
+        kind: ExportKind,
+        out: &Path,
+    ) -> Result<Exported, String> {
+        let _ = (src, password, kind, out);
+        Err("this engine can't export documents".into())
+    }
     /// One page for each picture in `inputs`, in order, written to `out`.
     /// Returns the page count.
     fn images_to_pdf(&self, inputs: &[PathBuf], out: &Path) -> Result<u32, String> {
