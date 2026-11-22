@@ -207,16 +207,51 @@ pub fn clear_leftovers() {
     }
 }
 
+/// The most the panic note keeps: the first panics of a run, which are the
+/// cause; a crash's later ones only follow from them.
+const PANIC_NOTE_MAX: usize = 64 << 10;
+
+/// A panic noted, with where it happened and how it got there.
+fn panic_note(info: &std::panic::PanicHookInfo<'_>) -> String {
+    let thread = std::thread::current();
+    format!(
+        "Kitab {} panicked on thread '{}': {info}\n{}\n",
+        env!("CARGO_PKG_VERSION"),
+        thread.name().unwrap_or("unnamed"),
+        std::backtrace::Backtrace::force_capture()
+    )
+}
+
+/// Add `note` to the panic note: the first of this run starts it afresh, the
+/// rest follow it. A panic while another unwinds ends in "panic in a
+/// destructor during cleanup", which says nothing; the first one says what
+/// went wrong (GitHub #19 reported only the second).
+fn add_panic_note(path: &Path, note: &str, first: bool) {
+    use std::io::Write;
+    let file = if first {
+        std::fs::File::create(path)
+    } else {
+        if std::fs::metadata(path).is_ok_and(|m| m.len() as usize >= PANIC_NOTE_MAX) {
+            return;
+        }
+        std::fs::OpenOptions::new().append(true).open(path)
+    };
+    if let Ok(mut f) = file {
+        let _ = f.write_all(note.as_bytes());
+    }
+}
+
 /// On any panic, write the unsaved work at once, then note the panic, then
 /// carry on as before (the default report, then unwinding).
 pub fn install_panic_hook() {
+    static NOTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
     let previous = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
         write();
         if let Some(d) = kitab_os::data_dir().map(|d| d.join("crash")) {
-            let note = format!("Kitab {} panicked: {info}\n", env!("CARGO_PKG_VERSION"));
+            let first = !NOTED.swap(true, std::sync::atomic::Ordering::SeqCst);
             let _ = std::fs::create_dir_all(&d);
-            let _ = std::fs::write(d.join(PANIC_NOTE), note);
+            add_panic_note(&d.join(PANIC_NOTE), &panic_note(info), first);
         }
         previous(info);
     }));
@@ -237,6 +272,24 @@ mod tests {
             }],
             deleted: vec![(1, 0)],
         }
+    }
+
+    /// GitHub #19: the panic that started a crash isn't overwritten by the
+    /// ones that follow it; the next run starts the note afresh.
+    #[test]
+    fn the_first_panic_of_a_run_is_kept() {
+        let dir = std::env::temp_dir().join(format!("kitab-panic-{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&dir);
+        let note = dir.join(PANIC_NOTE);
+        add_panic_note(&note, "cause\n", true);
+        add_panic_note(&note, "panic in a destructor during cleanup\n", false);
+        assert_eq!(
+            std::fs::read_to_string(&note).unwrap(),
+            "cause\npanic in a destructor during cleanup\n"
+        );
+        add_panic_note(&note, "next run\n", true);
+        assert_eq!(std::fs::read_to_string(&note).unwrap(), "next run\n");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
