@@ -145,6 +145,8 @@ pub enum ReaderEvent {
     SignaturePlaced(Option<(u32, [f32; 4])>),
     /// Something went wrong that the reader should hear about (a toast).
     Message(String),
+    /// Something to know, not an error (a toast that goes by).
+    Note(String),
     /// Asked to go on with the end of the document in view: the workspace
     /// offers the next book in the folder (GitHub #9).
     PastEnd,
@@ -1357,6 +1359,14 @@ impl Reader {
 
     /// Ctrl+6 / Ctrl+7 / Ctrl+8: one page across, two, or a book's spreads.
     pub fn set_spread(&mut self, spread: Spread, cx: &mut Context<Self>) {
+        // A book or Markdown flows to fit the window: say so, rather than
+        // doing nothing (the keys and the palette reached here silently).
+        if self.status == Status::Open && !self.can_spread() {
+            cx.emit(ReaderEvent::Note(
+                "Books flow to fit the window, one page across. Two pages and book view are for PDFs, comics, XPS and DjVu.".into(),
+            ));
+            return;
+        }
         if self.spread == spread {
             return;
         }

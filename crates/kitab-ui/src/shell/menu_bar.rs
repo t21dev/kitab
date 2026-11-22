@@ -41,6 +41,8 @@ enum Needs {
     Nothing,
     /// A document in the active tab.
     Doc,
+    /// Fixed pages that can go side by side (not a flowing book).
+    Pages,
     Pdf,
     Markdown,
 }
@@ -138,9 +140,9 @@ const MENUS: &[BarMenu] = &[
             row!("Fit page", "Ctrl+0", Doc, FitPage),
             row!("Actual size", "Ctrl+1", Doc, ActualSize),
             None,
-            row!("Single page", "Ctrl+6", Doc, SinglePage),
-            row!("Two pages side by side", "Ctrl+7", Doc, TwoPages),
-            row!("Book view", "Ctrl+8", Doc, BookView),
+            row!("Single page", "Ctrl+6", Pages, SinglePage),
+            row!("Two pages side by side", "Ctrl+7", Pages, TwoPages),
+            row!("Book view", "Ctrl+8", Pages, BookView),
             None,
             row!("Rotate clockwise", "Ctrl+Shift+=", Doc, RotateRight),
             row!("Rotate counter-clockwise", "Ctrl+Shift+-", Doc, RotateLeft),
@@ -423,12 +425,12 @@ impl Workspace {
     ) {
         let Some(menu) = MENUS.get(ix) else { return };
         let reader = self.active_reader().cloned();
-        let (doc, pdf, markdown) = match &reader {
+        let (doc, pages, pdf, markdown) = match &reader {
             Some(r) => {
                 let r = r.read(cx);
-                (true, r.is_pdf(), r.is_markdown())
+                (true, r.can_spread(), r.is_pdf(), r.is_markdown())
             }
-            None => (false, false, false),
+            None => (false, false, false, false),
         };
         let items: Vec<MenuItem> = menu
             .rows
@@ -440,6 +442,7 @@ impl Workspace {
                     let off = match e.needs {
                         Needs::Nothing => false,
                         Needs::Doc => !doc,
+                        Needs::Pages => !pages,
                         Needs::Pdf => !pdf,
                         Needs::Markdown => !markdown,
                     };

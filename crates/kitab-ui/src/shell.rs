@@ -820,6 +820,7 @@ impl Workspace {
                     ReaderEvent::Presenting(on) => this.set_presenting(*on, window, cx),
                     ReaderEvent::Print => this.open_print(window, cx),
                     ReaderEvent::Message(text) => this.toast(text.clone(), true, None, cx),
+                    ReaderEvent::Note(text) => this.toast(text.clone(), false, None, cx),
                     ReaderEvent::Password => this.open_password(window, cx),
                     ReaderEvent::SignaturePlaced(spot) => this.signature_placed(*spot, cx),
                     ReaderEvent::Signatures => cx.notify(),
