@@ -13,8 +13,9 @@ use crate::style::Style;
 use gpui::{
     App, AppContext, Bounds, ClipboardItem, Context, ElementInputHandler, Entity,
     EntityInputHandler, EventEmitter, FocusHandle, Focusable, Font, InteractiveElement,
-    IntoElement, KeyDownEvent, ParentElement, Pixels, Render, SharedString, Styled, TextRun,
-    UTF16Selection, Window, canvas, div, point, px, size,
+    IntoElement, KeyDownEvent, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent,
+    ParentElement, Pixels, Point, Render, SharedString, Styled, TextRun, UTF16Selection, Window,
+    canvas, div, point, px, size,
 };
 use std::ops::Range;
 
@@ -50,6 +51,12 @@ pub struct TextField {
     /// How far the text is slid left so the caret stays in view (a line
     /// longer than the box), as painted last.
     shift: std::rc::Rc<std::cell::Cell<f32>>,
+    /// Where the first line's text starts on screen, as painted last: a
+    /// click finds its letter from here.
+    origin: std::rc::Rc<std::cell::Cell<Point<Pixels>>>,
+    /// The mouse button went down in the field and is still held: moving
+    /// selects (a drag).
+    dragging: bool,
 }
 
 /// Tab (or Shift+Tab, `back`) in a field that hands focus on: the next field.
@@ -74,6 +81,25 @@ fn display(text: &str) -> SharedString {
 
 /// What a secret field shows for each character.
 const DOT: char = '•';
+
+/// The byte offset in `text` of `ix`, an offset in the line as [`shown`]
+/// draws it (tabs widened to four spaces, or one dot a character).
+fn unshown(text: &str, ix: usize, secret: bool) -> usize {
+    let mut at = 0;
+    for (i, c) in text.char_indices() {
+        if at >= ix {
+            return i;
+        }
+        at += if secret {
+            DOT.len_utf8()
+        } else if c == '\t' {
+            4
+        } else {
+            c.len_utf8()
+        };
+    }
+    text.len()
+}
 
 /// A line as shown, and `col` (a byte offset in `text`) moved into it.
 fn shown(text: &str, col: usize, secret: bool) -> (SharedString, usize) {
@@ -111,7 +137,70 @@ impl TextField {
             tab_out: false,
             on_paper: false,
             shift: std::rc::Rc::new(std::cell::Cell::new(0.0)),
+            origin: std::rc::Rc::new(std::cell::Cell::new(Point::default())),
+            dragging: false,
         }
+    }
+
+    /// Replace the text (no [`FieldEvent::Changed`]: the caller set it),
+    /// with the caret at its end.
+    pub fn set_text(&mut self, text: &str, cx: &mut Context<Self>) {
+        self.buf = EditBuffer::new(text.to_string());
+        self.buf.end(true, false);
+        cx.notify();
+    }
+
+    /// Select everything, so typing replaces it.
+    pub fn select_all(&mut self, cx: &mut Context<Self>) {
+        self.buf.select_all();
+        cx.notify();
+    }
+
+    /// The offset in the text under `pos` (window coordinates).
+    fn offset_at(&self, pos: Point<Pixels>, window: &mut Window) -> usize {
+        let origin = self.origin.get();
+        let lines = self.buf.line_count().max(1);
+        let y = f32::from(pos.y - origin.y);
+        let line = ((y / self.line_h()).floor().max(0.0) as usize).min(lines - 1);
+        let text = self.buf.line(line);
+        let (shown_text, _) = shown(text, 0, self.secret);
+        let font = window.text_style().font();
+        let shaped = window.text_system().shape_line(
+            shown_text.clone(),
+            px(self.font_size),
+            &[run(shown_text.len(), gpui::black(), &font)],
+            None,
+        );
+        let ix = shaped.closest_index_for_x(pos.x - origin.x);
+        self.buf.line_range(line).start + unshown(text, ix, self.secret)
+    }
+
+    fn on_mouse_down(&mut self, e: &MouseDownEvent, window: &mut Window, cx: &mut Context<Self>) {
+        window.focus(&self.focus);
+        let at = self.offset_at(e.position, window);
+        if e.click_count >= 3 {
+            self.buf.select_all();
+        } else if e.click_count == 2 {
+            self.buf.select_word(at);
+        } else {
+            self.buf.click(at, e.modifiers.shift);
+            self.dragging = true;
+        }
+        cx.stop_propagation();
+        cx.notify();
+    }
+
+    fn on_mouse_move(&mut self, e: &MouseMoveEvent, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.dragging {
+            return;
+        }
+        if e.pressed_button != Some(MouseButton::Left) {
+            self.dragging = false;
+            return;
+        }
+        let at = self.offset_at(e.position, window);
+        self.buf.click(at, true);
+        cx.notify();
     }
 
     /// Type at `px` pixels (the line height follows).
@@ -277,6 +366,7 @@ impl Render for TextField {
         let font = window.text_style().font();
         let caret_x = self.caret_x(head_line, head, window);
         let shift = self.shift.clone();
+        let painted_origin = self.origin.clone();
         // Selection: x from and to on each line it touches.
         let sel_spans: Vec<(usize, f32, f32)> = if sel.is_empty() {
             Vec::new()
@@ -299,6 +389,14 @@ impl Render for TextField {
             })
             .track_focus(&self.focus)
             .on_key_down(cx.listener(|f, e: &KeyDownEvent, window, cx| f.on_key(e, window, cx)))
+            // Click to put the caret, drag or Shift+click to select, double-click
+            // for a word (GitHub #27: the caret couldn't be moved by mouse).
+            .on_mouse_down(MouseButton::Left, cx.listener(Self::on_mouse_down))
+            .on_mouse_move(cx.listener(Self::on_mouse_move))
+            .on_mouse_up(
+                MouseButton::Left,
+                cx.listener(|f, _: &MouseUpEvent, _, _| f.dragging = false),
+            )
             .w_full()
             .h(px(lines as f32 * lh + 4.0))
             // Text longer than the box slides, it never paints outside it.
@@ -319,6 +417,7 @@ impl Render for TextField {
                         let slide = (caret_x - room).max(0.0);
                         shift.set(slide);
                         let origin = bounds.origin + point(px(-slide), px(2.0));
+                        painted_origin.set(origin);
                         for (i, x0, x1) in &sel_spans {
                             window.paint_quad(gpui::fill(
                                 Bounds::new(
@@ -491,4 +590,22 @@ pub fn new_field(
     let field = cx.new(|cx| TextField::new(text, multiline, placeholder, cx));
     field.read(cx).focus(window);
     field
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{DOT, unshown};
+
+    #[test]
+    fn a_click_lands_between_the_right_letters() {
+        assert_eq!(unshown("In the", 0, false), 0);
+        assert_eq!(unshown("In the", 3, false), 3);
+        assert_eq!(unshown("In the", 99, false), 6);
+        // A tab is drawn four spaces wide.
+        assert_eq!(unshown("a\tb", 5, false), 2);
+        // Bangla letters are several bytes each.
+        assert_eq!(unshown("আমি", 3, false), 3);
+        // A password: one dot a character.
+        assert_eq!(unshown("abc", 2 * DOT.len_utf8(), true), 2);
+    }
 }

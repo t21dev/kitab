@@ -402,6 +402,7 @@ impl Reader {
         window.focus(&focus);
         let page_focus = cx.focus_handle();
         // Clicking away from the page field cancels the edit.
+        let (find_field, find_sub) = find::new_field(window, cx);
         let blur = cx.on_blur(&page_focus, window, |r, _, cx| {
             r.page_edit = None;
             cx.notify();
@@ -448,7 +449,7 @@ impl Reader {
             autoscroll_serial: 0,
             back: Vec::new(),
             forward: Vec::new(),
-            _subs: vec![blur],
+            _subs: vec![blur, find_sub],
             visible: Arc::new(std::sync::atomic::AtomicU64::new(0)),
             trace: std::env::var_os("KITAB_TRACE_RENDER").is_some(),
             blank_since: std::collections::HashMap::new(),
@@ -467,7 +468,7 @@ impl Reader {
             pending_recovery: None,
             last_frame: None,
             unlock: None,
-            find: find::FindState::new(cx.focus_handle()),
+            find: find::FindState::new(find_field),
             layers: layer::Layers::default(),
             select: select::SelectState::default(),
             md_sel: md_select::MdSelect::default(),

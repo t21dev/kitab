@@ -329,8 +329,9 @@ impl Reader {
         };
         let query: String = text.split_whitespace().collect::<Vec<_>>().join(" ");
         self.find.query = query.chars().take(256).collect();
+        let text = self.find.query.clone();
+        self.find.field.update(cx, |f, cx| f.set_text(&text, cx));
         self.open_find(window, cx);
-        self.find.all_selected = true;
         self.search(cx);
     }
 

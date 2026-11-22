@@ -13,11 +13,12 @@ use crate::actions::*;
 use crate::icons::icon;
 use crate::motion;
 use crate::style::Style;
+use crate::text_field::{FieldEvent, TextField};
 use crate::tooltip::Tip;
 use gpui::{
-    AnyElement, AppContext, Context, ElementId, FocusHandle, InteractiveElement, IntoElement,
-    KeyDownEvent, ListOffset, MouseButton, ParentElement, SharedString, StatefulInteractiveElement,
-    Styled, Window, div, prelude::FluentBuilder, px, svg,
+    AnyElement, AppContext, Context, ElementId, Entity, Focusable, InteractiveElement, IntoElement,
+    ListOffset, MouseButton, ParentElement, SharedString, StatefulInteractiveElement, Styled,
+    Subscription, Window, div, prelude::FluentBuilder, px, svg,
 };
 use kitab_core::{FindOptions, RectPt};
 use std::collections::BTreeMap;
@@ -38,10 +39,11 @@ pub(super) struct FindState {
     pub serial: u64,
     /// Closing: the bar plays its exit, then goes.
     pub closing: bool,
+    /// What the field holds, as last searched for.
     pub query: String,
-    /// The whole query is selected: typing replaces it (after Ctrl+F on an open bar).
-    pub all_selected: bool,
-    pub focus: FocusHandle,
+    /// The text box: a caret that moves, selection, clipboard and input
+    /// methods (GitHub #27: the old one could only add or rub out at the end).
+    pub field: Entity<TextField>,
     pub options: FindOptions,
     /// Hits by page, each a list of boxes in page points, in reading order.
     pub hits: BTreeMap<u32, Vec<Vec<RectPt>>>,
@@ -54,14 +56,13 @@ pub(super) struct FindState {
 }
 
 impl FindState {
-    pub fn new(focus: FocusHandle) -> Self {
+    pub fn new(field: Entity<TextField>) -> Self {
         Self {
             open: false,
             serial: 0,
             closing: false,
             query: String::new(),
-            all_selected: false,
-            focus,
+            field,
             options: FindOptions {
                 match_case: false,
                 whole_word: false,
@@ -104,20 +105,34 @@ impl FindState {
     }
 }
 
-/// What a key press types into the find field, if anything. Space is its
-/// own case: on Windows GPUI reports it as the key "space" with no
-/// `key_char`, so a phrase like "Hells angels" lost its space (GitHub #16).
-/// Ctrl and Alt combinations are commands, never text.
-fn typed(k: &gpui::Keystroke) -> Option<&str> {
-    if k.modifiers.control || k.modifiers.alt || k.modifiers.platform {
-        return None;
-    }
-    if k.key == "space" {
-        return Some(" ");
-    }
-    k.key_char
-        .as_deref()
-        .filter(|ch| !ch.is_empty() && ch.chars().all(|c| !c.is_control()))
+/// Make the find field and follow its edits: Enter steps to the next hit,
+/// Esc closes the bar, any change searches again.
+pub(super) fn new_field(
+    window: &mut Window,
+    cx: &mut Context<Reader>,
+) -> (Entity<TextField>, Subscription) {
+    let field = cx.new(|cx| TextField::new("", false, "Find in document", cx));
+    let sub = cx.subscribe_in(
+        &field,
+        window,
+        |r: &mut Reader, field, e: &FieldEvent, window, cx| match e {
+            FieldEvent::Submit => r.find_step(true, window, cx),
+            FieldEvent::Cancel => r.close_find(window, cx),
+            FieldEvent::Changed => {
+                let mut text = field.read(cx).text();
+                if text.chars().count() > MAX_QUERY {
+                    text = text.chars().take(MAX_QUERY).collect();
+                    field.update(cx, |f, cx| f.set_text(&text, cx));
+                }
+                if text != r.find.query {
+                    r.find.query = text;
+                    r.search(cx);
+                }
+                cx.notify();
+            }
+        },
+    );
+    (field, sub)
 }
 
 impl Reader {
@@ -132,8 +147,11 @@ impl Reader {
             f.closing = false;
             f.serial += 1;
         }
-        f.all_selected = !f.query.is_empty();
-        window.focus(&f.focus.clone());
+        if !f.query.is_empty() {
+            f.field.update(cx, |t, cx| t.select_all(cx));
+        }
+        let focus = f.field.focus_handle(cx);
+        window.focus(&focus);
         if !self.find.query.is_empty() && self.find.hits.is_empty() && self.find.done {
             self.search(cx);
         }
@@ -360,60 +378,6 @@ impl Reader {
         cx.notify();
     }
 
-    fn on_key_find(&mut self, e: &KeyDownEvent, _: &mut Window, cx: &mut Context<Self>) {
-        let k = &e.keystroke;
-        let f = &mut self.find;
-        let changed = match k.key.as_str() {
-            // Bound keys arrive as actions; these never edit the query.
-            "enter" | "escape" | "tab" | "f3" => return,
-            "backspace" => {
-                if f.all_selected || k.modifiers.control {
-                    f.query.clear();
-                } else {
-                    f.query.pop();
-                }
-                true
-            }
-            "a" if k.modifiers.control => {
-                f.all_selected = !f.query.is_empty();
-                cx.notify();
-                cx.stop_propagation();
-                return;
-            }
-            "v" if k.modifiers.control => {
-                let pasted = cx
-                    .read_from_clipboard()
-                    .and_then(|c| c.text())
-                    .unwrap_or_default();
-                let line = pasted.lines().next().unwrap_or("").to_string();
-                if f.all_selected {
-                    f.query.clear();
-                }
-                f.query.push_str(&line);
-                !line.is_empty()
-            }
-            _ => match typed(k) {
-                Some(ch) => {
-                    if f.all_selected {
-                        f.query.clear();
-                    }
-                    f.query.push_str(ch);
-                    true
-                }
-                None => false,
-            },
-        };
-        if changed {
-            f.all_selected = false;
-            if f.query.chars().count() > MAX_QUERY {
-                f.query = f.query.chars().take(MAX_QUERY).collect();
-            }
-            self.search(cx);
-        }
-        cx.stop_propagation();
-        cx.notify();
-    }
-
     /// Highlights for page `ix`, positioned on its sheet.
     pub(super) fn find_marks(&self, ix: usize, ppt: f32, st: &Style) -> Vec<AnyElement> {
         if !self.find.open || self.find.closing {
@@ -478,7 +442,7 @@ impl Reader {
         if !f.open {
             return None;
         }
-        let focused = f.focus.is_focused(window);
+        let focused = f.field.focus_handle(cx).contains_focused(window, cx);
         let empty = f.query.is_empty();
         let count: SharedString = if empty {
             "".into()
@@ -500,16 +464,9 @@ impl Reader {
             }
         };
         let none = !empty && f.done && f.total == 0;
-        let caret = div()
-            .w(px(1.0))
-            .h(px(15.0))
-            .bg(st.c(|c| c.accent))
-            .flex_none();
         let field = div()
             .id("find-field")
             .key_context(FIND_BAR)
-            .track_focus(&f.focus)
-            .on_key_down(cx.listener(Self::on_key_find))
             .on_action(cx.listener(|r, _: &FindNext, window, cx| r.find_step(true, window, cx)))
             .on_action(cx.listener(|r, _: &FindPrev, window, cx| r.find_step(false, window, cx)))
             .on_action(cx.listener(|r, _: &CloseFind, window, cx| r.close_find(window, cx)))
@@ -522,8 +479,9 @@ impl Reader {
             .on_mouse_down(
                 MouseButton::Left,
                 cx.listener(|r, _, window, cx| {
-                    r.find.all_selected = false;
-                    window.focus(&r.find.focus.clone());
+                    // Around the text (the icon, the count): into the field.
+                    let focus = r.find.field.focus_handle(cx);
+                    window.focus(&focus);
                     cx.notify();
                 }),
             )
@@ -559,37 +517,7 @@ impl Reader {
                     .min_w_0()
                     .flex()
                     .items_center()
-                    .overflow_hidden()
-                    .text_size(st.px(|m| m.ui_text))
-                    .whitespace_nowrap()
-                    // A long query shows its end, where the caret is.
-                    .when(f.query.chars().count() > 28, |d| d.justify_end())
-                    .map(|d| {
-                        if empty {
-                            d.when(focused, |d| d.child(caret)).child(
-                                div()
-                                    .text_color(st.c(|c| c.faint))
-                                    .child("Find in document"),
-                            )
-                        } else if f.all_selected {
-                            d.child(
-                                div()
-                                    .px(px(1.0))
-                                    .rounded(px(3.0))
-                                    .bg(st.c(|c| c.accent).opacity(0.3))
-                                    .text_color(st.c(|c| c.text))
-                                    .child(f.query.clone()),
-                            )
-                        } else {
-                            d.child(
-                                div()
-                                    .flex_none()
-                                    .text_color(st.c(|c| c.text))
-                                    .child(f.query.clone()),
-                            )
-                            .when(focused, |d| d.child(caret))
-                        }
-                    }),
+                    .child(f.field.clone()),
             )
             .child(
                 div()
@@ -709,33 +637,4 @@ fn bar_button(
         .when(on, |d| d.bg(st.c(|c| c.hover)).shadow(st.well()))
         .when(!on && !disabled, |d| d.hover(|d| d.bg(st.hover_bg())))
         .child(svg().path(icon(name)).size(px(16.0)).text_color(fg))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::typed;
-    use gpui::{Keystroke, Modifiers};
-
-    fn key(key: &str, key_char: Option<&str>, modifiers: Modifiers) -> Keystroke {
-        Keystroke {
-            modifiers,
-            key: key.into(),
-            key_char: key_char.map(Into::into),
-        }
-    }
-
-    /// GitHub #16: Space types a space (Windows sends no key_char for it),
-    /// letters type themselves, and Ctrl, Alt and named keys type nothing.
-    #[test]
-    fn the_find_field_types_spaces_and_letters_only() {
-        let none = Modifiers::default();
-        assert_eq!(typed(&key("space", None, none)), Some(" "));
-        assert_eq!(typed(&key("h", Some("h"), none)), Some("h"));
-        assert_eq!(typed(&key("a", Some("A"), Modifiers::shift())), Some("A"));
-        assert_eq!(typed(&key("space", None, Modifiers::control())), None);
-        assert_eq!(typed(&key("a", Some("a"), Modifiers::control())), None);
-        assert_eq!(typed(&key("a", Some("a"), Modifiers::alt())), None);
-        assert_eq!(typed(&key("left", None, none)), None);
-        assert_eq!(typed(&key("tab", Some("\t"), none)), None);
-    }
 }
