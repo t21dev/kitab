@@ -52,6 +52,8 @@ pub struct Style {
     pub skipped_update: String,
     /// The scroll bar on the right of the pages.
     pub scroll_bar: bool,
+    /// It shows only while the pages move, then fades out.
+    pub scroll_bar_fade: bool,
     pub smooth_scroll: bool,
     pub scroll_60hz: bool,
     /// The open-tab count in the title bar.
@@ -165,6 +167,7 @@ impl Style {
             update_check: s.update_check,
             skipped_update: s.skipped_update.clone(),
             scroll_bar: s.scroll_bar,
+            scroll_bar_fade: s.scroll_bar_fade,
             smooth_scroll: s.smooth_scroll,
             scroll_60hz: s.scroll_60hz,
             tab_count: s.tab_count,
@@ -261,6 +264,7 @@ impl Style {
             update_check: self.update_check,
             skipped_update: self.skipped_update.clone(),
             scroll_bar: self.scroll_bar,
+            scroll_bar_fade: self.scroll_bar_fade,
             smooth_scroll: self.smooth_scroll,
             scroll_60hz: self.scroll_60hz,
             tab_count: self.tab_count,

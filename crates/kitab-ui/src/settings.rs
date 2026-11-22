@@ -777,6 +777,9 @@ pub struct Settings {
     pub skipped_update: String,
     /// The scroll bar along the right of the pages (Settings › Reading).
     pub scroll_bar: bool,
+    /// The scroll bar shows only while the pages move (or the pointer is on
+    /// it), and fades out once they stop (GitHub #22).
+    pub scroll_bar_fade: bool,
     /// The mouse wheel and the keys glide to where they scroll, instead of
     /// jumping there (Settings › Reading).
     pub smooth_scroll: bool,
@@ -907,6 +910,7 @@ impl Default for Settings {
             update_check: true,
             skipped_update: String::new(),
             scroll_bar: true,
+            scroll_bar_fade: false,
             smooth_scroll: true,
             scroll_60hz: false,
             tab_count: false,
@@ -977,6 +981,7 @@ struct File {
     check_for_updates: bool,
     skipped_update: String,
     scroll_bar: bool,
+    scroll_bar_fade: bool,
     smooth_scroll: bool,
     scroll_60hz: bool,
     tab_count: bool,
@@ -1099,6 +1104,7 @@ impl From<Settings> for File {
             check_for_updates: s.update_check,
             skipped_update: s.skipped_update,
             scroll_bar: s.scroll_bar,
+            scroll_bar_fade: s.scroll_bar_fade,
             smooth_scroll: s.smooth_scroll,
             scroll_60hz: s.scroll_60hz,
             tab_count: s.tab_count,
@@ -1170,6 +1176,7 @@ impl Settings {
             update_check: f.check_for_updates,
             skipped_update: f.skipped_update.chars().take(32).collect(),
             scroll_bar: f.scroll_bar,
+            scroll_bar_fade: f.scroll_bar_fade,
             smooth_scroll: f.smooth_scroll,
             scroll_60hz: f.scroll_60hz,
             tab_count: f.tab_count,
@@ -1278,6 +1285,7 @@ mod tests {
             update_check: false,
             skipped_update: "0.2.0".into(),
             scroll_bar: false,
+            scroll_bar_fade: true,
             smooth_scroll: false,
             scroll_60hz: true,
             tab_count: true,

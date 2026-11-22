@@ -782,13 +782,30 @@ fn reading(ws: &WeakEntity<Workspace>, st: &Style) -> AnyElement {
             Some("Along the right edge of the pages: drag it, or click beside the thumb to jump there."),
             well_row(
                 "Show the scroll bar",
-                "",
-                switch(
-                    "scroll-bar",
-                    st.scroll_bar,
-                    st,
-                    change(ws, |s: &mut Style| s.scroll_bar = !s.scroll_bar),
-                ),
+                "While scrolling: it appears as the pages move and fades out when they stop.",
+                div()
+                    .id("scroll-bar")
+                    .child(segmented(
+                        [
+                            ("Always", true, false),
+                            ("While scrolling", true, true),
+                            ("Off", false, false),
+                        ]
+                        .into_iter()
+                        .map(|(name, on, fade)| {
+                            (
+                                SharedString::from(name),
+                                st.scroll_bar == on && (!on || st.scroll_bar_fade == fade),
+                                change(ws, move |s: &mut Style| {
+                                    s.scroll_bar = on;
+                                    s.scroll_bar_fade = fade;
+                                }),
+                            )
+                        })
+                        .collect(),
+                        st,
+                    ))
+                    .into_any_element(),
                 st,
             ),
             st,

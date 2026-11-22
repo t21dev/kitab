@@ -6,15 +6,41 @@
 //! page, so a short document (two pages) scrubs as smoothly as a long one.
 
 use super::{GAP, Reader};
+use crate::motion;
 use crate::style::Style;
 use gpui::{
     AnyElement, Bounds, Context, InteractiveElement, IntoElement, MouseButton, MouseDownEvent,
-    ParentElement, Pixels, Styled, canvas, div, point, px,
+    ParentElement, Pixels, StatefulInteractiveElement, Styled, canvas, div, point, px,
 };
 use gpui::{ListOffset, prelude::FluentBuilder};
+use std::cell::Cell;
+use std::time::{Duration, Instant};
 
 /// The thumb is never shorter than this, in pixels.
 const MIN_THUMB: f32 = 28.0;
+
+/// A fading scroll bar stays this long after the pages stop moving.
+const SHOW_FOR: Duration = Duration::from_millis(1000);
+/// Then fades out over this long.
+const FADE_FOR: Duration = Duration::from_millis(400);
+
+/// The scroll bar that shows only while the pages move (GitHub #22). Cells:
+/// the bar is drawn from `&self`.
+#[derive(Default)]
+pub(super) struct BarFade {
+    /// Where the pages were when last drawn, as a fraction.
+    seen: Cell<f32>,
+    /// When they last moved.
+    moved: Cell<Option<Instant>>,
+    /// A frame is asked for when the bar should start to fade.
+    timer: Cell<bool>,
+    /// Shown last frame.
+    shown: Cell<bool>,
+    /// Bumped each time it fades, so the fade plays every time.
+    serial: Cell<u64>,
+    /// The pointer is on it: it stays.
+    pub hover: Cell<bool>,
+}
 
 impl Reader {
     /// Page `ix`'s height in the list: its sheet and the gaps around it.
@@ -117,9 +143,48 @@ impl Reader {
         if !st.scroll_bar || self.page_count() == 0 {
             return None;
         }
-        let (_, shown) = self.scroll_fraction();
+        let (fraction, shown) = self.scroll_fraction();
         if shown >= 0.999 {
             return None;
+        }
+        // Fading: shown while the pages move, the pointer is on it or its
+        // thumb is held; then it fades. Faded, it's still there to be found:
+        // the pointer on the right edge brings it back.
+        let fade = &self.bar_fade;
+        let visible = if st.scroll_bar_fade {
+            if (fraction - fade.seen.get()).abs() > 1e-4 {
+                fade.seen.set(fraction);
+                // The first frame only notes where the pages are.
+                if fade.shown.get() || fade.moved.get().is_some() || fade.serial.get() > 0 {
+                    fade.moved.set(Some(Instant::now()));
+                } else {
+                    fade.serial.set(1);
+                }
+            }
+            let recent = fade.moved.get().is_some_and(|t| t.elapsed() < SHOW_FOR);
+            if recent && !fade.timer.get() {
+                fade.timer.set(true);
+                let wait =
+                    SHOW_FOR.saturating_sub(fade.moved.get().map_or(SHOW_FOR, |t| t.elapsed()));
+                let timer = cx
+                    .background_executor()
+                    .timer(wait + Duration::from_millis(20));
+                cx.spawn(async move |this, cx| {
+                    timer.await;
+                    let _ = this.update(cx, |r, cx| {
+                        r.bar_fade.timer.set(false);
+                        cx.notify();
+                    });
+                })
+                .detach();
+            }
+            recent || fade.hover.get() || self.bar_grab.is_some()
+        } else {
+            true
+        };
+        let was_shown = fade.shown.replace(visible);
+        if was_shown && !visible {
+            fade.serial.set(fade.serial.get() + 1);
         }
         let cell = self.bar.clone();
         let h = self
@@ -134,54 +199,69 @@ impl Reader {
             st.ca(|c| c.text, 0.22)
         };
         let hover_color = st.ca(|c| c.text, 0.38);
-        Some(
-            div()
-                .id("scroll-bar")
-                .absolute()
-                .top(px(self.top_inset + 4.0))
-                .bottom(px(4.0))
-                .right(px(2.0))
-                .w(px(12.0))
-                .group("scroll-bar")
-                .on_mouse_down(
-                    MouseButton::Left,
-                    cx.listener(move |r, e: &MouseDownEvent, _, cx| {
-                        cx.stop_propagation();
-                        let Some(b) = r.bar.get() else { return };
-                        let bh = f32::from(b.size.height);
-                        let (th, top) = r.thumb(bh);
-                        let y = f32::from(e.position.y - b.origin.y);
-                        // On the thumb: keep the grab point under the pointer.
-                        // Beside it: the thumb's middle jumps to the pointer.
-                        r.bar_grab = Some(if y >= top && y <= top + th {
-                            y - top
-                        } else {
-                            th / 2.0
-                        });
-                        r.bar_drag_to(e.position.y, cx);
+        let bar = div()
+            .id("scroll-bar")
+            .absolute()
+            .top(px(self.top_inset + 4.0))
+            .bottom(px(4.0))
+            .right(px(2.0))
+            .w(px(12.0))
+            .group("scroll-bar")
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(move |r, e: &MouseDownEvent, _, cx| {
+                    cx.stop_propagation();
+                    let Some(b) = r.bar.get() else { return };
+                    let bh = f32::from(b.size.height);
+                    let (th, top) = r.thumb(bh);
+                    let y = f32::from(e.position.y - b.origin.y);
+                    // On the thumb: keep the grab point under the pointer.
+                    // Beside it: the thumb's middle jumps to the pointer.
+                    r.bar_grab = Some(if y >= top && y <= top + th {
+                        y - top
+                    } else {
+                        th / 2.0
+                    });
+                    r.bar_drag_to(e.position.y, cx);
+                }),
+            )
+            .child(
+                canvas(move |bounds, _, _| cell.set(Some(bounds)), |_, _, _, _| {})
+                    .absolute()
+                    .top_0()
+                    .left_0()
+                    .size_full(),
+            )
+            .child(
+                div()
+                    .absolute()
+                    .right(px(2.0))
+                    .top(px(top))
+                    .h(px(th))
+                    .w(px(6.0))
+                    .rounded_full()
+                    .bg(thumb_color)
+                    .when(!dragging, |d| {
+                        d.group_hover("scroll-bar", move |d| d.bg(hover_color))
                     }),
-                )
-                .child(
-                    canvas(move |bounds, _, _| cell.set(Some(bounds)), |_, _, _, _| {})
-                        .absolute()
-                        .top_0()
-                        .left_0()
-                        .size_full(),
-                )
-                .child(
-                    div()
-                        .absolute()
-                        .right(px(2.0))
-                        .top(px(top))
-                        .h(px(th))
-                        .w(px(6.0))
-                        .rounded_full()
-                        .bg(thumb_color)
-                        .when(!dragging, |d| {
-                            d.group_hover("scroll-bar", move |d| d.bg(hover_color))
-                        }),
-                )
-                .into_any_element(),
-        )
+            )
+            .when(st.scroll_bar_fade, |d| {
+                d.on_hover(cx.listener(|r, over: &bool, _, cx| {
+                    r.bar_fade.hover.set(*over);
+                    cx.notify();
+                }))
+            });
+        Some(if visible {
+            bar.into_any_element()
+        } else if !st.animations {
+            bar.opacity(0.0).into_any_element()
+        } else {
+            motion::exit(
+                bar,
+                gpui::ElementId::NamedInteger("scroll-bar-out".into(), fade.serial.get()),
+                motion::From::Fade,
+                FADE_FOR,
+            )
+        })
     }
 }

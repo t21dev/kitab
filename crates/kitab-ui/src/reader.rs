@@ -245,6 +245,8 @@ pub struct Reader {
     /// Dragging the scroll bar: where the pointer holds the thumb (pixels
     /// from its top).
     bar_grab: Option<f32>,
+    /// The scroll bar that fades when the pages stop (Settings › Reading).
+    bar_fade: scrollbar::BarFade,
     /// How far the pages are moved sideways, in pixels (more shows more of
     /// their right side), when zoomed wider than the window (issue #14).
     /// Each row keeps it within its own overhang, so a narrower page stays
@@ -444,6 +446,7 @@ impl Reader {
             dragging: false,
             bar: Rc::new(Cell::new(None)),
             bar_grab: None,
+            bar_fade: Default::default(),
             pan_x: 0.0,
             hand: false,
             space_hand: None,
