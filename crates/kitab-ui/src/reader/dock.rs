@@ -140,6 +140,73 @@ impl Reader {
         } else {
             0.0
         };
+        let upright = at.upright();
+        let compact = st.dock_compact;
+        // What the dock shows (Settings › Appearance › Dock items); the
+        // compact preset trims the rest. More and Hide are always there.
+        // What the title bar shows is left out of the dock (all but More come
+        // back here when the window is too narrow for them up there).
+        let squeezed = cx
+            .try_global::<crate::shell::TitleSqueezed>()
+            .is_some_and(|s| s.0);
+        let t = if squeezed {
+            crate::settings::TitleItems {
+                more: st.title_items.more,
+                ..crate::settings::TitleItems::NONE
+            }
+        } else {
+            st.title_items
+        };
+        let mut items = st.dock_items;
+        items.sidebar &= !t.sidebar;
+        items.history &= !t.history;
+        items.zoom &= !t.zoom;
+        items.fit &= !t.fit;
+        items.find &= !t.find;
+        items.markup &= !t.markup;
+        items.rotate &= !t.rotate;
+        items.bookmark &= !t.bookmark;
+        items.minimal &= !t.minimal;
+        items.print &= !t.print;
+        items.password &= !t.password;
+        items.read_aloud &= !t.read_aloud;
+        // A narrow reading area: the least-used groups step aside first
+        // (their keys and the palette still work), so the dock never has to
+        // scroll at ordinary window sizes.
+        let vw = self.viewport.0;
+        let tight = !upright && vw > 0.0 && vw < 820.0;
+        let tighter = !upright && vw > 0.0 && vw < 640.0;
+        let tightest = !upright && vw > 0.0 && vw < 520.0;
+        let show_sidebar = items.sidebar && !compact && !tightest;
+        let show_history = items.history && !compact && !tight;
+        let show_fit = items.fit && !compact && !tighter;
+        let show_rotate = items.rotate && !compact && !tight;
+        // Nothing left to show but the hide chevron (every button off or in
+        // the title bar): no dock at all, and no handle to bring back an
+        // empty one (GitHub #23).
+        // A hidden page navigator still shows while a page number is typed (Ctrl+G).
+        let nav = at == DockAt::Bottom
+            && st.shows_page_nav()
+            && (st.page_nav != crate::settings::PageNav::Hidden || self.page_edit.is_some());
+        let shows_something = show_sidebar
+            || show_history
+            || nav
+            || items.zoom
+            || show_fit
+            || items.find
+            || (items.read_aloud && self.can_read_aloud())
+            || (items.bookmark && self.can_bookmark())
+            || (items.markup && self.can_markup(cx))
+            || self.unsaved_marks() > 0
+            || self.is_markdown()
+            || show_rotate
+            || items.print
+            || (items.password && self.is_pdf())
+            || items.minimal
+            || !t.more;
+        if !shows_something {
+            return None;
+        }
         // Hidden or shown again since the last frame: slide out, or in.
         let hidden = st.dock_hidden;
         if self.dock.seen_hidden.get() != Some(hidden) {
@@ -181,7 +248,6 @@ impl Reader {
                 st,
             ));
         }
-        let upright = at.upright();
         let mode = self.zoom;
         let group = || {
             div()
@@ -209,46 +275,6 @@ impl Reader {
             Some(pt) => format!("{pt:.0} pt"),
             None => format!("{} %", self.zoom_percent()),
         };
-        let compact = st.dock_compact;
-        // What the dock shows (Settings › Appearance › Dock items); the
-        // compact preset trims the rest. More and Hide are always there.
-        // What the title bar shows is left out of the dock (all but More come
-        // back here when the window is too narrow for them up there).
-        let squeezed = cx
-            .try_global::<crate::shell::TitleSqueezed>()
-            .is_some_and(|s| s.0);
-        let t = if squeezed {
-            crate::settings::TitleItems {
-                more: st.title_items.more,
-                ..crate::settings::TitleItems::NONE
-            }
-        } else {
-            st.title_items
-        };
-        let mut items = st.dock_items;
-        items.sidebar &= !t.sidebar;
-        items.history &= !t.history;
-        items.zoom &= !t.zoom;
-        items.fit &= !t.fit;
-        items.find &= !t.find;
-        items.markup &= !t.markup;
-        items.rotate &= !t.rotate;
-        items.bookmark &= !t.bookmark;
-        items.minimal &= !t.minimal;
-        items.print &= !t.print;
-        items.password &= !t.password;
-        items.read_aloud &= !t.read_aloud;
-        // A narrow reading area: the least-used groups step aside first
-        // (their keys and the palette still work), so the dock never has to
-        // scroll at ordinary window sizes.
-        let vw = self.viewport.0;
-        let tight = !upright && vw > 0.0 && vw < 820.0;
-        let tighter = !upright && vw > 0.0 && vw < 640.0;
-        let tightest = !upright && vw > 0.0 && vw < 520.0;
-        let show_sidebar = items.sidebar && !compact && !tightest;
-        let show_history = items.history && !compact && !tight;
-        let show_fit = items.fit && !compact && !tighter;
-        let show_rotate = items.rotate && !compact && !tight;
         let mut dock = div()
             .id("dock")
             .flex()
