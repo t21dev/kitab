@@ -35,6 +35,10 @@ an environment switch to turn it off so it can still be benchmarked:
           held whose y is 200 x ln(ratio), which the app reads as a zoom factor.
           A wheel message's own Ctrl and Shift flags decide (a touchpad pinch says
           Ctrl; a key let go in another window can't leave Kitab zooming).
+  Atlas   Linux: a texture freed before the frame that would fill it (a tab
+          closed just after its pages were drawn) takes its queued upload and
+          start-up with it. The frame looked the texture up afterwards and
+          panicked, which took Kitab down (GitHub #19).
   MenuKey macOS's menu bar shows a command's key only when it has Ctrl or Cmd
           in it. A key equivalent there is live: with a plain one (N for the
           next page) the menu could take the letter while it is being typed.
@@ -669,6 +673,7 @@ struct WindowInvalidatorInner {"""),
     husk_patch()
     path_patch()
     touch_patch()
+    blade_atlas_pending_fix()
     menu_key_patch()
     aligned_hit_test_patch()
     zed_backports()
@@ -1647,6 +1652,35 @@ def menu_key_patch() -> None:
                                 || keystrokes[0].modifiers().platform)
                         {
 """),
+    ])
+
+
+def blade_atlas_pending_fix() -> None:
+    """18. Atlas: GitHub #19, a crash closing tabs quickly on Linux.
+
+    The Blade atlas (Linux) queues a new texture's start-up and its pixel
+    uploads for the next frame. `remove` destroys a texture as soon as its
+    last picture goes and empties its slot, but left what was queued for it:
+    a tab closed before the next frame (several closed in a row) left the
+    frame to look up an empty slot, which panicked ("unwrap on None" in
+    flush_initializations), and the panic while unwinding aborted Kitab.
+    Now the queued work for a texture goes with it."""
+    edit("src/platform/blade/blade_atlas.rs", [
+        ("""            if texture.is_unreferenced() {
+                lock.storage[id.kind]
+                    .free_list
+                    .push(texture.id.index as usize);
+                texture.destroy(&lock.gpu);""",
+         """            if texture.is_unreferenced() {
+                // Kitab patch (GitHub #19): what was queued for it this frame
+                // goes too, or the frame finds its slot empty and panics.
+                let gone = texture.id;
+                lock.initializations.retain(|queued| *queued != gone);
+                lock.uploads.retain(|upload| upload.id != gone);
+                lock.storage[id.kind]
+                    .free_list
+                    .push(texture.id.index as usize);
+                texture.destroy(&lock.gpu);"""),
     ])
 
 
