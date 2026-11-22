@@ -381,6 +381,18 @@ export const PALETTE: PaletteCommand[] = [
   },
   {
     "group": "File",
+    "label": "Move to Recycle Bin…",
+    "doc": true,
+    "keys": []
+  },
+  {
+    "group": "File",
+    "label": "Move to Trash…",
+    "doc": true,
+    "keys": []
+  },
+  {
+    "group": "File",
     "label": "Reopen closed tab",
     "doc": false,
     "keys": []

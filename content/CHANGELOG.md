@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-11-23
+
+### Added
+- Move a book's file to the Recycle Bin (Trash on macOS and Linux) without leaving Kitab ([#17](https://github.com/t21dev/kitab/issues/17)): "Move to Recycle Bin" on Home's card menu, in the File menu and the command palette (they ask first), and Del while reading or presenting: the first press says what a second will do, and the second opens the next file in the folder (still presenting, if you were) and sends this one to the bin.
+- Read aloud can sit in the title bar ([#24](https://github.com/t21dev/kitab/issues/24)): Settings › Appearance › Toolbar gives it the same Title bar, Dock or Off choice as the other buttons. Stop sits beside it while reading.
+
+### Changed
+- Two pages and Book view put the facing pages side by side with no gap between them, like an open book ([#26](https://github.com/t21dev/kitab/issues/26)), with square corners where they meet and one shadow around the pair.
+- Ctrl+6, Ctrl+7 and Ctrl+8 in a book (EPUB, MOBI, FB2, TXT, Markdown) say why two pages doesn't apply instead of doing nothing: books flow to fit the window. The View menu greys them out there.
+
+### Fixed
+- The caret moves in the find field ([#27](https://github.com/t21dev/kitab/issues/27)): arrows, Home and End, Shift to select, Ctrl for words, a click to put it anywhere, a double-click for a word, and the clipboard. Fixing one word of a phrase no longer means deleting back to it. Notes, text boxes, form fields and the library search take clicks to place the caret too.
+- ZIP comics with WebP pages show every page ([#18](https://github.com/t21dev/kitab/issues/18)); only their JPEG or PNG pages showed before. Their thumbnails too.
+- Presentation mode no longer flashes empty white frames when you hold PgDn or PgUp to skim ([#20](https://github.com/t21dev/kitab/issues/20)): the last page stays up until the next one is ready, and the pages either side are rendered ahead, so going back is as quick as going on.
+- With every dock button turned off or moved to the title bar, the dock goes away instead of leaving its Hide button behind ([#23](https://github.com/t21dev/kitab/issues/23)).
+- A crash's note (`crash/last-panic.txt` in Kitab's data folder) now keeps the error that started it, with a backtrace, instead of only the last message ("panic in a destructor during cleanup", [#19](https://github.com/t21dev/kitab/issues/19)). If Kitab crashes when you close tabs, please attach this file to #19.
+
 ## [1.1.1] - 2026-11-21
 
 ### Changed
