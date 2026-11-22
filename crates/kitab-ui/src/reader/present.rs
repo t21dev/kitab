@@ -6,8 +6,9 @@
 //! Home and End jump; a page number then Enter goes there; B (or .) blanks
 //! the screen black and W (or ,) white, any key brings the page back; the
 //! pointer hides when still. Esc or F5 ends it on the page you were showing. Pages
-//! come from the reader's renderer and share its byte-bounded cache; the next
-//! page is rendered ahead so a click never waits.
+//! come from the reader's renderer and share its byte-bounded cache; the pages
+//! either side are rendered ahead so a click never waits, and a page not drawn
+//! yet leaves the last one on screen rather than a blank sheet (GitHub #20).
 
 use super::*;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -26,6 +27,9 @@ pub(super) struct Present {
     pub typed: String,
     /// When the pointer last moved: it hides after a moment still.
     pub moved: std::time::Instant,
+    /// The last page picture shown and its size: it stays up while the next
+    /// page renders (holding PgDn skims without flashing white, GitHub #20).
+    pub last: Option<(Arc<RenderImage>, (f32, f32))>,
 }
 
 /// The pointer hides once still this long.
@@ -83,6 +87,7 @@ impl Reader {
             blank: None,
             typed: String::new(),
             moved: std::time::Instant::now(),
+            last: None,
         });
         cx.emit(ReaderEvent::Presenting(true));
         cx.notify();
@@ -208,11 +213,28 @@ impl Reader {
         let page = self.present.as_ref().map_or(0, |p| p.page);
         let vp = window.viewport_size();
         let area = (f32::from(vp.width), f32::from(vp.height));
-        let (image, (w, h)) = self.present_image(page, area, window, cx);
-        // The next page, ready before it's asked for.
+        let (image, size) = self.present_image(page, area, window, cx);
+        // The pages either side, ready before they're asked for: going back
+        // is as quick as going on.
         if page + 1 < self.page_count() {
             let _ = self.present_image(page + 1, area, window, cx);
         }
+        if page > 0 {
+            let _ = self.present_image(page - 1, area, window, cx);
+        }
+        // Not drawn yet (not even small): the last picture stays up until it
+        // is, instead of an empty white sheet.
+        let (image, (w, h)) = match (image, self.present.as_mut()) {
+            (Some(i), Some(p)) => {
+                p.last = Some((i.clone(), size));
+                (Some(i), size)
+            }
+            (None, Some(p)) => match p.last.clone() {
+                Some((i, last_size)) => (Some(i), last_size),
+                None => (None, size),
+            },
+            (image, None) => (image, size),
+        };
         crate::fire_first_paint(window, cx);
         let (blank, typed, still) = self
             .present
