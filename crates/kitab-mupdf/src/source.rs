@@ -172,7 +172,8 @@ fn open_source(source: Arc<Source>) -> Result<Document, String> {
 
 /// Whether a file with this extension and these first bytes is read by
 /// Kitab's own page source (a comic in RAR or 7z, whatever its extension
-/// says, or DjVu) rather than by MuPDF.
+/// says, or DjVu) rather than by MuPDF. A ZIP comic can't be told by its
+/// first bytes: see [`zip_reads_itself`].
 pub fn reads_itself(ext: &str, head: &[u8]) -> bool {
     use kitab_core::Format;
     match Format::from_extension(ext) {
@@ -183,6 +184,18 @@ pub fn reads_itself(ext: &str, head: &[u8]) -> bool {
         ),
         _ => false,
     }
+}
+
+/// Whether a ZIP comic (`file`, a comic by its extension, starting with
+/// `PK`) is read by Kitab's own page source: it has WebP pages, which
+/// MuPDF's comic reader skips (GitHub #18). Reads only the table of contents.
+pub fn zip_reads_itself<R: std::io::Read + std::io::Seek>(ext: &str, head: &[u8], file: R) -> bool {
+    use kitab_core::Format;
+    matches!(
+        Format::from_extension(ext),
+        Some(Format::Cbz | Format::Cbr | Format::Cb7)
+    ) && head.starts_with(b"PK")
+        && crate::comic::zip_needs_kitab(file)
 }
 
 /// For a thumbnail: a file [`reads_itself`] says is Kitab's, as a MuPDF

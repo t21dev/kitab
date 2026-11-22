@@ -44,7 +44,7 @@ mod djvu;
 mod doc;
 pub mod export;
 mod source;
-pub use source::{open_first_page, reads_itself, register as register_handlers};
+pub use source::{open_first_page, reads_itself, register as register_handlers, zip_reads_itself};
 mod abort;
 pub mod epub;
 mod ffi;
@@ -58,6 +58,7 @@ pub mod rar;
 mod script_ap;
 pub mod sigs;
 pub mod tools;
+mod zip;
 
 use std::collections::HashMap;
 use std::panic::{AssertUnwindSafe, catch_unwind};

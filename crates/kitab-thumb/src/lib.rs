@@ -139,7 +139,15 @@ fn first_page(source: &Source<'_>, ext: &str, size: u32) -> Result<Thumb, String
             head
         }
     };
-    let doc = if kitab_mupdf::reads_itself(ext, &head) {
+    // A ZIP comic with WebP pages too (MuPDF's reader skips them): only its
+    // table of contents is read to tell.
+    let zip_own = match source {
+        Source::Bytes(b) => kitab_mupdf::zip_reads_itself(ext, &head, std::io::Cursor::new(*b)),
+        Source::Path(p) => {
+            std::fs::File::open(p).is_ok_and(|f| kitab_mupdf::zip_reads_itself(ext, &head, f))
+        }
+    };
+    let doc = if zip_own || kitab_mupdf::reads_itself(ext, &head) {
         let bytes = match source {
             Source::Bytes(b) => std::borrow::Cow::Borrowed(*b),
             Source::Path(p) => {

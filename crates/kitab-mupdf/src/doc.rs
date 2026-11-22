@@ -172,12 +172,14 @@ pub(crate) fn open_doc(
     } else {
         None
     };
-    // Comics in RAR and 7z (whatever the extension says) and DjVu draw
-    // through Kitab's own page source; ZIP and TAR comics stay with MuPDF's.
+    // Comics in RAR and 7z (whatever the extension says), ZIP comics with
+    // WebP pages (MuPDF's reader skips those, GitHub #18) and DjVu draw
+    // through Kitab's own page source; other ZIP and TAR comics stay with MuPDF's.
     let own_source = match format {
         Format::Djvu => Some(true),
         Format::Cbz | Format::Cbr | Format::Cb7 => match crate::comic::sniff_file(path) {
             crate::comic::Kind::Rar | crate::comic::Kind::SevenZ => Some(false),
+            crate::comic::Kind::Mupdf if crate::comic::zip_file_needs_kitab(path) => Some(false),
             crate::comic::Kind::Mupdf => None,
             crate::comic::Kind::Unknown => return Err(OpenError::Unsupported),
         },
