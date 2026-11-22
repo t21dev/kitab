@@ -1033,7 +1033,7 @@ fn toolbar_preview(st: &Style) -> AnyElement {
     let (d, t) = (st.dock_items, st.title_items);
     let compact = st.dock_compact;
     // (icons, in the title bar, in the dock); compact keeps zoom and find.
-    let buttons: [(&[&str], bool, bool, bool); 11] = [
+    let buttons: [(&[&str], bool, bool, bool); 12] = [
         (&["sidebar"], t.sidebar, d.sidebar, false),
         (&["arrow-left", "arrow-right"], t.history, d.history, false),
         (&["minus", "plus"], t.zoom, d.zoom, true),
@@ -1045,6 +1045,7 @@ fn toolbar_preview(st: &Style) -> AnyElement {
         (&["focus"], t.minimal, d.minimal, false),
         (&["print"], t.print, d.print, false),
         (&["lock"], t.password, d.password, false),
+        (&["speaker"], t.read_aloud, d.read_aloud, false),
     ];
     let glyph = |name: &str| {
         svg()
@@ -1155,7 +1156,7 @@ fn toolbar_preview(st: &Style) -> AnyElement {
 }
 
 fn toolbar_rows(ws: &WeakEntity<Workspace>, st: &Style) -> AnyElement {
-    let rows: [(&'static str, Slot); 11] = [
+    let rows: [(&'static str, Slot); 12] = [
         ("Sidebar", (|d| &mut d.sidebar, |t| &mut t.sidebar)),
         ("Back and forward", (|d| &mut d.history, |t| &mut t.history)),
         ("Zoom", (|d| &mut d.zoom, |t| &mut t.zoom)),
@@ -1167,6 +1168,8 @@ fn toolbar_rows(ws: &WeakEntity<Workspace>, st: &Style) -> AnyElement {
         ("Focus mode", (|d| &mut d.minimal, |t| &mut t.minimal)),
         ("Print", (|d| &mut d.print, |t| &mut t.print)),
         ("Password", (|d| &mut d.password, |t| &mut t.password)),
+        // GitHub #24: read aloud can sit in the title bar like the others.
+        ("Read aloud", (|d| &mut d.read_aloud, |t| &mut t.read_aloud)),
     ];
     let mut col = div().flex().flex_col().gap(px(8.0));
     for (label, (dock, title)) in rows {
@@ -1206,26 +1209,6 @@ fn toolbar_rows(ws: &WeakEntity<Workspace>, st: &Style) -> AnyElement {
             .into_any_element();
         col = col.child(well_row(label, "", control, st));
     }
-    // Read aloud sits in the dock (its stop button joins it while reading).
-    let read = [("Dock", true), ("Off", false)]
-        .into_iter()
-        .map(|(name, on)| {
-            (
-                SharedString::from(name),
-                st.dock_items.read_aloud == on,
-                change(ws, move |s: &mut Style| s.dock_items.read_aloud = on),
-            )
-        })
-        .collect();
-    col = col.child(well_row(
-        "Read aloud",
-        "",
-        div()
-            .id("toolbar-read-aloud")
-            .child(segmented(read, st))
-            .into_any_element(),
-        st,
-    ));
     let more = [("Title bar", true), ("Dock", false)]
         .into_iter()
         .map(|(name, up)| {

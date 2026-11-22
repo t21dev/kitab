@@ -1334,10 +1334,10 @@ impl Workspace {
             lead_w + 2.0 * st.m().icon_button + 17.0 + 40.0 + DRAG_MIN + buttons_w + 12.0 + count_w;
         let win_w = f32::from(window.viewport_size().width);
         // The title-bar buttons give way (to More alone) before the tabs do.
-        let squeezed = win_w - base - self.title_actions_width(st, false) < 140.0;
+        let squeezed = win_w - base - self.title_actions_width(st, false, cx) < 140.0;
         self.title_squeezed = squeezed;
         cx.set_global(TitleSqueezed(squeezed));
-        let fixed = base + self.title_actions_width(st, squeezed);
+        let fixed = base + self.title_actions_width(st, squeezed, cx);
         let room = (win_w - fixed).max(0.0);
         let crowded = n * 224.0 > room;
         // Crowded: a whole number of tabs fills the strip as the layout made

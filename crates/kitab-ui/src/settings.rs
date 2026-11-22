@@ -542,6 +542,8 @@ pub struct TitleItems {
     pub minimal: bool,
     pub print: bool,
     pub password: bool,
+    /// Read aloud: opens its panel (GitHub #24). Stop joins it while reading.
+    pub read_aloud: bool,
     pub more: bool,
     /// Open file… (the title bar only; on Home too).
     pub open: bool,
@@ -560,6 +562,7 @@ impl TitleItems {
         minimal: false,
         print: false,
         password: false,
+        read_aloud: false,
         more: false,
         open: false,
     };

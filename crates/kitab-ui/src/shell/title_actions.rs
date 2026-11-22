@@ -16,13 +16,24 @@ use gpui::{
 };
 use kitab_core::ZoomMode;
 
-/// Buttons in the title bar for `t`, with a document open or not.
-pub(super) fn count(t: TitleItems, has_doc: bool) -> usize {
+/// Buttons in the title bar for `t`, with a document open or not, and
+/// `reading` aloud (Stop shows beside Read aloud then).
+pub(super) fn count(t: TitleItems, has_doc: bool, reading: bool) -> usize {
     if !has_doc {
         return usize::from(t.more) + usize::from(t.open);
     }
     [
-        t.sidebar, t.find, t.bookmark, t.markup, t.rotate, t.minimal, t.print, t.password, t.more,
+        t.sidebar,
+        t.find,
+        t.bookmark,
+        t.markup,
+        t.rotate,
+        t.minimal,
+        t.print,
+        t.password,
+        t.read_aloud,
+        t.read_aloud && reading,
+        t.more,
         t.open,
     ]
     .iter()
@@ -35,13 +46,23 @@ pub(super) fn count(t: TitleItems, has_doc: bool) -> usize {
 
 impl Workspace {
     /// Width the actions take, for the tab strip's arithmetic.
-    pub(super) fn title_actions_width(&self, st: &Style, crowded: bool) -> f32 {
-        let n = count(Self::shown_items(st, crowded), self.active.is_some());
+    pub(super) fn title_actions_width(&self, st: &Style, crowded: bool, cx: &gpui::App) -> f32 {
+        let n = count(
+            Self::shown_items(st, crowded),
+            self.active.is_some(),
+            self.reading_aloud_now(cx),
+        );
         if n == 0 {
             0.0
         } else {
             n as f32 * (st.m().icon_button + 2.0) + 12.0
         }
+    }
+
+    /// The active tab is reading aloud (playing or paused).
+    fn reading_aloud_now(&self, cx: &gpui::App) -> bool {
+        self.active_reader()
+            .is_some_and(|r| r.read(cx).reading_aloud().is_some())
     }
 
     /// Run a reader action on the active tab: focus it first, so the action
@@ -76,7 +97,7 @@ impl Workspace {
     ) -> Option<AnyElement> {
         let t = Self::shown_items(st, crowded);
         let reader = self.active_reader().cloned();
-        if count(t, reader.is_some()) == 0 {
+        if count(t, reader.is_some(), self.reading_aloud_now(cx)) == 0 {
             return None;
         }
         let mut row = div()
@@ -231,6 +252,42 @@ impl Workspace {
                         "Focus mode  F11",
                         Box::new(ToggleMinimal),
                     ))
+                })
+                .when(t.read_aloud && r.can_read_aloud(), |d| {
+                    // As in the dock: the speaker opens read aloud's panel,
+                    // and Stop sits beside it while reading.
+                    let reading = r.reading_aloud();
+                    let glyph = if reading == Some(false) {
+                        "pause"
+                    } else {
+                        "speaker"
+                    };
+                    let menu_for = reader.clone();
+                    let stop_for = reader.clone();
+                    d.child(
+                        icon_button("t-read-aloud", glyph, reading.is_some(), st)
+                            .flex_none()
+                            .tip("Read aloud  Ctrl+Shift+U")
+                            .on_click(cx.listener(move |ws, e: &gpui::ClickEvent, window, cx| {
+                                let at = e.position();
+                                ws.speech_menu(
+                                    menu_for.clone(),
+                                    gpui::point(at.x, at.y + px(14.0)),
+                                    window,
+                                    cx,
+                                )
+                            })),
+                    )
+                    .when(reading.is_some(), |d| {
+                        d.child(
+                            icon_button("t-stop-reading", "stop", false, st)
+                                .flex_none()
+                                .tip("Stop reading")
+                                .on_click(cx.listener(move |_, _: &gpui::ClickEvent, _, cx| {
+                                    stop_for.update(cx, |r, cx| r.stop_read_aloud(cx))
+                                })),
+                        )
+                    })
                 });
         }
         // Open file… stands on its own: there's always something to open.
@@ -267,12 +324,24 @@ mod tests {
     fn home_shows_only_more() {
         let t = TitleItems::default();
         // More and Open file… on Home.
-        assert_eq!(count(t, false), 2);
-        assert!(count(t, true) > 1);
+        assert_eq!(count(t, false, false), 2);
+        assert!(count(t, true, false) > 1);
         let none = TitleItems {
             more: false,
             ..TitleItems::NONE
         };
-        assert_eq!(count(none, true), 0);
+        assert_eq!(count(none, true, false), 0);
+    }
+
+    #[test]
+    fn read_aloud_can_sit_in_the_title_bar() {
+        let t = TitleItems {
+            read_aloud: true,
+            ..TitleItems::NONE
+        };
+        assert_eq!(count(t, true, false), 1);
+        // Stop joins it while reading.
+        assert_eq!(count(t, true, true), 2);
+        assert_eq!(count(t, false, true), 0);
     }
 }

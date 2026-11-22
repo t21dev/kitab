@@ -237,6 +237,7 @@ impl Reader {
         items.minimal &= !t.minimal;
         items.print &= !t.print;
         items.password &= !t.password;
+        items.read_aloud &= !t.read_aloud;
         // A narrow reading area: the least-used groups step aside first
         // (their keys and the palette still work), so the dock never has to
         // scroll at ordinary window sizes.
