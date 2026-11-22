@@ -81,6 +81,9 @@ use std::time::Duration;
 const PX_PER_PT_AT_100: f32 = 96.0 / 72.0;
 /// Gap between page sheets and around them (DESIGN.md: 22 px).
 const GAP: f32 = crate::layout::PAGE_GAP;
+/// Between the two pages of a spread (Two pages, Book view): none, so they
+/// meet at the spine like an open book (GitHub #26).
+const SPREAD_GAP: f32 = 0.0;
 const ZOOM_STEPS: &[f32] = &[
     0.1, 0.25, 0.33, 0.5, 0.67, 0.75, 0.9, 1.0, 1.1, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0, 4.0, 5.0, 6.4,
 ];
@@ -919,6 +922,31 @@ impl Reader {
         (next < self.page_count()).then_some(next)
     }
 
+    /// Which side of its spread page `ix` is on: `Some(true)` on the left,
+    /// `Some(false)` on the right, `None` when it stands alone.
+    fn spread_side(&self, ix: usize) -> Option<bool> {
+        if self.md.is_some() {
+            return None;
+        }
+        let lead = self.row_lead(ix);
+        self.row_partner(lead)?;
+        Some((ix == lead) != self.spread_rtl)
+    }
+
+    /// Page `ix` is in a spread whose two pages stand the same height: they
+    /// cast one shadow together, so none falls across the spine.
+    fn spread_shares_shadow(&self, ix: usize) -> bool {
+        if self.spread_side(ix).is_none() {
+            return false;
+        }
+        let lead = self.row_lead(ix);
+        let Some(partner) = self.row_partner(lead) else {
+            return false;
+        };
+        let h = |p: usize| self.page_size(p).h * self.px_per_pt(p);
+        (h(lead) - h(partner)).abs() < 0.5
+    }
+
     /// Where page `ix`'s sheet was drawn last frame, in window pixels.
     fn sheet_bounds(&self, ix: usize) -> Option<Bounds<Pixels>> {
         let lead = self.row_lead(ix);
@@ -930,17 +958,17 @@ impl Reader {
         let x = match self.row_partner(lead) {
             None => item.origin.x + (item.size.width - px(w)) / 2.0,
             Some(partner) => {
-                // Two sheets centred together, GAP apart; the lead on the
-                // left (on the right when pages run right to left).
+                // Two sheets centred together, SPREAD_GAP apart; the lead on
+                // the left (on the right when pages run right to left).
                 let width = |p: usize| self.page_size(p).w * self.px_per_pt(p);
                 let (lw, pw) = (width(lead), width(partner));
-                let left = item.origin.x + (item.size.width - px(lw + GAP + pw)) / 2.0;
+                let left = item.origin.x + (item.size.width - px(lw + SPREAD_GAP + pw)) / 2.0;
                 let first_is_left = !self.spread_rtl;
                 let on_left = (ix == lead) == first_is_left;
                 if on_left {
                     left
                 } else {
-                    left + px(if first_is_left { lw } else { pw } + GAP)
+                    left + px(if first_is_left { lw } else { pw } + SPREAD_GAP)
                 }
             }
         };
@@ -954,7 +982,7 @@ impl Reader {
         let w = |p: usize| self.page_size(p).w * self.px_per_pt(p);
         match self.row_partner(lead) {
             None => w(lead),
-            Some(p) => w(lead) + GAP + w(p),
+            Some(p) => w(lead) + SPREAD_GAP + w(p),
         }
     }
 
@@ -1050,7 +1078,8 @@ impl Reader {
         );
         // Side by side, each page gets half the width.
         let across = if self.spread_on() { 2.0 } else { 1.0 };
-        let fit_w = ((vw - (1.0 + across) * GAP) / across).max(80.0) / s.w.max(1.0);
+        let fit_w =
+            ((vw - 2.0 * GAP - (across - 1.0) * SPREAD_GAP) / across).max(80.0) / s.w.max(1.0);
         let fit_h = ((vh - 2.0 * GAP).max(80.0)) / s.h.max(1.0);
         match self.zoom {
             ZoomMode::FitWidth => fit_w,
@@ -1914,6 +1943,8 @@ impl Reader {
         // Corners scale with the page so they look the same at every zoom.
         let zoom = (ppt / PX_PER_PT_AT_100).clamp(0.5, 2.0);
         let radius = px(st.page_corners.radius() * zoom);
+        // In a spread, the corners at the spine stay square: the pages meet there.
+        let side = self.spread_side(ix);
         let pinching = self
             .pinch_until
             .is_some_and(|t| std::time::Instant::now() < t);
@@ -2012,8 +2043,10 @@ impl Reader {
             } else {
                 gpui::white()
             })
-            .rounded(radius)
-            .shadow(st.sheet())
+            .map(|d| round_outer(d, radius, side))
+            // A spread casts one shadow around both pages (`page_element`):
+            // a sheet's own would fall across its partner at the spine.
+            .when(!self.spread_shares_shadow(ix), |d| d.shadow(st.sheet()))
             .overflow_hidden()
             .relative()
             .cursor(if self.hand_on() {
@@ -2044,10 +2077,11 @@ impl Reader {
                 cx.listener(move |r, _: &MouseMoveEvent, _, cx| r.ensure_chars(ix as u32, cx)),
             )
             .children(image.as_ref().map(|i| {
-                img(ImageSource::Render(i.clone()))
-                    .w(px(w))
-                    .h(px(h))
-                    .rounded(radius)
+                round_outer(
+                    img(ImageSource::Render(i.clone())).w(px(w)).h(px(h)),
+                    radius,
+                    side,
+                )
             }))
             // Painted right after the picture, so by then its
             // texture is on the GPU (see `painted`). A husk whose
@@ -2121,7 +2155,7 @@ impl Reader {
             .w_full()
             .flex()
             .justify_center()
-            .gap(px(GAP))
+            .gap(px(SPREAD_GAP))
             .pt(px(self.sheet_top_pad(ix)))
             .pb(px(GAP / 2.0))
             // Zoomed wider than the window: moved sideways (sheet_bounds
@@ -2132,11 +2166,24 @@ impl Reader {
             None => row.child(first),
             Some(p) => {
                 let second = self.page_sheet(p, window, cx);
-                if self.spread_rtl {
-                    row.child(second).child(first)
+                let (left, right) = if self.spread_rtl {
+                    (second, first)
                 } else {
-                    row.child(first).child(second)
-                }
+                    (first, second)
+                };
+                let st = Style::get(cx);
+                let zoom = (self.px_per_pt(ix) / PX_PER_PT_AT_100).clamp(0.5, 2.0);
+                row.child(
+                    div()
+                        .flex()
+                        .flex_none()
+                        .items_start()
+                        .gap(px(SPREAD_GAP))
+                        .rounded(px(st.page_corners.radius() * zoom))
+                        .when(self.spread_shares_shadow(ix), |d| d.shadow(st.sheet()))
+                        .child(left)
+                        .child(right),
+                )
             }
         };
         // In a plain wrapper: a list item's own root ignores a relative
@@ -3341,6 +3388,16 @@ pub fn code_color(st: &Style, kind: kitab_md::TokenKind) -> gpui::Hsla {
 }
 
 /// Files Kitab reads as Markdown.
+/// Round `el`'s corners, but not those at the spine of a spread: the left
+/// page keeps its left corners round, the right page its right ones.
+fn round_outer<E: Styled>(el: E, radius: Pixels, side: Option<bool>) -> E {
+    match side {
+        None => el.rounded(radius),
+        Some(true) => el.rounded_tl(radius).rounded_bl(radius),
+        Some(false) => el.rounded_tr(radius).rounded_br(radius),
+    }
+}
+
 pub fn is_markdown_path(path: &std::path::Path) -> bool {
     path.extension()
         .and_then(|e| e.to_str())
