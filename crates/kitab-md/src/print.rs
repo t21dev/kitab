@@ -1,9 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-//! The block tree as a self-contained HTML page, for printing: MuPDF lays it
-//! out on paper like an EPUB chapter. Every piece of text is escaped; links
-//! and images are left out (paper can't follow them, and remote pictures
-//! stay blocked), with an image's alt text in its place.
+//! The block tree as a self-contained HTML page, for printing and Save as
+//! PDF: MuPDF lays it out on paper like an EPUB chapter. Every piece of text
+//! is escaped. Links are left out (paper can't follow them). Pictures and
+//! Mermaid diagrams come from [`PrintAssets`], as files beside the page: the
+//! app draws the diagrams and copies the local pictures there; without one
+//! (or for a remote picture, which stays blocked) the alt text stands in.
+//! Math is written out as a line of text (`math::to_line`).
 
 use crate::model::{Align, Block, Inline, Inlines, MdDoc};
 
@@ -16,8 +19,35 @@ pub struct PrintStyle<'a> {
     pub mono_font: &'a str,
 }
 
+/// A picture for the page: its file name, beside the HTML, and the width
+/// to show it at in points (`None`: its own size, 96 pixels an inch; MuPDF
+/// shrinks anything wider than the page to fit).
+pub type PrintPicture = (String, Option<f32>);
+
+/// What the page shows pictures and diagrams with.
+pub trait PrintAssets {
+    /// A Mermaid diagram drawn as a picture, or `None` to print its source.
+    fn diagram(&self, _src: &str) -> Option<PrintPicture> {
+        None
+    }
+    /// The picture at `src` (as written in the Markdown), `width` pixels wide
+    /// when the Markdown says so; `None` prints its alt text.
+    fn image(&self, _src: &str, _width: Option<f32>) -> Option<PrintPicture> {
+        None
+    }
+}
+
+/// No pictures: alt text and diagram sources.
+pub struct NoAssets;
+impl PrintAssets for NoAssets {}
+
 /// The document as an HTML page sized for A4 or Letter (MuPDF's default page).
 pub fn to_print_html(doc: &MdDoc, style: &PrintStyle) -> String {
+    to_print_html_with(doc, style, &NoAssets)
+}
+
+/// [`to_print_html`] with pictures and diagrams from `assets`.
+pub fn to_print_html_with(doc: &MdDoc, style: &PrintStyle, assets: &dyn PrintAssets) -> String {
     let mut out = String::with_capacity(4096);
     out.push_str("<!DOCTYPE html><html><head><meta charset=\"utf-8\">");
     if let Some(t) = &doc.title {
@@ -41,9 +71,11 @@ pub fn to_print_html(doc: &MdDoc, style: &PrintStyle) -> String {
          code,kbd{{background:#f2f2f2;padding:0 .2em}}\
          pre{{background:#f6f6f6;border:1px solid #ddd;padding:.6em .8em;white-space:pre-wrap}}\
          blockquote{{margin:.6em 0;padding:0 0 0 .9em;border-left:3px solid #ccc;color:#444}}\
-         table{{border-collapse:collapse;margin:.6em 0}}\
-         th,td{{border:1px solid #bbb;padding:.25em .5em;vertical-align:top}}\
-         th{{background:#f0f0f0}}\
+         table{{border-collapse:separate;border-spacing:0;margin:.6em 0}}\
+         th,td{{border-bottom:1px solid #ccc;padding:.3em .6em}}\
+         th{{background:#f0f0f0;border-top:1px solid #bbb;border-bottom:1px solid #999}}\
+         .fig{{text-align:center;margin:.8em 0}}\
+         .math{{text-align:center;font-style:italic;margin:.6em 0}}\
          hr{{border:0;border-top:1px solid #ccc;margin:1em 0}}\
          .fm{{color:#555;font-size:9pt;margin-bottom:1em}}\
          .fn{{font-size:9pt;color:#333}}\
@@ -53,7 +85,7 @@ pub fn to_print_html(doc: &MdDoc, style: &PrintStyle) -> String {
     ));
     out.push_str("</style></head><body>");
     for b in &doc.blocks {
-        block(b, &mut out);
+        block(b, &mut out, assets);
     }
     out.push_str("</body></html>");
     out
@@ -71,9 +103,32 @@ fn esc(text: &str, out: &mut String) {
     }
 }
 
-fn inlines(list: &Inlines, out: &mut String) {
+/// An `<img>` for a picture from [`PrintAssets`].
+fn picture((file, width): &PrintPicture, out: &mut String) {
+    out.push_str("<img src=\"");
+    esc(file, out);
+    out.push('"');
+    if let Some(w) = width {
+        out.push_str(&format!(" style=\"width:{w:.1}pt\""));
+    }
+    out.push('>');
+}
+
+/// Math written out as a line (x², √2, …); its source when it can't be read.
+fn math_line(src: &str) -> String {
+    crate::math::parse(src)
+        .map(|n| crate::math::to_line(&n))
+        .unwrap_or_else(|_| src.to_string())
+}
+
+fn inlines(list: &Inlines, out: &mut String, assets: &dyn PrintAssets) {
     for i in list {
         match i {
+            Inline::Text { text, style, .. } if style.math => {
+                out.push_str("<i>");
+                esc(&math_line(text), out);
+                out.push_str("</i>");
+            }
             Inline::Text { text, style, .. } => {
                 let mut close = Vec::new();
                 let mut open = |tag: &'static str, out: &mut String| {
@@ -110,8 +165,12 @@ fn inlines(list: &Inlines, out: &mut String) {
                     out.push('>');
                 }
             }
-            Inline::Image { alt, .. } => {
-                if !alt.is_empty() {
+            Inline::Image {
+                src, alt, width, ..
+            } => {
+                if let Some(p) = assets.image(src, *width) {
+                    picture(&p, out);
+                } else if !alt.is_empty() {
                     out.push_str("<span class=\"alt\">[");
                     esc(alt, out);
                     out.push_str("]</span>");
@@ -125,23 +184,23 @@ fn inlines(list: &Inlines, out: &mut String) {
     }
 }
 
-fn blocks(list: &[Block], out: &mut String) {
+fn blocks(list: &[Block], out: &mut String, assets: &dyn PrintAssets) {
     for b in list {
-        block(b, out);
+        block(b, out, assets);
     }
 }
 
-fn block(b: &Block, out: &mut String) {
+fn block(b: &Block, out: &mut String, assets: &dyn PrintAssets) {
     match b {
         Block::Heading { level, content, .. } => {
             let l = (*level).clamp(1, 6);
             out.push_str(&format!("<h{l}>"));
-            inlines(content, out);
+            inlines(content, out, assets);
             out.push_str(&format!("</h{l}>"));
         }
         Block::Paragraph(content) => {
             out.push_str("<p>");
-            inlines(content, out);
+            inlines(content, out, assets);
             out.push_str("</p>");
         }
         Block::List { start, items } => {
@@ -163,18 +222,18 @@ fn block(b: &Block, out: &mut String) {
                     // A tight item's single paragraph prints without a gap.
                     [Block::Paragraph(content)] => {
                         out.push_str(mark);
-                        inlines(content, out);
+                        inlines(content, out, assets);
                     }
                     [Block::Paragraph(content), rest @ ..] => {
                         out.push_str("<p>");
                         out.push_str(mark);
-                        inlines(content, out);
+                        inlines(content, out, assets);
                         out.push_str("</p>");
-                        blocks(rest, out);
+                        blocks(rest, out, assets);
                     }
                     many => {
                         out.push_str(mark);
-                        blocks(many, out);
+                        blocks(many, out, assets);
                     }
                 }
                 out.push_str("</li>");
@@ -183,8 +242,18 @@ fn block(b: &Block, out: &mut String) {
         }
         Block::Quote(body) => {
             out.push_str("<blockquote>");
-            blocks(body, out);
+            blocks(body, out, assets);
             out.push_str("</blockquote>");
+        }
+        Block::Mermaid(text) if let Some(p) = assets.diagram(text) => {
+            out.push_str("<p class=\"fig\">");
+            picture(&p, out);
+            out.push_str("</p>");
+        }
+        Block::Math(text) if crate::math::parse(text).is_ok() => {
+            out.push_str("<p class=\"math\">");
+            esc(&math_line(text), out);
+            out.push_str("</p>");
         }
         Block::Code { text, .. } | Block::Mermaid(text) | Block::Math(text) => {
             out.push_str("<pre>");
@@ -201,7 +270,7 @@ fn block(b: &Block, out: &mut String) {
             out.push_str("<table><thead><tr>");
             for (i, cell) in head.iter().enumerate() {
                 out.push_str(&format!("<th{}>", align(i)));
-                inlines(cell, out);
+                inlines(cell, out, assets);
                 out.push_str("</th>");
             }
             out.push_str("</tr></thead><tbody>");
@@ -209,7 +278,7 @@ fn block(b: &Block, out: &mut String) {
                 out.push_str("<tr>");
                 for (i, cell) in row.iter().enumerate() {
                     out.push_str(&format!("<td{}>", align(i)));
-                    inlines(cell, out);
+                    inlines(cell, out, assets);
                     out.push_str("</td>");
                 }
                 out.push_str("</tr>");
@@ -219,13 +288,13 @@ fn block(b: &Block, out: &mut String) {
         Block::Rule => out.push_str("<hr>"),
         Block::Details { summary, body } => {
             out.push_str("<p><b>");
-            inlines(summary, out);
+            inlines(summary, out, assets);
             out.push_str("</b></p>");
-            blocks(body, out);
+            blocks(body, out, assets);
         }
         Block::Footnote { number, body, .. } => {
             out.push_str(&format!("<div class=\"fn\"><sup>{number}</sup> "));
-            blocks(body, out);
+            blocks(body, out, assets);
             out.push_str("</div>");
         }
         Block::Frontmatter(pairs) => {
@@ -275,5 +344,41 @@ mod tests {
         assert!(h.contains("<table>"));
         assert!(h.contains("text-align:right"));
         assert!(!h.contains("onerror=alert"), "{h}");
+    }
+
+    struct Files;
+    impl PrintAssets for Files {
+        fn diagram(&self, _: &str) -> Option<PrintPicture> {
+            Some(("d0.png".into(), Some(150.0)))
+        }
+        fn image(&self, src: &str, width: Option<f32>) -> Option<PrintPicture> {
+            (src == "here.png").then(|| ("i0.png".into(), width.map(|w| w * 0.75)))
+        }
+    }
+
+    #[test]
+    fn diagrams_pictures_and_math_print_as_themselves() {
+        let md = "```mermaid\ngraph TD; A-->B\n```\n\n![a](here.png) ![b](https://x/y.png)\n\n$$x^2$$\n\nInline $\\sqrt{2}$.\n";
+        let doc = crate::parse(md);
+        let style = PrintStyle {
+            body_font: "serif",
+            mono_font: "monospace",
+        };
+        let h = to_print_html_with(&doc, &style, &Files);
+        assert!(
+            h.contains("<p class=\"fig\"><img src=\"d0.png\" style=\"width:150.0pt\"></p>"),
+            "{h}"
+        );
+        assert!(h.contains("<img src=\"i0.png\">"), "{h}");
+        // A picture the assets don't give stays its alt text.
+        assert!(h.contains("[b]"), "{h}");
+        assert!(
+            h.contains("<p class=\"math\">") && !h.contains("x^2"),
+            "{h}"
+        );
+        assert!(!h.contains("\\sqrt"), "{h}");
+        // Without assets: the diagram's source, as before.
+        let plain = to_print_html(&doc, &style);
+        assert!(plain.contains("<pre>graph TD; A--&gt;B</pre>"), "{plain}");
     }
 }

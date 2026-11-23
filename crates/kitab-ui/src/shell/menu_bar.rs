@@ -99,6 +99,7 @@ const MENUS: &[BarMenu] = &[
             row!("Make a smaller copy…", "", Pdf, CompressPdf),
             row!("Export as Markdown…", "", Doc, ExportMarkdown),
             row!("Export as text…", "", Doc, ExportText),
+            row!("Save as PDF…", "", Markdown, SaveAsPdf),
             row!("Print…", "Ctrl+P", Doc, Print),
             row!("Make a PDF from pictures…", "", Nothing, ImagesToPdf),
             None,

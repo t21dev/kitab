@@ -96,6 +96,41 @@ pub fn move_pages(
         .map(|_| ())
 }
 
+/// Write the PDF with its pages as `layout` lists them: each original page
+/// (0-based) and the degrees to turn it clockwise (a multiple of 90). Pages
+/// left out are dropped. Returns how many pages the new PDF has.
+pub fn arrange(
+    src: &Path,
+    password: Option<&str>,
+    layout: &[(u32, i32)],
+    out: &Path,
+) -> Result<u32, String> {
+    guard(src, out)?;
+    if layout.iter().any(|(_, d)| d % 90 != 0) {
+        return Err("pages turn in quarter turns".into());
+    }
+    let mut doc = open_pdf(src, password)?;
+    let order: Vec<u32> = layout.iter().map(|(p, _)| *p).collect();
+    crate::cli_ops::arrange_in(&mut doc, &order)?;
+    let err = |e: mupdf::Error| e.to_string();
+    for (i, &(_, degrees)) in layout.iter().enumerate() {
+        if degrees.rem_euclid(360) == 0 {
+            continue;
+        }
+        let mut page = doc.find_page(i as i32).map_err(err)?;
+        let now = page
+            .get_dict_inheritable("Rotate")
+            .map_err(err)?
+            .and_then(|r| r.as_int().ok())
+            .unwrap_or(0);
+        let turned = (now + degrees).rem_euclid(360);
+        page.dict_put("Rotate", doc.new_int(turned).map_err(err)?)
+            .map_err(err)?;
+    }
+    save_pdf(&doc, out)?;
+    Ok(layout.len() as u32)
+}
+
 /// Write the PDF with `pages` turned by `degrees` (a multiple of 90).
 pub fn rotate_pages(
     src: &Path,
@@ -460,6 +495,42 @@ mod tests {
         move_pages(&src, None, &[total - 1], 0, &out).unwrap();
         assert_eq!(text_of(&out, 0), text_of(&src, total as i32 - 1));
         assert_eq!(text_of(&out, 1), text_of(&src, 0));
+        let _ = std::fs::remove_file(out);
+    }
+
+    /// Arrange pages: the order given, pages left out gone, each turned as
+    /// asked (the page grid's Save).
+    #[test]
+    fn arranged_pages_are_reordered_dropped_and_turned() {
+        let src = fixture("01-text-outline.pdf");
+        let total = pages_of(&src);
+        assert!(total >= 3, "the fixture has three or more pages");
+        let out = temp("arranged.pdf");
+        let layout = [(2, 90), (0, 0), (1, -90)];
+        assert_eq!(arrange(&src, None, &layout, &out).unwrap(), 3);
+        assert_eq!(pages_of(&out), 3);
+        // Each page's needle (a turned page's text comes out in other lines).
+        let needle = |p: &Path, i: i32| {
+            let t = text_of(p, i);
+            let at = t.find("kitab-needle-").expect("a needle on every page");
+            t[at..at + 15].to_string()
+        };
+        for (i, (from, _)) in layout.iter().enumerate() {
+            assert_eq!(needle(&out, i as i32), needle(&src, *from as i32));
+        }
+        let doc = open_pdf(&out, None).unwrap();
+        let rotate = |i: i32| {
+            doc.find_page(i)
+                .unwrap()
+                .get_dict_inheritable("Rotate")
+                .unwrap()
+                .and_then(|r| r.as_int().ok())
+                .unwrap_or(0)
+        };
+        assert_eq!((rotate(0), rotate(1), rotate(2)), (90, 0, 270));
+        assert!(arrange(&src, None, &[(0, 45)], &out).is_err());
+        assert!(arrange(&src, None, &[], &out).is_err());
+        assert!(arrange(&src, None, &[(0, 0)], &src).is_err());
         let _ = std::fs::remove_file(out);
     }
 

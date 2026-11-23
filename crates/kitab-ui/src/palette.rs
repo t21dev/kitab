@@ -98,6 +98,13 @@ pub const COMMANDS: &[Command] = &[
     ),
     cmd!(
         "File",
+        "Save as PDF…",
+        "convert markdown md to pdf export save as print",
+        true,
+        SaveAsPdf
+    ),
+    cmd!(
+        "File",
         "Export as text…",
         "export convert text txt plain save as extract",
         true,

@@ -52,6 +52,9 @@ an environment switch to turn it off so it can still be benchmarked:
           size, no bytes) stands in for it. Painting a husk whose texture is
           gone (device lost) paints nothing and counts in gpui::kitab_image_misses,
           so the app renders the page again.
+  Hands   Windows: CursorStyle::OpenHand and ClosedHand (the hand tool, dragging
+          a page or a row) were the arrow, Windows having no grab cursors.
+          They are the system's hand now.
 
 Run `python tools/patch_gpui.py` once after cloning (and after a gpui version bump).
 
@@ -681,8 +684,22 @@ struct WindowInvalidatorInner {"""),
     menu_key_patch()
     aligned_hit_test_patch()
     zed_backports()
+    hand_cursor_patch()
     print(f"patched gpui copy: {DEST}")
     xim_ctext_fix()
+
+
+def hand_cursor_patch() -> None:
+    """Hands: Windows has no open or closed hand cursor, so gpui showed the
+    arrow for both. They take the system's hand, as links do."""
+    edit("src/platform/windows/util.rs", [
+        ("""        CursorStyle::PointingHand | CursorStyle::DragLink => (&HAND, IDC_HAND),""",
+         """        // Kitab: the open and closed hands too (Windows has neither).
+        CursorStyle::PointingHand
+        | CursorStyle::DragLink
+        | CursorStyle::OpenHand
+        | CursorStyle::ClosedHand => (&HAND, IDC_HAND),"""),
+    ])
 
 
 def aligned_hit_test_patch() -> None:

@@ -246,6 +246,13 @@ impl Reader {
                     act(Box::new(ExportMarkdown)),
                 )]
             }
+            Tool::Export => vec![b(
+                0,
+                "download",
+                "Save as PDF",
+                false,
+                act(Box::new(SaveAsPdf)),
+            )],
             Tool::More => vec![b(0, "more-vertical", "More", false, Click::MoreMenu)],
             _ => Vec::new(),
         }

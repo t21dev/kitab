@@ -104,6 +104,13 @@ pub fn render(source: Source<'_>, ext: &str, size: u32) -> Result<Thumb, String>
     }
 }
 
+/// A picture file drawn small, for Kitab's own lists of pictures (Make a PDF
+/// from pictures). Not for the file manager: `render` still refuses them.
+pub fn picture(path: &Path, size: u32) -> Result<Thumb, String> {
+    let pixmap = kitab_mupdf::tools::picture_thumbnail(path, size.clamp(MIN_SIZE, MAX_SIZE))?;
+    Ok(Thumb { pixmap })
+}
+
 /// The start of a text file, cut at a line end so no block is half read.
 fn text_head(source: &Source<'_>) -> Result<String, String> {
     let bytes: Vec<u8> = match source {

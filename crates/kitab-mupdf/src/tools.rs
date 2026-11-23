@@ -262,6 +262,49 @@ pub fn images_to_pdf(inputs: &[PathBuf], out: &Path) -> Result<u32, String> {
     Ok(inputs.len() as u32)
 }
 
+/// A picture drawn with its longer side `size` px, upright as its camera
+/// recorded, decoded as `images_to_pdf` decodes it (Make a PDF from
+/// pictures shows these in its list).
+pub fn picture_thumbnail(path: &Path, size: u32) -> Result<mupdf::Pixmap, String> {
+    let err = |e: mupdf::Error| e.to_string();
+    let data = std::fs::read(path).map_err(|e| e.to_string())?;
+    let image = picture(path, &data)?;
+    let (iw, ih) = (image.width() as f32, image.height() as f32);
+    if iw < 1.0 || ih < 1.0 {
+        return Err("it has no pixels".into());
+    }
+    let turn = jpeg_orientation(&data);
+    let (w, h) = if matches!(turn, 6 | 8) {
+        (ih, iw)
+    } else {
+        (iw, ih)
+    };
+    let k = size.max(1) as f32 / w.max(h);
+    let (tw, th) = ((w * k).round().max(1.0), (h * k).round().max(1.0));
+    let mut pix = mupdf::Pixmap::new_with_w_h(
+        &mupdf::Colorspace::device_rgb(),
+        tw as i32,
+        th as i32,
+        false,
+    )
+    .map_err(err)?;
+    pix.clear_with(255).map_err(err)?;
+    {
+        let dev = mupdf::Device::from_pixmap(&pix).map_err(err)?;
+        // The picture's unit square (its first row at the top) onto the
+        // thumbnail, turned as the camera said.
+        let ctm = match turn {
+            3 => mupdf::Matrix::new(-tw, 0.0, 0.0, -th, tw, th),
+            6 => mupdf::Matrix::new(0.0, th, -tw, 0.0, tw, 0.0),
+            8 => mupdf::Matrix::new(0.0, -th, tw, 0.0, 0.0, th),
+            _ => mupdf::Matrix::new(tw, 0.0, 0.0, th, 0.0, 0.0),
+        };
+        dev.fill_image(&image, &ctm, 1.0, mupdf::ColorParams::default())
+            .map_err(err)?;
+    }
+    Ok(pix)
+}
+
 /// The longest password Kitab writes, in bytes (MuPDF holds 128).
 pub const MAX_PASSWORD_BYTES: usize = 100;
 

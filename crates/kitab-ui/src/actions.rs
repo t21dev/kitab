@@ -122,6 +122,8 @@ actions!(
         // The document's content as Markdown (pictures beside it) or text.
         ExportMarkdown,
         ExportText,
+        // A Markdown document as a PDF (laid out on A4 as for printing).
+        SaveAsPdf,
         ToggleSplit,
         CloseOverlay,
         // Keyboard focus: the next or previous button or control

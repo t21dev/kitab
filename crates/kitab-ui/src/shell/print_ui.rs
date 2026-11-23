@@ -93,58 +93,20 @@ impl Workspace {
         cx: &mut Context<Self>,
     ) {
         self.finish_md_print();
-        let Some(doc) = reader.read(cx).markdown_doc() else {
+        let Some(paper) = md_paper(&reader, cx) else {
             return;
         };
-        // MuPDF lays out with its own fonts, picked by generic family.
-        let body = match Style::get(cx).md_face {
-            crate::settings::MdFace::System => "sans-serif",
-            crate::settings::MdFace::Serif => "serif",
-            crate::settings::MdFace::Mono => "monospace",
-        }
-        .to_string();
-        let mono = "monospace".to_string();
         let engine: Arc<dyn DocEngine> = self.engine.clone();
         let id = reader.entity_id();
         cx.spawn_in(window, async move |this, cx| {
             let laid = cx
                 .background_spawn(async move {
-                    let html = kitab_md::print::to_print_html(
-                        &doc,
-                        &kitab_md::print::PrintStyle {
-                            body_font: &body,
-                            mono_font: &mono,
-                        },
-                    );
-                    // kitab-print-*.html: the one HTML the engine opens.
-                    let file = kitab_print::temp_pdf().with_extension("html");
-                    std::fs::write(&file, html).map_err(|e| e.to_string())?;
-                    let (handle, _) = match engine.open(&file, None) {
-                        Ok(o) => o,
-                        Err(e) => {
-                            let _ = std::fs::remove_file(&file);
-                            return Err(format!("{e:?}"));
-                        }
-                    };
-                    let a4 = kitab_core::BookLayout {
-                        width: 595.0,
-                        height: 842.0,
-                        em: 10.5,
-                        ..kitab_core::BookLayout::DEFAULT
-                    };
-                    match engine.relayout(handle, a4) {
-                        Ok(info) => Ok(MdPrint {
-                            reader: id,
-                            doc: handle,
-                            sizes: info.page_sizes.clone(),
-                            file,
-                        }),
-                        Err(e) => {
-                            engine.close(handle);
-                            let _ = std::fs::remove_file(&file);
-                            Err(e)
-                        }
-                    }
+                    paper(engine.as_ref()).map(|(doc, sizes, file)| MdPrint {
+                        reader: id,
+                        doc,
+                        sizes,
+                        file,
+                    })
                 })
                 .await;
             let _ = this.update_in(cx, |ws, window, cx| match laid {
@@ -158,12 +120,60 @@ impl Workspace {
         .detach();
     }
 
+    /// File › Save as PDF… (Markdown): the document laid out on A4 as for
+    /// printing, written to a PDF the user names.
+    pub(super) fn save_markdown_pdf(&mut self, reader: Entity<Reader>, cx: &mut Context<Self>) {
+        let Some(paper) = md_paper(&reader, cx) else {
+            self.toast("Save as PDF works on Markdown.", true, None, cx);
+            return;
+        };
+        let src = reader.read(cx).path.clone();
+        let name = format!("{}.pdf", super::tools_ui::stem(&src));
+        let dir = src.parent().map(|d| d.to_path_buf()).unwrap_or_default();
+        let save_rx = cx.prompt_for_new_path(&dir, Some(&name));
+        let engine: Arc<dyn DocEngine> = self.engine.clone();
+        cx.spawn(async move |this, cx| {
+            let picked = save_rx.await;
+            if matches!(picked, Ok(Err(_)) | Err(_)) {
+                let _ = this.update(cx, |ws, cx| ws.picker_failed(cx));
+            }
+            let Ok(Ok(Some(mut out))) = picked else {
+                return;
+            };
+            if out.extension().is_none() {
+                out.set_extension("pdf");
+            }
+            let result = cx
+                .background_spawn(async move {
+                    let (doc, sizes, file) = paper(engine.as_ref())?;
+                    let pages: Vec<u32> = (0..sizes.len() as u32).collect();
+                    let written = engine.write_pdf(doc, &pages, &out);
+                    engine.close(doc);
+                    drop_paper(&file);
+                    written.map(|n| (out, n))
+                })
+                .await;
+            let _ = this.update(cx, |ws, cx| match result {
+                Ok((out, n)) => {
+                    let what = if n == 1 {
+                        "Saved as a PDF of 1 page:".to_string()
+                    } else {
+                        format!("Saved as a PDF of {n} pages:")
+                    };
+                    ws.report(Ok(out), &what, cx)
+                }
+                Err(e) => ws.report(Err(e), "", cx),
+            });
+        })
+        .detach();
+    }
+
     /// Printing is over (sent, cancelled or failed): let go of Markdown's
     /// paper layout.
     fn finish_md_print(&mut self) {
         if let Some(m) = self.md_print.take() {
             self.engine.close(m.doc);
-            let _ = std::fs::remove_file(&m.file);
+            drop_paper(&m.file);
         }
     }
 
@@ -972,4 +982,175 @@ fn owner_of(window: &Window) -> isize {
     }
     let _ = window;
     0
+}
+
+/// The Markdown in `reader` laid out for paper: the work, to run off the UI
+/// thread, that writes kitab-md's print HTML and has MuPDF lay it out on A4.
+/// It gives the open layout, its page sizes and the HTML file (both to be
+/// let go of when done). `None` when `reader` isn't Markdown.
+#[allow(clippy::type_complexity)]
+fn md_paper(
+    reader: &Entity<Reader>,
+    cx: &gpui::App,
+) -> Option<
+    impl FnOnce(
+        &dyn DocEngine,
+    ) -> Result<
+        (
+            crate::engine::DocHandle,
+            Vec<kitab_core::SizePt>,
+            std::path::PathBuf,
+        ),
+        String,
+    > + Send
+    + 'static,
+> {
+    let doc = reader.read(cx).markdown_doc()?;
+    let dir = reader
+        .read(cx)
+        .path
+        .parent()
+        .map(std::path::Path::to_path_buf)
+        .unwrap_or_default();
+    // MuPDF lays out with its own fonts, picked by generic family.
+    let body = match Style::get(cx).md_face {
+        crate::settings::MdFace::System => "sans-serif",
+        crate::settings::MdFace::Serif => "serif",
+        crate::settings::MdFace::Mono => "monospace",
+    };
+    Some(move |engine: &dyn DocEngine| {
+        // kitab-print-*.html: the one HTML the engine opens. Its pictures
+        // sit beside it, named after it, and go with it (`drop_paper`).
+        let file = kitab_print::temp_pdf().with_extension("html");
+        let assets = PaperAssets {
+            dir,
+            page: file.clone(),
+            made: std::cell::Cell::new(0),
+        };
+        let html = kitab_md::print::to_print_html_with(
+            &doc,
+            &kitab_md::print::PrintStyle {
+                body_font: body,
+                mono_font: "monospace",
+            },
+            &assets,
+        );
+        if let Err(e) = std::fs::write(&file, html) {
+            drop_paper(&file);
+            return Err(e.to_string());
+        }
+        let (handle, _) = match engine.open(&file, None) {
+            Ok(o) => o,
+            Err(e) => {
+                drop_paper(&file);
+                return Err(format!("{e:?}"));
+            }
+        };
+        let a4 = kitab_core::BookLayout {
+            width: 595.0,
+            height: 842.0,
+            em: 10.5,
+            ..kitab_core::BookLayout::DEFAULT
+        };
+        match engine.relayout(handle, a4) {
+            Ok(info) => Ok((handle, info.page_sizes.clone(), file)),
+            Err(e) => {
+                engine.close(handle);
+                drop_paper(&file);
+                Err(e)
+            }
+        }
+    })
+}
+
+/// Let go of a paper layout's files: the HTML page and its pictures.
+fn drop_paper(page: &std::path::Path) {
+    let (Some(dir), Some(stem)) = (page.parent(), page.file_stem()) else {
+        return;
+    };
+    let stem = stem.to_string_lossy();
+    if !stem.starts_with("kitab-print-") {
+        return;
+    }
+    if let Ok(list) = std::fs::read_dir(dir) {
+        for e in list.flatten() {
+            if e.file_name().to_string_lossy().starts_with(stem.as_ref()) {
+                let _ = std::fs::remove_file(e.path());
+            }
+        }
+    }
+}
+
+/// The pictures a paper layout shows, written beside its page: Mermaid
+/// diagrams drawn as the reader draws them (in Mermaid's own colours, made for white paper)
+/// and the document's local pictures. Remote pictures stay blocked, as in
+/// the reader.
+struct PaperAssets {
+    /// The Markdown file's folder (pictures are found from it).
+    dir: std::path::PathBuf,
+    page: std::path::PathBuf,
+    made: std::cell::Cell<u32>,
+}
+
+impl PaperAssets {
+    /// A new file beside the page, named after it: (path, file name).
+    fn next(&self, ext: &str) -> (std::path::PathBuf, String) {
+        let n = self.made.get();
+        self.made.set(n + 1);
+        let stem = self
+            .page
+            .file_stem()
+            .map(|s| s.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        let name = format!("{stem}-{n}.{ext}");
+        (self.page.with_file_name(&name), name)
+    }
+}
+
+impl kitab_md::print::PrintAssets for PaperAssets {
+    fn diagram(&self, src: &str) -> Option<kitab_md::print::PrintPicture> {
+        let (mut px, w, h, lw, _) =
+            crate::reader::draw_mermaid(src, &mermaid_svg::Theme::default_theme(), 1.0).ok()?;
+        // Premultiplied BGRA onto white paper, as RGB.
+        let mut rgb = Vec::with_capacity(px.len() / 4 * 3);
+        for p in px.as_chunks_mut::<4>().0 {
+            let clear = 255 - p[3];
+            rgb.extend([
+                p[2].saturating_add(clear),
+                p[1].saturating_add(clear),
+                p[0].saturating_add(clear),
+            ]);
+        }
+        let image = image::RgbImage::from_raw(w, h, rgb)?;
+        let (path, name) = self.next("png");
+        image.save(&path).ok()?;
+        // Its size at 100 %, in points.
+        Some((name, Some(lw * 0.75)))
+    }
+
+    fn image(&self, src: &str, width: Option<f32>) -> Option<kitab_md::print::PrintPicture> {
+        /// Bigger pictures print as their alt text.
+        const MAX_BYTES: u64 = 40 << 20;
+        let lower = src.to_ascii_lowercase();
+        if lower.contains("://") || lower.starts_with("data:") {
+            return None;
+        }
+        let clean = src
+            .split(['?', '#'])
+            .next()
+            .unwrap_or(src)
+            .replace("%20", " ");
+        let path = self.dir.join(clean);
+        let ext = path.extension()?.to_str()?.to_ascii_lowercase();
+        // What MuPDF draws in a page.
+        if !matches!(ext.as_str(), "png" | "jpg" | "jpeg" | "gif" | "bmp") {
+            return None;
+        }
+        if std::fs::metadata(&path).ok()?.len() > MAX_BYTES {
+            return None;
+        }
+        let (to, name) = self.next(&ext);
+        std::fs::copy(&path, &to).ok()?;
+        Some((name, width.map(|w| w * 0.75)))
+    }
 }

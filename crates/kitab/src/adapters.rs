@@ -240,6 +240,10 @@ impl DocEngine for MupdfEngine {
                 p::move_pages(src, password, pages, *before, out)?;
                 format!("Moved {}", n(pages.len(), "page", "pages"))
             }
+            PageOp::Arrange(layout) => {
+                let left = p::arrange(src, password, layout, out)?;
+                format!("Saved {}", n(left as usize, "page", "pages"))
+            }
             PageOp::Rotate(pages, deg) => {
                 p::rotate_pages(src, password, pages, *deg, out)?;
                 format!("Turned {}", n(pages.len(), "page", "pages"))
@@ -993,10 +997,12 @@ impl Library for StoreLibrary {
             let _ = std::fs::remove_file(&file);
         }
         let ext = path.extension()?.to_str()?.to_ascii_lowercase();
-        let png = kitab_thumb::render(kitab_thumb::Source::Path(path), &ext, size)
-            .ok()?
-            .to_png()
-            .ok()?;
+        let thumb = if kitab_core::Format::from_extension(&ext) == Some(kitab_core::Format::Image) {
+            kitab_thumb::picture(path, size)
+        } else {
+            kitab_thumb::render(kitab_thumb::Source::Path(path), &ext, size)
+        };
+        let png = thumb.ok()?.to_png().ok()?;
         if std::fs::create_dir_all(&dir).is_ok() {
             let tmp = file.with_extension(format!("{}.tmp", std::process::id()));
             if std::fs::write(&tmp, &png).is_ok() && std::fs::rename(&tmp, &file).is_err() {

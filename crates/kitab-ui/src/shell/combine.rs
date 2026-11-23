@@ -4,9 +4,12 @@
 //! a list sets their order. Drag a row, or use its arrows, Alt+↑/↓, Del;
 //! Add PDFs… and Sort by name. Opened by Merge with other PDFs… (the open
 //! document first) and by the file manager's right-click Combine.
+//!
+//! The same list sets the order of pictures for Make a PDF from pictures:
+//! each picture a page.
 
 use super::Workspace;
-use super::tools_ui::{dialog_button, natural_key};
+use super::tools_ui::{dialog_button, is_picture, natural_key};
 use crate::icons::icon;
 use crate::style::Style;
 use crate::tooltip::Tip;
@@ -35,6 +38,8 @@ pub(super) struct CombineDialog {
     /// The row the keys act on.
     pub sel: usize,
     pub serial: u64,
+    /// Pictures to make a PDF of, not PDFs to combine.
+    pub pictures: bool,
 }
 
 /// A row being dragged: its index in the dialog with this serial.
@@ -100,6 +105,28 @@ impl Workspace {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        self.open_order_sheet(inputs, false, window, cx);
+    }
+
+    /// Show the sheet that sets the order of `pictures` before they become
+    /// a PDF, one a page.
+    pub(super) fn open_pictures_order(
+        &mut self,
+        pictures: Vec<PathBuf>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let inputs = pictures.into_iter().map(|p| (p, None)).collect();
+        self.open_order_sheet(inputs, true, window, cx);
+    }
+
+    fn open_order_sheet(
+        &mut self,
+        inputs: Vec<(PathBuf, Option<String>)>,
+        pictures: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         self.menu = None;
         self.menu_closing = None;
         self.menu_serial += 1;
@@ -108,6 +135,7 @@ impl Workspace {
             items: Vec::new(),
             sel: 0,
             serial,
+            pictures,
         });
         self.add_to_combine(inputs, cx);
         window.focus(&self.tools.dialog_focus);
@@ -120,7 +148,7 @@ impl Workspace {
         let Some(d) = self.tools.combine.as_mut() else {
             return;
         };
-        let serial = d.serial;
+        let (serial, pictures) = (d.serial, d.pictures);
         for (path, unlock) in inputs {
             if d.items.iter().any(|i| i.path == path) {
                 continue;
@@ -137,16 +165,22 @@ impl Workspace {
                 let (pages, cover) = cx
                     .background_spawn(async move {
                         use kitab_core::OpenError;
-                        let pages = match engine.open(&p, unlock.as_deref()) {
-                            Ok((h, info)) => {
-                                engine.close(h);
-                                Ok(info.page_count)
+                        // A picture is one page; whether it can be read, making
+                        // the PDF says (its preview is only a nicety).
+                        let pages = if pictures {
+                            Ok(1)
+                        } else {
+                            match engine.open(&p, unlock.as_deref()) {
+                                Ok((h, info)) => {
+                                    engine.close(h);
+                                    Ok(info.page_count)
+                                }
+                                Err(OpenError::NeedsPassword | OpenError::WrongPassword) => {
+                                    Err("Has a password: open it in Kitab first")
+                                }
+                                Err(OpenError::NotFound) => Err("Not found"),
+                                Err(_) => Err("Kitab can't read this file"),
                             }
-                            Err(OpenError::NeedsPassword | OpenError::WrongPassword) => {
-                                Err("Has a password: open it in Kitab first")
-                            }
-                            Err(OpenError::NotFound) => Err("Not found"),
-                            Err(_) => Err("Kitab can't read this file"),
                         };
                         let cover = pages.is_ok().then(|| library.cover(&p, THUMB_PX)).flatten();
                         let cover = cover.and_then(|png| {
@@ -222,31 +256,41 @@ impl Workspace {
             files: true,
             directories: false,
             multiple: true,
-            prompt: Some("Add to combine".into()),
+            prompt: Some("Add to the list".into()),
         });
+        let pictures = self.tools.combine.as_ref().is_some_and(|d| d.pictures);
         cx.spawn(async move |this, cx| {
             let picked = rx.await;
             if matches!(picked, Ok(Err(_)) | Err(_)) {
                 let _ = this.update(cx, |ws, cx| ws.picker_failed(cx));
             }
             let Ok(Ok(Some(paths))) = picked else { return };
-            let pdfs: Vec<(PathBuf, Option<String>)> = paths
+            let wanted = |p: &PathBuf| {
+                if pictures {
+                    is_picture(p)
+                } else {
+                    p.extension().is_some_and(|e| e.eq_ignore_ascii_case("pdf"))
+                }
+            };
+            let files: Vec<(PathBuf, Option<String>)> = paths
                 .into_iter()
-                .filter(|p| p.extension().is_some_and(|e| e.eq_ignore_ascii_case("pdf")))
+                .filter(wanted)
                 .map(|p| (p, None))
                 .collect();
             let _ = this.update(cx, |ws, cx| {
-                ws.add_to_combine(pdfs, cx);
+                ws.add_to_combine(files, cx);
                 cx.notify();
             });
         })
         .detach();
     }
 
-    /// The list can be combined: two or more PDFs, none that can't be read.
+    /// The list can be combined: two or more PDFs (one or more pictures),
+    /// none that can't be read.
     fn combine_ready(&self) -> bool {
         self.tools.combine.as_ref().is_some_and(|d| {
-            d.items.len() >= 2 && d.items.iter().all(|i| !matches!(i.pages, Some(Err(_))))
+            let least = if d.pictures { 1 } else { 2 };
+            d.items.len() >= least && d.items.iter().all(|i| !matches!(i.pages, Some(Err(_))))
         })
     }
 
@@ -262,8 +306,13 @@ impl Workspace {
             .iter()
             .map(|i| (i.path.clone(), i.unlock.clone()))
             .collect();
+        let pictures = d.pictures;
         self.close_combine(window, cx);
-        self.merge_inputs(inputs, cx);
+        if pictures {
+            self.save_pictures_pdf(inputs.into_iter().map(|(p, _)| p).collect(), cx);
+        } else {
+            self.merge_inputs(inputs, cx);
+        }
     }
 
     fn combine_key(&mut self, e: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
@@ -299,12 +348,18 @@ impl Workspace {
         cx: &mut Context<Self>,
     ) -> Option<AnyElement> {
         let d = self.tools.combine.as_ref()?;
-        let serial = d.serial;
+        let (serial, pictures) = (d.serial, d.pictures);
         let focused = self.tools.dialog_focus.is_focused(window);
         let n = d.items.len();
         let total: Option<u32> = d.items.iter().map(|i| i.pages.and_then(Result::ok)).sum();
         let blocked = d.items.iter().any(|i| matches!(i.pages, Some(Err(_))));
-        let note = if n < 2 {
+        let note = if pictures {
+            match n {
+                0 => "Add at least one picture.".to_string(),
+                1 => "1 picture, 1 page".into(),
+                n => format!("{n} pictures, {n} pages"),
+            }
+        } else if n < 2 {
             "Add at least two PDFs.".to_string()
         } else if blocked {
             "Take out the PDF marked in red to combine.".to_string()
@@ -338,7 +393,11 @@ impl Workspace {
                     .justify_center()
                     .text_size(px(12.5))
                     .text_color(st.c(|c| c.faint))
-                    .child("No PDFs yet."),
+                    .child(if pictures {
+                        "No pictures yet."
+                    } else {
+                        "No PDFs yet."
+                    }),
             );
         }
 
@@ -386,13 +445,21 @@ impl Workspace {
                     .text_size(px(15.0))
                     .font_weight(FontWeight::SEMIBOLD)
                     .text_color(st.c(|c| c.text))
-                    .child("Combine into one PDF"),
+                    .child(if pictures {
+                        "Make a PDF from pictures"
+                    } else {
+                        "Combine into one PDF"
+                    }),
             )
             .child(
                 div()
                     .text_size(px(12.5))
                     .text_color(st.c(|c| c.muted))
-                    .child("Drag to set the order. The originals stay as they are."),
+                    .child(if pictures {
+                        "Drag to set the order: each picture becomes a page, first to last."
+                    } else {
+                        "Drag to set the order. The originals stay as they are."
+                    }),
             )
             .child(list)
             .child(
@@ -401,8 +468,16 @@ impl Workspace {
                     .items_center()
                     .gap(px(4.0))
                     .child(
-                        ghost_btn("combine-add", "Add PDFs…", Some("plus"))
-                            .on_click(cx.listener(|ws, _, _, cx| ws.combine_add(cx))),
+                        ghost_btn(
+                            "combine-add",
+                            if pictures {
+                                "Add pictures…"
+                            } else {
+                                "Add PDFs…"
+                            },
+                            Some("plus"),
+                        )
+                        .on_click(cx.listener(|ws, _, _, cx| ws.combine_add(cx))),
                     )
                     .child(
                         ghost_btn("combine-sort", "Sort by name", None)
@@ -413,7 +488,7 @@ impl Workspace {
                         div()
                             .ml_auto()
                             .text_size(px(12.0))
-                            .text_color(if n < 2 || blocked {
+                            .text_color(if !ready {
                                 st.c(|c| c.bad)
                             } else {
                                 st.c(|c| c.faint)
@@ -432,11 +507,18 @@ impl Workspace {
                         ),
                     )
                     .child(
-                        dialog_button(st, "combine-go", "Combine…", true)
-                            .when(!ready, |b| b.opacity(0.45))
-                            .on_click(
-                                cx.listener(|ws, _, window, cx| ws.confirm_combine(window, cx)),
-                            ),
+                        dialog_button(
+                            st,
+                            "combine-go",
+                            if pictures {
+                                "Make PDF…"
+                            } else {
+                                "Combine…"
+                            },
+                            true,
+                        )
+                        .when(!ready, |b| b.opacity(0.45))
+                        .on_click(cx.listener(|ws, _, window, cx| ws.confirm_combine(window, cx))),
                     ),
             );
         Some(self.modal_layer(
@@ -462,7 +544,9 @@ impl Workspace {
     ) -> AnyElement {
         let accent = st.c(|c| c.accent);
         let name = file_name(&it.path);
+        let pictures = self.tools.combine.as_ref().is_some_and(|d| d.pictures);
         let (meta, bad) = match it.pages {
+            _ if pictures => (format!("Page {}", i + 1), false),
             None => ("Reading…".to_string(), false),
             Some(Ok(1)) => ("1 page".to_string(), false),
             Some(Ok(p)) => (format!("{p} pages"), false),

@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-//! Page tools… (PLAN.md Phase 9): delete, move or turn pages, compress, add
-//! page numbers or a watermark, save the text or the pictures. One sheet,
-//! a tool and its few inputs; every tool writes a new file and the open
-//! document is never changed.
+//! Page tools… (PLAN.md Phase 9): arrange pages (delete, move or turn them,
+//! on the page grid of arrange_ui.rs), compress, add page numbers or a
+//! watermark, save the text or the pictures. One sheet, a tool and its few
+//! inputs; every tool writes a new file and the open document is never
+//! changed.
 
 use super::Workspace;
 use super::tools_ui::{dialog_button, stem};
@@ -18,14 +19,12 @@ use gpui::{
     MouseButton, ParentElement, PathPromptOptions, SharedString, StatefulInteractiveElement,
     Styled, Subscription, Window, div, prelude::FluentBuilder, px, svg,
 };
-use kitab_core::parse_page_ranges;
 use std::path::Path;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(super) enum Tool {
-    Delete,
-    Move,
-    Rotate,
+    /// Opens the page grid (its own sheet) rather than taking inputs here.
+    Arrange,
     Compress,
     Number,
     Watermark,
@@ -34,10 +33,8 @@ pub(super) enum Tool {
 }
 
 impl Tool {
-    const ALL: [Tool; 8] = [
-        Tool::Delete,
-        Tool::Move,
-        Tool::Rotate,
+    const ALL: [Tool; 6] = [
+        Tool::Arrange,
         Tool::Compress,
         Tool::Number,
         Tool::Watermark,
@@ -47,9 +44,7 @@ impl Tool {
 
     fn label(self) -> &'static str {
         match self {
-            Tool::Delete => "Delete pages",
-            Tool::Move => "Move pages",
-            Tool::Rotate => "Turn pages",
+            Tool::Arrange => "Arrange pages",
             Tool::Compress => "Compress",
             Tool::Number => "Page numbers",
             Tool::Watermark => "Watermark",
@@ -60,9 +55,7 @@ impl Tool {
 
     fn icon(self) -> &'static str {
         match self {
-            Tool::Delete => "trash",
-            Tool::Move => "pages",
-            Tool::Rotate => "rotate",
+            Tool::Arrange => "pages",
             Tool::Compress => "scale",
             Tool::Number => "hash",
             Tool::Watermark => "text",
@@ -73,9 +66,7 @@ impl Tool {
 
     fn about(self) -> &'static str {
         match self {
-            Tool::Delete => "A copy without the pages you list.",
-            Tool::Move => "A copy with the pages you list moved before another page.",
-            Tool::Rotate => "A copy with the pages you list turned.",
+            Tool::Arrange => "Delete, move or turn pages on a grid of them.",
             Tool::Compress => {
                 "A smaller copy. Balanced and Smallest scale down pictures larger than the pages need; text, drawings and fonts stay as sharp as before. Same quality only drops unused and repeated parts."
             }
@@ -85,47 +76,81 @@ impl Tool {
             Tool::Images => "Every picture on the pages, as PNG files in a folder you choose.",
         }
     }
+}
 
-    fn takes_pages(self) -> bool {
-        matches!(self, Tool::Delete | Tool::Move | Tool::Rotate)
+/// Compress: the size a quality comes to, found by making the copy.
+#[derive(Clone)]
+enum Estimate {
+    Working,
+    /// Bytes before and after, and whether that's the copy itself (a small
+    /// PDF) or worked out from a few of its pages.
+    Done(u64, u64, bool),
+    /// Why there's no smaller copy (already as small as it gets, or an error).
+    Failed(String),
+}
+
+fn shrink_ix(s: crate::Shrink) -> usize {
+    match s {
+        crate::Shrink::Lossless => 0,
+        crate::Shrink::Balanced => 1,
+        crate::Shrink::Smallest => 2,
     }
 }
 
 pub(super) struct PageToolsSheet {
     reader: Entity<Reader>,
     tool: Tool,
-    pages: Entity<TextField>,
-    before: Entity<TextField>,
+    /// Opened for one tool (the file manager's right-click menu, File ›
+    /// Make a smaller copy…): that tool alone, without the others to pick.
+    single: bool,
     first: Entity<TextField>,
     mark: Entity<TextField>,
-    turn: i32,
     /// Compress: how much smaller.
     shrink: crate::Shrink,
+    /// Compress: each quality's result, once worked out (by `shrink_ix`).
+    estimates: [Option<Estimate>; 3],
     serial: u64,
     _subs: Vec<Subscription>,
 }
 
 impl Workspace {
     pub(super) fn open_page_tools(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(reader) = self.active_reader().cloned() else {
-            return;
-        };
+        if let Some(reader) = self.active_reader().cloned() {
+            self.open_page_tools_for(reader, None, window, cx);
+        }
+    }
+
+    /// Page tools on `reader`, its tab brought forward; on `tool` alone
+    /// when given, else on the picker of every tool.
+    pub(super) fn open_page_tools_for(
+        &mut self,
+        reader: Entity<Reader>,
+        tool: Option<Tool>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         if !reader.read(cx).is_pdf() {
             self.toast("Page tools work on PDFs.", true, None, cx);
             return;
         }
+        if let Some(ix) = self.tabs.iter().position(|t| *t == reader)
+            && self.active != Some(ix)
+        {
+            self.activate(ix, window, cx);
+        }
         self.menu = None;
         self.menu_closing = None;
-        let page = reader.read(cx).current_page() + 1;
+        if tool == Some(Tool::Arrange) {
+            self.open_arrange(reader, window, cx);
+            return;
+        }
         let field = |text: &str, placeholder: &str, cx: &mut Context<Self>| {
             cx.new(|cx| TextField::new(text, false, placeholder, cx))
         };
-        let pages = field(&page.to_string(), "1-3, 7, 10-", cx);
-        let before = field("1", "Page number", cx);
         let first = field("1", "1", cx);
         let mark = field("DRAFT", "Text, like DRAFT", cx);
         let mut subs = Vec::new();
-        for f in [&pages, &before, &first, &mark] {
+        for f in [&first, &mark] {
             subs.push(
                 cx.subscribe_in(f, window, |ws, _, e: &FieldEvent, window, cx| match e {
                     FieldEvent::Submit => ws.run_page_tool(window, cx),
@@ -134,21 +159,106 @@ impl Workspace {
                 }),
             );
         }
-        pages.read(cx).focus(window);
+        let single = tool.is_some();
+        let tool = tool.unwrap_or(Tool::Compress);
+        match tool {
+            Tool::Watermark => mark.read(cx).focus(window),
+            Tool::Number => first.read(cx).focus(window),
+            _ => {}
+        }
         self.page_tools_serial += 1;
         self.page_tools = Some(PageToolsSheet {
             reader,
-            tool: Tool::Delete,
-            pages,
-            before,
+            tool,
+            single,
             first,
             mark,
-            turn: 90,
             shrink: crate::Shrink::Balanced,
+            estimates: [None, None, None],
             serial: self.page_tools_serial,
             _subs: subs,
         });
+        self.compress_estimate(cx);
         cx.notify();
+    }
+
+    /// Compress shows what its copy will weigh, worked out in the background
+    /// once per quality: a small PDF's copy is made (and thrown away); a big
+    /// one's from a few of its pages, spread through it, compressed alone:
+    /// the whole copy takes minutes on a long scan, a few pages a moment.
+    fn compress_estimate(&mut self, cx: &mut Context<Self>) {
+        let Some(s) = self.page_tools.as_mut() else {
+            return;
+        };
+        let ix = shrink_ix(s.shrink);
+        if s.tool != Tool::Compress || s.estimates[ix].is_some() {
+            return;
+        }
+        s.estimates[ix] = Some(Estimate::Working);
+        let (shrink, serial) = (s.shrink, s.serial);
+        let r = s.reader.read(cx);
+        let (src, unlock, count) = (r.path.clone(), r.unlock(), r.page_count() as u32);
+        let engine = self.engine.clone();
+        cx.spawn(async move |this, cx| {
+            let estimate = cx
+                .background_spawn(async move {
+                    const SAMPLE: u32 = 4;
+                    let before = std::fs::metadata(&src).map(|m| m.len()).unwrap_or(0);
+                    let tmp = |what: &str| {
+                        std::env::temp_dir().join(format!(
+                            "kitab-estimate-{}-{serial}-{ix}-{what}.pdf",
+                            std::process::id()
+                        ))
+                    };
+                    let size = |p: &Path| std::fs::metadata(p).map(|m| m.len()).ok();
+                    let compress = PageOp::Compress(shrink);
+                    let exact = count <= SAMPLE + 2;
+                    // The pages measured: all of a small PDF, or a few of a big one.
+                    let (from, from_size) = if exact {
+                        (src.clone(), Some(before))
+                    } else {
+                        let pages = (0..SAMPLE)
+                            .map(|i| (i * 2 + 1) * count / (SAMPLE * 2))
+                            .map(|p| (p, 0))
+                            .collect();
+                        let sample = tmp("sample");
+                        if let Err(e) = engine.page_tool(
+                            &src,
+                            unlock.as_deref(),
+                            &PageOp::Arrange(pages),
+                            &sample,
+                        ) {
+                            return Estimate::Failed(e);
+                        }
+                        let n = size(&sample);
+                        (sample, n)
+                    };
+                    let out = tmp("out");
+                    let made = engine.page_tool(&from, unlock.as_deref(), &compress, &out);
+                    let after = size(&out);
+                    let _ = std::fs::remove_file(&out);
+                    if !exact {
+                        let _ = std::fs::remove_file(&from);
+                    }
+                    match (made, after, from_size) {
+                        (Ok(_), Some(after), Some(measured)) if measured > 0 => {
+                            // The whole file shrinks as its sample did.
+                            let after = (before as f64 * after as f64 / measured as f64) as u64;
+                            Estimate::Done(before, after.min(before), exact)
+                        }
+                        (Err(e), ..) => Estimate::Failed(e),
+                        _ => Estimate::Failed("Couldn't work out the new size.".into()),
+                    }
+                })
+                .await;
+            let _ = this.update(cx, |ws, cx| {
+                if let Some(s) = ws.page_tools.as_mut().filter(|s| s.serial == serial) {
+                    s.estimates[ix] = Some(estimate);
+                    cx.notify();
+                }
+            });
+        })
+        .detach();
     }
 
     /// File › Make a smaller copy… (and Ctrl+K): Page tools, on Compress.
@@ -157,21 +267,9 @@ impl Workspace {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.open_page_tools_on(Tool::Compress, window, cx);
-    }
-
-    /// Page tools with `tool` chosen (the file manager's right-click menu).
-    pub(super) fn open_page_tools_on(
-        &mut self,
-        tool: Tool,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        self.open_page_tools(window, cx);
-        if let Some(s) = self.page_tools.as_mut() {
-            s.tool = tool;
+        if let Some(reader) = self.active_reader().cloned() {
+            self.open_page_tools_for(reader, Some(Tool::Compress), window, cx);
         }
-        cx.notify();
     }
 
     pub(super) fn close_page_tools(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -189,25 +287,9 @@ impl Workspace {
     /// The operation the sheet describes, or why it can't run yet.
     fn page_op(&self, cx: &Context<Self>) -> Result<PageOp, String> {
         let s = self.page_tools.as_ref().ok_or_else(String::new)?;
-        let count = s.reader.read(cx).page_count() as u32;
-        let pages = || parse_page_ranges(&s.pages.read(cx).text(), count);
         let number = |f: &Entity<TextField>| f.read(cx).text().trim().parse::<u32>().ok();
         Ok(match s.tool {
-            Tool::Delete => {
-                let p = pages()?;
-                if p.len() as u32 >= count {
-                    return Err("That's every page; at least one has to stay.".into());
-                }
-                PageOp::Delete(p)
-            }
-            Tool::Move => {
-                let p = pages()?;
-                let before = number(&s.before)
-                    .filter(|n| (1..=count + 1).contains(n))
-                    .ok_or(format!("Move before a page from 1 to {}.", count + 1))?;
-                PageOp::Move(p, before - 1)
-            }
-            Tool::Rotate => PageOp::Rotate(pages()?, s.turn),
+            Tool::Arrange => return Err(String::new()),
             Tool::Compress => PageOp::Compress(s.shrink),
             Tool::Number => PageOp::Number(
                 number(&s.first).ok_or("Start at a whole number, like 1.".to_string())?,
@@ -235,7 +317,6 @@ impl Workspace {
         cx.notify();
         let r = sheet.reader.read(cx);
         let (src, unlock) = (r.path.clone(), r.unlock());
-        let dir = src.parent().map(Path::to_path_buf).unwrap_or_default();
         let name = stem(&src);
         let engine = self.engine.clone();
         if op == PageOp::Images {
@@ -273,15 +354,29 @@ impl Workspace {
         }
         let suggested = match &op {
             PageOp::Text => format!("{name}.txt"),
-            PageOp::Delete(_) => format!("{name} (pages deleted).pdf"),
-            PageOp::Move(..) => format!("{name} (reordered).pdf"),
-            PageOp::Rotate(..) => format!("{name} (turned).pdf"),
             PageOp::Compress(_) => format!("{name} (compressed).pdf"),
             PageOp::Number(_) => format!("{name} (numbered).pdf"),
             PageOp::Watermark(_) => format!("{name} (watermarked).pdf"),
-            PageOp::Images => unreachable!("handled above"),
+            _ => format!("{name} (edited).pdf"),
         };
         let ext = if op == PageOp::Text { "txt" } else { "pdf" };
+        self.save_page_op(&sheet.reader, op, suggested, ext, cx);
+    }
+
+    /// Ask where, then write `op` on `reader`'s file there (`suggested`
+    /// as the name, `ext` when none is typed) and say how it went.
+    pub(super) fn save_page_op(
+        &mut self,
+        reader: &Entity<Reader>,
+        op: PageOp,
+        suggested: String,
+        ext: &'static str,
+        cx: &mut Context<Self>,
+    ) {
+        let r = reader.read(cx);
+        let (src, unlock) = (r.path.clone(), r.unlock());
+        let dir = src.parent().map(Path::to_path_buf).unwrap_or_default();
+        let engine = self.engine.clone();
         let rx = cx.prompt_for_new_path(&dir, Some(&suggested));
         cx.spawn(async move |this, cx| {
             let picked = rx.await;
@@ -349,15 +444,21 @@ impl Workspace {
                             .hover(|d| d.bg(st.hover_bg()))
                     })
                     .on_click(cx.listener(move |ws, _, window, cx| {
+                        if t == Tool::Arrange {
+                            if let Some(r) = ws.page_tools.as_ref().map(|s| s.reader.clone()) {
+                                ws.open_arrange(r, window, cx);
+                            }
+                            return;
+                        }
                         if let Some(s) = ws.page_tools.as_mut() {
                             s.tool = t;
                             match t {
                                 Tool::Watermark => s.mark.read(cx).focus(window),
                                 Tool::Number => s.first.read(cx).focus(window),
-                                _ if t.takes_pages() => s.pages.read(cx).focus(window),
                                 _ => {}
                             }
                         }
+                        ws.compress_estimate(cx);
                         cx.notify();
                     }))
                     .child(
@@ -400,27 +501,8 @@ impl Workspace {
                 )
                 .child(control)
         };
-        let turn = |deg: i32| -> Click {
-            let ws = ws.clone();
-            Box::new(move |_, cx| {
-                let _ = ws.update(cx, |ws, cx| {
-                    if let Some(s) = ws.page_tools.as_mut() {
-                        s.turn = deg;
-                    }
-                    cx.notify();
-                });
-            })
-        };
         let (note, bad) = match &op {
             Err(e) => (e.clone(), !e.is_empty()),
-            Ok(PageOp::Delete(p) | PageOp::Move(p, _) | PageOp::Rotate(p, _)) => (
-                if p.len() == 1 {
-                    "1 page".into()
-                } else {
-                    format!("{} pages", p.len())
-                },
-                false,
-            ),
             Ok(_) => (String::new(), false),
         };
         let ready = op.is_ok();
@@ -442,9 +524,13 @@ impl Workspace {
                     .text_size(px(15.0))
                     .font_weight(FontWeight::SEMIBOLD)
                     .text_color(st.c(|c| c.text))
-                    .child("Page tools"),
+                    .child(if s.single {
+                        s.tool.label()
+                    } else {
+                        "Page tools"
+                    }),
             )
-            .child(grid)
+            .when(!s.single, |d| d.child(grid))
             .child(
                 div()
                     .text_size(px(12.5))
@@ -454,25 +540,6 @@ impl Workspace {
                         s.tool.about()
                     )),
             )
-            .when(s.tool.takes_pages(), |d| {
-                d.child(row("Pages", field(&s.pages).into_any_element()))
-            })
-            .when(s.tool == Tool::Move, |d| {
-                d.child(row("Before page", field(&s.before).into_any_element()))
-            })
-            .when(s.tool == Tool::Rotate, |d| {
-                d.child(row(
-                    "Turn",
-                    segmented(
-                        vec![
-                            (SharedString::from("Right"), s.turn == 90, turn(90)),
-                            (SharedString::from("Left"), s.turn == 270, turn(270)),
-                            (SharedString::from("Upside down"), s.turn == 180, turn(180)),
-                        ],
-                        st,
-                    ),
-                ))
-            })
             .when(s.tool == Tool::Compress, |d| {
                 use crate::Shrink;
                 let shrink = |to: Shrink| -> Click {
@@ -482,6 +549,7 @@ impl Workspace {
                             if let Some(s) = ws.page_tools.as_mut() {
                                 s.shrink = to;
                             }
+                            ws.compress_estimate(cx);
                             cx.notify();
                         });
                     })
@@ -521,6 +589,39 @@ impl Workspace {
                             Shrink::Lossless => "Pictures unchanged.",
                         }),
                 )
+                .child(row("Size", {
+                    use crate::reader::human_size as size;
+                    let (text, strong) = match &s.estimates[shrink_ix(s.shrink)] {
+                        None | Some(Estimate::Working) => ("Estimating…".to_string(), false),
+                        Some(Estimate::Done(before, after, exact)) => {
+                            let pct = (after * 100)
+                                .checked_div(*before)
+                                .map_or(0, |share| 100 - share.min(100));
+                            let text = if *exact {
+                                format!("{} → {} ({pct}% smaller)", size(*before), size(*after))
+                            } else if pct < 3 {
+                                "About the same size: little to gain.".to_string()
+                            } else {
+                                format!(
+                                    "About {pct}% smaller: {} → about {}",
+                                    size(*before),
+                                    size(*after)
+                                )
+                            };
+                            (text, true)
+                        }
+                        Some(Estimate::Failed(why)) => (why.clone(), false),
+                    };
+                    div()
+                        .text_size(px(12.5))
+                        .text_color(if strong {
+                            st.c(|c| c.text)
+                        } else {
+                            st.c(|c| c.faint)
+                        })
+                        .child(text)
+                        .into_any_element()
+                }))
             })
             .when(s.tool == Tool::Number, |d| {
                 d.child(row("Start at", field(&s.first).into_any_element()))

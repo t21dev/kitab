@@ -29,6 +29,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::time::Duration;
 
+mod arrange_ui;
 mod combine;
 mod home_ui;
 mod library_ui;
@@ -241,6 +242,8 @@ pub struct Workspace {
     sign: sign_ui::SignState,
     /// Page tools…, when open.
     page_tools: Option<page_tools_ui::PageToolsSheet>,
+    /// Arrange pages: the page grid.
+    arrange: Option<arrange_ui::ArrangeSheet>,
     page_tools_serial: u64,
     /// Home's library search and reading stats.
     lib: library_ui::LibraryState,
@@ -370,6 +373,7 @@ impl Workspace {
             password_serial: 0,
             sign: Default::default(),
             page_tools: None,
+            arrange: None,
             page_tools_serial: 0,
             lib: library_ui::LibraryState::new(cx),
             shelves: Default::default(),
@@ -653,7 +657,14 @@ impl Workspace {
                     this.update(cx, |ws, cx| {
                         ws.restoring = false;
                         if let Some(p) = plan.get(first) {
-                            ws.open_tab(p.clone(), window, cx);
+                            if ws.tabs.is_empty() {
+                                ws.open_tab(p.clone(), window, cx);
+                            } else {
+                                // A file opened meanwhile (a right-click tool,
+                                // a second launch) keeps the front.
+                                let at = ws.restored_position(&plan, first, cx);
+                                ws.insert_tab(p.clone(), Some(at), false, window, cx);
+                            }
                         }
                         cx.notify();
                     })
@@ -3746,7 +3757,7 @@ impl Workspace {
             .text_color(st.c(|c| c.text))
             .font_family("Segoe UI")
             .on_action(cx.listener(|ws, _: &OpenFile, window, cx| ws.open_dialog(window, cx)))
-            .on_action(cx.listener(|ws, _: &ImagesToPdf, _, cx| ws.images_to_pdf(cx)))
+            .on_action(cx.listener(|ws, _: &ImagesToPdf, window, cx| ws.images_to_pdf(window, cx)))
             .on_action(cx.listener(|ws, _: &MoveToTrash, window, cx| ws.trash_key(window, cx)))
             .on_action(cx.listener(|ws, _: &MoveToTrashAsk, window, cx| ws.trash_asked(window, cx)))
             .on_action(cx.listener(|ws, _: &CloseTab, window, cx| {
@@ -3806,6 +3817,11 @@ impl Workspace {
             .on_action(cx.listener(|ws, _: &ExportMarkdown, _, cx| {
                 if let Some(r) = ws.active_reader().cloned() {
                     ws.export_document(r, crate::ExportKind::Markdown, cx);
+                }
+            }))
+            .on_action(cx.listener(|ws, _: &SaveAsPdf, _, cx| {
+                if let Some(r) = ws.active_reader().cloned() {
+                    ws.save_markdown_pdf(r, cx);
                 }
             }))
             .on_action(cx.listener(|ws, _: &ExportText, _, cx| {
@@ -4462,6 +4478,8 @@ impl Workspace {
             self.close_extract(window, cx);
         } else if self.tools.combine.is_some() {
             self.close_combine(window, cx);
+        } else if self.arrange.is_some() {
+            self.close_arrange(window, cx);
         } else if self.tools.save.is_some() {
             self.close_save_page(window, cx);
         } else if self.menu.is_some() {
@@ -4718,6 +4736,20 @@ impl Workspace {
             .icon("print")
             .key("Ctrl+P")
             .disabled(self.active.is_none()),
+            MenuItem::new(
+                "Save as PDF…",
+                self.on_ws(cx, |ws, _, cx| {
+                    if let Some(r) = ws.active_reader().cloned() {
+                        ws.save_markdown_pdf(r, cx);
+                    }
+                }),
+            )
+            .icon("download")
+            .disabled(
+                !self
+                    .active_reader()
+                    .is_some_and(|r| r.read(cx).is_markdown()),
+            ),
             MenuItem::new(
                 "Page tools…",
                 self.on_ws(cx, |ws, window, cx| ws.open_page_tools(window, cx)),
@@ -5015,6 +5047,15 @@ impl Workspace {
                 })
                 .icon("print")
                 .key("Ctrl+P"),
+            );
+            items.push(
+                MenuItem::new("Save as PDF…", {
+                    let reader = reader.clone();
+                    self.on_ws(cx, move |ws, _, cx| {
+                        ws.save_markdown_pdf(reader.clone(), cx)
+                    })
+                })
+                .icon("download"),
             );
             items.push(MenuItem::Separator);
             items.push(file_item_copy(&path));
@@ -5902,6 +5943,7 @@ impl Workspace {
         out.extend(self.sign_view(st, cx));
         out.extend(self.sign_confirm_view(st, cx));
         out.extend(self.page_tools_view(st, cx));
+        out.extend(self.arrange_view(st, window, cx));
         out.extend(self.naming_view(st, cx));
 
         if let Some(section) = self.settings.or(self.settings_closing) {

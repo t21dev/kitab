@@ -39,6 +39,7 @@ pub(crate) struct HDrag {
     from_offset: f32,
 }
 mod mermaid;
+pub(crate) use mermaid::draw as draw_mermaid;
 mod pages;
 mod park;
 mod place_sig;

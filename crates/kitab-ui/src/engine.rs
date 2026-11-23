@@ -68,6 +68,9 @@ pub enum PageOp {
     Move(Vec<u32>, u32),
     /// Pages and degrees clockwise.
     Rotate(Vec<u32>, i32),
+    /// The new PDF's pages, in order: each an original page and the degrees
+    /// to turn it clockwise. Pages left out are deleted.
+    Arrange(Vec<(u32, i32)>),
     /// A smaller copy: pictures scaled down as much as this says.
     Compress(Shrink),
     /// Page numbers, starting at this one.

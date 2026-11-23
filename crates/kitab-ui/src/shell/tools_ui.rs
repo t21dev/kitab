@@ -81,7 +81,7 @@ fn dir_of(p: &Path) -> PathBuf {
 }
 
 /// A picture Images to PDF takes, by its extension.
-fn is_picture(p: &Path) -> bool {
+pub(super) fn is_picture(p: &Path) -> bool {
     const EXT: &[&str] = &[
         "jpg", "jpeg", "jfif", "png", "webp", "tif", "tiff", "bmp", "gif", "jp2", "jpx", "pnm",
         "pbm", "pgm", "ppm", "pam",
@@ -994,45 +994,55 @@ impl Workspace {
 
     // ── pictures to PDF ──
 
-    /// Pick pictures and write them, one a page, to a new PDF (sorted by
-    /// name, as a folder of scans or photos lists them; Page tools › Move
-    /// changes the order afterwards).
-    pub(super) fn images_to_pdf(&mut self, cx: &mut Context<Self>) {
+    /// Pick pictures, set their order, and write them, one a page, to a new
+    /// PDF.
+    pub(super) fn images_to_pdf(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let rx = cx.prompt_for_paths(PathPromptOptions {
             files: true,
             directories: false,
             multiple: true,
             prompt: Some("Make a PDF".into()),
         });
-        cx.spawn(async move |this, cx| {
+        cx.spawn_in(window, async move |this, cx| {
             let picked = rx.await;
             // The picker couldn't open (Linux without a desktop portal): say so.
             if matches!(picked, Ok(Err(_)) | Err(_)) {
                 let _ = this.update(cx, |ws, cx| ws.picker_failed(cx));
             }
             let Ok(Ok(Some(paths))) = picked else { return };
-            let _ = this.update(cx, |ws, cx| ws.pictures_to_pdf(paths, cx));
+            let _ = this.update_in(cx, |ws, window, cx| ws.pictures_to_pdf(paths, window, cx));
         })
         .detach();
     }
 
-    /// The pictures among `paths`, in name order, to one new PDF (asks where).
-    pub(super) fn pictures_to_pdf(&mut self, paths: Vec<PathBuf>, cx: &mut Context<Self>) {
+    /// The pictures among `paths` on the sheet that sets their order (name
+    /// order to start, as a folder of scans or photos lists them).
+    pub(super) fn pictures_to_pdf(
+        &mut self,
+        paths: Vec<PathBuf>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let mut pictures: Vec<PathBuf> = paths.into_iter().filter(|p| is_picture(p)).collect();
+        if pictures.is_empty() {
+            self.report(
+                Err("those aren't pictures Kitab can put in a PDF (JPEG, PNG, WebP, TIFF, BMP, GIF)".into()),
+                "",
+                cx,
+            );
+            return;
+        }
+        pictures.sort_by_cached_key(|p| natural_key(p));
+        self.open_pictures_order(pictures, window, cx);
+    }
+
+    /// `pictures`, in this order, one a page, to a new PDF (asks where).
+    pub(super) fn save_pictures_pdf(&mut self, pictures: Vec<PathBuf>, cx: &mut Context<Self>) {
         let engine = self.engine.clone();
         cx.spawn(async move |this, cx| {
-            let mut pictures: Vec<PathBuf> = paths.into_iter().filter(|p| is_picture(p)).collect();
-            if pictures.is_empty() {
-                let _ = this.update(cx, |ws, cx| {
-                    ws.report(
-                        Err("those aren't pictures Kitab can put in a PDF (JPEG, PNG, WebP, TIFF, BMP, GIF)".into()),
-                        "",
-                        cx,
-                    )
-                });
+            let Some(first) = pictures.first().cloned() else {
                 return;
-            }
-            pictures.sort_by_cached_key(|p| natural_key(p));
-            let first = pictures[0].clone();
+            };
             let name = format!("{}.pdf", stem(&first));
             let Ok(save_rx) = this.update(cx, |_, cx| {
                 cx.prompt_for_new_path(&dir_of(&first), Some(&name))
@@ -1051,9 +1061,7 @@ impl Workspace {
             }
             let n = pictures.len();
             let result = cx
-                .background_spawn(async move {
-                    engine.images_to_pdf(&pictures, &out).map(|_| out)
-                })
+                .background_spawn(async move { engine.images_to_pdf(&pictures, &out).map(|_| out) })
                 .await;
             let _ = this.update(cx, |ws, cx| {
                 let what = if n == 1 {
@@ -1095,23 +1103,24 @@ impl Workspace {
                 }
                 self.open_combine(pdfs.into_iter().map(|p| (p, None)).collect(), window, cx);
             }
-            Tool::Pictures => self.pictures_to_pdf(paths, cx),
+            Tool::Pictures => self.pictures_to_pdf(paths, window, cx),
             Tool::Compress | Tool::DeletePages | Tool::MovePages | Tool::RotatePages => {
                 use super::page_tools_ui::Tool as Page;
                 let page = match tool {
-                    Tool::DeletePages => Page::Delete,
-                    Tool::MovePages => Page::Move,
-                    Tool::RotatePages => Page::Rotate,
-                    _ => Page::Compress,
+                    Tool::Compress => Some(Page::Compress),
+                    _ => None,
                 };
                 let Some(pdf) = paths.into_iter().find(is_pdf) else {
                     self.report(Err("Page tools work on PDFs.".into()), "", cx);
                     return;
                 };
                 self.open_tab(pdf, window, cx);
-                // Page tools need the PDF open: once it is, on that tool.
-                self.when_active_opens(window, cx, move |ws, window, cx| {
-                    ws.open_page_tools_on(page, window, cx)
+                // Page tools need the PDF open: once it is, on that tool, on
+                // that PDF (the last session's tabs may have come back over it).
+                self.when_active_opens(window, cx, move |ws, reader, window, cx| match page {
+                    Some(tool) => ws.open_page_tools_for(reader, Some(tool), window, cx),
+                    // Deleting, moving and turning pages: the page grid.
+                    None => ws.open_arrange(reader, window, cx),
                 });
             }
             Tool::Export | Tool::ExportText => {
@@ -1131,13 +1140,13 @@ impl Workspace {
         }
     }
 
-    /// Run `f` once the active tab's document has opened (15 s at most; a
-    /// file that fails to open shows its own message instead).
+    /// Run `f` on the active tab's document once it has opened (15 s at
+    /// most; a file that fails to open shows its own message instead).
     fn when_active_opens(
         &mut self,
         window: &mut Window,
         cx: &mut Context<Self>,
-        f: impl FnOnce(&mut Self, &mut Window, &mut Context<Self>) + 'static,
+        f: impl FnOnce(&mut Self, Entity<Reader>, &mut Window, &mut Context<Self>) + 'static,
     ) {
         let Some(reader) = self.active_reader().cloned() else {
             return;
@@ -1151,7 +1160,7 @@ impl Workspace {
                 if open {
                     let _ = this.update_in(cx, |ws, window, cx| {
                         if let Some(f) = f.take() {
-                            f(ws, window, cx)
+                            f(ws, reader.clone(), window, cx)
                         }
                     });
                     return;
@@ -1272,7 +1281,7 @@ impl Workspace {
             .disabled(!is_pdf),
             MenuItem::new(
                 "Make a PDF from pictures…",
-                self.on_ws(cx, |ws, _, cx| ws.images_to_pdf(cx)),
+                self.on_ws(cx, |ws, window, cx| ws.images_to_pdf(window, cx)),
             )
             .icon("file"),
         ];

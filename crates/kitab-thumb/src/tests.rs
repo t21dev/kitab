@@ -235,3 +235,13 @@ fn comics_in_rar_and_7z_and_djvu_have_thumbnails() {
     }
     assert!(checked >= 7, "{checked} comic and DjVu fixtures");
 }
+
+/// Make a PDF from pictures shows each picture small, by MuPDF; the file
+/// manager's thumbnails still leave pictures alone.
+#[test]
+fn pictures_draw_for_kitabs_own_lists_only() {
+    let png = fixtures().join("md/assets/sample.png");
+    let t = picture(&png, 96).expect("a picture draws");
+    assert!(t.width() > 0 && t.height() > 0 && t.width().max(t.height()) <= 96);
+    assert!(thumb_of(&png, 96).is_err());
+}

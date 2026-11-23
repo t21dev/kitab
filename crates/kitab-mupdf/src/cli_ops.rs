@@ -82,6 +82,17 @@ pub fn arrange_pages(
         return Err("choose a different file name than the original".into());
     }
     let mut doc = open_pdf(src, password)?;
+    arrange_in(&mut doc, order)?;
+    save_pdf(&doc, out)?;
+    Ok(order.len() as u32)
+}
+
+/// Put the pages of `doc` in `order` (0-based, each at most once); pages
+/// left out are dropped.
+pub(crate) fn arrange_in(doc: &mut mupdf::pdf::PdfDocument, order: &[u32]) -> Result<(), String> {
+    if order.is_empty() {
+        return Err("no pages chosen".into());
+    }
     let total = doc.page_count().map_err(|e| e.to_string())?.max(0) as u32;
     let mut seen = std::collections::HashSet::new();
     if order.iter().any(|p| *p >= total || !seen.insert(*p)) {
@@ -107,8 +118,7 @@ pub fn arrange_pages(
             kept.insert(i, p);
         }
     }
-    save_pdf(&doc, out)?;
-    Ok(order.len() as u32)
+    Ok(())
 }
 
 /// Save a rendered page (BGRA on white, as [`crate::Engine::render`] gives
