@@ -46,7 +46,7 @@ thread_local! {
 }
 
 /// kitab.exe in the same folder as this DLL.
-fn kitab_exe() -> Result<PathBuf, String> {
+pub(crate) fn kitab_exe() -> Result<PathBuf, String> {
     #[cfg(test)]
     if let Some(p) = KITAB_EXE.with(|k| k.borrow().clone()) {
         return Ok(p);
@@ -300,7 +300,8 @@ impl IClassFactory_Impl for Factory_Impl {
     }
 }
 
-/// COM entry point: the class factory for [`CLSID_KITAB_THUMBNAIL`].
+/// COM entry point: the class factory for [`CLSID_KITAB_THUMBNAIL`] or
+/// [`crate::menu::CLSID_KITAB_MENU`].
 ///
 /// # Safety
 /// Called by COM with valid pointers (checked for null anyway).
@@ -317,10 +318,13 @@ pub unsafe extern "system" fn DllGetClassObject(
         // SAFETY: pointers checked non-null above; COM owns their memory.
         unsafe {
             *ppv = std::ptr::null_mut();
-            if *rclsid != CLSID_KITAB_THUMBNAIL {
+            let factory: IClassFactory = if *rclsid == CLSID_KITAB_THUMBNAIL {
+                Factory.into()
+            } else if *rclsid == crate::menu::CLSID_KITAB_MENU {
+                crate::menu::MenuFactory.into()
+            } else {
                 return CLASS_E_CLASSNOTAVAILABLE;
-            }
-            let factory: IClassFactory = Factory.into();
+            };
             factory.query(riid, ppv)
         }
     });

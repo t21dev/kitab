@@ -45,6 +45,8 @@ pub struct Style {
     /// The title bar's and the dock's buttons, in order.
     pub toolbar: crate::toolbar::Toolbar,
     pub toolbar_tip_seen: bool,
+    /// Right-click tools in the file manager (None: Kitab's default).
+    pub context_menu: Option<bool>,
     pub status_items: crate::settings::StatusItems,
     /// Check for updates automatically (opt-in).
     pub update_check: bool,
@@ -163,6 +165,7 @@ impl Style {
             file_info_folded: s.file_info_folded,
             toolbar: s.toolbar.clone(),
             toolbar_tip_seen: s.toolbar_tip_seen,
+            context_menu: s.context_menu,
             status_items: s.status_items,
             update_check: s.update_check,
             skipped_update: s.skipped_update.clone(),
@@ -260,6 +263,7 @@ impl Style {
             file_info_folded: self.file_info_folded,
             toolbar: self.toolbar.clone(),
             toolbar_tip_seen: self.toolbar_tip_seen,
+            context_menu: self.context_menu,
             status_items: self.status_items,
             update_check: self.update_check,
             skipped_update: self.skipped_update.clone(),

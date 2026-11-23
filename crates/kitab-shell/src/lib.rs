@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 //! `kitab_shell.dll`: Kitab's Windows Explorer thumbnail provider (PLAN.md
-//! §3.9 "Thumbnails").
+//! §3.9 "Thumbnails") and its right-click menu of tools (`menu`).
 //!
 //! The DLL holds no document code. Explorer hands it the file as a stream; it
 //! pipes the bytes to `kitab.exe --thumbnail --stdin EXT --bgra` (the kitab.exe
@@ -14,7 +14,11 @@
 //! so it never replaces another reader's thumbnails.
 
 #[cfg(windows)]
+mod menu;
+#[cfg(windows)]
 mod provider;
 
+#[cfg(windows)]
+pub use menu::{CLSID_KITAB_MENU, MenuTool, tools_for};
 #[cfg(windows)]
 pub use provider::*;

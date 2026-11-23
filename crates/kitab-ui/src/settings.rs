@@ -767,6 +767,9 @@ pub struct Settings {
     pub toolbar: crate::toolbar::Toolbar,
     /// The Toolbar settings' tip (drag to move, + to add) was put away.
     pub toolbar_tip_seen: bool,
+    /// Kitab's tools in the file manager's right-click menu (Settings ›
+    /// File types). None: as Kitab sees fit (on, but off for a portable copy).
+    pub context_menu: Option<bool>,
     /// The status bar's items.
     pub status_items: StatusItems,
     /// Ask GitHub for a newer release shortly after start-up and every six
@@ -906,6 +909,7 @@ impl Default for Settings {
             file_info_folded: false,
             toolbar: crate::toolbar::Toolbar::default(),
             toolbar_tip_seen: false,
+            context_menu: None,
             status_items: StatusItems::default(),
             update_check: true,
             skipped_update: String::new(),
@@ -981,6 +985,8 @@ struct File {
     #[serde(default)]
     toolbar: Option<crate::toolbar::Toolbar>,
     toolbar_tip_seen: bool,
+    #[serde(default)]
+    context_menu: Option<bool>,
     /// Still written (from `toolbar`) so an older Kitab shows the same buttons.
     dock_items: DockItems,
     status_items: StatusItems,
@@ -1107,6 +1113,7 @@ impl From<Settings> for File {
             file_info_folded: s.file_info_folded,
             toolbar: Some(s.toolbar.clone()),
             toolbar_tip_seen: s.toolbar_tip_seen,
+            context_menu: s.context_menu,
             dock_items: s.toolbar.to_items().0,
             status_items: s.status_items,
             title_items: s.toolbar.to_items().1,
@@ -1184,6 +1191,7 @@ impl Settings {
                 .unwrap_or_else(|| crate::toolbar::Toolbar::from_items(f.dock_items, f.title_items))
                 .normalized(),
             toolbar_tip_seen: f.toolbar_tip_seen,
+            context_menu: f.context_menu,
             status_items: f.status_items,
             update_check: f.check_for_updates,
             skipped_update: f.skipped_update.chars().take(32).collect(),
@@ -1307,6 +1315,7 @@ mod tests {
                 dock_align: crate::toolbar::DockAlign::End,
             },
             toolbar_tip_seen: true,
+            context_menu: Some(false),
             status_items: StatusItems {
                 zoom: true,
                 words: false,

@@ -168,9 +168,28 @@ def associations(types: list[dict]) -> str:
     return "\n".join(parts)
 
 
+# The right-click tools' file types (kitab-os context_menu::all_exts): the
+# handler in kitab_shell.dll shows only the tools that fit the selection.
+CONTEXT_MENU_EXTS = [
+    "azw", "azw3", "bmp", "epub", "fb2", "gif", "jfif", "jpeg", "jpg", "mobi",
+    "oxps", "pdf", "png", "tif", "tiff", "webp", "xps",
+]
+MENU_CLSID = "5B2C9E41-7D3A-4F6E-9A1B-C8E2F0D4A713"
+
+
+def context_menu_types() -> str:
+    return "\n".join(
+        f'            <desktop5:ItemType Type=".{ext}">\n'
+        f'              <desktop5:Verb Id="KitabTools" Clsid="{MENU_CLSID}" />\n'
+        f"            </desktop5:ItemType>"
+        for ext in CONTEXT_MENU_EXTS
+    )
+
+
 def manifest(version: str, types: list[dict]) -> str:
     text = (WIN / "msix" / "AppxManifest.xml").read_text(encoding="utf8")
     text = text.replace("@VERSION@", msix_version(version)).replace("@ARCH@", arch())
+    text = text.replace("@CONTEXT_MENU_TYPES@", context_menu_types())
     return text.replace("@FILE_TYPES@", associations(types))
 
 

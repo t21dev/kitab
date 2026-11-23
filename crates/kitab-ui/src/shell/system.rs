@@ -272,6 +272,41 @@ impl Workspace {
         .detach();
     }
 
+    /// File types › Right-click tools: add Kitab's tools to the file
+    /// manager's menu, or take them off (off the UI thread).
+    pub(crate) fn set_right_click_tools(&mut self, on: bool, cx: &mut Context<Self>) {
+        self.change_style(&|s: &mut crate::style::Style| s.context_menu = Some(on), cx);
+        cx.spawn(async move |this, cx| {
+            let result = cx
+                .background_spawn(async move { kitab_os::context_menu::sync(on) })
+                .await;
+            let _ = this.update(cx, |ws, cx| match result {
+                Ok(()) if on => ws.toast(
+                    crate::i18n::tr("Kitab's tools are in the right-click menu."),
+                    false,
+                    None,
+                    cx,
+                ),
+                Ok(()) => ws.toast(
+                    crate::i18n::tr("Kitab's tools are off the right-click menu."),
+                    false,
+                    None,
+                    cx,
+                ),
+                Err(e) => {
+                    log::warn!("right-click tools: {e}");
+                    ws.toast(
+                        crate::i18n::tr("Couldn't change the right-click menu."),
+                        true,
+                        None,
+                        cx,
+                    )
+                }
+            });
+        })
+        .detach();
+    }
+
     /// Advanced › Command line: put the `kitab` command on the user's PATH
     /// or take it off, then show where it stands now.
     pub(crate) fn set_cli_on_path(&mut self, on: bool, cx: &mut Context<Self>) {

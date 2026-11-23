@@ -5,6 +5,7 @@
 
 pub mod assoc;
 pub mod cli_path;
+pub mod context_menu;
 pub mod install;
 pub mod instance;
 #[cfg(windows)]

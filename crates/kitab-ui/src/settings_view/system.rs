@@ -340,6 +340,7 @@ pub(super) fn file_types(ws: &WeakEntity<Workspace>, info: &SystemInfo, st: &Sty
             st,
         ));
     }
+    col = col.child(right_click_tools(ws, st));
     col.child(group(
         "Stop using Kitab for these files",
         None,
@@ -363,6 +364,48 @@ pub(super) fn file_types(ws: &WeakEntity<Workspace>, info: &SystemInfo, st: &Sty
         st,
     ))
     .into_any_element()
+}
+
+/// Settings › File types › Right-click tools: Kitab's tools in the file
+/// manager's menu, or (Store build, Flatpak) a note that the package has them.
+fn right_click_tools(ws: &WeakEntity<Workspace>, st: &Style) -> AnyElement {
+    let windows = cfg!(windows);
+    let about = if windows {
+        "Right-click PDFs or pictures in File Explorer: Combine into one PDF, Make a PDF from pictures, Make a smaller copy, Export as Markdown or text. Kitab opens the tool with the files filled in."
+    } else if cfg!(target_os = "macos") {
+        "Right-click PDFs or pictures in Finder, under Quick Actions: Combine into one PDF, Make a PDF from pictures, Make a smaller copy, Export as Markdown or text."
+    } else {
+        "Right-click PDFs or pictures in Files, Dolphin, Nemo or Thunar: Combine into one PDF, Make a PDF from pictures, Make a smaller copy, Export as Markdown or text."
+    };
+    let control = if kitab_os::context_menu::manages_menu() {
+        let on = st
+            .context_menu
+            .unwrap_or_else(kitab_os::context_menu::default_on);
+        let ws = ws.clone();
+        super::switch(
+            "right-click-tools",
+            on,
+            st,
+            Box::new(move |_, cx| {
+                let _ = ws.update(cx, |ws, cx| ws.set_right_click_tools(!on, cx));
+            }),
+        )
+    } else {
+        status("On", true, st)
+    };
+    let label = if windows {
+        "In File Explorer's right-click menu"
+    } else if cfg!(target_os = "macos") {
+        "In Finder's Quick Actions"
+    } else {
+        "In your file manager's right-click menu"
+    };
+    group(
+        "Right-click tools",
+        Some(about),
+        icon_row(Some("pages"), label, "", control, st),
+        st,
+    )
 }
 
 // ── Advanced ─────────────────────────────────────────────────────────────

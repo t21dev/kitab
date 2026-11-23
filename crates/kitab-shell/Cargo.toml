@@ -28,6 +28,8 @@ windows-core = "0.61"
 [target.'cfg(windows)'.dev-dependencies]
 # The Explorer end-to-end test registers the provider the way Kitab does.
 kitab-os = { path = "../kitab-os" }
+# The menu test reads the shell's context menu (Win32 menus).
+windows = { version = "0.61", features = ["Win32_UI_WindowsAndMessaging", "Win32_UI_Shell_Common"] }
 
 # COM and Win32 need unsafe; each block has a SAFETY comment (AGENTS.md rule 10).
 [lints.rust]

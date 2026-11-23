@@ -25,9 +25,10 @@
   xmlns:desktop="http://schemas.microsoft.com/appx/manifest/desktop/windows10"
   xmlns:desktop2="http://schemas.microsoft.com/appx/manifest/desktop/windows10/2"
   xmlns:desktop4="http://schemas.microsoft.com/appx/manifest/desktop/windows10/4"
+  xmlns:desktop5="http://schemas.microsoft.com/appx/manifest/desktop/windows10/5"
   xmlns:com="http://schemas.microsoft.com/appx/manifest/com/windows10"
   xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
-  IgnorableNamespaces="uap uap2 uap3 uap5 desktop desktop2 desktop4 com rescap">
+  IgnorableNamespaces="uap uap2 uap3 uap5 desktop desktop2 desktop4 desktop5 com rescap">
 
   <Identity
     Name="TriptoAfsin.KitabReader"
@@ -71,6 +72,21 @@
             </com:SurrogateServer>
           </com:ComServer>
         </com:Extension>
+        <!-- kitab_shell.dll: the right-click tools (IExplorerCommand), in
+             Windows 11's own menu. The handler shows only what fits the
+             selection (Combine for 2+ PDFs, Make a PDF for pictures...). -->
+        <com:Extension Category="windows.comServer">
+          <com:ComServer>
+            <com:SurrogateServer DisplayName="Kitab Reader tools">
+              <com:Class Id="5B2C9E41-7D3A-4F6E-9A1B-C8E2F0D4A713" Path="kitab_shell.dll" ThreadingModel="STA" />
+            </com:SurrogateServer>
+          </com:ComServer>
+        </com:Extension>
+        <desktop4:Extension Category="windows.fileExplorerContextMenus">
+          <desktop4:FileExplorerContextMenus>
+@CONTEXT_MENU_TYPES@
+          </desktop4:FileExplorerContextMenus>
+        </desktop4:Extension>
         <!-- The kitab command (crate kitab-cli) in terminals: the alias
              kitab.exe runs bin\kitab.exe, a console program. It belongs to
              this application on purpose: a second, hidden application

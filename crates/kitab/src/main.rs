@@ -138,6 +138,20 @@ fn main() {
             })
         })
         .unwrap_or_default();
+    // The right-click tools match the setting (added, moved with Kitab, or
+    // taken off): a few registry keys or files, on a thread of their own.
+    {
+        let on = settings
+            .context_menu
+            .unwrap_or_else(kitab_os::context_menu::default_on);
+        let _ = std::thread::Builder::new()
+            .name("kitab-context-menu".into())
+            .spawn(move || {
+                if let Err(e) = kitab_os::context_menu::sync(on) {
+                    log::warn!("right-click tools: {e}");
+                }
+            });
+    }
     // Saves come from several background tasks at once (a text-size step,
     // the window moving): one at a time, and an older one that arrives late
     // never overwrites a newer one.
@@ -177,6 +191,12 @@ fn main() {
     {
         let tx = tx.clone();
         app.on_open_urls(move |urls| {
+            // Finder's Quick Actions: kitab://tool/WORD?list=FILE.
+            for url in urls.iter().filter(|u| u.starts_with("kitab://")) {
+                if let Some(req) = kitab_os::instance::Request::from_tool_url(url) {
+                    let _ = tx.send_blocking(req);
+                }
+            }
             let paths: Vec<PathBuf> = urls.iter().filter_map(|u| path_of_url(u)).collect();
             if !paths.is_empty() {
                 let _ = tx.send_blocking(kitab_os::instance::Request::open(paths));

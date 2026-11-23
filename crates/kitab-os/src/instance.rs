@@ -73,6 +73,42 @@ impl Request {
     pub fn open(paths: Vec<PathBuf>) -> Request {
         Request { tool: None, paths }
     }
+
+    /// macOS's Quick Actions hand files over as `kitab://tool/WORD?list=FILE`
+    /// (opened URLs reach the running app; a launch's arguments don't). The
+    /// list is one path a line in a `kitab-tool.*` file in the temporary
+    /// folder, which is removed once read. Any other file isn't read.
+    pub fn from_tool_url(url: &str) -> Option<Request> {
+        let rest = url.strip_prefix("kitab://tool/")?;
+        let (word, query) = rest.split_once('?')?;
+        let tool = Tool::from_word(word)?;
+        let list = PathBuf::from(query.strip_prefix("list=")?);
+        let name = list.file_name()?.to_str()?;
+        let tmp = std::env::temp_dir();
+        let in_tmp = list
+            .parent()
+            .zip(std::fs::canonicalize(&tmp).ok().or(Some(tmp)))
+            .is_some_and(|(dir, tmp)| {
+                std::fs::canonicalize(dir).is_ok_and(|d| d == tmp)
+                    || dir.starts_with("/tmp")
+                    || dir.starts_with("/var/folders")
+                    || dir.starts_with("/private/var/folders")
+            });
+        if !name.starts_with("kitab-tool.") || !in_tmp {
+            return None;
+        }
+        let text = std::fs::read_to_string(&list).ok()?;
+        let _ = std::fs::remove_file(&list);
+        let paths = text
+            .lines()
+            .map(PathBuf::from)
+            .filter(|p| p.is_absolute())
+            .collect();
+        Some(Request {
+            tool: Some(tool),
+            paths,
+        })
+    }
 }
 
 /// What `claim` found.
@@ -431,6 +467,28 @@ mod imp {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn quick_actions_hand_a_list_of_files_over() {
+        let dir = std::env::temp_dir();
+        let list = dir.join(format!("kitab-tool.test{}", std::process::id()));
+        let a = dir.join("a.pdf");
+        let b = dir.join("b.pdf");
+        std::fs::write(
+            &list,
+            format!("{}\n{}\nrelative.pdf\n", a.display(), b.display()),
+        )
+        .unwrap();
+        let url = format!("kitab://tool/merge?list={}", list.display());
+        let req = Request::from_tool_url(&url).unwrap();
+        assert_eq!(req.tool, Some(Tool::Merge));
+        assert_eq!(req.paths, vec![a, b]);
+        assert!(!list.exists(), "the list is removed once read");
+        // Only Kitab's own list files, only in the temporary folder.
+        assert!(Request::from_tool_url("kitab://tool/merge?list=/etc/passwd").is_none());
+        assert!(Request::from_tool_url("kitab://tool/teleport?list=/tmp/kitab-tool.x").is_none());
+        assert!(Request::from_tool_url("file:///a.pdf").is_none());
+    }
 
     #[test]
     fn folders_get_their_own_stable_key() {
