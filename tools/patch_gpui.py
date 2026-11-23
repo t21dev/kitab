@@ -39,6 +39,9 @@ an environment switch to turn it off so it can still be benchmarked:
           closed just after its pages were drawn) takes its queued upload and
           start-up with it. The frame looked the texture up afterwards and
           panicked, which took Kitab down (GitHub #19).
+  Wayland A Wayland compositor without what gpui needs (xdg_wm_base 2+,
+          wl_compositor 3+, wl_shm, wl_seat; WSLg's is too old) is passed over
+          for X11 when there's a DISPLAY, instead of panicking at start-up.
   MenuKey macOS's menu bar shows a command's key only when it has Ctrl or Cmd
           in it. A key equivalent there is live: with a plain one (N for the
           next page) the menu could take the letter while it is being typed.
@@ -674,6 +677,7 @@ struct WindowInvalidatorInner {"""),
     path_patch()
     touch_patch()
     blade_atlas_pending_fix()
+    wayland_fallback_patch()
     menu_key_patch()
     aligned_hit_test_patch()
     zed_backports()
@@ -1681,6 +1685,74 @@ def blade_atlas_pending_fix() -> None:
                     .free_list
                     .push(texture.id.index as usize);
                 texture.destroy(&lock.gpu);"""),
+    ])
+
+
+def wayland_fallback_patch() -> None:
+    """19. Wayland: an old compositor falls back to X11.
+
+    gpui picks Wayland whenever WAYLAND_DISPLAY is set, then unwraps the
+    globals it needs; a compositor without them (WSLg's has xdg_wm_base 1)
+    panicked before the window opened. The compositor is asked first, and
+    without them Kitab uses X11 (XWayland) when there's a DISPLAY."""
+    edit("src/platform.rs", [
+        ("""        #[cfg(feature = "wayland")]
+        "Wayland" => Rc::new(WaylandClient::new()),
+""",
+         """        #[cfg(feature = "wayland")]
+        "Wayland" if kitab_wayland_usable() => Rc::new(WaylandClient::new()),
+
+        // Kitab patch: a compositor without what gpui needs; X11 instead.
+        #[cfg(all(feature = "wayland", feature = "x11"))]
+        "Wayland" if std::env::var_os("DISPLAY").is_some_and(|d| !d.is_empty()) => {
+            log::warn!("the Wayland compositor lacks what Kitab needs; using X11");
+            Rc::new(
+                X11Client::new()
+                    .context("Failed to initialize X11 client.")
+                    .unwrap(),
+            )
+        }
+
+        #[cfg(feature = "wayland")]
+        "Wayland" => Rc::new(WaylandClient::new()),
+"""),
+        ("""/// Return which compositor we're guessing we'll use.""",
+         """/// Kitab patch: the Wayland compositor offers what gpui's client binds
+/// without fallback: xdg_wm_base 2+, wl_compositor 3+, wl_shm and wl_seat.
+#[cfg(all(any(target_os = "linux", target_os = "freebsd"), feature = "wayland"))]
+fn kitab_wayland_usable() -> bool {
+    use wayland_client::{
+        Connection, Dispatch, QueueHandle,
+        globals::{GlobalListContents, registry_queue_init},
+        protocol::wl_registry,
+    };
+    struct Probe;
+    impl Dispatch<wl_registry::WlRegistry, GlobalListContents> for Probe {
+        fn event(
+            _: &mut Self,
+            _: &wl_registry::WlRegistry,
+            _: wl_registry::Event,
+            _: &GlobalListContents,
+            _: &Connection,
+            _: &QueueHandle<Self>,
+        ) {
+        }
+    }
+    let Ok(conn) = Connection::connect_to_env() else {
+        return false;
+    };
+    let Ok((globals, _queue)) = registry_queue_init::<Probe>(&conn) else {
+        return false;
+    };
+    globals.contents().with_list(|list| {
+        let has = |name: &str, version: u32| {
+            list.iter().any(|g| g.interface == name && g.version >= version)
+        };
+        has("xdg_wm_base", 2) && has("wl_compositor", 3) && has("wl_shm", 1) && has("wl_seat", 1)
+    })
+}
+
+/// Return which compositor we're guessing we'll use."""),
     ])
 
 
