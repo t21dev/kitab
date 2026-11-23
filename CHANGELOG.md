@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-11-23
+
+### Added
+- Put any button in the title bar or the dock, in any order ([#25](https://github.com/t21dev/kitab/issues/25)). Settings › Appearance › Toolbar now shows your title bar and dock as they look: drag a button along its bar or onto the other one, click it for Earlier, Later, Move and Take away, or press the + at the end of a bar to add one. Two pages, Book view, Rotate left, the hand tool, Present, Print, Export as Markdown and Open file can be buttons now too, and the dock's buttons can sit on the left, in the middle or on the right. Your buttons from 1.2 stay where they were.
+- A scroll bar that shows only while you scroll ([#22](https://github.com/t21dev/kitab/issues/22)): Settings › Reading › Scroll bar › While scrolling. It appears as the pages move, fades out a second after they stop, and comes back when you point at the right edge.
+
+### Fixed
+- Kitab no longer crashes on Linux when you close several tabs quickly ([#19](https://github.com/t21dev/kitab/issues/19)). A page picture freed before the next frame left the frame looking for it.
+- Kitab opens on Linux desktops whose Wayland compositor is too old for it (WSL's, for one), by using X11 there instead of quitting at start-up.
+
 ## [1.2.0] - 2026-11-23
 
 ### Added
