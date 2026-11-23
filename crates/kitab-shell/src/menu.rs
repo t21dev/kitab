@@ -36,15 +36,21 @@ pub const CLSID_KITAB_MENU: GUID = GUID::from_u128(0x5b2c9e41_7d3a_4f6e_9a1b_c8e
 pub enum MenuTool {
     Merge,
     Pictures,
+    DeletePages,
+    MovePages,
+    RotatePages,
     Compress,
     Export,
     ExportText,
 }
 
 impl MenuTool {
-    pub const ALL: [MenuTool; 5] = [
+    pub const ALL: [MenuTool; 8] = [
         MenuTool::Merge,
         MenuTool::Pictures,
+        MenuTool::DeletePages,
+        MenuTool::MovePages,
+        MenuTool::RotatePages,
         MenuTool::Compress,
         MenuTool::Export,
         MenuTool::ExportText,
@@ -55,6 +61,9 @@ impl MenuTool {
         match self {
             MenuTool::Merge => "merge",
             MenuTool::Pictures => "pictures",
+            MenuTool::DeletePages => "delete-pages",
+            MenuTool::MovePages => "move-pages",
+            MenuTool::RotatePages => "rotate-pages",
             MenuTool::Compress => "compress",
             MenuTool::Export => "export",
             MenuTool::ExportText => "export-text",
@@ -65,6 +74,9 @@ impl MenuTool {
         match self {
             MenuTool::Merge => "Combine into one PDF",
             MenuTool::Pictures => "Make a PDF from pictures",
+            MenuTool::DeletePages => "Remove pages",
+            MenuTool::MovePages => "Reorder pages",
+            MenuTool::RotatePages => "Rotate pages",
             MenuTool::Compress => "Make a smaller copy",
             MenuTool::Export => "Export as Markdown",
             MenuTool::ExportText => "Export as text",
@@ -111,7 +123,10 @@ pub fn tools_for(paths: &[PathBuf]) -> Vec<MenuTool> {
         .filter(|t| match t {
             MenuTool::Merge => paths.len() >= 2 && paths.iter().all(|p| is_pdf(p)),
             MenuTool::Pictures => !paths.is_empty() && paths.iter().all(|p| is_picture(p)),
-            MenuTool::Compress => one && is_pdf(&paths[0]),
+            MenuTool::DeletePages
+            | MenuTool::MovePages
+            | MenuTool::RotatePages
+            | MenuTool::Compress => one && is_pdf(&paths[0]),
             MenuTool::Export | MenuTool::ExportText => one && is_document(&paths[0]),
         })
         .collect()
@@ -376,7 +391,17 @@ mod tests {
     fn the_menu_offers_what_fits_the_selection() {
         use MenuTool::*;
         assert_eq!(tools_for(&p(&["a.pdf", "b.PDF"])), [Merge]);
-        assert_eq!(tools_for(&p(&["a.pdf"])), [Compress, Export, ExportText]);
+        assert_eq!(
+            tools_for(&p(&["a.pdf"])),
+            [
+                DeletePages,
+                MovePages,
+                RotatePages,
+                Compress,
+                Export,
+                ExportText
+            ]
+        );
         assert_eq!(tools_for(&p(&["1.jpg", "2.png", "3.WEBP"])), [Pictures]);
         assert_eq!(tools_for(&p(&["book.epub"])), [Export, ExportText]);
         // Mixed, or nothing Kitab handles: no menu.

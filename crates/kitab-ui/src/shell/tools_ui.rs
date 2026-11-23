@@ -48,6 +48,7 @@ pub(super) struct ToolsState {
     pub toast_closing: Option<Toast>,
     pub toast_serial: u64,
     pub extract: Option<ExtractDialog>,
+    pub combine: Option<super::combine::CombineDialog>,
     pub save: Option<super::save_page::SavePageDialog>,
     pub dialog_focus: FocusHandle,
     /// The tab shown beside the active one.
@@ -61,6 +62,7 @@ impl ToolsState {
             toast_closing: None,
             toast_serial: 0,
             extract: None,
+            combine: None,
             save: None,
             dialog_focus: cx.focus_handle(),
             split: None,
@@ -91,7 +93,7 @@ fn is_picture(p: &Path) -> bool {
 
 /// A file name to sort by as people expect: case aside, and runs of digits
 /// by their value ("scan 2" before "scan 10").
-fn natural_key(p: &Path) -> Vec<(u8, u64, String)> {
+pub(super) fn natural_key(p: &Path) -> Vec<(u8, u64, String)> {
     let name = p
         .file_name()
         .map(|n| n.to_string_lossy().to_lowercase())
@@ -820,7 +822,13 @@ impl Workspace {
                 cx.listener(move |ws, _, window, cx| {
                     let typed = matches!(
                         id,
-                        "password" | "sign" | "page-tools" | "name" | "print" | "extract"
+                        "password"
+                            | "sign"
+                            | "page-tools"
+                            | "name"
+                            | "print"
+                            | "extract"
+                            | "combine"
                     );
                     if !typed {
                         close(ws, window, cx)
@@ -834,43 +842,56 @@ impl Workspace {
 
     // ── merge ──
 
-    /// Pick more PDFs and write `reader`'s document followed by them to a new PDF.
-    pub(super) fn merge_with(&mut self, reader: Entity<Reader>, cx: &mut Context<Self>) {
+    /// Pick more PDFs, then set the order in the Combine sheet, `reader`'s
+    /// document first.
+    pub(super) fn merge_with(
+        &mut self,
+        reader: Entity<Reader>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let r = reader.read(cx);
         let (first, unlock) = (r.path.clone(), r.unlock());
         let rx = cx.prompt_for_paths(PathPromptOptions {
             files: true,
             directories: false,
             multiple: true,
-            prompt: Some("Add to merge".into()),
+            prompt: Some("Add to combine".into()),
         });
-        cx.spawn(async move |this, cx| {
+        cx.spawn_in(window, async move |this, cx| {
             let picked = rx.await;
             // The picker couldn't open (Linux without a desktop portal): say so.
             if matches!(picked, Ok(Err(_)) | Err(_)) {
                 let _ = this.update(cx, |ws, cx| ws.picker_failed(cx));
             }
             let Ok(Ok(Some(more))) = picked else { return };
-            let more: Vec<PathBuf> = more.into_iter().filter(|p| *p != first).collect();
-            if more.is_empty() {
+            let mut inputs = vec![(first.clone(), unlock)];
+            inputs.extend(
+                more.into_iter()
+                    .filter(|p| *p != first)
+                    .filter(|p| p.extension().is_some_and(|e| e.eq_ignore_ascii_case("pdf")))
+                    .map(|p| (p, None)),
+            );
+            if inputs.len() < 2 {
                 return;
             }
-            let _ = this.update(cx, |ws, cx| ws.merge_files(first, unlock, more, cx));
+            let _ = this.update_in(cx, |ws, window, cx| ws.open_combine(inputs, window, cx));
         })
         .detach();
     }
 
-    /// Ask where, then write `first` followed by `more` to one new PDF.
-    pub(super) fn merge_files(
+    /// Ask where, then write `inputs` in this order to one new PDF.
+    pub(super) fn merge_inputs(
         &mut self,
-        first: PathBuf,
-        unlock: Option<String>,
-        more: Vec<PathBuf>,
+        inputs: Vec<(PathBuf, Option<String>)>,
         cx: &mut Context<Self>,
     ) {
+        let Some((first, _)) = inputs.first().cloned() else {
+            return;
+        };
         let engine = self.engine.clone();
         cx.spawn(async move |this, cx| {
-            let name = format!("{} + {} more.pdf", stem(&first), more.len());
+            let name = format!("{} + {} more.pdf", stem(&first), inputs.len() - 1);
             let Ok(save_rx) = this.update(cx, |_, cx| {
                 cx.prompt_for_new_path(&dir_of(&first), Some(&name))
             }) else {
@@ -887,9 +908,7 @@ impl Workspace {
             if out.extension().is_none() {
                 out.set_extension("pdf");
             }
-            let n = more.len() + 1;
-            let mut inputs = vec![(first, unlock)];
-            inputs.extend(more.into_iter().map(|p| (p, None)));
+            let n = inputs.len();
             let result = cx
                 .background_spawn(
                     async move { engine.merge(&inputs, &out).map(|pages| (out, pages)) },
@@ -898,7 +917,7 @@ impl Workspace {
             let _ = this.update(cx, |ws, cx| match result {
                 Ok((out, pages)) => ws.report(
                     Ok(out),
-                    &format!("Merged {n} PDFs ({pages} pages) into"),
+                    &format!("Combined {n} PDFs ({pages} pages) into"),
                     cx,
                 ),
                 Err(e) => ws.report(Err(e), "", cx),
@@ -1074,19 +1093,25 @@ impl Workspace {
                     );
                     return;
                 }
-                let first = pdfs.remove(0);
-                self.merge_files(first, None, pdfs, cx);
+                self.open_combine(pdfs.into_iter().map(|p| (p, None)).collect(), window, cx);
             }
             Tool::Pictures => self.pictures_to_pdf(paths, cx),
-            Tool::Compress => {
+            Tool::Compress | Tool::DeletePages | Tool::MovePages | Tool::RotatePages => {
+                use super::page_tools_ui::Tool as Page;
+                let page = match tool {
+                    Tool::DeletePages => Page::Delete,
+                    Tool::MovePages => Page::Move,
+                    Tool::RotatePages => Page::Rotate,
+                    _ => Page::Compress,
+                };
                 let Some(pdf) = paths.into_iter().find(is_pdf) else {
-                    self.report(Err("Make smaller works on PDFs.".into()), "", cx);
+                    self.report(Err("Page tools work on PDFs.".into()), "", cx);
                     return;
                 };
                 self.open_tab(pdf, window, cx);
-                // Page tools need the PDF open: once it is, on Compress.
-                self.when_active_opens(window, cx, |ws, window, cx| {
-                    ws.open_page_tools_on_compress(window, cx)
+                // Page tools need the PDF open: once it is, on that tool.
+                self.when_active_opens(window, cx, move |ws, window, cx| {
+                    ws.open_page_tools_on(page, window, cx)
                 });
             }
             Tool::Export | Tool::ExportText => {
@@ -1239,7 +1264,9 @@ impl Workspace {
             .icon("file"),
             MenuItem::new(
                 "Merge with other PDFs…",
-                self.on_ws(cx, move |ws, _, cx| ws.merge_with(r2.clone(), cx)),
+                self.on_ws(cx, move |ws, window, cx| {
+                    ws.merge_with(r2.clone(), window, cx)
+                }),
             )
             .icon("copy")
             .disabled(!is_pdf),

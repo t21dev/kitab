@@ -29,6 +29,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::time::Duration;
 
+mod combine;
 mod home_ui;
 mod library_ui;
 mod menu_bar;
@@ -4459,6 +4460,8 @@ impl Workspace {
     fn close_overlay(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.tools.extract.is_some() {
             self.close_extract(window, cx);
+        } else if self.tools.combine.is_some() {
+            self.close_combine(window, cx);
         } else if self.tools.save.is_some() {
             self.close_save_page(window, cx);
         } else if self.menu.is_some() {
@@ -5891,6 +5894,7 @@ impl Workspace {
         // since what they report often happened there.
         let toast = self.toast_view(st, cx);
         out.extend(self.extract_view(st, window, cx));
+        out.extend(self.combine_view(st, window, cx));
         out.extend(self.save_page_view(st, window, cx));
         out.extend(self.palette_view(st, cx));
         out.extend(self.print_view(st, cx));

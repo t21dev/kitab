@@ -29,6 +29,12 @@ pub enum Tool {
     Merge,
     /// One PDF of pictures, a page each.
     Pictures,
+    /// A copy of a PDF without some pages (Page tools › Delete).
+    DeletePages,
+    /// A copy with pages in a new order (Page tools › Move).
+    MovePages,
+    /// A copy with pages turned (Page tools › Rotate).
+    RotatePages,
     /// A smaller copy of a PDF.
     Compress,
     /// Markdown of a document.
@@ -42,6 +48,9 @@ impl Tool {
         match self {
             Tool::Merge => "merge",
             Tool::Pictures => "pictures",
+            Tool::DeletePages => "delete-pages",
+            Tool::MovePages => "move-pages",
+            Tool::RotatePages => "rotate-pages",
             Tool::Compress => "compress",
             Tool::Export => "export",
             Tool::ExportText => "export-text",
@@ -52,6 +61,9 @@ impl Tool {
         [
             Tool::Merge,
             Tool::Pictures,
+            Tool::DeletePages,
+            Tool::MovePages,
+            Tool::RotatePages,
             Tool::Compress,
             Tool::Export,
             Tool::ExportText,

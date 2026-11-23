@@ -22,7 +22,7 @@ use kitab_core::parse_page_ranges;
 use std::path::Path;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-enum Tool {
+pub(super) enum Tool {
     Delete,
     Move,
     Rotate,
@@ -157,9 +157,19 @@ impl Workspace {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        self.open_page_tools_on(Tool::Compress, window, cx);
+    }
+
+    /// Page tools with `tool` chosen (the file manager's right-click menu).
+    pub(super) fn open_page_tools_on(
+        &mut self,
+        tool: Tool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         self.open_page_tools(window, cx);
         if let Some(s) = self.page_tools.as_mut() {
-            s.tool = Tool::Compress;
+            s.tool = tool;
         }
         cx.notify();
     }

@@ -35,7 +35,7 @@ const PICTURES: &[&str] = &[
 ];
 const DOCUMENTS: &[&str] = &["pdf", "epub", "mobi", "azw", "azw3", "fb2", "xps", "oxps"];
 
-pub const ENTRIES: [MenuEntry; 5] = [
+pub const ENTRIES: [MenuEntry; 8] = [
     MenuEntry {
         word: "merge",
         title: "Combine into one PDF",
@@ -47,6 +47,24 @@ pub const ENTRIES: [MenuEntry; 5] = [
         title: "Make a PDF from pictures",
         exts: PICTURES,
         many: true,
+    },
+    MenuEntry {
+        word: "delete-pages",
+        title: "Remove pages",
+        exts: PDF,
+        many: false,
+    },
+    MenuEntry {
+        word: "move-pages",
+        title: "Reorder pages",
+        exts: PDF,
+        many: false,
+    },
+    MenuEntry {
+        word: "rotate-pages",
+        title: "Rotate pages",
+        exts: PDF,
+        many: false,
     },
     MenuEntry {
         word: "compress",
@@ -627,7 +645,8 @@ mod imp {
         config_home().map(|d| d.join("Thunar/uca.xml"))
     }
 
-    /// Files (Nautilus): an executable script per tool, under Scripts.
+    /// Files (Nautilus): an executable script per tool, in a Kitab folder:
+    /// Scripts › Kitab › the tools.
     fn nautilus_script(kitab: &Path, e: &MenuEntry) -> String {
         format!(
             "#!/bin/sh\n# {MARK}\n# Kitab: {title}. Files hands the selection over as arguments.\nexec {kitab} --tool {word} \"$@\"\n",
@@ -720,7 +739,7 @@ mod imp {
     }
 
     fn nautilus_path(e: &MenuEntry) -> Option<PathBuf> {
-        nautilus_dir().map(|d| d.join(format!("Kitab - {}", e.title)))
+        nautilus_dir().map(|d| d.join("Kitab").join(e.title))
     }
 
     fn nemo_path(e: &MenuEntry) -> Option<PathBuf> {
@@ -773,6 +792,10 @@ mod imp {
                 remove_ours(&p);
             }
         }
+        // The Kitab folder in Scripts, once it's empty (never the user's own files).
+        if let Some(d) = nautilus_dir() {
+            let _ = std::fs::remove_dir(d.join("Kitab"));
+        }
         if let Some(p) = dolphin_file() {
             remove_ours(&p);
         }
@@ -802,12 +825,20 @@ mod imp {
         fn menus_name_kitab_and_its_tools() {
             let k = Path::new("/opt/Kitab's/kitab");
             let d = dolphin_menu(k);
-            assert!(d.contains("Actions=merge;pictures;compress;export;export-text"));
+            assert!(d.contains(
+                "Actions=merge;pictures;delete-pages;move-pages;rotate-pages;compress;export;export-text"
+            ));
             assert!(d.contains("Exec='/opt/Kitab'\\''s/kitab' --tool merge %F"));
             assert!(d.contains("application/pdf") && d.contains("image/webp"));
             let n = nemo_action(k, &ENTRIES[0]);
             assert!(n.contains("Selection=m") && n.contains("Extensions=pdf;"));
-            assert!(nautilus_script(k, &ENTRIES[2]).contains("--tool compress \"$@\""));
+            assert!(nautilus_script(k, &ENTRIES[5]).contains("--tool compress \"$@\""));
+            // Grouped: Scripts › Kitab › the tool, and Dolphin's Kitab submenu.
+            assert!(
+                nautilus_path(&ENTRIES[0])
+                    .is_some_and(|p| p.ends_with("nautilus/scripts/Kitab/Combine into one PDF"))
+            );
+            assert!(d.contains("X-KDE-Submenu=Kitab"));
         }
 
         #[test]
