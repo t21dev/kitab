@@ -123,7 +123,6 @@
   "Quick dock": "快捷工具列",
   "Zoom, fit, find, rotate and more, floating over the page. At the bottom it also holds the page navigator.": "縮放、符合、尋找、旋轉等功能，浮動在頁面上方。放在底部時也包含頁面導覽器。",
   "Toolbar": "工具按鈕",
-  "Put each button in the title bar, beside the window buttons, or in the dock over the page, or turn it off. Title bar buttons act on the open tab. The compact dock trims the dock further.": "將每個按鈕放在標題列中視窗按鈕旁邊，或放在頁面上方的工具列中，也可以關閉。標題列按鈕會作用於目前開啟的分頁。精簡工具列會進一步簡化工具列。",
   "Motion": "動畫",
   "Page navigator": "頁面導覽器",
   "Click the page number in any style, or press Ctrl+G, to type a page.": "無論哪種樣式，按一下頁碼或按 Ctrl+G 都可以輸入頁碼。",

@@ -45,7 +45,7 @@ mod side_search;
 mod sign_ui;
 mod signatures_ui;
 mod system;
-mod title_actions;
+pub(crate) mod title_actions;
 mod tools_ui;
 mod trash_file;
 pub use system::VERSION;
@@ -229,6 +229,8 @@ pub struct Workspace {
     md_print: Option<print_ui::MdPrint>,
     /// Settings' search field while Settings is open.
     settings_search: Option<(Entity<crate::text_field::TextField>, Subscription)>,
+    /// The toolbar button picked in Settings › Appearance › Toolbar.
+    pub(crate) toolbar_sel: Option<crate::toolbar::Tool>,
     /// Debounces saving the window's place while it moves.
     place_serial: u64,
     /// The password sheet, when open.
@@ -361,6 +363,7 @@ impl Workspace {
             print_no_portal: false,
             md_print: None,
             settings_search: None,
+            toolbar_sel: None,
             place_serial: 0,
             password: None,
             password_serial: 0,
@@ -5323,6 +5326,52 @@ impl Workspace {
         self.open_menu(at, false, 240.0, items, window, cx);
     }
 
+    /// The toolbar editor's +: every tool not on `bar`, by group, saying
+    /// where it is now. Picking one puts it at the end of `bar`.
+    pub(crate) fn toolbar_add_menu(
+        &mut self,
+        bar: crate::toolbar::Bar,
+        at: Point<Pixels>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        use crate::toolbar::{Bar, ToolGroup};
+        let toolbar = Style::get(cx).toolbar.clone();
+        let mut items = Vec::new();
+        for group in ToolGroup::ALL {
+            let tools: Vec<_> = toolbar
+                .missing_from(bar)
+                .filter(|t| t.group() == group)
+                .collect();
+            if tools.is_empty() {
+                continue;
+            }
+            if !items.is_empty() {
+                items.push(MenuItem::Separator);
+            }
+            items.push(MenuItem::Heading(group.label().into()));
+            for tool in tools {
+                let mut item = MenuItem::new(
+                    tool.label(),
+                    self.on_ws(cx, move |ws, _, cx| {
+                        ws.toolbar_sel = Some(tool);
+                        ws.change_style(&|s: &mut Style| s.toolbar.put(tool, bar, None), cx);
+                    }),
+                )
+                .icon(tool.icon());
+                if let Some((now, _)) = toolbar.place(tool) {
+                    item = item.key(match now {
+                        Bar::Title => "Title bar",
+                        Bar::Dock => "Dock",
+                    });
+                }
+                items.push(item);
+            }
+        }
+        self.toolbar_sel = None;
+        self.open_menu(at, false, 260.0, items, window, cx);
+    }
+
     pub(crate) fn code_font_menu(
         &mut self,
         at: Point<Pixels>,
@@ -5870,6 +5919,7 @@ impl Workspace {
                     .unwrap_or_default(),
                 &self.settings_scroll,
                 self.settings_found.clone(),
+                self.toolbar_sel,
                 window,
             ));
             let (scrim, panel) = if closing {

@@ -1,92 +1,87 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-//! Reader buttons in the title bar, beside the window buttons (Settings ›
-//! Appearance › Toolbar puts each one in the title bar, the dock, or
-//! nowhere). They act on the active tab; on Home only More shows. They sit in
-//! a fixed slot, so the tab strip shares what's left and scrolls as before.
+//! Reader buttons in the title bar, beside the window buttons, in the order
+//! Settings › Appearance › Toolbar gives them (GitHub #25). They act on the
+//! active tab; on Home only Open file and More show. They sit in a fixed
+//! slot, so the tab strip shares what's left and scrolls as before.
 
 use super::{Workspace, icon_button};
-use crate::actions::*;
-use crate::settings::TitleItems;
+use crate::reader::tools::{Click, ToolButton};
 use crate::style::Style;
+use crate::toolbar::Tool;
 use crate::tooltip::Tip;
 use gpui::{
-    Action, AnyElement, Context, Focusable, IntoElement, ParentElement, StatefulInteractiveElement,
-    Styled, Window, div, prelude::FluentBuilder, px,
+    AnyElement, Context, Focusable, InteractiveElement, IntoElement, ParentElement,
+    StatefulInteractiveElement, Styled, div, prelude::FluentBuilder, px,
 };
-use kitab_core::ZoomMode;
 
-/// Buttons in the title bar for `t`, with a document open or not, and
-/// `reading` aloud (Stop shows beside Read aloud then).
-pub(super) fn count(t: TitleItems, has_doc: bool, reading: bool) -> usize {
-    if !has_doc {
-        return usize::from(t.more) + usize::from(t.open);
-    }
-    [
-        t.sidebar,
-        t.find,
-        t.bookmark,
-        t.markup,
-        t.rotate,
-        t.minimal,
-        t.print,
-        t.password,
-        t.read_aloud,
-        t.read_aloud && reading,
-        t.more,
-        t.open,
-    ]
-    .iter()
-    .filter(|b| **b)
-    .count()
-        + 2 * usize::from(t.history)
-        + 2 * usize::from(t.zoom)
-        + 2 * usize::from(t.fit)
+/// The tools the title bar shows: all of its list, or, when the tabs would
+/// be squeezed out, only Open file and More (the rest go to the dock).
+pub(crate) fn shown_tools(toolbar: &crate::toolbar::Toolbar, crowded: bool) -> Vec<Tool> {
+    toolbar
+        .title
+        .iter()
+        .copied()
+        .filter(|t| !crowded || matches!(t, Tool::Open | Tool::More))
+        .collect()
+}
+
+/// On Home there's no tab to act on: only these make sense.
+fn on_home(t: Tool) -> bool {
+    matches!(t, Tool::Open | Tool::More)
 }
 
 impl Workspace {
+    /// The buttons each shown tool puts up, for the active tab (Home: Open
+    /// file and More only).
+    fn title_buttons(&self, st: &Style, crowded: bool, cx: &gpui::App) -> Vec<(Tool, ToolButton)> {
+        let reader = self.active_reader();
+        let mut out = Vec::new();
+        for tool in shown_tools(&st.toolbar, crowded) {
+            match reader {
+                Some(r) => out.extend(
+                    r.read(cx)
+                        .tool_buttons(tool, cx)
+                        .into_iter()
+                        .map(|b| (tool, b)),
+                ),
+                None if on_home(tool) => out.push((
+                    tool,
+                    ToolButton {
+                        id: format!("tool-{tool:?}-0").into(),
+                        icon: Some(tool.icon()),
+                        text: String::new(),
+                        tip: if tool == Tool::Open {
+                            "Open file…  Ctrl+O".into()
+                        } else {
+                            "More".into()
+                        },
+                        on: false,
+                        enabled: true,
+                        click: if tool == Tool::More {
+                            Click::MoreMenu
+                        } else {
+                            Click::Act(Box::new(crate::actions::OpenFile))
+                        },
+                    },
+                )),
+                None => {}
+            }
+        }
+        out
+    }
+
     /// Width the actions take, for the tab strip's arithmetic.
     pub(super) fn title_actions_width(&self, st: &Style, crowded: bool, cx: &gpui::App) -> f32 {
-        let n = count(
-            Self::shown_items(st, crowded),
-            self.active.is_some(),
-            self.reading_aloud_now(cx),
-        );
-        if n == 0 {
-            0.0
-        } else {
-            n as f32 * (st.m().icon_button + 2.0) + 12.0
+        let buttons = self.title_buttons(st, crowded, cx);
+        if buttons.is_empty() {
+            return 0.0;
         }
-    }
-
-    /// The active tab is reading aloud (playing or paused).
-    fn reading_aloud_now(&self, cx: &gpui::App) -> bool {
-        self.active_reader()
-            .is_some_and(|r| r.read(cx).reading_aloud().is_some())
-    }
-
-    /// Run a reader action on the active tab: focus it first, so the action
-    /// reaches it rather than whatever had focus.
-    fn on_reader(
-        action: Box<dyn Action>,
-    ) -> impl Fn(&gpui::ClickEvent, &mut Window, &mut gpui::App) {
-        move |_, window, cx| {
-            window.dispatch_action(action.boxed_clone(), cx);
-        }
-    }
-
-    /// The items to show: all of them, or only More when the tabs would be
-    /// squeezed out (their actions stay on their keys and in the palette).
-    fn shown_items(st: &Style, crowded: bool) -> TitleItems {
-        if crowded {
-            TitleItems {
-                more: st.title_items.more,
-                open: st.title_items.open,
-                ..TitleItems::NONE
-            }
-        } else {
-            st.title_items
-        }
+        let w: f32 = buttons
+            .iter()
+            .map(|(_, b)| if b.icon.is_some() { st.m().icon_button } else { 46.0 } + 2.0)
+            .sum();
+        w + 12.0
     }
 
     pub(super) fn title_actions(
@@ -95,222 +90,94 @@ impl Workspace {
         crowded: bool,
         cx: &mut Context<Self>,
     ) -> Option<AnyElement> {
-        let t = Self::shown_items(st, crowded);
-        let reader = self.active_reader().cloned();
-        if count(t, reader.is_some(), self.reading_aloud_now(cx)) == 0 {
+        let buttons = self.title_buttons(st, crowded, cx);
+        if buttons.is_empty() {
             return None;
         }
+        let reader = self.active_reader().cloned();
+        let focus = reader.as_ref().map(|r| r.read(cx).focus_handle(cx));
         let mut row = div()
             .flex()
             .flex_none()
             .items_center()
             .gap(px(2.0))
             .mr(px(10.0));
-        if let Some(reader) = reader.as_ref() {
-            // Print and Password open the workspace's own sheets: called
-            // directly, as an action dispatched just after the focus moves
-            // to the reader doesn't reach the workspace.
-            let open_print =
-                cx.listener(|ws, _: &gpui::ClickEvent, window, cx| ws.open_print(window, cx));
-            let open_password =
-                cx.listener(|ws, _: &gpui::ClickEvent, window, cx| ws.open_password(window, cx));
-            let r = reader.read(cx);
-            let focus = r.focus_handle(cx);
-            let refocus = move |window: &mut Window| window.focus(&focus);
-            let button = |id: &'static str,
-                          name: &'static str,
-                          on: bool,
-                          tip: &'static str,
-                          action: Box<dyn Action>| {
-                let refocus = refocus.clone();
-                let run = Self::on_reader(action);
-                icon_button(id, name, on, st)
-                    .flex_none()
-                    .tip(tip)
-                    .on_click(move |e, window, cx| {
-                        refocus(window);
-                        run(e, window, cx);
-                    })
-            };
-            let mode = r.zoom_mode();
-            let page = r.current_page() as u32;
-            row = row
-                .when(t.sidebar, |d| {
-                    d.child(button(
-                        "t-sidebar",
-                        "sidebar",
-                        self.sidebar,
-                        "Sidebar  Ctrl+B",
-                        Box::new(ToggleSidebar),
-                    ))
-                })
-                .when(t.history, |d| {
-                    d.child(button(
-                        "t-back",
-                        "arrow-left",
-                        false,
-                        "Back  Alt+Left",
-                        Box::new(HistoryBack),
-                    ))
-                    .child(button(
-                        "t-forward",
-                        "arrow-right",
-                        false,
-                        "Forward  Alt+Right",
-                        Box::new(HistoryForward),
-                    ))
-                })
-                .when(t.zoom, |d| {
-                    d.child(button(
-                        "t-zoom-out",
-                        "minus",
-                        false,
-                        "Zoom out  Ctrl+-",
-                        Box::new(ZoomOut),
-                    ))
-                    .child(button(
-                        "t-zoom-in",
-                        "plus",
-                        false,
-                        "Zoom in  Ctrl+=",
-                        Box::new(ZoomIn),
-                    ))
-                })
-                .when(t.fit, |d| {
-                    d.child(button(
-                        "t-fit-width",
-                        "fit-width",
-                        mode == ZoomMode::FitWidth,
-                        "Fit width  Ctrl+2",
-                        Box::new(FitWidth),
-                    ))
-                    .child(button(
-                        "t-fit-page",
-                        "fit-page",
-                        mode == ZoomMode::FitPage,
-                        "Fit page  Ctrl+0",
-                        Box::new(FitPage),
-                    ))
-                })
-                .when(t.find, |d| {
-                    d.child(button(
-                        "t-find",
-                        "search",
-                        false,
-                        "Find  Ctrl+F",
-                        Box::new(Find),
-                    ))
-                })
-                .when(t.bookmark && r.can_bookmark(), |d| {
-                    d.child(button(
-                        "t-bookmark",
-                        "bookmark",
-                        r.is_bookmarked(page),
-                        "Bookmark this page  Ctrl+D",
-                        Box::new(ToggleBookmark),
-                    ))
-                })
-                .when(t.markup && r.can_markup(cx), |d| {
-                    d.child(button(
-                        "t-markup",
-                        "pen",
-                        r.markup_on(),
-                        "Draw and mark up  Ctrl+Shift+D",
-                        Box::new(ToggleMarkup),
-                    ))
-                })
-                .when(t.rotate, |d| {
-                    d.child(button(
-                        "t-rotate",
-                        "rotate",
-                        false,
-                        "Rotate  Ctrl+Shift+=",
-                        Box::new(RotateRight),
-                    ))
-                })
-                .when(t.print, |d| {
-                    d.child(
-                        icon_button("t-print", "print", false, st)
-                            .flex_none()
-                            .tip("Print  Ctrl+P")
-                            .on_click(open_print),
-                    )
-                })
-                .when(t.password && r.is_pdf(), |d| {
-                    d.child(
-                        icon_button("t-password", "lock", false, st)
-                            .flex_none()
-                            .tip("Password")
-                            .on_click(open_password),
-                    )
-                })
-                .when(t.minimal, |d| {
-                    d.child(button(
-                        "t-minimal",
-                        "focus",
-                        st.minimal,
-                        "Focus mode  F11",
-                        Box::new(ToggleMinimal),
-                    ))
-                })
-                .when(t.read_aloud && r.can_read_aloud(), |d| {
-                    // As in the dock: the speaker opens read aloud's panel,
-                    // and Stop sits beside it while reading.
-                    let reading = r.reading_aloud();
-                    let glyph = if reading == Some(false) {
-                        "pause"
-                    } else {
-                        "speaker"
-                    };
-                    let menu_for = reader.clone();
-                    let stop_for = reader.clone();
-                    d.child(
-                        icon_button("t-read-aloud", glyph, reading.is_some(), st)
-                            .flex_none()
-                            .tip("Read aloud  Ctrl+Shift+U")
-                            .on_click(cx.listener(move |ws, e: &gpui::ClickEvent, window, cx| {
-                                let at = e.position();
-                                ws.speech_menu(
-                                    menu_for.clone(),
-                                    gpui::point(at.x, at.y + px(14.0)),
-                                    window,
-                                    cx,
-                                )
-                            })),
-                    )
-                    .when(reading.is_some(), |d| {
-                        d.child(
-                            icon_button("t-stop-reading", "stop", false, st)
-                                .flex_none()
-                                .tip("Stop reading")
-                                .on_click(cx.listener(move |_, _: &gpui::ClickEvent, _, cx| {
-                                    stop_for.update(cx, |r, cx| r.stop_read_aloud(cx))
-                                })),
-                        )
-                    })
-                });
-        }
-        // Open file… stands on its own: there's always something to open.
-        if t.open {
-            row = row.child(
-                icon_button("t-open", "folder-open", false, st)
-                    .flex_none()
-                    .tip("Open file…  Ctrl+O")
-                    .on_click(cx.listener(|ws, _: &gpui::ClickEvent, window, cx| {
-                        ws.open_dialog(window, cx)
-                    })),
-            );
-        }
-        if t.more {
-            row = row.child(
-                icon_button("t-more", "more-vertical", false, st)
-                    .flex_none()
-                    .tip("More")
-                    .on_click(cx.listener(|ws, e: &gpui::ClickEvent, window, cx| {
+        for (tool, b) in buttons {
+            let el = match b.icon {
+                Some(name) => icon_button(b.id.clone(), name, b.on, st).flex_none(),
+                // Zoom's percentage: a small text button (Actual size).
+                None => crate::kbd::stop(div().id(b.id.clone()), st)
+                    .h(st.px(|m| m.icon_button))
+                    .min_w(px(46.0))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .rounded(st.px(|m| m.control_radius))
+                    .text_size(px(12.0))
+                    .text_color(st.c(|c| c.text))
+                    .hover(|d| d.bg(st.c(|c| c.hover)))
+                    .child(b.text.clone()),
+            }
+            .tip(b.tip.clone())
+            .when(!b.enabled, |d| d.opacity(0.4));
+            if !b.enabled {
+                row = row.child(el);
+                continue;
+            }
+            let el = match b.click {
+                Click::SpeechMenu => {
+                    let Some(r) = reader.clone() else { continue };
+                    el.on_click(cx.listener(move |ws, e: &gpui::ClickEvent, window, cx| {
+                        let at = e.position();
+                        ws.speech_menu(r.clone(), gpui::point(at.x, at.y + px(14.0)), window, cx)
+                    }))
+                }
+                Click::MoreMenu => {
+                    el.on_click(cx.listener(|ws, e: &gpui::ClickEvent, window, cx| {
                         let at = e.position();
                         ws.more_menu(Some(gpui::point(at.x, at.y + px(14.0))), window, cx)
-                    })),
-            );
+                    }))
+                }
+                // The workspace's own sheets and dialogs: called directly, as
+                // an action dispatched just after the focus moves to the
+                // reader doesn't reach the workspace.
+                Click::Act(_) if matches!(tool, Tool::Print) => el.on_click(
+                    cx.listener(|ws, _: &gpui::ClickEvent, window, cx| ws.open_print(window, cx)),
+                ),
+                Click::Act(_) if matches!(tool, Tool::Password) => {
+                    el.on_click(cx.listener(|ws, _: &gpui::ClickEvent, window, cx| {
+                        ws.open_password(window, cx)
+                    }))
+                }
+                Click::Act(_) if matches!(tool, Tool::Open) => {
+                    el.on_click(cx.listener(|ws, _: &gpui::ClickEvent, window, cx| {
+                        ws.open_dialog(window, cx)
+                    }))
+                }
+                Click::Act(_) if matches!(tool, Tool::Present) => {
+                    el.on_click(cx.listener(|ws, _: &gpui::ClickEvent, window, cx| {
+                        ws.toggle_present(window, cx)
+                    }))
+                }
+                Click::Act(_) if matches!(tool, Tool::Export) => {
+                    el.on_click(cx.listener(|ws, _: &gpui::ClickEvent, _, cx| {
+                        if let Some(r) = ws.active_reader().cloned() {
+                            ws.export_document(r, crate::ExportKind::Markdown, cx);
+                        }
+                    }))
+                }
+                // A reader action: focus the tab first, so it reaches it.
+                Click::Act(action) => {
+                    let focus = focus.clone();
+                    el.on_click(move |_, window, cx| {
+                        if let Some(f) = &focus {
+                            window.focus(f);
+                        }
+                        window.dispatch_action(action.boxed_clone(), cx);
+                    })
+                }
+            };
+            row = row.child(el);
         }
         Some(row.into_any_element())
     }
@@ -321,27 +188,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn home_shows_only_more() {
-        let t = TitleItems::default();
-        // More and Open file… on Home.
-        assert_eq!(count(t, false, false), 2);
-        assert!(count(t, true, false) > 1);
-        let none = TitleItems {
-            more: false,
-            ..TitleItems::NONE
-        };
-        assert_eq!(count(none, true, false), 0);
-    }
-
-    #[test]
-    fn read_aloud_can_sit_in_the_title_bar() {
-        let t = TitleItems {
-            read_aloud: true,
-            ..TitleItems::NONE
-        };
-        assert_eq!(count(t, true, false), 1);
-        // Stop joins it while reading.
-        assert_eq!(count(t, true, true), 2);
-        assert_eq!(count(t, false, true), 0);
+    fn a_squeezed_title_bar_keeps_open_and_more() {
+        let t = crate::toolbar::Toolbar::default();
+        assert_eq!(shown_tools(&t, true), [Tool::Open, Tool::More]);
+        assert_eq!(shown_tools(&t, false), t.title);
     }
 }

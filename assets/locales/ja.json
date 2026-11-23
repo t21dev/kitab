@@ -123,7 +123,6 @@
   "Quick dock": "クイックドック",
   "Zoom, fit, find, rotate and more, floating over the page. At the bottom it also holds the page navigator.": "ズーム、フィット、検索、回転などをページの上に浮かべて表示します。下部に置くと、ページナビゲーターも含まれます。",
   "Toolbar": "ツールバー",
-  "Put each button in the title bar, beside the window buttons, or in the dock over the page, or turn it off. Title bar buttons act on the open tab. The compact dock trims the dock further.": "各ボタンを、タイトルバーのウィンドウボタンの横か、ページ上のドックに置くか、非表示にします。タイトルバーのボタンは開いているタブに作用します。コンパクトドックでは、ドックをさらに簡素にします。",
   "Motion": "アニメーション",
   "Page navigator": "ページナビゲーター",
   "Click the page number in any style, or press Ctrl+G, to type a page.": "どのスタイルでも、ページ番号をクリックするかCtrl+Gを押すと、ページ番号を入力できます。",

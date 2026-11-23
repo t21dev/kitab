@@ -19,6 +19,7 @@ use kitab_theme::{Accent, AccentPreset, Appearance, Density, Theme, hue_swatch};
 
 mod search;
 mod system;
+mod toolbar_editor;
 pub use system::{CliStatus, SystemInfo, UpdateState};
 
 /// The custom accent's hex field.
@@ -194,6 +195,7 @@ pub fn panel(
     query: &str,
     scroll: &gpui::ScrollHandle,
     found: Option<Found>,
+    toolbar_sel: Option<crate::toolbar::Tool>,
     window: &Window,
 ) -> AnyElement {
     let searching = !query.trim().is_empty();
@@ -294,7 +296,7 @@ pub fn panel(
 
     let body = match section {
         _ if searching => search::results(&ws, query, st),
-        Section::Appearance => appearance(&ws, st, themes, hex, window),
+        Section::Appearance => appearance(&ws, st, themes, hex, toolbar_sel, window),
         Section::Reading => reading(&ws, st),
         Section::Home => home_section(&ws, st),
         Section::Library => system::library(&ws, sys, st),
@@ -404,6 +406,7 @@ fn appearance(
     st: &Style,
     themes: &[Theme],
     hex: &HexState,
+    toolbar_sel: Option<crate::toolbar::Tool>,
     window: &Window,
 ) -> AnyElement {
     let mut theme_cards = div().flex().flex_wrap().gap(px(12.0));
@@ -688,13 +691,8 @@ fn appearance(
         ))
         .child(group(
             "Toolbar",
-            Some("Put each button in the title bar, beside the window buttons, or in the dock over the page, or turn it off. Title bar buttons act on the open tab. The compact dock trims the dock further."),
-            div()
-                .flex()
-                .flex_col()
-                .gap(px(12.0))
-                .child(toolbar_preview(st))
-                .child(toolbar_rows(ws, st)),
+            Some("Your title bar and dock, as they look: change them right here. Title bar buttons act on the open tab; anything on neither is in More (⋯). The compact dock trims the dock further."),
+            toolbar_editor::editor(ws, st, toolbar_sel),
             st,
         ))
         .child(group(
@@ -1025,243 +1023,6 @@ fn reading(ws: &WeakEntity<Workspace>, st: &Style) -> AnyElement {
             st,
         ))
         .into_any_element()
-}
-
-/// Where a toolbar button sits.
-#[derive(Clone, Copy, PartialEq)]
-enum Place {
-    Title,
-    Dock,
-    Off,
-}
-
-/// A button's two switches: shown in the dock, moved to the title bar.
-type Slot = (
-    fn(&mut crate::settings::DockItems) -> &mut bool,
-    fn(&mut crate::settings::TitleItems) -> &mut bool,
-);
-
-/// One row per toolbar button: title bar, dock or off. More can't be off;
-/// the dock's hide chevron always stays.
-/// A small window that follows the Quick dock and Toolbar settings: the
-/// buttons in the title bar, the ones in the dock (where it sits, compact or
-/// not, faded or not), and More (⋯).
-fn toolbar_preview(st: &Style) -> AnyElement {
-    let (d, t) = (st.dock_items, st.title_items);
-    let compact = st.dock_compact;
-    // (icons, in the title bar, in the dock); compact keeps zoom and find.
-    let buttons: [(&[&str], bool, bool, bool); 12] = [
-        (&["sidebar"], t.sidebar, d.sidebar, false),
-        (&["arrow-left", "arrow-right"], t.history, d.history, false),
-        (&["minus", "plus"], t.zoom, d.zoom, true),
-        (&["fit-width", "fit-page"], t.fit, d.fit, false),
-        (&["search"], t.find, d.find, true),
-        (&["bookmark"], t.bookmark, d.bookmark, false),
-        (&["pen"], t.markup, d.markup, false),
-        (&["rotate"], t.rotate, d.rotate, false),
-        (&["focus"], t.minimal, d.minimal, false),
-        (&["print"], t.print, d.print, false),
-        (&["lock"], t.password, d.password, false),
-        (&["speaker"], t.read_aloud, d.read_aloud, false),
-    ];
-    let glyph = |name: &str| {
-        svg()
-            .path(icon(name))
-            .size(px(11.0))
-            .text_color(st.c(|c| c.muted))
-    };
-    let mut up = div().flex().items_center().gap(px(6.0));
-    let mut dock = div().flex().items_center().gap(px(6.0));
-    let mut in_dock = 0;
-    for (names, title, docked, keep) in buttons {
-        if title {
-            for n in names {
-                up = up.child(glyph(n));
-            }
-        } else if docked && (!compact || keep) {
-            for n in names {
-                dock = dock.child(glyph(n));
-            }
-            in_dock += 1;
-        }
-    }
-    if t.more {
-        up = up.child(glyph("more-vertical"));
-    } else {
-        dock = dock.child(glyph("more-vertical"));
-        in_dock += 1;
-    }
-    let side = matches!(
-        st.dock,
-        crate::settings::DockAt::Left | crate::settings::DockAt::Right
-    );
-    let dock = (in_dock > 0).then(|| {
-        let bar = if side { dock.flex_col() } else { dock };
-        bar.p(px(6.0))
-            .rounded(px(8.0))
-            .bg(st.c(|c| c.raised))
-            .shadow(st.float())
-            .when(st.dock_fade, |d| d.opacity(0.5))
-    });
-    let page = div()
-        .w(px(150.0))
-        .h(px(150.0))
-        .rounded(px(3.0))
-        .bg(gpui::white())
-        .shadow(st.elev());
-    let mut area = div()
-        .relative()
-        .flex_1()
-        .flex()
-        .justify_center()
-        .pt(px(12.0))
-        .overflow_hidden()
-        .child(page);
-    if let Some(dock) = dock {
-        let placed = div().absolute().flex().child(dock);
-        area = area.child(match st.dock {
-            crate::settings::DockAt::Top => placed.top(px(8.0)).left_0().right_0().justify_center(),
-            crate::settings::DockAt::Bottom => {
-                placed.bottom(px(8.0)).left_0().right_0().justify_center()
-            }
-            crate::settings::DockAt::Left => placed.left(px(8.0)).top_0().bottom_0().items_center(),
-            crate::settings::DockAt::Right => {
-                placed.right(px(8.0)).top_0().bottom_0().items_center()
-            }
-        });
-    }
-    div()
-        .w(px(440.0))
-        .h(px(190.0))
-        .flex()
-        .flex_col()
-        .rounded(px(10.0))
-        .overflow_hidden()
-        .bg(st.c(|c| c.bg))
-        .border_1()
-        .border_color(st.c(|c| c.line))
-        .child(
-            div()
-                .h(px(28.0))
-                .flex()
-                .items_center()
-                .gap(px(8.0))
-                .px(px(10.0))
-                .border_b_1()
-                .border_color(st.c(|c| c.line))
-                .child(
-                    div()
-                        .w(px(84.0))
-                        .h(px(16.0))
-                        .rounded(px(4.0))
-                        .bg(st.c(|c| c.raised)),
-                )
-                .child(div().flex_1())
-                .child(up)
-                .child(
-                    div()
-                        .flex()
-                        .gap(px(10.0))
-                        .pl(px(8.0))
-                        .child(glyph("win-min"))
-                        .child(glyph("win-max"))
-                        .child(glyph("close")),
-                ),
-        )
-        .child(area)
-        .into_any_element()
-}
-
-fn toolbar_rows(ws: &WeakEntity<Workspace>, st: &Style) -> AnyElement {
-    let rows: [(&'static str, Slot); 12] = [
-        ("Sidebar", (|d| &mut d.sidebar, |t| &mut t.sidebar)),
-        ("Back and forward", (|d| &mut d.history, |t| &mut t.history)),
-        ("Zoom", (|d| &mut d.zoom, |t| &mut t.zoom)),
-        ("Fit width and fit page", (|d| &mut d.fit, |t| &mut t.fit)),
-        ("Find", (|d| &mut d.find, |t| &mut t.find)),
-        ("Bookmark", (|d| &mut d.bookmark, |t| &mut t.bookmark)),
-        ("Draw and mark up", (|d| &mut d.markup, |t| &mut t.markup)),
-        ("Rotate", (|d| &mut d.rotate, |t| &mut t.rotate)),
-        ("Focus mode", (|d| &mut d.minimal, |t| &mut t.minimal)),
-        ("Print", (|d| &mut d.print, |t| &mut t.print)),
-        ("Password", (|d| &mut d.password, |t| &mut t.password)),
-        // GitHub #24: read aloud can sit in the title bar like the others.
-        ("Read aloud", (|d| &mut d.read_aloud, |t| &mut t.read_aloud)),
-    ];
-    let mut col = div().flex().flex_col().gap(px(8.0));
-    for (label, (dock, title)) in rows {
-        let (mut d, mut t) = (st.dock_items, st.title_items);
-        let now = if *title(&mut t) {
-            Place::Title
-        } else if *dock(&mut d) {
-            Place::Dock
-        } else {
-            Place::Off
-        };
-        let choices = [
-            ("Title bar", Place::Title),
-            ("Dock", Place::Dock),
-            ("Off", Place::Off),
-        ]
-        .into_iter()
-        .map(|(name, place)| {
-            let set = move |s: &mut Style| {
-                *title(&mut s.title_items) = place == Place::Title;
-                // A button moved to the title bar keeps its dock switch,
-                // so moving it back puts it where it was.
-                if place != Place::Title {
-                    *dock(&mut s.dock_items) = place == Place::Dock;
-                } else {
-                    *dock(&mut s.dock_items) = true;
-                }
-            };
-            (SharedString::from(name), now == place, change(ws, set))
-        })
-        .collect();
-        // Every row has the same three labels: the row's own id keeps their
-        // buttons apart (without it, a click could land on another row).
-        let control = div()
-            .id(SharedString::from(format!("toolbar-{label}")))
-            .child(segmented(choices, st))
-            .into_any_element();
-        col = col.child(well_row(label, "", control, st));
-    }
-    let more = [("Title bar", true), ("Dock", false)]
-        .into_iter()
-        .map(|(name, up)| {
-            (
-                SharedString::from(name),
-                st.title_items.more == up,
-                change(ws, move |s: &mut Style| s.title_items.more = up),
-            )
-        })
-        .collect();
-    let open = [("Show", true), ("Hide", false)]
-        .into_iter()
-        .map(|(name, on)| {
-            (
-                SharedString::from(name),
-                st.title_items.open == on,
-                change(ws, move |s: &mut Style| s.title_items.open = on),
-            )
-        })
-        .collect();
-    col.child(well_row(
-        "More (⋯)",
-        "Everything else lives here, so it is always in one of the two.",
-        segmented(more, st),
-        st,
-    ))
-    .child(well_row(
-        "Open file…",
-        "A folder button in the title bar, beside More. Ctrl+O works either way.",
-        div()
-            .id("toolbar-open")
-            .child(segmented(open, st))
-            .into_any_element(),
-        st,
-    ))
-    .into_any_element()
 }
 
 fn minimal_rows(ws: &WeakEntity<Workspace>, st: &Style) -> AnyElement {

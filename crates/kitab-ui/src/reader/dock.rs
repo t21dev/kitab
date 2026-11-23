@@ -6,18 +6,18 @@
 //! With "Fade the dock while reading" it fades after a short pause and comes
 //! back when the pointer moves or a key is pressed.
 
+use super::tools::{Click, ToolButton};
 use super::{Reader, ReaderEvent, Status};
-use crate::actions::*;
 use crate::icons::icon;
 use crate::motion;
 use crate::settings::DockAt;
 use crate::style::Style;
+use crate::toolbar::{DockAlign, Tool};
 use crate::tooltip::Tip;
 use gpui::{
     AnyElement, Context, ElementId, InteractiveElement, IntoElement, MouseButton, ParentElement,
     StatefulInteractiveElement, Styled, Window, div, prelude::FluentBuilder, px, svg,
 };
-use kitab_core::ZoomMode;
 use std::time::{Duration, Instant};
 
 /// Quiet time before a fading dock goes.
@@ -142,69 +142,64 @@ impl Reader {
         };
         let upright = at.upright();
         let compact = st.dock_compact;
-        // What the dock shows (Settings › Appearance › Dock items); the
-        // compact preset trims the rest. More and Hide are always there.
-        // What the title bar shows is left out of the dock (all but More come
-        // back here when the window is too narrow for them up there).
+        // The dock's buttons, in the order Settings › Appearance › Toolbar
+        // gives (GitHub #25). When the title bar is too narrow for its
+        // buttons, they join the end of the dock (all but Open file and More,
+        // which stay up there).
         let squeezed = cx
             .try_global::<crate::shell::TitleSqueezed>()
             .is_some_and(|s| s.0);
-        let t = if squeezed {
-            crate::settings::TitleItems {
-                more: st.title_items.more,
-                ..crate::settings::TitleItems::NONE
-            }
-        } else {
-            st.title_items
-        };
-        let mut items = st.dock_items;
-        items.sidebar &= !t.sidebar;
-        items.history &= !t.history;
-        items.zoom &= !t.zoom;
-        items.fit &= !t.fit;
-        items.find &= !t.find;
-        items.markup &= !t.markup;
-        items.rotate &= !t.rotate;
-        items.bookmark &= !t.bookmark;
-        items.minimal &= !t.minimal;
-        items.print &= !t.print;
-        items.password &= !t.password;
-        items.read_aloud &= !t.read_aloud;
-        // A narrow reading area: the least-used groups step aside first
-        // (their keys and the palette still work), so the dock never has to
-        // scroll at ordinary window sizes.
+        let mut tools: Vec<Tool> = st.toolbar.dock.clone();
+        if squeezed {
+            let up = crate::shell::title_actions::shown_tools(&st.toolbar, true);
+            tools.extend(st.toolbar.title.iter().filter(|t| !up.contains(t)));
+        }
+        // The compact preset, and a narrow reading area, leave out the
+        // least-used first (their keys and the palette still work), so the
+        // dock never has to scroll at ordinary window sizes.
         let vw = self.viewport.0;
         let tight = !upright && vw > 0.0 && vw < 820.0;
         let tighter = !upright && vw > 0.0 && vw < 640.0;
         let tightest = !upright && vw > 0.0 && vw < 520.0;
-        let show_sidebar = items.sidebar && !compact && !tightest;
-        let show_history = items.history && !compact && !tight;
-        let show_fit = items.fit && !compact && !tighter;
-        let show_rotate = items.rotate && !compact && !tight;
-        // Nothing left to show but the hide chevron (every button off or in
-        // the title bar): no dock at all, and no handle to bring back an
-        // empty one (GitHub #23).
+        tools.retain(|t| {
+            !(compact && t.trimmed_when_compact())
+                && match t {
+                    Tool::Sidebar => !tightest,
+                    Tool::History | Tool::Rotate | Tool::RotateLeft => !tight,
+                    Tool::Fit | Tool::Hand => !tighter,
+                    _ => true,
+                }
+        });
+        // Each tool's buttons for this document: a group of buttons (back
+        // and forward, zoom, fit) gets its own well; single buttons in a row
+        // share one.
+        let mut groups: Vec<Vec<ToolButton>> = Vec::new();
+        let mut run_open = false;
+        for t in tools {
+            let buttons = self.tool_buttons(t, cx);
+            if buttons.is_empty() {
+                continue;
+            }
+            let multi = matches!(t, Tool::History | Tool::Zoom | Tool::Fit);
+            if multi {
+                groups.push(buttons);
+                run_open = false;
+            } else if run_open && let Some(last) = groups.last_mut() {
+                last.extend(buttons);
+            } else {
+                groups.push(buttons);
+                run_open = true;
+            }
+        }
+        let marks = self.unsaved_marks();
+        let extras = marks > 0 || self.is_markdown();
         // A hidden page navigator still shows while a page number is typed (Ctrl+G).
         let nav = at == DockAt::Bottom
             && st.shows_page_nav()
             && (st.page_nav != crate::settings::PageNav::Hidden || self.page_edit.is_some());
-        let shows_something = show_sidebar
-            || show_history
-            || nav
-            || items.zoom
-            || show_fit
-            || items.find
-            || (items.read_aloud && self.can_read_aloud())
-            || (items.bookmark && self.can_bookmark())
-            || (items.markup && self.can_markup(cx))
-            || self.unsaved_marks() > 0
-            || self.is_markdown()
-            || show_rotate
-            || items.print
-            || (items.password && self.is_pdf())
-            || items.minimal
-            || !t.more;
-        if !shows_something {
+        // Nothing left to show but the hide chevron: no dock at all, and no
+        // handle to bring back an empty one (GitHub #23).
+        if groups.is_empty() && !nav && !extras {
             return None;
         }
         // Hidden or shown again since the last frame: slide out, or in.
@@ -248,7 +243,6 @@ impl Reader {
                 st,
             ));
         }
-        let mode = self.zoom;
         let group = || {
             div()
                 .flex_none()
@@ -269,11 +263,6 @@ impl Reader {
                     d.w(px(1.0)).h(px(18.0))
                 }
             })
-        };
-        // A book shows its text size: zoom there changes the text, not the page.
-        let zoom_label = match self.book_text() {
-            Some(pt) => format!("{pt:.0} pt"),
-            None => format!("{} %", self.zoom_percent()),
         };
         let mut dock = div()
             .id("dock")
@@ -320,42 +309,9 @@ impl Reader {
                     cx.stop_propagation();
                     cx.notify();
                 }
-            }))
-            .when(show_sidebar, |d| {
-                d.child(
-                    group().child(
-                        dock_button("dock-sidebar", "sidebar", false, st)
-                            .tip("Sidebar  Ctrl+B")
-                            .on_click(|_, window, cx| {
-                                window.dispatch_action(Box::new(ToggleSidebar), cx)
-                            }),
-                    ),
-                )
-            })
-            .when(show_history, |d| {
-                d.child(
-                    group()
-                        .child(if self.can_go_back() {
-                            dock_button("dock-back", "arrow-left", false, st)
-                                .tip("Back  Alt+Left")
-                                .on_click(cx.listener(|r, _, _, cx| r.history(true, cx)))
-                        } else {
-                            dock_button_off("dock-back", "arrow-left", st)
-                        })
-                        .child(if self.can_go_forward() {
-                            dock_button("dock-forward", "arrow-right", false, st)
-                                .tip("Forward  Alt+Right")
-                                .on_click(cx.listener(|r, _, _, cx| r.history(false, cx)))
-                        } else {
-                            dock_button_off("dock-forward", "arrow-right", st)
-                        }),
-                )
-            });
+            }));
         // At the bottom the dock is also the page navigator.
-        if at == DockAt::Bottom
-            && st.shows_page_nav()
-            && let Some(parts) = self.nav_parts(st, window, cx)
-        {
+        if nav && let Some(parts) = self.nav_parts(st, window, cx) {
             dock = dock.child(
                 div()
                     .flex_none()
@@ -365,245 +321,96 @@ impl Reader {
                     .px(px(6.0))
                     .children(parts),
             );
-            dock = dock.child(sep());
+            if !groups.is_empty() || extras {
+                dock = dock.child(sep());
+            }
         }
-        dock = dock
-            .when(items.zoom || show_fit, |d| {
-                d.child(
-                    group()
-                        .when(items.zoom, |g| {
-                            g.child(
-                                dock_button("dock-zoom-out", "minus", false, st)
-                                    .tip("Zoom out  Ctrl+−")
-                                    .on_click(cx.listener(|r, _, _, cx| r.zoom_step(false, cx))),
-                            )
+        for buttons in groups {
+            let mut g = group();
+            for b in buttons {
+                g = g.child(self.dock_tool_button(b, upright, st, cx));
+            }
+            dock = dock.child(g);
+        }
+        if extras {
+            let mut g = group();
+            // Unsaved marks in a PDF: Save, with a count, and Discard.
+            if marks > 0 {
+                let n = marks;
+                let saving = self.markup_saving();
+                g = g
+                    .child(
+                        dock_button("dock-save-marks", "save", false, st)
+                            .relative()
+                            .tip(format!(
+                                "Save {n} mark{} into the PDF  Ctrl+S",
+                                if n == 1 { "" } else { "s" }
+                            ))
+                            .when(saving, |b| b.opacity(0.5))
+                            .on_click(cx.listener(|r, _, _, cx| r.save_marks(cx)))
                             .child(
                                 div()
-                                    .when(!upright, |d| d.min_w(px(46.0)))
-                                    .when(upright, |d| d.py(px(2.0)).text_size(px(10.5)))
+                                    .absolute()
+                                    .top(px(1.0))
+                                    .right(px(1.0))
+                                    .min_w(px(14.0))
+                                    .h(px(14.0))
+                                    .px(px(3.0))
+                                    .rounded_full()
+                                    .bg(st.c(|c| c.accent))
+                                    .text_color(st.c(|c| c.bg))
+                                    .text_size(px(9.0))
                                     .flex()
+                                    .items_center()
                                     .justify_center()
-                                    .text_color(st.c(|c| c.text))
-                                    .child(zoom_label),
-                            )
-                            .child(
-                                dock_button("dock-zoom-in", "plus", false, st)
-                                    .tip("Zoom in  Ctrl+=")
-                                    .on_click(cx.listener(|r, _, _, cx| r.zoom_step(true, cx))),
-                            )
-                        })
-                        .when(show_fit, |g| {
-                            g.child(
-                                dock_button(
-                                    "dock-fit-width",
-                                    "fit-width",
-                                    mode == ZoomMode::FitWidth,
-                                    st,
-                                )
-                                .tip("Fit width  Ctrl+2")
-                                .on_click(cx.listener(
-                                    |r, _, _, cx| r.set_zoom_mode(ZoomMode::FitWidth, cx),
-                                )),
-                            )
-                            .child(
-                                dock_button(
-                                    "dock-fit-page",
-                                    "fit-page",
-                                    mode == ZoomMode::FitPage,
-                                    st,
-                                )
-                                .tip("Fit page  Ctrl+0")
-                                .on_click(
-                                    cx.listener(|r, _, _, cx| {
-                                        r.set_zoom_mode(ZoomMode::FitPage, cx)
-                                    }),
-                                ),
-                            )
-                            .child(
-                                dock_button("dock-hand", "hand", self.hand, st)
-                                    .tip("Hand tool: drag to move the page (or hold Space)")
-                                    .on_click(cx.listener(|r, _, _, cx| r.toggle_hand(cx))),
-                            )
-                        }),
-                )
-            })
-            .child(
-                group()
-                    .when(items.find, |g| {
-                        g.child(
-                            dock_button("dock-find", "search", self.find.open, st)
-                                .tip("Find  Ctrl+F")
-                                .on_click(cx.listener(|r, _, window, cx| {
-                                    if r.find.open && !r.find.closing {
-                                        r.close_find(window, cx)
-                                    } else {
-                                        r.open_find(window, cx)
-                                    }
-                                })),
-                        )
-                    })
-                    .when(items.read_aloud && self.can_read_aloud(), |g| {
-                        // The speaker opens read aloud's panel: play, skip,
-                        // speed, tone and voice, all changeable while reading.
-                        let reading = self.reading_aloud();
-                        let glyph = if reading == Some(false) { "pause" } else { "speaker" };
-                        g.child(
-                            dock_button("dock-read-aloud", glyph, reading.is_some(), st)
-                                .tip("Read aloud  Ctrl+Shift+U")
-                                .on_click(cx.listener(|_, e: &gpui::ClickEvent, _, cx| {
-                                    cx.emit(ReaderEvent::SpeechMenu(e.position()))
-                                })),
-                        )
-                        .when(reading.is_some(), |g| {
-                            g.child(
-                                dock_button("dock-stop-reading", "stop", false, st)
-                                    .tip("Stop reading")
-                                    .on_click(cx.listener(|r, _, _, cx| r.stop_read_aloud(cx))),
-                            )
-                        })
-                    })
-                    .when(items.bookmark && self.can_bookmark(), |g| {
-                        let marked = self.is_bookmarked(self.current_page() as u32);
-                        g.child(
-                            dock_button("dock-bookmark", "bookmark", marked, st)
-                                .tip(if marked {
-                                    "Remove bookmark  Ctrl+D"
-                                } else {
-                                    "Bookmark this page  Ctrl+D"
-                                })
-                                .on_click(cx.listener(|r, _, _, cx| r.toggle_bookmark(cx))),
-                        )
-                    })
-                    .when(items.markup && self.can_markup(cx), |g| {
-                        g.child(
-                            dock_button("dock-markup", "pen", self.markup.open, st)
-                                .tip("Draw and mark up  Ctrl+Shift+D")
-                                .on_click(cx.listener(|r, _, _, cx| r.toggle_markup(cx))),
-                        )
-                    })
-                    // Unsaved marks in a PDF: Save sits beside the pen, with a count.
-                    .when(self.unsaved_marks() > 0, |g| {
-                        let n = self.unsaved_marks();
-                        let saving = self.markup_saving();
-                        g.child(
-                            dock_button("dock-save-marks", "save", false, st)
-                                .relative()
-                                .tip(format!(
-                                    "Save {n} mark{} into the PDF  Ctrl+S",
-                                    if n == 1 { "" } else { "s" }
-                                ))
-                                .when(saving, |b| b.opacity(0.5))
-                                .on_click(cx.listener(|r, _, _, cx| r.save_marks(cx)))
-                                .child(
-                                    div()
-                                        .absolute()
-                                        .top(px(1.0))
-                                        .right(px(1.0))
-                                        .min_w(px(14.0))
-                                        .h(px(14.0))
-                                        .px(px(3.0))
-                                        .rounded_full()
-                                        .bg(st.c(|c| c.accent))
-                                        .text_color(st.c(|c| c.bg))
-                                        .text_size(px(9.0))
-                                        .flex()
-                                        .items_center()
-                                        .justify_center()
-                                        .child(if n > 99 {
-                                            "99+".to_string()
-                                        } else {
-                                            n.to_string()
-                                        }),
-                                ),
-                        )
-                        // Or let them go: asks first, the file stays as it is.
-                        .child(
-                            dock_button("dock-discard", "close", false, st)
-                                .tip("Discard unsaved changes")
-                                .when(saving, |b| b.opacity(0.5))
-                                .on_click(cx.listener(move |_, _, window, cx| {
-                                    let answer = window.prompt(
-                                        gpui::PromptLevel::Warning,
-                                        &format!(
-                                            "Discard {n} unsaved change{}?",
-                                            if n == 1 { "" } else { "s" }
-                                        ),
-                                        Some("Marks, deletions and form values not saved yet go. The file stays as it is."),
-                                        &["Discard", "Keep"],
-                                        cx,
-                                    );
-                                    cx.spawn(async move |this, cx| {
-                                        if answer.await.ok() == Some(0) {
-                                            let _ = this.update(cx, |r, cx| r.discard_changes(cx));
-                                        }
-                                    })
-                                    .detach();
-                                })),
-                        )
-                    })
-                    // Markdown: typeface and text size in a small panel.
-                    .when(self.is_markdown(), |g| {
-                        g.child(
-                            dock_button("dock-md-type", "typography", false, st)
-                                .tip("Typography: font and size")
-                                .on_click(cx.listener(|_, e: &gpui::ClickEvent, _, cx| {
-                                    cx.emit(ReaderEvent::TypeMenu(e.position()))
-                                })),
-                        )
-                    })
-                    .when(show_rotate, |g| {
-                        g.child(
-                            dock_button("dock-rotate", "rotate", false, st)
-                                .tip("Rotate  Ctrl+Shift+=")
-                                .on_click(cx.listener(|r, _, _, cx| r.rotate(true, cx))),
-                        )
-                    })
-                    .when(items.print, |g| {
-                        g.child(
-                            dock_button("dock-print", "print", false, st)
-                                .tip("Print  Ctrl+P")
-                                .on_click(cx.listener(|_, _, _, cx| cx.emit(ReaderEvent::Print))),
-                        )
-                    })
-                    .when(items.password && self.is_pdf(), |g| {
-                        g.child(
-                            dock_button("dock-password", "lock", false, st)
-                                .tip("Password")
-                                .on_click(
-                                    cx.listener(|_, _, _, cx| cx.emit(ReaderEvent::Password)),
-                                ),
-                        )
-                    })
-                    .when(items.minimal, |g| {
-                        g.child(
-                            dock_button("dock-minimal", "focus", st.minimal, st)
-                                .tip("Focus mode  F11")
-                                .on_click(|_, window, cx| {
-                                    window.dispatch_action(
-                                        Box::new(crate::actions::ToggleMinimal),
-                                        cx,
-                                    )
-                                }),
-                        )
-                    })
-                    .when(!t.more, |g| {
-                        g.child(
-                            dock_button("dock-more", "more-vertical", false, st)
-                                .tip("More")
-                                .on_click(cx.listener(|_, e: &gpui::ClickEvent, _, cx| {
-                                    cx.emit(ReaderEvent::MoreMenu(e.position()))
-                                })),
-                        )
-                    })
-                    // Tuck the dock into a handle at its edge.
+                                    .child(if n > 99 { "99+".to_string() } else { n.to_string() }),
+                            ),
+                    )
+                    // Or let them go: asks first, the file stays as it is.
                     .child(
-                        dock_button("dock-hide", toward_edge(at), false, st)
-                            .tip("Hide the dock  Ctrl+.")
-                            .on_click(|_, window, cx| {
-                                window.dispatch_action(Box::new(crate::actions::ToggleDock), cx)
-                            }),
-                    ),
-            );
+                        dock_button("dock-discard", "close", false, st)
+                            .tip("Discard unsaved changes")
+                            .when(saving, |b| b.opacity(0.5))
+                            .on_click(cx.listener(move |_, _, window, cx| {
+                                let answer = window.prompt(
+                                    gpui::PromptLevel::Warning,
+                                    &format!(
+                                        "Discard {n} unsaved change{}?",
+                                        if n == 1 { "" } else { "s" }
+                                    ),
+                                    Some("Marks, deletions and form values not saved yet go. The file stays as it is."),
+                                    &["Discard", "Keep"],
+                                    cx,
+                                );
+                                cx.spawn(async move |this, cx| {
+                                    if answer.await.ok() == Some(0) {
+                                        let _ = this.update(cx, |r, cx| r.discard_changes(cx));
+                                    }
+                                })
+                                .detach();
+                            })),
+                    );
+            }
+            // Markdown: typeface and text size in a small panel.
+            if self.is_markdown() {
+                g = g.child(
+                    dock_button("dock-md-type", "typography", false, st)
+                        .tip("Typography: font and size")
+                        .on_click(cx.listener(|_, e: &gpui::ClickEvent, _, cx| {
+                            cx.emit(ReaderEvent::TypeMenu(e.position()))
+                        })),
+                );
+            }
+            dock = dock.child(g);
+        }
+        // Tuck the dock into a handle at its edge: always its last button.
+        dock = dock.child(
+            dock_button("dock-hide", toward_edge(at), false, st)
+                .tip("Hide the dock  Ctrl+.")
+                .on_click(|_, window, cx| {
+                    window.dispatch_action(Box::new(crate::actions::ToggleDock), cx)
+                }),
+        );
 
         let faded = st.dock_fade && self.dock.idle;
         let from = match at {
@@ -652,36 +459,97 @@ impl Reader {
         let place = div().absolute();
         // Editing Markdown: the dock floats over the preview, not the source.
         let editing = self.is_editing();
+        // Where along its edge: the start, the middle or the end.
+        let align = st.toolbar.dock_align;
+        let along = |d: gpui::Div| match align {
+            DockAlign::Start => d.justify_start(),
+            DockAlign::Centre => d.justify_center(),
+            DockAlign::End => d.justify_end(),
+        };
+        let across = |d: gpui::Div| match align {
+            DockAlign::Start => d.items_start().pt(px(14.0 + top_inset)),
+            DockAlign::Centre => d.items_center(),
+            DockAlign::End => d.items_end().pb(px(14.0)),
+        };
         let placed = match at {
-            DockAt::Top => over_preview(place, editing)
-                .top(px(10.0 + top_inset))
-                .right_0()
-                .flex()
-                .justify_center(),
-            DockAt::Bottom => over_preview(place, editing)
-                .bottom(px(16.0 + bar))
-                .right_0()
-                .flex()
-                .justify_center(),
-            DockAt::Left => over_preview(place, editing)
-                .ml(px(14.0))
-                .top_0()
-                .bottom(px(bar))
-                .flex()
-                .items_center(),
-            DockAt::Right => place
-                .right(px(14.0))
-                .top_0()
-                .bottom(px(bar))
-                .flex()
-                .items_center(),
+            DockAt::Top => along(
+                over_preview(place, editing)
+                    .top(px(10.0 + top_inset))
+                    .right_0()
+                    .px(px(16.0))
+                    .flex(),
+            ),
+            DockAt::Bottom => along(
+                over_preview(place, editing)
+                    .bottom(px(16.0 + bar))
+                    .right_0()
+                    .px(px(16.0))
+                    .flex(),
+            ),
+            DockAt::Left => across(
+                over_preview(place, editing)
+                    .ml(px(14.0))
+                    .top_0()
+                    .bottom(px(bar))
+                    .flex(),
+            ),
+            DockAt::Right => across(place.right(px(14.0)).top_0().bottom(px(bar)).flex()),
         };
         Some(placed.child(dock).into_any_element())
     }
 }
 
+impl Reader {
+    /// A tool's button in the dock: its icon (or Zoom's percentage), lit when
+    /// on, greyed when there's nothing to do, and what a click does.
+    fn dock_tool_button(
+        &self,
+        b: ToolButton,
+        upright: bool,
+        st: &Style,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let Some(icon_name) = b.icon else {
+            return div()
+                .when(!upright, |d| d.min_w(px(46.0)))
+                .when(upright, |d| d.py(px(2.0)).text_size(px(10.5)))
+                .flex()
+                .justify_center()
+                .text_color(st.c(|c| c.text))
+                .child(b.text)
+                .into_any_element();
+        };
+        if !b.enabled {
+            return dock_button_off(b.id, icon_name, st).into_any_element();
+        }
+        let el = dock_button(b.id, icon_name, b.on, st).tip(b.tip);
+        match b.click {
+            Click::SpeechMenu => el
+                .on_click(cx.listener(|_, e: &gpui::ClickEvent, _, cx| {
+                    cx.emit(ReaderEvent::SpeechMenu(e.position()))
+                }))
+                .into_any_element(),
+            Click::MoreMenu => el
+                .on_click(cx.listener(|_, e: &gpui::ClickEvent, _, cx| {
+                    cx.emit(ReaderEvent::MoreMenu(e.position()))
+                }))
+                .into_any_element(),
+            Click::Act(action) => {
+                let focus = self.focus.clone();
+                el.on_click(move |_, window, cx| {
+                    // The tab's own focus first, so the action reaches it
+                    // (and through it the workspace's sheets).
+                    window.focus(&focus);
+                    window.dispatch_action(action.boxed_clone(), cx);
+                })
+                .into_any_element()
+            }
+        }
+    }
+}
+
 pub(super) fn dock_button(
-    id: &'static str,
+    id: impl Into<ElementId>,
     name: &'static str,
     on: bool,
     st: &Style,
@@ -705,7 +573,7 @@ pub(super) fn dock_button(
 
 /// A dock button that can't be used right now: `ring` glyph, no hover.
 pub(super) fn dock_button_off(
-    id: &'static str,
+    id: impl Into<ElementId>,
     name: &'static str,
     st: &Style,
 ) -> gpui::Stateful<gpui::Div> {

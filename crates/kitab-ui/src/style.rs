@@ -42,10 +42,10 @@ pub struct Style {
     pub dock_hidden: bool,
     /// The file info chip is folded to its "i" button.
     pub file_info_folded: bool,
-    /// The quick dock's buttons.
-    pub dock_items: crate::settings::DockItems,
+    /// The title bar's and the dock's buttons, in order.
+    pub toolbar: crate::toolbar::Toolbar,
+    pub toolbar_tip_seen: bool,
     pub status_items: crate::settings::StatusItems,
-    pub title_items: crate::settings::TitleItems,
     /// Check for updates automatically (opt-in).
     pub update_check: bool,
     /// The release put off with Later.
@@ -161,9 +161,9 @@ impl Style {
             file_info: s.file_info,
             dock_hidden: s.dock_hidden,
             file_info_folded: s.file_info_folded,
-            dock_items: s.dock_items,
+            toolbar: s.toolbar.clone(),
+            toolbar_tip_seen: s.toolbar_tip_seen,
             status_items: s.status_items,
-            title_items: s.title_items,
             update_check: s.update_check,
             skipped_update: s.skipped_update.clone(),
             scroll_bar: s.scroll_bar,
@@ -258,9 +258,9 @@ impl Style {
             file_info: self.file_info,
             dock_hidden: self.dock_hidden,
             file_info_folded: self.file_info_folded,
-            dock_items: self.dock_items,
+            toolbar: self.toolbar.clone(),
+            toolbar_tip_seen: self.toolbar_tip_seen,
             status_items: self.status_items,
-            title_items: self.title_items,
             update_check: self.update_check,
             skipped_update: self.skipped_update.clone(),
             scroll_bar: self.scroll_bar,

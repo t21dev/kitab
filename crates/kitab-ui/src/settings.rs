@@ -763,12 +763,12 @@ pub struct Settings {
     pub dock_hidden: bool,
     /// The file info chip is folded to an "i" button (Ctrl+I).
     pub file_info_folded: bool,
-    /// The quick dock's buttons.
-    pub dock_items: DockItems,
+    /// The title bar's and the dock's buttons, in order (GitHub #25).
+    pub toolbar: crate::toolbar::Toolbar,
+    /// The Toolbar settings' tip (drag to move, + to add) was put away.
+    pub toolbar_tip_seen: bool,
     /// The status bar's items.
     pub status_items: StatusItems,
-    /// Buttons in the title bar rather than the dock.
-    pub title_items: TitleItems,
     /// Ask GitHub for a newer release shortly after start-up and every six
     /// hours (Settings › About › Check on start-up). On by default, the
     /// owner's call (AGENTS.md rule 12); the switch turns it off.
@@ -904,9 +904,9 @@ impl Default for Settings {
             file_info: true,
             dock_hidden: false,
             file_info_folded: false,
-            dock_items: DockItems::default(),
+            toolbar: crate::toolbar::Toolbar::default(),
+            toolbar_tip_seen: false,
             status_items: StatusItems::default(),
-            title_items: TitleItems::default(),
             update_check: true,
             skipped_update: String::new(),
             scroll_bar: true,
@@ -975,6 +975,13 @@ struct File {
     file_info_chip: bool,
     dock_hidden: bool,
     file_info_folded: bool,
+    /// The buttons, in order. A file from before 1.3 has none: the old
+    /// switches below stand for it. Missing means None here, not the
+    /// struct default's Some (which would skip the old switches).
+    #[serde(default)]
+    toolbar: Option<crate::toolbar::Toolbar>,
+    toolbar_tip_seen: bool,
+    /// Still written (from `toolbar`) so an older Kitab shows the same buttons.
     dock_items: DockItems,
     status_items: StatusItems,
     title_items: TitleItems,
@@ -1098,9 +1105,11 @@ impl From<Settings> for File {
             file_info_chip: s.file_info,
             dock_hidden: s.dock_hidden,
             file_info_folded: s.file_info_folded,
-            dock_items: s.dock_items,
+            toolbar: Some(s.toolbar.clone()),
+            toolbar_tip_seen: s.toolbar_tip_seen,
+            dock_items: s.toolbar.to_items().0,
             status_items: s.status_items,
-            title_items: s.title_items,
+            title_items: s.toolbar.to_items().1,
             check_for_updates: s.update_check,
             skipped_update: s.skipped_update,
             scroll_bar: s.scroll_bar,
@@ -1170,9 +1179,12 @@ impl Settings {
             file_info: f.file_info_chip,
             dock_hidden: f.dock_hidden,
             file_info_folded: f.file_info_folded,
-            dock_items: f.dock_items,
+            toolbar: f
+                .toolbar
+                .unwrap_or_else(|| crate::toolbar::Toolbar::from_items(f.dock_items, f.title_items))
+                .normalized(),
+            toolbar_tip_seen: f.toolbar_tip_seen,
             status_items: f.status_items,
-            title_items: f.title_items,
             update_check: f.check_for_updates,
             skipped_update: f.skipped_update.chars().take(32).collect(),
             scroll_bar: f.scroll_bar,
@@ -1234,6 +1246,28 @@ impl Settings {
 mod tests {
     use super::*;
 
+    /// A settings file from 1.2 (no `toolbar`, the old switches) keeps its
+    /// buttons where they were: Read aloud up top stays up top.
+    #[test]
+    fn old_button_switches_become_the_toolbar() {
+        use crate::toolbar::Tool;
+        let s = Settings::from_json(
+            r#"{"title_items":{"sidebar":false,"history":false,"zoom":false,"fit":false,"find":true,
+                               "markup":false,"rotate":false,"bookmark":false,"minimal":false,
+                               "print":false,"password":false,"read_aloud":true,"more":true,"open":false},
+                "dock_items":{"sidebar":false,"history":true,"zoom":true,"fit":false,"find":true,
+                              "markup":false,"rotate":false,"bookmark":false,"read_aloud":true,
+                              "minimal":false,"print":false,"password":false}}"#,
+        )
+        .unwrap();
+        assert_eq!(s.toolbar.title, [Tool::Find, Tool::ReadAloud, Tool::More]);
+        assert_eq!(s.toolbar.dock, [Tool::History, Tool::Zoom]);
+        // A file with a toolbar uses it as it is.
+        let t = Settings::from_json(r#"{"toolbar":{"title":["more"],"dock":["find"]}}"#).unwrap();
+        assert_eq!(t.toolbar.title, [Tool::More]);
+        assert_eq!(t.toolbar.dock, [Tool::Find]);
+    }
+
     #[test]
     fn round_trips() {
         let s = Settings {
@@ -1267,20 +1301,16 @@ mod tests {
             file_info: false,
             dock_hidden: true,
             file_info_folded: true,
-            dock_items: DockItems {
-                rotate: false,
-                bookmark: true,
-                ..DockItems::default()
+            toolbar: crate::toolbar::Toolbar {
+                title: vec![crate::toolbar::Tool::Zoom, crate::toolbar::Tool::TwoPages],
+                dock: vec![crate::toolbar::Tool::Bookmark, crate::toolbar::Tool::More],
+                dock_align: crate::toolbar::DockAlign::End,
             },
+            toolbar_tip_seen: true,
             status_items: StatusItems {
                 zoom: true,
                 words: false,
                 ..StatusItems::default()
-            },
-            title_items: TitleItems {
-                zoom: true,
-                more: false,
-                ..TitleItems::default()
             },
             update_check: false,
             skipped_update: "0.2.0".into(),

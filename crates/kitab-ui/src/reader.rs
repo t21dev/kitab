@@ -47,6 +47,7 @@ mod scrollbar;
 mod select;
 mod signatures;
 mod speech;
+pub mod tools;
 pub(crate) use signatures::check_words;
 pub(crate) use speech::{load_voices, preview as preview_voice, voices};
 
@@ -1033,7 +1034,7 @@ impl Reader {
     }
 
     /// The hand is out: the hand tool, or Space held.
-    fn hand_on(&self) -> bool {
+    pub fn hand_on(&self) -> bool {
         (self.hand || self.space_hand.is_some()) && self.status == Status::Open
     }
 

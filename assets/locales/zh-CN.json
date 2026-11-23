@@ -123,7 +123,6 @@
   "Quick dock": "快捷程序坞",
   "Zoom, fit, find, rotate and more, floating over the page. At the bottom it also holds the page navigator.": "缩放、适合、查找、旋转等功能，悬浮在页面上方。放在底部时还包含页面导航器。",
   "Toolbar": "工具栏",
-  "Put each button in the title bar, beside the window buttons, or in the dock over the page, or turn it off. Title bar buttons act on the open tab. The compact dock trims the dock further.": "将每个按钮放在标题栏中窗口按钮旁边，或放在页面上方的程序坞中，也可以关闭。标题栏按钮作用于当前打开的标签页。紧凑程序坞会进一步精简程序坞。",
   "Motion": "动画",
   "Page navigator": "页面导航器",
   "Click the page number in any style, or press Ctrl+G, to type a page.": "无论哪种样式，点击页码或按 Ctrl+G 都可以输入页码。",
