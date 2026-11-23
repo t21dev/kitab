@@ -152,14 +152,19 @@ fn wait_for_exit(pid: u32, limit: std::time::Duration) {
     }
 }
 
+/// The folder of a portable Kitab (a `portable` file next to the
+/// executable), or None for an installed one.
+pub fn portable_dir() -> Option<PathBuf> {
+    let exe = std::env::current_exe().ok()?;
+    let dir = exe.parent()?;
+    dir.join("portable").is_file().then(|| dir.to_path_buf())
+}
+
 /// Kitab's data folder (PRIVACY.md): `%APPDATA%\t21\Kitab`,
 /// `~/Library/Application Support/dev.t21.kitab`, `$XDG_DATA_HOME/kitab`.
 /// A `portable` file next to the executable puts it in `data/` beside it.
 pub fn data_dir() -> Option<PathBuf> {
-    if let Ok(exe) = std::env::current_exe()
-        && let Some(dir) = exe.parent()
-        && dir.join("portable").is_file()
-    {
+    if let Some(dir) = portable_dir() {
         return Some(dir.join("data"));
     }
     #[cfg(windows)]

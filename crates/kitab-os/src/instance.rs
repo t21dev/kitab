@@ -139,10 +139,28 @@ fn user_key() -> String {
     let user = std::env::var("USERNAME")
         .or_else(|_| std::env::var("USER"))
         .unwrap_or_else(|_| "user".into());
-    user.chars()
+    let mut key: String = user
+        .chars()
         .filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_')
         .take(40)
-        .collect()
+        .collect();
+    // A portable Kitab keeps its own settings and library: it's its own
+    // instance, so an installed Kitab's files never open in it (or its in
+    // the installed one).
+    if let Some(dir) = crate::portable_dir() {
+        key.push_str(&format!("-p{:08x}", folder_hash(&dir)));
+    }
+    key
+}
+
+/// A short, stable number for a folder (FNV-1a of its path, any case).
+fn folder_hash(dir: &std::path::Path) -> u32 {
+    let mut h: u32 = 0x811c_9dc5;
+    for b in dir.to_string_lossy().to_lowercase().bytes() {
+        h ^= u32::from(b);
+        h = h.wrapping_mul(0x0100_0193);
+    }
+    h
 }
 
 /// Hand `req` to a running Kitab, or become the one.
@@ -413,6 +431,13 @@ mod imp {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn folders_get_their_own_stable_key() {
+        let a = folder_hash(std::path::Path::new(r"D:\Apps\Kitab"));
+        assert_eq!(a, folder_hash(std::path::Path::new(r"d:\apps\kitab")));
+        assert_ne!(a, folder_hash(std::path::Path::new(r"D:\Apps\Kitab2")));
+    }
 
     #[test]
     fn messages_round_trip_and_reject_junk() {
