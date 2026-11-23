@@ -839,7 +839,7 @@ fn code_el(
         .into_any_element()
 }
 
-/// The sideways scroll bar under a code block, when its lines are wider
+/// The sideways scroll bar under a code block or a table, when it's wider
 /// than the column: drag the thumb, or click the track to jump.
 fn code_hbar(
     key: u64,
@@ -1148,19 +1148,50 @@ fn table_el(
         table = table.child(line);
     }
     let grid = table;
+    // Wider than the column: it scrolls sideways, with a bar under it to
+    // show there's more and to drag (as code blocks do).
+    let key = ((d.block as u64) << 20) | d.seq.get();
+    let scroll = d.code_scroll.borrow_mut().entry(key).or_default().clone();
+    // A little air between the last row and the bar.
+    let bar = code_hbar(key, &scroll, d.hdrag == Some(key), st, cx)
+        .map(|b| div().pt(px(6.0)).child(b).into_any_element());
     div()
-        .id(d.id("md-table"))
         .mb(d.px(16.0))
         .rounded(px(8.0))
         .border_1()
         .border_color(st.c(|c| c.line))
-        .overflow_x_scroll()
-        // The wheel scrolls the page; Shift+wheel or a sideways swipe this box.
-        .map(|mut el| {
-            el.style().restrict_scroll_to_axis = Some(true);
-            el
-        })
-        .child(grid)
+        .overflow_hidden()
+        .child(
+            div()
+                .id(d.id("md-table"))
+                .overflow_x_scroll()
+                .track_scroll(&scroll)
+                // The wheel scrolls the page; Shift+wheel or a sideways swipe this box.
+                .map(|mut el| {
+                    el.style().restrict_scroll_to_axis = Some(true);
+                    el
+                })
+                .on_scroll_wheel({
+                    let scroll = scroll.clone();
+                    move |e: &gpui::ScrollWheelEvent, window, cx| {
+                        if !e.modifiers.shift {
+                            return;
+                        }
+                        let delta = e.delta.pixel_delta(window.line_height());
+                        if delta.x.abs() > px(0.0) {
+                            return;
+                        }
+                        let max = scroll.max_offset().width;
+                        let mut at = scroll.offset();
+                        at.x = (at.x + delta.y).clamp(-max, px(0.0));
+                        scroll.set_offset(at);
+                        cx.stop_propagation();
+                        window.refresh();
+                    }
+                })
+                .child(grid),
+        )
+        .children(bar)
         .into_any_element()
 }
 
