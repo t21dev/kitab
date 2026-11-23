@@ -169,7 +169,6 @@ impl Listener {
 #[cfg(windows)]
 mod imp {
     use super::{Claim, Listener, MAX_MESSAGE, Request, message, parse, user_key};
-    use std::path::PathBuf;
     use windows::Win32::Foundation::{
         CloseHandle, ERROR_PIPE_BUSY, ERROR_PIPE_CONNECTED, GENERIC_WRITE, GetLastError, HANDLE,
         INVALID_HANDLE_VALUE,
