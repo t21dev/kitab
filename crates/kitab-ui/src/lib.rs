@@ -90,6 +90,29 @@ pub fn open_paths(cx: &mut App, paths: Vec<PathBuf>) {
     }
 }
 
+/// A launch's request: open its files, or (the file manager's right-click
+/// menu) open a tool on them in the main window, which comes to the front.
+pub fn handle_request(cx: &mut App, req: kitab_os::instance::Request) {
+    let Some(tool) = req.tool else {
+        open_paths(cx, req.paths);
+        return;
+    };
+    // The window first (macOS keeps running without one), then the tool.
+    if cx
+        .try_global::<MainWindow>()
+        .map(|w| w.0)
+        .is_none_or(|h| h.update(cx, |_, _, _| ()).is_err())
+    {
+        open_paths(cx, Vec::new());
+    }
+    if let Some(handle) = cx.try_global::<MainWindow>().map(|w| w.0) {
+        let _ = handle.update(cx, |ws, window, cx| {
+            window.activate_window();
+            ws.run_tool(tool, req.paths, window, cx);
+        });
+    }
+}
+
 /// macOS: Kitab's icon in the Dock was clicked (or the app launched again)
 /// with no window open: open one, on Home and the tabs it restores.
 pub fn reopen(cx: &mut App) {

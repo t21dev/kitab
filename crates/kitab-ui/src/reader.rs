@@ -1632,6 +1632,11 @@ impl Reader {
         self.md.is_some()
     }
 
+    /// The document has opened (its facts are in): tools can work on it.
+    pub fn info_ready(&self) -> bool {
+        self.info.is_some()
+    }
+
     pub fn is_pdf(&self) -> bool {
         self.info
             .as_ref()

@@ -73,22 +73,51 @@ fn main() {
     // A panic anywhere writes unsaved work to disk at once (crash recovery).
     kitab_ui::recovery::install_panic_hook();
     let mut files: Vec<PathBuf> = Vec::new();
-    for arg in std::env::args_os().skip(1) {
+    // `--tool merge a.pdf b.pdf`: the file manager's right-click menu asks
+    // for one of Kitab's tools on the files.
+    let mut tool = None;
+    let mut args = std::env::args_os().skip(1);
+    while let Some(arg) = args.next() {
         let s = arg.to_string_lossy();
         if s == "--version" {
             println!("Kitab Reader {}", env!("CARGO_PKG_VERSION"));
             return;
         }
+        if s == "--tool" {
+            tool = args
+                .next()
+                .and_then(|t| kitab_os::instance::Tool::from_word(&t.to_string_lossy()));
+            continue;
+        }
         if !s.starts_with("--") {
             files.push(PathBuf::from(arg));
         }
+    }
+    let cwd = std::env::current_dir().unwrap_or_default();
+    let request = kitab_os::instance::Request {
+        tool,
+        paths: files
+            .iter()
+            .map(|f| {
+                if f.is_absolute() {
+                    f.clone()
+                } else {
+                    cwd.join(f)
+                }
+            })
+            .collect(),
+    };
+    // A tool's files aren't opened as tabs: the tool takes them, once the
+    // window is up.
+    if tool.is_some() {
+        files.clear();
     }
 
     // settings.json is read before the first frame because the theme and density
     // are needed to draw it (AGENTS.md rule 1); it is a few hundred bytes.
     // One Kitab per user: a second launch (a double-clicked file) hands its
     // files to the running one, which opens them as tabs, and exits.
-    let listener = match kitab_os::instance::claim(&files) {
+    let listener = match kitab_os::instance::claim(&request) {
         kitab_os::instance::Claim::Forwarded => return,
         kitab_os::instance::Claim::Primary(listener) => listener,
     };
@@ -143,14 +172,14 @@ fn main() {
 
     // Files from later launches arrive on a background thread (Windows,
     // Linux) or as "open" events from the system (macOS's Finder).
-    let (tx, rx) = smol::channel::unbounded::<Vec<PathBuf>>();
+    let (tx, rx) = smol::channel::unbounded::<kitab_os::instance::Request>();
     let app = Application::new().with_assets(kitab_ui::Assets);
     {
         let tx = tx.clone();
         app.on_open_urls(move |urls| {
             let paths: Vec<PathBuf> = urls.iter().filter_map(|u| path_of_url(u)).collect();
             if !paths.is_empty() {
-                let _ = tx.send_blocking(paths);
+                let _ = tx.send_blocking(kitab_os::instance::Request::open(paths));
             }
         });
     }
@@ -161,12 +190,15 @@ fn main() {
     app.run(move |cx| {
         kitab_os::trace::mark("gpui running");
         cx.set_global(FirstPaint(None));
-        listener.run(move |paths| {
-            let _ = tx.send_blocking(paths);
-        });
+        {
+            let tx = tx.clone();
+            listener.run(move |req| {
+                let _ = tx.send_blocking(req);
+            });
+        }
         cx.spawn(async move |cx| {
-            while let Ok(paths) = rx.recv().await {
-                let _ = cx.update(|cx| kitab_ui::open_paths(cx, paths));
+            while let Ok(req) = rx.recv().await {
+                let _ = cx.update(|cx| kitab_ui::handle_request(cx, req));
             }
         })
         .detach();
@@ -185,6 +217,10 @@ fn main() {
         if !kitab_ui::open_main_window(cx, engine, library, theme, settings, save_settings, files) {
             eprintln!("Kitab: could not open a window");
             cx.quit();
+        }
+        // Launched for a tool (the right-click menu): it opens in the window.
+        if request.tool.is_some() {
+            let _ = tx.send_blocking(request);
         }
     });
 }

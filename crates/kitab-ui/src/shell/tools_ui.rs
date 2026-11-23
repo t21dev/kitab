@@ -844,7 +844,6 @@ impl Workspace {
             multiple: true,
             prompt: Some("Add to merge".into()),
         });
-        let engine = self.engine.clone();
         cx.spawn(async move |this, cx| {
             let picked = rx.await;
             // The picker couldn't open (Linux without a desktop portal): say so.
@@ -856,6 +855,21 @@ impl Workspace {
             if more.is_empty() {
                 return;
             }
+            let _ = this.update(cx, |ws, cx| ws.merge_files(first, unlock, more, cx));
+        })
+        .detach();
+    }
+
+    /// Ask where, then write `first` followed by `more` to one new PDF.
+    pub(super) fn merge_files(
+        &mut self,
+        first: PathBuf,
+        unlock: Option<String>,
+        more: Vec<PathBuf>,
+        cx: &mut Context<Self>,
+    ) {
+        let engine = self.engine.clone();
+        cx.spawn(async move |this, cx| {
             let name = format!("{} + {} more.pdf", stem(&first), more.len());
             let Ok(save_rx) = this.update(cx, |_, cx| {
                 cx.prompt_for_new_path(&dir_of(&first), Some(&name))
@@ -971,7 +985,6 @@ impl Workspace {
             multiple: true,
             prompt: Some("Make a PDF".into()),
         });
-        let engine = self.engine.clone();
         cx.spawn(async move |this, cx| {
             let picked = rx.await;
             // The picker couldn't open (Linux without a desktop portal): say so.
@@ -979,6 +992,15 @@ impl Workspace {
                 let _ = this.update(cx, |ws, cx| ws.picker_failed(cx));
             }
             let Ok(Ok(Some(paths))) = picked else { return };
+            let _ = this.update(cx, |ws, cx| ws.pictures_to_pdf(paths, cx));
+        })
+        .detach();
+    }
+
+    /// The pictures among `paths`, in name order, to one new PDF (asks where).
+    pub(super) fn pictures_to_pdf(&mut self, paths: Vec<PathBuf>, cx: &mut Context<Self>) {
+        let engine = self.engine.clone();
+        cx.spawn(async move |this, cx| {
             let mut pictures: Vec<PathBuf> = paths.into_iter().filter(|p| is_picture(p)).collect();
             if pictures.is_empty() {
                 let _ = this.update(cx, |ws, cx| {
@@ -1022,6 +1044,97 @@ impl Workspace {
                 };
                 ws.report(result, &what, cx)
             });
+        })
+        .detach();
+    }
+
+    // ── tools from the file manager's right-click menu ──
+
+    /// A tool picked in Explorer, Finder or a Linux file manager on `paths`
+    /// (`kitab --tool …`): Kitab opens that tool with the files filled in.
+    pub(crate) fn run_tool(
+        &mut self,
+        tool: kitab_os::instance::Tool,
+        paths: Vec<PathBuf>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        use kitab_os::instance::Tool;
+        let is_pdf = |p: &PathBuf| p.extension().is_some_and(|e| e.eq_ignore_ascii_case("pdf"));
+        match tool {
+            Tool::Merge => {
+                let mut pdfs: Vec<PathBuf> = paths.into_iter().filter(is_pdf).collect();
+                // The order a folder lists them in (2 before 10).
+                pdfs.sort_by_cached_key(|p| natural_key(p));
+                if pdfs.len() < 2 {
+                    self.report(
+                        Err("Select two or more PDFs to combine them.".into()),
+                        "",
+                        cx,
+                    );
+                    return;
+                }
+                let first = pdfs.remove(0);
+                self.merge_files(first, None, pdfs, cx);
+            }
+            Tool::Pictures => self.pictures_to_pdf(paths, cx),
+            Tool::Compress => {
+                let Some(pdf) = paths.into_iter().find(is_pdf) else {
+                    self.report(Err("Make smaller works on PDFs.".into()), "", cx);
+                    return;
+                };
+                self.open_tab(pdf, window, cx);
+                // Page tools need the PDF open: once it is, on Compress.
+                self.when_active_opens(window, cx, |ws, window, cx| {
+                    ws.open_page_tools_on_compress(window, cx)
+                });
+            }
+            Tool::Export | Tool::ExportText => {
+                let Some(doc) = paths.into_iter().next() else {
+                    return;
+                };
+                let kind = if tool == Tool::Export {
+                    crate::ExportKind::Markdown
+                } else {
+                    crate::ExportKind::Text
+                };
+                self.open_tab(doc, window, cx);
+                if let Some(r) = self.active_reader().cloned() {
+                    self.export_document(r, kind, cx);
+                }
+            }
+        }
+    }
+
+    /// Run `f` once the active tab's document has opened (15 s at most; a
+    /// file that fails to open shows its own message instead).
+    fn when_active_opens(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+        f: impl FnOnce(&mut Self, &mut Window, &mut Context<Self>) + 'static,
+    ) {
+        let Some(reader) = self.active_reader().cloned() else {
+            return;
+        };
+        let mut f = Some(f);
+        cx.spawn_in(window, async move |this, cx| {
+            for _ in 0..150 {
+                let open = cx
+                    .update(|_, cx| reader.read(cx).info_ready())
+                    .unwrap_or(false);
+                if open {
+                    let _ = this.update_in(cx, |ws, window, cx| {
+                        if let Some(f) = f.take() {
+                            f(ws, window, cx)
+                        }
+                    });
+                    return;
+                }
+                cx.background_executor()
+                    .timer(Duration::from_millis(100))
+                    .await;
+            }
         })
         .detach();
     }

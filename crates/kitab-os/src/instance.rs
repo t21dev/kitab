@@ -17,6 +17,63 @@ use std::path::PathBuf;
 /// Largest message read; more is a broken or hostile client.
 const MAX_MESSAGE: usize = 64 * 1024;
 const MAGIC: &str = "KITAB1";
+/// The line that names a tool. An older Kitab reads it as a relative path
+/// and skips it, so it just opens the files.
+const TOOL_LINE: &str = "@tool ";
+
+/// A tool a launch can open on its files (the file manager's right-click
+/// menu: `kitab --tool merge a.pdf b.pdf`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Tool {
+    /// Combine PDFs into one.
+    Merge,
+    /// One PDF of pictures, a page each.
+    Pictures,
+    /// A smaller copy of a PDF.
+    Compress,
+    /// Markdown of a document.
+    Export,
+    /// Plain text of a document.
+    ExportText,
+}
+
+impl Tool {
+    pub fn word(self) -> &'static str {
+        match self {
+            Tool::Merge => "merge",
+            Tool::Pictures => "pictures",
+            Tool::Compress => "compress",
+            Tool::Export => "export",
+            Tool::ExportText => "export-text",
+        }
+    }
+
+    pub fn from_word(word: &str) -> Option<Tool> {
+        [
+            Tool::Merge,
+            Tool::Pictures,
+            Tool::Compress,
+            Tool::Export,
+            Tool::ExportText,
+        ]
+        .into_iter()
+        .find(|t| t.word() == word)
+    }
+}
+
+/// What a launch asks the running Kitab for: open these files, or open a
+/// tool on them.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct Request {
+    pub tool: Option<Tool>,
+    pub paths: Vec<PathBuf>,
+}
+
+impl Request {
+    pub fn open(paths: Vec<PathBuf>) -> Request {
+        Request { tool: None, paths }
+    }
+}
 
 /// What `claim` found.
 pub enum Claim {
@@ -28,10 +85,15 @@ pub enum Claim {
 
 // macOS hands opens to the running app itself, without a message.
 #[cfg_attr(target_os = "macos", allow(dead_code))]
-fn message(files: &[PathBuf]) -> Vec<u8> {
+fn message(req: &Request) -> Vec<u8> {
     let cwd = std::env::current_dir().unwrap_or_default();
     let mut text = String::from(MAGIC);
-    for f in files {
+    if let Some(tool) = req.tool {
+        text.push('\n');
+        text.push_str(TOOL_LINE);
+        text.push_str(tool.word());
+    }
+    for f in &req.paths {
         let abs = if f.is_absolute() {
             f.clone()
         } else {
@@ -48,7 +110,7 @@ fn message(files: &[PathBuf]) -> Vec<u8> {
 }
 
 /// Parse a message into paths (an empty list means "come to the front").
-pub fn parse(bytes: &[u8]) -> Option<Vec<PathBuf>> {
+pub fn parse(bytes: &[u8]) -> Option<Request> {
     if bytes.len() > MAX_MESSAGE {
         return None;
     }
@@ -57,13 +119,19 @@ pub fn parse(bytes: &[u8]) -> Option<Vec<PathBuf>> {
     if lines.next()? != MAGIC {
         return None;
     }
-    Some(
-        lines
-            .filter(|l| !l.is_empty())
-            .map(PathBuf::from)
-            .filter(|p| p.is_absolute())
-            .collect(),
-    )
+    let mut req = Request::default();
+    for line in lines.filter(|l| !l.is_empty()) {
+        if let Some(word) = line.strip_prefix(TOOL_LINE) {
+            req.tool = Tool::from_word(word);
+            continue;
+        }
+        let p = PathBuf::from(line);
+        // Relative paths are never accepted from the channel.
+        if p.is_absolute() {
+            req.paths.push(p);
+        }
+    }
+    Some(req)
 }
 
 #[cfg_attr(target_os = "macos", allow(dead_code))]
@@ -77,9 +145,9 @@ fn user_key() -> String {
         .collect()
 }
 
-/// Hand `files` to a running Kitab, or become the one.
-pub fn claim(files: &[PathBuf]) -> Claim {
-    imp::claim(files)
+/// Hand `req` to a running Kitab, or become the one.
+pub fn claim(req: &Request) -> Claim {
+    imp::claim(req)
 }
 
 pub struct Listener {
@@ -90,7 +158,7 @@ impl Listener {
     /// Receive messages on a background thread for the life of the process;
     /// `on_paths` gets each one (possibly empty: just come to the front). The
     /// thread blocks in the OS between messages, so it costs nothing idle.
-    pub fn run(self, on_paths: impl Fn(Vec<PathBuf>) + Send + 'static) {
+    pub fn run(self, on_paths: impl Fn(Request) + Send + 'static) {
         let inner = self.inner;
         let _ = std::thread::Builder::new()
             .name("kitab-instance".into())
@@ -100,7 +168,7 @@ impl Listener {
 
 #[cfg(windows)]
 mod imp {
-    use super::{Claim, Listener, MAX_MESSAGE, message, parse, user_key};
+    use super::{Claim, Listener, MAX_MESSAGE, Request, message, parse, user_key};
     use std::path::PathBuf;
     use windows::Win32::Foundation::{
         CloseHandle, ERROR_PIPE_BUSY, ERROR_PIPE_CONNECTED, GENERIC_WRITE, GetLastError, HANDLE,
@@ -196,9 +264,9 @@ mod imp {
         (h != INVALID_HANDLE_VALUE && !h.is_invalid()).then_some(h)
     }
 
-    pub fn claim(files: &[PathBuf]) -> Claim {
+    pub fn claim(req: &Request) -> Claim {
         let name = pipe_name();
-        let bytes = message(files);
+        let bytes = message(req);
         // The running Kitab may bring its window to the front: Windows lets
         // only the foreground process (this one, just launched) allow that.
         // SAFETY: plain Win32 call without pointers.
@@ -240,7 +308,7 @@ mod imp {
         out
     }
 
-    pub fn serve(inner: Inner, on_paths: &dyn Fn(Vec<PathBuf>)) {
+    pub fn serve(inner: Inner, on_paths: &dyn Fn(Request)) {
         let mut next = (inner.first != 0).then_some(HANDLE(inner.first as *mut core::ffi::c_void));
         loop {
             let Some(h) = next.take().or_else(|| create(&inner.name, false)) else {
@@ -252,8 +320,8 @@ mod imp {
                 || unsafe { GetLastError() } == ERROR_PIPE_CONNECTED;
             if connected {
                 let bytes = read_all(h);
-                if let Some(paths) = parse(&bytes) {
-                    on_paths(paths);
+                if let Some(req) = parse(&bytes) {
+                    on_paths(req);
                 }
             }
             // SAFETY: done with this client; disconnect and close our handle.
@@ -267,7 +335,7 @@ mod imp {
 
 #[cfg(all(unix, not(target_os = "macos")))]
 mod imp {
-    use super::{Claim, Listener, MAX_MESSAGE, message, parse, user_key};
+    use super::{Claim, Listener, MAX_MESSAGE, Request, message, parse, user_key};
     use std::io::{Read, Write};
     use std::os::unix::net::{UnixListener, UnixStream};
     use std::path::PathBuf;
@@ -295,9 +363,9 @@ mod imp {
         }
     }
 
-    pub fn claim(files: &[PathBuf]) -> Claim {
+    pub fn claim(req: &Request) -> Claim {
         let path = socket_path();
-        let bytes = message(files);
+        let bytes = message(req);
         if send(&path, &bytes) {
             return Claim::Forwarded;
         }
@@ -314,15 +382,15 @@ mod imp {
         })
     }
 
-    pub fn serve(inner: Inner, on_paths: &dyn Fn(Vec<PathBuf>)) {
+    pub fn serve(inner: Inner, on_paths: &dyn Fn(Request)) {
         let Some(listener) = inner.listener else {
             return;
         };
         for stream in listener.incoming().flatten() {
             let mut bytes = Vec::new();
             let _ = stream.take(MAX_MESSAGE as u64 + 1).read_to_end(&mut bytes);
-            if let Some(paths) = parse(&bytes) {
-                on_paths(paths);
+            if let Some(req) = parse(&bytes) {
+                on_paths(req);
             }
         }
     }
@@ -330,17 +398,17 @@ mod imp {
 
 #[cfg(target_os = "macos")]
 mod imp {
-    use super::{Claim, Listener};
+    use super::{Claim, Listener, Request};
     use std::path::PathBuf;
 
     pub struct Inner;
 
     /// macOS routes file opens to the running app itself.
-    pub fn claim(_files: &[PathBuf]) -> Claim {
+    pub fn claim(_req: &Request) -> Claim {
         Claim::Primary(Listener { inner: Inner })
     }
 
-    pub fn serve(_inner: Inner, _on_paths: &dyn Fn(Vec<PathBuf>)) {}
+    pub fn serve(_inner: Inner, _on_paths: &dyn Fn(Request)) {}
 }
 
 #[cfg(test)]
@@ -350,12 +418,43 @@ mod tests {
     #[test]
     fn messages_round_trip_and_reject_junk() {
         let abs = std::env::temp_dir().join("a.pdf");
-        let msg = message(std::slice::from_ref(&abs));
-        assert_eq!(parse(&msg), Some(vec![abs]));
-        assert_eq!(parse(MAGIC.as_bytes()), Some(vec![]), "focus only");
-        assert_eq!(parse(b"GET / HTTP/1.1\r\n"), None);
+        let msg = message(&Request::open(vec![abs.clone()]));
+        assert_eq!(parse(&msg), Some(Request::open(vec![abs.clone()])));
+        assert_eq!(
+            parse(MAGIC.as_bytes()),
+            Some(Request::default()),
+            "focus only"
+        );
+        assert_eq!(
+            parse(
+                b"GET / HTTP/1.1
+"
+            ),
+            None
+        );
         assert_eq!(parse(&vec![b'a'; MAX_MESSAGE + 1]), None);
         // Relative paths are never accepted from the channel.
-        assert_eq!(parse(b"KITAB1\nrelative.pdf"), Some(vec![]));
+        assert_eq!(
+            parse(
+                b"KITAB1
+relative.pdf"
+            ),
+            Some(Request::default())
+        );
+        // A tool and its files (the right-click menu).
+        let req = Request {
+            tool: Some(Tool::Merge),
+            paths: vec![abs.clone(), abs],
+        };
+        assert_eq!(parse(&message(&req)), Some(req));
+        // A tool this Kitab doesn't know: the files still open.
+        assert_eq!(
+            parse(
+                b"KITAB1
+@tool teleport"
+            )
+            .map(|r| r.tool),
+            Some(None)
+        );
     }
 }
