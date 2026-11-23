@@ -16,7 +16,6 @@
 //!
 //! Everything written is Kitab's alone and removed by [`uninstall`].
 
-use std::path::PathBuf;
 
 /// One right-click tool: the word `kitab --tool` takes and its title.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -126,9 +125,11 @@ pub fn sync(on: bool) -> Result<(), String> {
 }
 
 /// How the menus start Kitab: this executable (an AppImage's own file).
-fn kitab_command() -> Option<PathBuf> {
+/// macOS's Quick Actions open a kitab:// link instead.
+#[cfg(not(target_os = "macos"))]
+fn kitab_command() -> Option<std::path::PathBuf> {
     if let Some(appimage) = std::env::var_os("APPIMAGE") {
-        return Some(PathBuf::from(appimage));
+        return Some(std::path::PathBuf::from(appimage));
     }
     std::env::current_exe().ok()
 }
@@ -878,7 +879,7 @@ mod tests {
             assert!(info.contains(&format!("Kitab: {}", e.title)));
             assert!(wflow.contains(&format!("kitab://tool/{}?list=", e.word)));
             if let Some(dir) = std::env::var_os("KITAB_DUMP_MAC") {
-                let dir = PathBuf::from(dir);
+                let dir = std::path::PathBuf::from(dir);
                 let _ = std::fs::create_dir_all(&dir);
                 std::fs::write(dir.join(format!("{}.Info.plist", e.word)), &info).unwrap();
                 std::fs::write(dir.join(format!("{}.document.wflow", e.word)), &wflow).unwrap();

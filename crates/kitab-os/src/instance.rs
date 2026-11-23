@@ -464,7 +464,6 @@ mod imp {
 #[cfg(target_os = "macos")]
 mod imp {
     use super::{Claim, Listener, Request};
-    use std::path::PathBuf;
 
     pub struct Inner;
 
