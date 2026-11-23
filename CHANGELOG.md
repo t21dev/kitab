@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-11-23
+
+### Added
+- Kitab's PDF tools on your file manager's right-click menu, under **Kitab**: **Combine into one PDF** (two or more PDFs), **Make a PDF from pictures**, **Remove pages**, **Reorder pages**, **Rotate pages**, **Make a smaller copy**, **Export as Markdown** and **Export as text**. Kitab opens with the tool on the files you picked; the page tools open Page tools on that PDF, and every tool saves a new file, leaving the original as it is. On Windows they're a Kitab submenu in File Explorer, in Dolphin a Kitab submenu, in Nautilus Scripts › Kitab; on macOS they're Quick Actions in Finder, and in Nemo and Thunar actions named "Kitab: …". They're on by default, and Settings › File types › Right-click tools turns them off. The Store and Flatpak versions bring them with the package.
+- Combine into one PDF shows the PDFs in a list first, to put them in order: drag a row, use its arrows (or Alt+↑ and Alt+↓), take one out, add more or sort them by name. Each row shows the first page and the page count, and a PDF with a password says so. Merge with other PDFs… in Kitab opens the same list, with the open PDF first.
+- `kitab --tool merge a.pdf b.pdf` (also `pictures`, `delete-pages`, `move-pages`, `rotate-pages`, `compress`, `export` and `export-text`) opens one of those tools on files from a terminal or a script.
+
+### Fixed
+- Markdown tables wider than the page show a sideways scroll bar, so their last columns can be reached without a trackpad (Shift and the wheel scroll them too).
+- A portable copy of Kitab (one with a `portable` file beside it) runs as its own app instead of handing its files to an installed Kitab that's already open.
+
 ## [1.3.0] - 2026-11-23
 
 ### Added
