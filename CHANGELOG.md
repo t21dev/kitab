@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.1] - 2026-11-24
+
+### Fixed
+- **+ From folder** on Home takes comics kept as `.zip` ([#10](https://github.com/t21dev/kitab/issues/10)). A zip counts as a book when most of its files are pictures; a zip of anything else is still left out.
+- Zooming with Ctrl+wheel, or a pinch, keeps the part of the page under the pointer where it is, instead of the pages also scrolling ([#29](https://github.com/t21dev/kitab/issues/29)). Ctrl+Plus and Ctrl+Minus keep the middle of the window in place.
+- On Windows, a maximized Kitab fills the whole screen when the taskbar hides itself, with no row of desktop showing along the bottom ([#28](https://github.com/t21dev/kitab/issues/28)). The taskbar still slides in when you point at that edge.
+
 ## [1.5.0] - 2026-11-24
 
 ### Added
