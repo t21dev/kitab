@@ -6,6 +6,7 @@
 //! and the UI (`kitab-ui`): formats, page sizes, outline, permissions, render
 //! requests, locators and reading state.
 
+pub mod archive;
 mod form;
 mod legible;
 mod markup;
@@ -84,8 +85,9 @@ impl Format {
             "cb7" => Format::Cb7,
             "djvu" | "djv" => Format::Djvu,
             // A plain archive of pictures reads as a comic when opened from
-            // inside Kitab (GitHub #7). Kitab never claims these in the OS
-            // and folder scans skip them: see [`Format::is_plain_archive`].
+            // inside Kitab (GitHub #7). Kitab never claims these in the OS,
+            // and folder scans take only a zip of pictures: see
+            // [`Format::is_plain_archive`] and [`archive::zip_is_pictures`].
             "zip" => Format::Cbz,
             "rar" => Format::Cbr,
             "7z" => Format::Cb7,
@@ -97,7 +99,8 @@ impl Format {
     }
 
     /// A general archive (.zip, .rar, .7z) rather than a comic: it opens as
-    /// one when asked to, but a folder scan doesn't take it for a book.
+    /// one when asked to, but a folder scan takes it for a book only when it
+    /// is a zip of pictures ([`archive::zip_is_pictures`]).
     pub fn is_plain_archive(ext: &str) -> bool {
         ["zip", "rar", "7z"]
             .iter()

@@ -531,6 +531,9 @@ const SCAN_FILES: usize = 20_000;
 const SCAN_DEPTH: u32 = 8;
 
 /// Documents Kitab opens under `dir` (not image files, not hidden folders).
+/// A plain `.zip` counts when it's a zip of pictures, a comic by another
+/// name (GitHub #10); a `.rar` or `.7z` can't be looked into cheaply, so
+/// it's left out.
 fn walk_documents(dir: &Path, depth: u32, out: &mut Vec<(PathBuf, kitab_core::Format)>) {
     if depth > SCAN_DEPTH || out.len() >= SCAN_FILES {
         return;
@@ -549,19 +552,28 @@ fn walk_documents(dir: &Path, depth: u32, out: &mut Vec<(PathBuf, kitab_core::Fo
         }
         if kind.is_dir() {
             walk_documents(&path, depth + 1, out);
-        } else if let Some(format) = path
-            .extension()
-            .map(|x| x.to_string_lossy())
-            .filter(|x| !kitab_core::Format::is_plain_archive(x))
-            .and_then(|x| kitab_core::Format::from_extension(&x))
-            .filter(|f| *f != kitab_core::Format::Image)
-        {
+        } else if let Some(format) = document_format(&path) {
             out.push((path, format));
             if out.len() >= SCAN_FILES {
                 return;
             }
         }
     }
+}
+
+/// The format a folder scan takes the file at `path` to be, if it's a book.
+fn document_format(path: &Path) -> Option<kitab_core::Format> {
+    let ext = path.extension()?.to_string_lossy();
+    let format = kitab_core::Format::from_extension(&ext)?;
+    if format == kitab_core::Format::Image {
+        return None;
+    }
+    if kitab_core::Format::is_plain_archive(&ext)
+        && !(ext.eq_ignore_ascii_case("zip") && kitab_core::archive::zip_is_pictures(path))
+    {
+        return None;
+    }
+    Some(format)
 }
 
 fn file_name(path: &Path) -> String {
