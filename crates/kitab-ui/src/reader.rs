@@ -1136,6 +1136,60 @@ impl Reader {
     }
 
     fn set_zoom(&mut self, zoom: ZoomMode, cx: &mut Context<Self>) {
+        self.set_zoom_at(zoom, None, cx);
+    }
+
+    /// How tall row `ix` is drawn at the current zoom: nothing for the second
+    /// page of a spread, which sits beside its lead.
+    fn row_px(&self, ix: usize) -> f32 {
+        if self.row_lead(ix) != ix {
+            return 0.0;
+        }
+        self.page_size(ix).h * self.px_per_pt(ix) + GAP
+    }
+
+    /// The spot `y` pixels below the top of the view: a row and how far
+    /// down it (0 to 1), which stays the same spot at any zoom.
+    fn spot_at(&self, y: f32) -> (usize, f32) {
+        let n = self.page_count();
+        if n == 0 {
+            return (0, 0.0);
+        }
+        let top = self.list.logical_scroll_top();
+        let mut ix = top.item_ix.min(n - 1);
+        let mut left = f32::from(top.offset_in_item) + y.max(0.0);
+        loop {
+            let h = self.row_px(ix);
+            if left < h {
+                return (ix, left / h);
+            }
+            if ix + 1 == n {
+                return (ix, 1.0);
+            }
+            left -= h;
+            ix += 1;
+        }
+    }
+
+    /// Scroll so that `spot` (from [`Self::spot_at`]) is `y` pixels below
+    /// the top of the view.
+    fn put_spot_at(&mut self, (ix, down): (usize, f32), y: f32) {
+        let mut ix = ix.min(self.page_count().saturating_sub(1));
+        let mut offset = down * self.row_px(ix) - y.max(0.0);
+        while offset < 0.0 && ix > 0 {
+            ix -= 1;
+            offset += self.row_px(ix);
+        }
+        self.list.scroll_to(ListOffset {
+            item_ix: ix,
+            offset_in_item: px(offset.max(0.0)),
+        });
+    }
+
+    /// Zoom, keeping the part of the page under `at` (the pointer, for
+    /// Ctrl+wheel and a pinch) where it is; without one, the part in the
+    /// middle of the window (GitHub #29: the pages used to slide away).
+    fn set_zoom_at(&mut self, zoom: ZoomMode, at: Option<Point<Pixels>>, cx: &mut Context<Self>) {
         if self.is_book() {
             // Actual size (Ctrl+0) puts the text size back; a book page
             // otherwise always fits the width.
@@ -1144,21 +1198,34 @@ impl Reader {
             }
             return;
         }
-        // The part of the page in the middle of the window stays there.
-        let before = self.px_per_pt(self.current_page());
+        // Where the spot to keep is: across from the middle, and down from
+        // the top of the view.
+        let view = self.list.viewport_bounds();
+        let (across, down) = match at {
+            Some(p) if view.contains(&p) => (
+                f32::from(p.x - view.origin.x) - f32::from(view.size.width) / 2.0,
+                f32::from(p.y - view.origin.y),
+            ),
+            _ => (0.0, f32::from(view.size.height) / 2.0),
+        };
+        let spot = self.spot_at(down);
+        let page = self.current_page();
+        let before = self.px_per_pt(page);
+        let pan = self.row_shift(self.row_lead(page));
         self.zoom = zoom;
-        let after = self.px_per_pt(self.current_page());
+        let after = self.px_per_pt(page);
         if before > 0.0 {
-            self.pan_x *= after / before;
+            self.pan_x = (pan + across) * (after / before) - across;
         }
         self.relayout(cx);
+        self.put_spot_at(spot, down);
         self.schedule_save(cx);
     }
 
     /// A pinch (touch screen or touchpad): zoom by `factor`, continuously.
     /// The pages on screen stretch as the fingers move; the sharp ones are
     /// drawn once the pinch has been still for a moment.
-    fn pinch_zoom(&mut self, factor: f32, cx: &mut Context<Self>) {
+    fn pinch_zoom(&mut self, factor: f32, at: Option<Point<Pixels>>, cx: &mut Context<Self>) {
         // A book's page always fits the window (its zoom is the text size).
         if self.is_book() || !factor.is_finite() || factor <= 0.0 {
             return;
@@ -1171,7 +1238,7 @@ impl Reader {
         self.pinch_until = Some(std::time::Instant::now() + PINCH_SETTLE);
         self.pinch_serial += 1;
         let serial = self.pinch_serial;
-        self.set_zoom(ZoomMode::Custom(next), cx);
+        self.set_zoom_at(ZoomMode::Custom(next), at, cx);
         cx.spawn(async move |this, cx| {
             cx.background_executor().timer(PINCH_SETTLE).await;
             let _ = this.update(cx, |r, cx| {
@@ -1184,7 +1251,7 @@ impl Reader {
         .detach();
     }
 
-    fn step_zoom(&mut self, up: bool, cx: &mut Context<Self>) {
+    fn step_zoom(&mut self, up: bool, at: Option<Point<Pixels>>, cx: &mut Context<Self>) {
         // In a book, zoom is the text size: the page always fits the window.
         if self.is_book() {
             self.step_book_text(up, cx);
@@ -1205,7 +1272,7 @@ impl Reader {
                 .find(|z| *z < current - 0.005)
                 .unwrap_or(0.1)
         };
-        self.set_zoom(ZoomMode::Custom(next), cx);
+        self.set_zoom_at(ZoomMode::Custom(next), at, cx);
     }
 
     fn go_to_page(&mut self, page: usize, cx: &mut Context<Self>) {
@@ -1316,7 +1383,7 @@ impl Reader {
     }
 
     pub fn zoom_step(&mut self, zoom_in: bool, cx: &mut Context<Self>) {
-        self.step_zoom(zoom_in, cx);
+        self.step_zoom(zoom_in, None, cx);
     }
 
     pub fn set_zoom_mode(&mut self, mode: ZoomMode, cx: &mut Context<Self>) {
@@ -2929,8 +2996,8 @@ impl Reader {
             }))
             .on_action(cx.listener(|r, _: &ToggleHand, _, cx| r.toggle_hand(cx)))
             .on_action(cx.listener(|r, _: &ScreenUp, _, cx| r.glide_by(-r.viewport.1 * 0.9, cx)))
-            .on_action(cx.listener(|r, _: &ZoomIn, _, cx| r.step_zoom(true, cx)))
-            .on_action(cx.listener(|r, _: &ZoomOut, _, cx| r.step_zoom(false, cx)))
+            .on_action(cx.listener(|r, _: &ZoomIn, _, cx| r.step_zoom(true, None, cx)))
+            .on_action(cx.listener(|r, _: &ZoomOut, _, cx| r.step_zoom(false, None, cx)))
             .on_action(cx.listener(|r, _: &FitPage, _, cx| r.set_zoom(ZoomMode::FitPage, cx)))
             .on_action(cx.listener(|r, _: &FitWidth, _, cx| r.set_zoom(ZoomMode::FitWidth, cx)))
             .on_action(cx.listener(|r, _: &ActualSize, _, cx| r.set_zoom(ZoomMode::ActualSize, cx)))
@@ -2996,13 +3063,13 @@ impl Reader {
                             // A pinch (touch screen, touchpad): fine steps,
                             // 200 px for each e-fold of the zoom.
                             if let gpui::ScrollDelta::Pixels(by) = e.delta {
-                                r.pinch_zoom((f32::from(by.y) / 200.0).exp(), cx);
+                                r.pinch_zoom((f32::from(by.y) / 200.0).exp(), Some(e.position), cx);
                                 cx.stop_propagation();
                                 return;
                             }
                             let dy = f32::from(e.delta.pixel_delta(px(20.0)).y);
                             if dy.abs() > 0.5 {
-                                r.step_zoom(dy > 0.0, cx);
+                                r.step_zoom(dy > 0.0, Some(e.position), cx);
                             }
                             cx.stop_propagation();
                             return;
