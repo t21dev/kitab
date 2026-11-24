@@ -55,6 +55,11 @@ an environment switch to turn it off so it can still be benchmarked:
   Hands   Windows: CursorStyle::OpenHand and ClosedHand (the hand tool, dragging
           a page or a row) were the arrow, Windows having no grab cursors.
           They are the system's hand now.
+  Taskbar Windows: a maximised window with the taskbar set to hide itself
+          filled the screen less one row of pixels at the taskbar's edge, so
+          the taskbar could still slide in, and the desktop showed through
+          that row (GitHub #28). The window now says it's no full-screen app
+          (the NonRudeHWND property) and fills the whole screen.
 
 Run `python tools/patch_gpui.py` once after cloning (and after a gpui version bump).
 
@@ -685,6 +690,7 @@ struct WindowInvalidatorInner {"""),
     aligned_hit_test_patch()
     zed_backports()
     hand_cursor_patch()
+    taskbar_patch()
     print(f"patched gpui copy: {DEST}")
     xim_ctext_fix()
 
@@ -699,6 +705,42 @@ def hand_cursor_patch() -> None:
         | CursorStyle::DragLink
         | CursorStyle::OpenHand
         | CursorStyle::ClosedHand => (&HAND, IDC_HAND),"""),
+    ])
+
+
+def taskbar_patch() -> None:
+    """Taskbar: a maximised window and a taskbar that hides itself (GitHub #28).
+
+    gpui left a row of pixels out of a maximised window at the taskbar's edge,
+    as Chrome does, so Windows wouldn't take the window for a full-screen app
+    and keep the taskbar from sliding in. Nothing is drawn in that row (the
+    window has no redirection surface), so the desktop showed through. The
+    window says it's no full-screen app instead, with the NonRudeHWND property
+    set before it's first shown, and fills the screen."""
+    edit("src/platform/windows/events.rs", [
+        ("""const AUTO_HIDE_TASKBAR_THICKNESS_PX: i32 = 1;
+""",
+         """const AUTO_HIDE_TASKBAR_THICKNESS_PX: i32 = 1;
+// Kitab patch: the window sets NonRudeHWND instead of leaving a row out.
+const KITAB_TASKBAR_ROW: bool = false;
+"""),
+        ("""        if is_maximized
+            && let Some(ref taskbar_position) =""",
+         """        if KITAB_TASKBAR_ROW
+            && is_maximized
+            && let Some(ref taskbar_position) ="""),
+    ])
+    edit("src/platform/windows/window.rs", [
+        ("""        configure_dwm_dark_mode(hwnd, appearance);
+""",
+         """        configure_dwm_dark_mode(hwnd, appearance);
+        // Kitab patch: never a full-screen app to the taskbar, so one that
+        // hides itself still slides in over a maximised window. Read when
+        // the window is first shown, so it's set before that.
+        unsafe {
+            SetPropW(hwnd, w!("NonRudeHWND"), Some(HANDLE(1 as _))).log_err();
+        }
+"""),
     ])
 
 
