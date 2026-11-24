@@ -16,7 +16,6 @@
 //!
 //! Everything written is Kitab's alone and removed by [`uninstall`].
 
-
 /// One right-click tool: the word `kitab --tool` takes and its title.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct MenuEntry {
