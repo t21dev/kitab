@@ -287,19 +287,23 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - name: Sync from main
+      # Synced from the release tag, not main: a release can be cut from
+      # another branch, and main then still holds the previous version.
+      - name: Sync from the release tag
         shell: bash
+        env:
+          TAG: ${{ github.ref_name }}
         run: |
           set -euo pipefail
-          git fetch origin main
+          git fetch origin "refs/tags/$TAG:refs/tags/$TAG"
           npm ci
-          npm run sync -- origin/main
+          npm run sync -- "$TAG"
           if git diff --quiet; then
             echo "The site already has this release's content"
           else
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git commit -am "chore: sync content for ${{ github.ref_name }}"
+            git commit -am "chore: sync content for $TAG"
             git push origin HEAD:landing
           fi
 
