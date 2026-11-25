@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.1] - 2026-11-24
+
+### Fixed
+- **+ From folder** on Home takes comics kept as `.zip` ([#10](https://github.com/t21dev/kitab/issues/10)). A zip counts as a book when most of its files are pictures; a zip of anything else is still left out.
+- Zooming with Ctrl+wheel, or a pinch, keeps the part of the page under the pointer where it is, instead of the pages also scrolling ([#29](https://github.com/t21dev/kitab/issues/29)). Ctrl+Plus and Ctrl+Minus keep the middle of the window in place.
+- On Windows, a maximized Kitab fills the whole screen when the taskbar hides itself, with no row of desktop showing along the bottom ([#28](https://github.com/t21dev/kitab/issues/28)). The taskbar still slides in when you point at that edge.
+
+## [1.5.0] - 2026-11-24
+
+### Added
+- **Arrange pages**: remove, reorder and rotate a PDF's pages in one grid of page previews. Drag pages to move them (the grid scrolls when you drag to its edge), turn or delete them with the buttons on each page, select several with Ctrl or Shift, and undo with Ctrl+Z. It replaces Remove pages, Reorder pages and Rotate pages in Page tools and on the right-click menu, and saves a new file.
+- **Save as PDF** for Markdown files (⋯ › Save as PDF…, or the toolbar): Mermaid diagrams print as diagrams, local pictures are included, and math is written out as text. Printing a Markdown file gets the same.
+- Make a PDF from pictures shows the pictures in a list first, to put them in order, as Combine into one PDF does.
+- Make a smaller copy shows about how much smaller each quality makes the file.
+
+### Changed
+- A right-click tool opens just that tool, on the file it was given, instead of every page tool.
+- Dragging pages, and the dock's hand tool, show the system's hand cursor.
+
+### Fixed
+- A right-click page tool no longer says "Page tools work on PDFs" when Kitab restores tabs from before.
+- Markdown tables in a printout keep each row whole across a page break, and bold text in a cell lines up with the rest.
+
 ## [1.4.0] - 2026-11-23
 
 ### Added
