@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Two pages** and **Book view** for EPUB, MOBI, FB2 and other books: each page is laid out at half the width, side by side ([#32](https://github.com/t21dev/kitab/issues/32)). Ctrl+7, Ctrl+8, the dock and the View menu all work; Ctrl+6 goes back to one page.
+- The AppImage carries update information, and each release has its `.zsync` file, so AppImageUpdate, Gear Lever and AppImageLauncher update it by downloading only what changed.
+
+### Changed
+- Settings › Appearance › Toolbar says which buttons show only for some files (the hand tool only for PDFs, comics, XPS and DjVu, for example), instead of leaving them out of the dock without a word ([#32](https://github.com/t21dev/kitab/issues/32)).
+
+### Fixed
+- On Windows, pen and highlighter strokes are smooth and anti-aliased while you draw them, instead of jagged until saved ([#31](https://github.com/t21dev/kitab/issues/31)). A fast stroke curves instead of turning sharp corners, and is saved into the PDF the same way.
+- On Linux (X11), Kitab opens maximized again when it was maximized when you closed it.
+
 ## [1.5.1] - 2026-11-24
 
 ### Fixed

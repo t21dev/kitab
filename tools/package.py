@@ -9,7 +9,8 @@
   Linux    dist/Kitab_<v>_<arch>.tar.gz: the binary, desktop entry, MIME
            package, thumbnailer and icons, with install.sh for ~/.local;
            and the same files as Kitab_<v>_<arch>.deb (Debian, Ubuntu),
-           .rpm (Fedora, openSUSE) and .AppImage (any distribution).
+           .rpm (Fedora, openSUSE) and .AppImage (any distribution), with
+           its .zsync for delta updates.
            The .deb's dependencies come from the libraries the binary loads
            (dpkg -S); rpmbuild finds the .rpm's itself. The .rpm needs
            rpmbuild, the AppImage appimagetool (APPIMAGETOOL=path); each is
@@ -315,9 +316,20 @@ def appimage(v: str, root: pathlib.Path) -> None:
                  app / "dev.t21.kitab.png")
     out = DIST / f"Kitab_{v}_{arch}.AppImage"
     env = dict(os.environ, ARCH=arch)
-    subprocess.check_call([tool, "--appimage-extract-and-run", "--no-appstream", str(app), str(out)], env=env)
+    # Update information (AppImageUpdate, Gear Lever, AppImageLauncher): the
+    # newest GitHub release's .zsync for this architecture, which appimagetool
+    # writes beside the AppImage. An update then fetches only the blocks that
+    # changed. The name has the version in it, hence the wildcard.
+    update = f"gh-releases-zsync|t21dev|kitab|latest|Kitab_*_{arch}.AppImage.zsync"
+    subprocess.check_call([tool, "--appimage-extract-and-run", "--no-appstream",
+                           "-u", update, str(app), str(out)], env=env)
     shutil.rmtree(app)
     print(out)
+    zsync = out.with_name(out.name + ".zsync")
+    if zsync.exists():
+        print(zsync)
+    else:
+        print(f"no {zsync.name}: appimagetool needs zsyncmake for it")
 
 
 def main() -> int:
