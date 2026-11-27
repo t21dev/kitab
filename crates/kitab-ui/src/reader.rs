@@ -38,6 +38,16 @@ pub(crate) struct HDrag {
     from_x: f32,
     from_offset: f32,
 }
+
+/// A Markdown table's column edge being dragged: which table and column,
+/// where the pointer was, and every column's width then (window pixels).
+#[derive(Clone)]
+pub(crate) struct ColDrag {
+    key: u64,
+    col: usize,
+    from_x: f32,
+    from: Vec<f32>,
+}
 mod mermaid;
 pub(crate) use mermaid::draw as draw_mermaid;
 mod pages;
@@ -311,6 +321,8 @@ pub struct Reader {
     md_sel: md_select::MdSelect,
     /// A code block's sideways scroll bar being dragged.
     md_hdrag: Option<HDrag>,
+    /// A Markdown table's column edge being dragged.
+    md_coldrag: Option<ColDrag>,
     /// Markdown's text scale when the file has no zoom of its own
     /// (Settings › Reading › Markdown text size); followed each frame.
     md_base: f32,
@@ -481,6 +493,7 @@ impl Reader {
             select: select::SelectState::default(),
             md_sel: md_select::MdSelect::default(),
             md_hdrag: None,
+            md_coldrag: None,
             md_base: f32::from(Style::get(cx).md_text) / 100.0,
             dock: dock::DockState::default(),
             top_inset: 0.0,
@@ -720,6 +733,8 @@ impl Reader {
                         mtime,
                         diagrams: Default::default(),
                         code_scroll: Default::default(),
+                        col_widths: Default::default(),
+                        col_seen: Default::default(),
                     });
                     this.start_watch(cx);
                     if let Some(state) = this.restore {
@@ -2929,6 +2944,14 @@ impl Reader {
                         cx.notify();
                     }
                 }
+                if let Some(g) = r.md_coldrag.clone() {
+                    if e.pressed_button == Some(MouseButton::Left) {
+                        r.md_coldrag_to(&g, f32::from(e.position.x), cx);
+                    } else {
+                        r.md_coldrag = None;
+                        cx.notify();
+                    }
+                }
                 if r.md_sel.dragging {
                     if e.pressed_button == Some(MouseButton::Left) {
                         r.md_select_move(e.position, cx);
@@ -2965,6 +2988,9 @@ impl Reader {
                     r.select_up();
                     r.md_sel.dragging = false;
                     if r.md_hdrag.take().is_some() {
+                        cx.notify();
+                    }
+                    if r.md_coldrag.take().is_some() {
                         cx.notify();
                     }
                     r.markup_up(cx);

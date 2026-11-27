@@ -50,6 +50,12 @@ pub(super) struct MdState {
     /// Each wide code block's sideways scroll, by block and position.
     pub code_scroll:
         std::rc::Rc<std::cell::RefCell<std::collections::HashMap<u64, gpui::ScrollHandle>>>,
+    /// Column widths the reader set by dragging a table's column edges, by
+    /// table (as `code_scroll`), at 100 % (they scale with the text).
+    pub col_widths: std::collections::HashMap<u64, Vec<f32>>,
+    /// Each table's column widths as last drawn, in window pixels: where a
+    /// drag starts from.
+    pub col_seen: std::rc::Rc<std::cell::RefCell<std::collections::HashMap<u64, Vec<f32>>>>,
 }
 
 /// What a block needs while it draws.
@@ -76,6 +82,10 @@ struct Draw<'a> {
         std::rc::Rc<std::cell::RefCell<std::collections::HashMap<u64, gpui::ScrollHandle>>>,
     /// The code block whose scroll bar is being dragged.
     hdrag: Option<u64>,
+    col_widths: &'a std::collections::HashMap<u64, Vec<f32>>,
+    col_seen: std::rc::Rc<std::cell::RefCell<std::collections::HashMap<u64, Vec<f32>>>>,
+    /// The table column whose edge is being dragged.
+    coldrag: Option<(u64, usize)>,
 }
 
 impl Draw<'_> {
@@ -300,6 +310,9 @@ impl Reader {
             unit: Cell::new(0),
             code_scroll: md.code_scroll.clone(),
             hdrag: self.md_hdrag.map(|g| g.key),
+            col_widths: &md.col_widths,
+            col_seen: md.col_seen.clone(),
+            coldrag: self.md_coldrag.as_ref().map(|g| (g.key, g.col)),
         };
         let el = block_el(&d, block, 0, cx);
         // HTML around it can centre or right-align it (a README's top, as
@@ -345,6 +358,10 @@ impl Reader {
             .px(px(28.0))
             .pt(px(if ix == 0 { 40.0 + self.top_inset } else { 0.0 }))
             .pb(px(if last { 120.0 } else { 0.0 }))
+            // Dragging a table's column edge: the resize cursor all the way.
+            .when(self.md_coldrag.is_some(), |d| {
+                d.cursor(gpui::CursorStyle::ResizeColumn)
+            })
             .on_mouse_down(
                 gpui::MouseButton::Left,
                 cx.listener(|r, e: &gpui::MouseDownEvent, window, cx| {
@@ -1044,6 +1061,16 @@ fn table_el(
         .len()
         .max(rows.iter().map(Vec::len).max().unwrap_or(0))
         .max(1);
+    // This table's key (its scroll, its column widths), taken before its
+    // cells so it stays the same however many links they hold.
+    let key = ((d.block as u64) << 20) | d.seq.get();
+    d.seq.set(d.seq.get() + 1);
+    // Widths the reader dragged the columns to, scaled with the text.
+    let user: Option<Vec<f32>> = d
+        .col_widths
+        .get(&key)
+        .filter(|w| w.len() == cols)
+        .map(|w| w.iter().map(|x| x * d.scale).collect());
     let base = Base {
         size: BODY * 0.92,
         bold: false,
@@ -1105,7 +1132,7 @@ fn table_el(
             (chars * char_w + 20.0 * d.scale).clamp(90.0 * d.scale, 440.0 * d.scale)
         })
         .collect();
-    let wide = shares.is_none();
+    let wide = shares.is_none() || user.is_some();
     // Each column's least width in pixels: a narrower window scrolls the
     // table rather than breaking short words.
     let mins: Vec<f32> = word
@@ -1113,25 +1140,82 @@ fn table_el(
         .map(|&w| col_need(w) * char_w + 20.0 * d.scale)
         .collect();
     let min_total: f32 = mins.iter().sum();
-    let sized = |c: gpui::Div, i: usize| match &shares {
+    let sized = |c: gpui::Div, i: usize| match (&user, &shares) {
+        // As wide as the reader made it.
+        (Some(u), _) => c.w(px(u.get(i).copied().unwrap_or(160.0))).flex_none(),
         // Its share of the row to start from; it gives way when the row is
         // tight, but never below what its longest word needs.
-        Some(s) => c
+        (None, Some(s)) => c
             .flex_basis(gpui::relative(s.get(i).copied().unwrap_or(0.0)))
             .flex_grow()
             .flex_shrink()
             .min_w(px(mins.get(i).copied().unwrap_or(60.0))),
-        None => c.w(px(fixed.get(i).copied().unwrap_or(160.0))).flex_none(),
+        (None, None) => c.w(px(fixed.get(i).copied().unwrap_or(160.0))).flex_none(),
+    };
+    // The right edge of each header cell: drag it to make the column wider
+    // or narrower, double-click it for the widths Kitab chose.
+    let accent = st.c(|c| c.accent);
+    let edge = |i: usize, cx: &mut Context<Reader>| {
+        let held = d.coldrag == Some((key, i));
+        let seen = d.col_seen.clone();
+        div()
+            .id(gpui::ElementId::Name(
+                format!("md-col-edge-{key}-{i}").into(),
+            ))
+            .absolute()
+            .top_0()
+            .bottom_0()
+            .right_0()
+            .w(px(6.0))
+            .cursor(gpui::CursorStyle::ResizeColumn)
+            .when(held, |e| e.bg(accent.opacity(0.6)))
+            .when(!held, |e| e.hover(|h| h.bg(accent.opacity(0.35))))
+            .tip("Drag to resize the column. Double-click for the automatic widths")
+            .on_mouse_down(
+                gpui::MouseButton::Left,
+                cx.listener(move |r, e: &gpui::MouseDownEvent, _, cx| {
+                    // Not the start of a text selection.
+                    cx.stop_propagation();
+                    if e.click_count >= 2 {
+                        r.md_coldrag = None;
+                        if let Some(md) = r.md.as_mut() {
+                            md.col_widths.remove(&key);
+                        }
+                    } else if let Some(from) = seen.borrow().get(&key).cloned() {
+                        r.md_coldrag = Some(super::ColDrag {
+                            key,
+                            col: i,
+                            from_x: f32::from(e.position.x),
+                            from,
+                        });
+                    }
+                    cx.notify();
+                }),
+            )
     };
     let mut table = div()
         .flex()
         .flex_col()
-        .when(wide, |t| t.w(px(fixed.iter().sum::<f32>())))
+        .when(wide, |t| {
+            let w: f32 = user.as_ref().unwrap_or(&fixed).iter().sum();
+            t.w(px(w))
+        })
         .when(!wide, |t| t.w_full().min_w(px(min_total)));
-    let mut head_row = div().flex().w_full();
+    // The header's cells as drawn: where a column drag starts from.
+    let seen = d.col_seen.clone();
+    let mut head_row = div()
+        .flex()
+        .w_full()
+        .on_children_prepainted(move |b, _, _| {
+            let w: Vec<f32> = b.iter().map(|b| f32::from(b.size.width)).collect();
+            seen.borrow_mut().insert(key, w);
+        });
     for i in 0..cols {
         let empty = Vec::new();
-        head_row = head_row.child(sized(cell(head.get(i).unwrap_or(&empty), i, true, cx), i));
+        let c = cell(head.get(i).unwrap_or(&empty), i, true, cx)
+            .relative()
+            .child(edge(i, cx));
+        head_row = head_row.child(sized(c, i));
     }
     table = table.child(head_row);
     for (r, row) in rows.iter().enumerate() {
@@ -1150,20 +1234,22 @@ fn table_el(
     let grid = table;
     // Wider than the column: it scrolls sideways, with a bar under it to
     // show there's more and to drag (as code blocks do).
-    let key = ((d.block as u64) << 20) | d.seq.get();
     let scroll = d.code_scroll.borrow_mut().entry(key).or_default().clone();
     // A little air between the last row and the bar.
     let bar = code_hbar(key, &scroll, d.hdrag == Some(key), st, cx)
         .map(|b| div().pt(px(6.0)).child(b).into_any_element());
-    div()
+    let boxed = div()
         .mb(d.px(16.0))
         .rounded(px(8.0))
         .border_1()
         .border_color(st.c(|c| c.line))
         .overflow_hidden()
+        // Columns the reader sized: the box fits the table (up to the page's
+        // width, then it scrolls), with no empty strip beside a narrower one.
+        .when(user.is_some(), |b| b.max_w_full())
         .child(
             div()
-                .id(d.id("md-table"))
+                .id(gpui::ElementId::NamedInteger("md-table".into(), key))
                 .overflow_x_scroll()
                 .track_scroll(&scroll)
                 // The wheel scrolls the page; Shift+wheel or a sideways swipe this box.
@@ -1191,8 +1277,12 @@ fn table_el(
                 })
                 .child(grid),
         )
-        .children(bar)
-        .into_any_element()
+        .children(bar);
+    if user.is_some() {
+        div().flex().child(boxed).into_any_element()
+    } else {
+        boxed.into_any_element()
+    }
 }
 
 fn details_el(
