@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.3] - 2026-11-27
+
+### Added
+- **Pin tabs.** Right-click a tab and choose **Pin tab** (or Pin or unpin tab in the command palette) to keep it at the front of the tab bar, always in view however many tabs are open. Up to 3 tabs can be pinned. Pinned tabs come back pinned the next time Kitab opens, Close other tabs and Close tabs to the right leave them open, and with the tabs in the sidebar they're listed first with a pin.
+
 ## [1.6.2] - 2026-11-27
 
 ### Added
