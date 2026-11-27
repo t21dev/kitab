@@ -56,6 +56,9 @@ pub(super) struct MdState {
     /// Each table's column widths as last drawn, in window pixels: where a
     /// drag starts from.
     pub col_seen: std::rc::Rc<std::cell::RefCell<std::collections::HashMap<u64, Vec<f32>>>>,
+    /// The wide tables and code blocks drawn (their `code_scroll` keys), for
+    /// the scroll bar pinned to the bottom of the window (`sticky_hbar`).
+    pub hbars: std::rc::Rc<std::cell::RefCell<Vec<u64>>>,
 }
 
 /// What a block needs while it draws.
@@ -86,6 +89,7 @@ struct Draw<'a> {
     col_seen: std::rc::Rc<std::cell::RefCell<std::collections::HashMap<u64, Vec<f32>>>>,
     /// The table column whose edge is being dragged.
     coldrag: Option<(u64, usize)>,
+    hbars: std::rc::Rc<std::cell::RefCell<Vec<u64>>>,
 }
 
 impl Draw<'_> {
@@ -215,6 +219,63 @@ impl Reader {
     /// Text scale for Markdown (zoom changes the type size). A file without
     /// a zoom of its own, or put back to the default size (Ctrl+2), reads at
     /// the Markdown text size from Settings; Actual size (Ctrl+0) is 100 %.
+    /// A wide table (or code block) runs past the bottom of the window: its
+    /// sideways scroll bar, pinned to the bottom of the reading area (above
+    /// a dock there) while its own is out of sight. The same bar on the same
+    /// scroll, so either moves the table. From where things were last frame:
+    /// the list lays its blocks out after this.
+    pub(super) fn sticky_hbar(&self, st: &Style, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let md = self.md.as_ref()?;
+        if md.edit.is_some() || self.status != super::Status::Open {
+            md.hbars.borrow_mut().clear();
+            return None;
+        }
+        let drawn = std::mem::take(&mut *md.hbars.borrow_mut());
+        let view = self.list.viewport_bounds();
+        if view.size.height < px(1.0) {
+            return None;
+        }
+        // Above a dock along the bottom (it floats over the page there).
+        let dock = st.shows_dock() && !st.dock_hidden && st.dock == crate::settings::DockAt::Bottom;
+        let floor = view.bottom() - px(if dock { 84.0 } else { 14.0 });
+        let scrolls = md.code_scroll.borrow();
+        // The first (topmost) one that needs it.
+        let (key, scroll) = drawn.iter().find_map(|k| {
+            let s = scrolls.get(k)?;
+            let b = s.bounds();
+            let wide = s.max_offset().width > px(1.0);
+            // Its top is on screen with some rows to scroll, and its own bar
+            // (just under it) is below the floor.
+            let pinned = b.top() < floor - px(60.0) && b.bottom() + px(14.0) > floor;
+            (wide && pinned).then(|| (*k, s.clone()))
+        })?;
+        drop(scrolls);
+        let b = scroll.bounds();
+        let bar = code_hbar(
+            key,
+            &scroll,
+            self.md_hdrag.map(|g| g.key) == Some(key),
+            st,
+            cx,
+        )?;
+        Some(
+            gpui::anchored()
+                .position(gpui::point(b.left(), floor - px(18.0)))
+                .child(
+                    div()
+                        .id("md-sticky-hbar")
+                        .occlude()
+                        .w(b.size.width)
+                        .pt(px(6.0))
+                        .rounded(px(9.0))
+                        .bg(st.c(|c| c.raised).opacity(0.92))
+                        .shadow(st.well())
+                        .child(bar),
+                )
+                .into_any_element(),
+        )
+    }
+
     pub(super) fn md_scale(&self) -> f32 {
         match self.zoom {
             kitab_core::ZoomMode::Custom(z) => z,
@@ -313,6 +374,7 @@ impl Reader {
             col_widths: &md.col_widths,
             col_seen: md.col_seen.clone(),
             coldrag: self.md_coldrag.as_ref().map(|g| (g.key, g.col)),
+            hbars: md.hbars.clone(),
         };
         let el = block_el(&d, block, 0, cx);
         // HTML around it can centre or right-align it (a README's top, as
@@ -721,6 +783,9 @@ fn code_el(
         .or_default()
         .clone();
     let bar = code_hbar(code_key, &scroll, d.hdrag == Some(code_key), st, cx);
+    if bar.is_some() {
+        d.hbars.borrow_mut().push(code_key);
+    }
     div()
         .mb(d.px(16.0))
         .rounded(px(10.0))
@@ -1204,6 +1269,7 @@ fn table_el(
     // The header's cells as drawn: where a column drag starts from.
     let seen = d.col_seen.clone();
     let mut head_row = div()
+        .group("md-thead")
         .flex()
         .w_full()
         .on_children_prepainted(move |b, _, _| {
@@ -1214,6 +1280,22 @@ fn table_el(
         let empty = Vec::new();
         let c = cell(head.get(i).unwrap_or(&empty), i, true, cx)
             .relative()
+            // The edge before it, shown while the pointer is over the header
+            // so it's plain where to grab. Drawn at this cell's left (over
+            // its background, which would hide a line at the last one's right).
+            .when(i > 0, |c| {
+                c.child(
+                    div()
+                        .absolute()
+                        .left_0()
+                        .top(px(8.0))
+                        .bottom(px(8.0))
+                        .w(px(1.0))
+                        .bg(st.c(|c| c.muted).opacity(0.45))
+                        .invisible()
+                        .group_hover("md-thead", |d| d.visible()),
+                )
+            })
             .child(edge(i, cx));
         head_row = head_row.child(sized(c, i));
     }
@@ -1238,6 +1320,9 @@ fn table_el(
     // A little air between the last row and the bar.
     let bar = code_hbar(key, &scroll, d.hdrag == Some(key), st, cx)
         .map(|b| div().pt(px(6.0)).child(b).into_any_element());
+    if bar.is_some() {
+        d.hbars.borrow_mut().push(key);
+    }
     let boxed = div()
         .mb(d.px(16.0))
         .rounded(px(8.0))

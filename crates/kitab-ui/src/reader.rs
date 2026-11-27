@@ -735,6 +735,7 @@ impl Reader {
                         code_scroll: Default::default(),
                         col_widths: Default::default(),
                         col_seen: Default::default(),
+                        hbars: Default::default(),
                     });
                     this.start_watch(cx);
                     if let Some(state) = this.restore {
@@ -3135,6 +3136,7 @@ impl Reader {
                         cx.stop_propagation();
                     })),
             )
+            .children(self.sticky_hbar(&st, cx))
             .children(self.page_nav(&st, window, cx))
             .children(self.dock_view(&st, inset, window, cx))
             .children(self.edit_button(&st, cx))
