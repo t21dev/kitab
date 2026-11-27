@@ -17,6 +17,7 @@ actions!(
         NextTab,
         PrevTab,
         MoveTabLeft,
+        PinTab,
         MoveTabRight,
         ShowHome,
         ReopenClosedTab,

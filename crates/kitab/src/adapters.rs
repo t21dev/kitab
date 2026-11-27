@@ -517,7 +517,7 @@ fn write_session(s: &mut IoState, tabs: &[SessionTab]) -> Option<()> {
             let doc = store.document_by_path(&t.path).ok().flatten()?;
             Some(TabRecord {
                 document_id: doc.id,
-                pinned: false,
+                pinned: t.pinned,
                 active: t.active,
                 scroll: None,
             })
@@ -1205,6 +1205,7 @@ impl Library for StoreLibrary {
                     .map(|t| SessionTab {
                         path: t.path,
                         active: t.tab.active,
+                        pinned: t.tab.pinned,
                     })
                     .collect(),
             )
@@ -1384,11 +1385,13 @@ mod tests {
         lib.save_session(vec![SessionTab {
             path: path.clone(),
             active: true,
+            pinned: true,
         }]);
         assert!(lib.opened(&path, &info).is_none());
         lib.save_session(vec![SessionTab {
             path: path.clone(),
             active: true,
+            pinned: true,
         }]);
         let state = ReadingState {
             locator: kitab_core::Locator::Fixed {
@@ -1409,7 +1412,8 @@ mod tests {
             lib.last_session(),
             vec![SessionTab {
                 path: path.clone(),
-                active: true
+                active: true,
+                pinned: true,
             }]
         );
         assert_eq!(lib.opened(&path, &info), Some(state));

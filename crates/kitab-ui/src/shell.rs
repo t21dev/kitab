@@ -175,6 +175,9 @@ pub struct Workspace {
     /// How many tabs there were last frame: the strip's measured width is
     /// for that many.
     tab_n: usize,
+    /// Tabs pinned to the front of the strip: always the first this many
+    /// (`MAX_PINNED` at most), drawn before the strip's scrolling part.
+    pinned_n: usize,
     /// The strip's lined-up scroll offset, held for up to this many frames.
     tab_snap: Option<(f32, u32)>,
     /// Minimal mode: the pointer is at the top edge, so the window buttons show.
@@ -342,6 +345,7 @@ impl Workspace {
             left_tab: None,
             tab_w: 0.0,
             tab_n: 0,
+            pinned_n: 0,
             tab_snap: None,
             peek: false,
             system: SystemInfo::default(),
@@ -632,11 +636,15 @@ impl Workspace {
                 })
                 .await;
             let mut plan: Vec<PathBuf> = Vec::new();
+            let mut pins: Vec<PathBuf> = Vec::new();
             let mut first = None;
             for t in tabs {
                 if !plan.contains(&t.path) {
                     if t.active {
                         first = Some(plan.len());
+                    }
+                    if t.pinned {
+                        pins.push(t.path.clone());
                     }
                     plan.push(t.path);
                 }
@@ -686,6 +694,12 @@ impl Workspace {
                         if i != first {
                             let at = ws.restored_position(&plan, i, cx);
                             ws.insert_tab(path.clone(), Some(at), false, window, cx);
+                        }
+                    }
+                    // Pinned again, in the order they were.
+                    for path in &pins {
+                        if let Some(ix) = ws.tabs.iter().position(|t| t.read(cx).path == *path) {
+                            ws.pin_tab(ix, cx);
                         }
                     }
                     ws.restore_staging = false;
@@ -756,6 +770,7 @@ impl Workspace {
             .map(|(i, t)| SessionTab {
                 path: t.read(cx).path.clone(),
                 active: self.active == Some(i),
+                pinned: i < self.pinned_n,
             })
             .collect()
     }
@@ -860,7 +875,11 @@ impl Workspace {
                 }
             },
         ));
-        let ix = at.unwrap_or(self.tabs.len()).min(self.tabs.len());
+        // New tabs go after the pinned ones, never among them.
+        let ix = at
+            .unwrap_or(self.tabs.len())
+            .min(self.tabs.len())
+            .max(self.pinned_n.min(self.tabs.len()));
         // Tabs coming back from the last session appear in place: they were
         // already open, and a slide for each, 40 ms apart, read as the strip
         // loading slowly while the page was already up.
@@ -1010,8 +1029,10 @@ impl Workspace {
             return;
         }
         // Its place in the strip narrows away instead of the others jumping.
+        let pinned = ix < self.pinned_n;
         if Style::get(cx).animations
-            && let Some(b) = self.tab_scroll.bounds_for_item(ix)
+            && !pinned
+            && let Some(b) = self.tab_scroll.bounds_for_item(ix - self.pinned_n)
         {
             let r = self.tabs[ix].read(cx);
             self.tab_ghost_serial += 1;
@@ -1031,6 +1052,9 @@ impl Workspace {
             });
         }
         let closing = self.tabs.remove(ix);
+        if pinned {
+            self.pinned_n -= 1;
+        }
         self.retire_tab(&closing, window, cx);
         if self.tabs.is_empty() {
             self.show_home(window, cx);
@@ -1336,7 +1360,15 @@ impl Workspace {
         // width comes from the layout: it takes whatever the other items
         // leave and scrolls past that, so the bar has no gap when this is a
         // little off, and the window buttons never leave the screen.
-        let n = self.tabs.len().max(1) as f32;
+        // Pinned tabs sit before the strip at a fixed width; the strip's
+        // tabs share what's left.
+        let pinned = self.pinned_n.min(self.tabs.len());
+        let pinned_w = if pinned > 0 {
+            pinned as f32 * (PIN_TAB_W + 4.0) + 9.0
+        } else {
+            0.0
+        };
+        let n = (self.tabs.len() - pinned).max(1) as f32;
         let count_w = if st.tab_count && !self.tabs.is_empty() {
             // The chip (two digits), its margin and the bar's gap.
             12.0 + 7.0 * self.tabs.len().to_string().len() as f32 + 6.0 + 4.0
@@ -1353,7 +1385,7 @@ impl Workspace {
         self.title_squeezed = squeezed;
         cx.set_global(TitleSqueezed(squeezed));
         let fixed = base + self.title_actions_width(st, squeezed, cx);
-        let room = (win_w - fixed).max(0.0);
+        let room = (win_w - fixed - pinned_w).max(0.0);
         let crowded = n * 224.0 > room;
         // Crowded: a whole number of tabs fills the strip as the layout made
         // it last frame, so the strip never ends on half a tab (whose empty
@@ -1390,7 +1422,8 @@ impl Workspace {
             // view (GPUI's scroll_to_item does nothing for a tab already in
             // view, which left half a tab showing after a resize). Only here,
             // on a switch or a resize: the wheel scrolls freely.
-            if let Some(a) = self.active {
+            // Strip positions: the pinned tabs aren't in it.
+            if let Some(a) = self.active.filter(|&a| a >= pinned).map(|a| a - pinned) {
                 let step = tab_w + 4.0;
                 let k = (((strip_w + 4.0) / step).floor() as usize).max(1);
                 let off = -f32::from(self.tab_scroll.offset().x);
@@ -1421,7 +1454,7 @@ impl Workspace {
                 cx.notify();
             }
         } else if self.reveal_tab && !resized {
-            if let Some(a) = self.active {
+            if let Some(a) = self.active.filter(|&a| a >= pinned).map(|a| a - pinned) {
                 self.tab_scroll.scroll_to_item(a);
                 // GPUI applies it once the tab has been laid out; until then
                 // ask for one more frame (an idle window draws none).
@@ -1475,6 +1508,12 @@ impl Workspace {
             (at, el)
         });
         let mut ghost = ghost;
+        let mut pinned_row = div()
+            .flex()
+            .flex_none()
+            .items_center()
+            .gap(px(4.0))
+            .h_full();
         for (ix, tab) in self.tabs.iter().enumerate() {
             if ghost.as_ref().is_some_and(|g| g.0 == ix)
                 && let Some((_, el)) = ghost.take()
@@ -1482,6 +1521,7 @@ impl Workspace {
                 strip = strip.child(el);
             }
             let on = self.active == Some(ix);
+            let is_pin = ix < pinned;
             // The tab shown in the side pane of a split view.
             let side = !on && self.tools.split.as_ref() == Some(tab);
             let r = tab.read(cx);
@@ -1493,6 +1533,11 @@ impl Workspace {
             let tip = match r.doc_title() {
                 Some(t) => format!("{name} · {t}"),
                 None => name,
+            };
+            let tip = if is_pin {
+                format!("Pinned · {tip}")
+            } else {
+                tip
             };
             let tab_icon = tab_icon_for(&r.path);
             let animate = self.booted
@@ -1524,8 +1569,9 @@ impl Workspace {
                 .flex_none()
                 // Crowded: every tab gets an equal share, at least 120 px,
                 // exactly (they tile the strip); otherwise up to 220 px.
-                .when(crowded, |d| d.w(px(tab_w)))
-                .when(!crowded, |d| d.max_w(px(220.0)))
+                .when(is_pin, |d| d.w(px(PIN_TAB_W)))
+                .when(!is_pin && crowded, |d| d.w(px(tab_w)))
+                .when(!is_pin && !crowded, |d| d.max_w(px(220.0)))
                 .rounded(st.px(|m| m.control_radius))
                 .text_size(st.px(|m| m.ui_text))
                 .text_color(if on {
@@ -1546,18 +1592,21 @@ impl Workspace {
                 // where one title ends and the next begins is plain. None
                 // beside the open tab (its raised look is enough) or the
                 // one under the pointer.
-                .when(ix > 0 && !on && self.active != Some(ix - 1), |d| {
-                    d.child(
-                        div()
-                            .absolute()
-                            .left(px(-2.5))
-                            .top(px(9.0))
-                            .bottom(px(9.0))
-                            .w(px(1.0))
-                            .bg(st.c(|c| c.line))
-                            .group_hover("tab", |d| d.invisible()),
-                    )
-                })
+                .when(
+                    ix > 0 && ix != pinned && !on && self.active != Some(ix - 1),
+                    |d| {
+                        d.child(
+                            div()
+                                .absolute()
+                                .left(px(-2.5))
+                                .top(px(9.0))
+                                .bottom(px(9.0))
+                                .w(px(1.0))
+                                .bg(st.c(|c| c.line))
+                                .group_hover("tab", |d| d.invisible()),
+                        )
+                    },
+                )
                 .child(svg().path(icon(tab_icon)).size(px(14.0)).text_color(if on {
                     st.c(|c| c.accent)
                 } else {
@@ -1574,7 +1623,7 @@ impl Workspace {
                         .rounded(px(5.0))
                         .invisible()
                         .when(on, |d| d.visible())
-                        .when(crowded && !on, |d| {
+                        .when((crowded || is_pin) && !on, |d| {
                             d.absolute().right(px(6.0)).bg(st.c(|c| c.bg))
                         })
                         .group_hover("tab", |d| d.visible())
@@ -1591,6 +1640,10 @@ impl Workspace {
                                 .text_color(st.c(|c| c.faint)),
                         ),
                 );
+            if is_pin {
+                pinned_row = pinned_row.child(tab_el);
+                continue;
+            }
             // A new tab grows open as a closing one narrows away, so the
             // tabs after it and the + button glide aside instead of jumping.
             strip = strip.child(motion::grow_in(
@@ -1677,6 +1730,17 @@ impl Workspace {
             .when(hidden_left, |d| d.child(fade(true)))
             .when(hidden_right, |d| d.child(fade(false)));
         bar = bar
+            // Pinned tabs: always in view, a hairline after them.
+            .when(pinned > 0, |b| {
+                b.child(pinned_row).child(
+                    div()
+                        .flex_none()
+                        .w(px(1.0))
+                        .h(px(20.0))
+                        .mx(px(2.0))
+                        .bg(st.c(|c| c.line)),
+                )
+            })
             .child(strip)
             // New tab (Settings › Appearance › Tabs): Home, with Open file…
             // and the recent books, or the Open dialog straight away. Not
@@ -2521,6 +2585,16 @@ impl Workspace {
         let mut list = div().flex().flex_col().gap(px(2.0)).px(px(8.0)).pb(px(8.0));
         for (ix, tab) in self.tabs.iter().enumerate() {
             let on = self.active == Some(ix);
+            let is_pin = ix < self.pinned_n;
+            if ix > 0 && ix == self.pinned_n {
+                list = list.child(
+                    div()
+                        .h(px(1.0))
+                        .mx(px(6.0))
+                        .my(px(4.0))
+                        .bg(st.c(|c| c.line)),
+                );
+            }
             let side = !on && self.tools.split.as_ref() == Some(tab);
             let r = tab.read(cx);
             let title = r.title();
@@ -2563,7 +2637,7 @@ impl Workspace {
                     )
                     .child(
                         svg()
-                            .path(icon(tab_icon_for(&r.path)))
+                            .path(icon(if is_pin { "pin" } else { tab_icon_for(&r.path) }))
                             .size(px(14.0))
                             .text_color(if on {
                                 st.c(|c| c.accent)
@@ -3843,6 +3917,7 @@ impl Workspace {
                 ws.save_copy_with_marks(window, cx)
             }))
             .on_action(cx.listener(|ws, _: &MoveTabLeft, _, cx| ws.move_active_tab(-1, cx)))
+            .on_action(cx.listener(|ws, _: &PinTab, _, cx| ws.toggle_pin_active(cx)))
             .on_action(cx.listener(|ws, _: &MoveTabRight, _, cx| ws.move_active_tab(1, cx)))
             .on_action(cx.listener(|ws, _: &ShowHome, window, cx| ws.show_home(window, cx)))
             .on_action(cx.listener(|ws, _: &ToggleSidebar, _, cx| ws.toggle_sidebar(cx)))
@@ -4157,6 +4232,60 @@ impl Workspace {
         }
     }
 
+    /// Pin tab `ix`: it joins the end of the pinned group at the front of
+    /// the strip, where it stays in view. At most `MAX_PINNED`.
+    pub(crate) fn pin_tab(&mut self, ix: usize, cx: &mut Context<Self>) {
+        if ix >= self.tabs.len() || ix < self.pinned_n || self.pinned_n >= MAX_PINNED {
+            return;
+        }
+        let to = self.pinned_n;
+        self.move_tab(ix, to);
+        self.pinned_n += 1;
+        self.reveal_tab = true;
+        self.save_session(cx);
+        cx.notify();
+    }
+
+    /// Unpin tab `ix`: it goes back to the strip, first after the pinned ones.
+    pub(crate) fn unpin_tab(&mut self, ix: usize, cx: &mut Context<Self>) {
+        if ix >= self.pinned_n {
+            return;
+        }
+        let to = self.pinned_n - 1;
+        self.move_tab(ix, to);
+        self.pinned_n -= 1;
+        self.reveal_tab = true;
+        self.save_session(cx);
+        cx.notify();
+    }
+
+    /// The tab showing, pinned or unpinned (the command palette's Pin tab).
+    pub(crate) fn toggle_pin_active(&mut self, cx: &mut Context<Self>) {
+        let Some(ix) = self.active else { return };
+        if ix < self.pinned_n {
+            self.unpin_tab(ix, cx);
+        } else if self.pinned_n >= MAX_PINNED {
+            self.toast(
+                format!("Up to {MAX_PINNED} tabs can be pinned. Unpin one first."),
+                false,
+                None,
+                cx,
+            );
+        } else {
+            self.pin_tab(ix, cx);
+        }
+    }
+
+    /// Tab `from` moves to place `to`; the tab showing keeps showing.
+    fn move_tab(&mut self, from: usize, to: usize) {
+        if from == to || from >= self.tabs.len() || to >= self.tabs.len() {
+            return;
+        }
+        let t = self.tabs.remove(from);
+        self.tabs.insert(to, t);
+        self.active = self.active.map(|a| moved_index(a, from, to));
+    }
+
     /// Ctrl+Shift+PgUp / PgDn: the tab showing moves one place along.
     fn move_active_tab(&mut self, by: i32, cx: &mut Context<Self>) {
         let Some(ix) = self.active else { return };
@@ -4165,6 +4294,10 @@ impl Workspace {
             return;
         }
         let to = to as usize;
+        // Pinned tabs move among themselves, the others among theirs.
+        if (ix < self.pinned_n) != (to < self.pinned_n) {
+            return;
+        }
         self.tabs.swap(ix, to);
         self.active = Some(to);
         self.reveal_tab = true;
@@ -5647,7 +5780,31 @@ impl Workspace {
             return;
         };
         let n = self.tabs.len();
+        // Pinned tabs stay when others close; only Close (or Ctrl+W) closes one.
+        let pinned_n = self.pinned_n;
+        let pin_item = if ix < pinned_n {
+            MenuItem::new(
+                "Unpin tab",
+                self.on_ws(cx, move |ws, _, cx| ws.unpin_tab(ix, cx)),
+            )
+            .icon("pin")
+        } else if pinned_n >= MAX_PINNED {
+            MenuItem::new(
+                format!("Pin tab (up to {MAX_PINNED} can be pinned)"),
+                self.on_ws(cx, |_, _, _| {}),
+            )
+            .icon("pin")
+            .disabled(true)
+        } else {
+            MenuItem::new(
+                "Pin tab",
+                self.on_ws(cx, move |ws, _, cx| ws.pin_tab(ix, cx)),
+            )
+            .icon("pin")
+        };
         let items = vec![
+            pin_item,
+            MenuItem::Separator,
             MenuItem::new(
                 "Close",
                 self.on_ws(cx, move |ws, window, cx| ws.close_tab(ix, window, cx)),
@@ -5657,17 +5814,17 @@ impl Workspace {
             MenuItem::new(
                 "Close other tabs",
                 self.on_ws(cx, move |ws, window, cx| {
-                    ws.close_where(window, cx, |i| i != ix)
+                    ws.close_where(window, cx, |i| i != ix && i >= pinned_n)
                 }),
             )
-            .disabled(n < 2),
+            .disabled((pinned_n..n).all(|i| i == ix)),
             MenuItem::new(
                 "Close tabs to the right",
                 self.on_ws(cx, move |ws, window, cx| {
-                    ws.close_where(window, cx, |i| i > ix)
+                    ws.close_where(window, cx, |i| i > ix && i >= pinned_n)
                 }),
             )
-            .disabled(ix + 1 >= n),
+            .disabled((ix + 1).max(pinned_n) >= n),
             MenuItem::Separator,
             MenuItem::new(
                 "Reopen closed tab",
@@ -6248,5 +6405,41 @@ mod tab_icon_tests {
         assert_eq!(icon("a.djvu"), "pages");
         assert_eq!(icon("a.txt"), "text");
         assert_eq!(icon("a.xps"), "pages");
+    }
+}
+
+/// The most tabs that can be pinned: more would crowd out the strip.
+const MAX_PINNED: usize = 3;
+/// A pinned tab's width: its icon and the start of its title.
+const PIN_TAB_W: f32 = 120.0;
+
+/// Where the tab at `a` is after the tab at `from` moved to `to`.
+fn moved_index(a: usize, from: usize, to: usize) -> usize {
+    if a == from {
+        to
+    } else if from < a && a <= to {
+        a - 1
+    } else if to <= a && a < from {
+        a + 1
+    } else {
+        a
+    }
+}
+
+#[cfg(test)]
+mod pin_tests {
+    use super::moved_index;
+
+    #[test]
+    fn moving_a_tab_keeps_the_others_in_order() {
+        // [A B C D]: C (2) pinned to the front (0) gives [C A B D].
+        assert_eq!(moved_index(2, 2, 0), 0);
+        assert_eq!(moved_index(0, 2, 0), 1);
+        assert_eq!(moved_index(1, 2, 0), 2);
+        assert_eq!(moved_index(3, 2, 0), 3);
+        // [C A B D]: C (0) to place 1 gives [A C B D].
+        assert_eq!(moved_index(0, 0, 1), 1);
+        assert_eq!(moved_index(1, 0, 1), 0);
+        assert_eq!(moved_index(2, 0, 1), 2);
     }
 }

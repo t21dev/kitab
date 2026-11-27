@@ -76,6 +76,13 @@ pub const COMMANDS: &[Command] = &[
     cmd!("File", "Move tab left", "reorder order", false, MoveTabLeft),
     cmd!(
         "File",
+        "Pin or unpin tab",
+        "pin keep front always",
+        false,
+        PinTab
+    ),
+    cmd!(
+        "File",
         "Move tab right",
         "reorder order",
         false,

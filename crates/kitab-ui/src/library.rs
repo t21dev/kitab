@@ -78,6 +78,8 @@ pub struct CollectionInfo {
 pub struct SessionTab {
     pub path: PathBuf,
     pub active: bool,
+    /// Pinned: kept at the front of the strip, always in view.
+    pub pinned: bool,
 }
 
 pub trait Library: Send + Sync + 'static {
