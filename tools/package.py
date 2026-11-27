@@ -325,7 +325,11 @@ def appimage(v: str, root: pathlib.Path) -> None:
                            "-u", update, str(app), str(out)], env=env)
     shutil.rmtree(app)
     print(out)
+    # appimagetool writes the .zsync in the current folder, not beside the AppImage.
     zsync = out.with_name(out.name + ".zsync")
+    stray = pathlib.Path.cwd() / zsync.name
+    if stray.exists() and stray.resolve() != zsync.resolve():
+        shutil.move(str(stray), zsync)
     if zsync.exists():
         print(zsync)
     else:
