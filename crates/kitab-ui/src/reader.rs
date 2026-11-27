@@ -898,11 +898,10 @@ impl Reader {
         }
     }
 
-    /// Pages side by side now: a paged document (not a book or Markdown).
-    fn spread_on(&self) -> bool {
-        self.spread != Spread::Single
-            && self.md.is_none()
-            && self.info.as_ref().is_some_and(|i| !i.reflowable)
+    /// Pages side by side now: any document but Markdown. A book (EPUB,
+    /// MOBI...) is laid out at half the width for it (`book.rs`).
+    pub(super) fn spread_on(&self) -> bool {
+        self.spread != Spread::Single && self.md.is_none() && self.info.is_some()
     }
 
     /// The first page of page `ix`'s row (itself in single-page view).
@@ -1461,11 +1460,11 @@ impl Reader {
 
     /// Ctrl+6 / Ctrl+7 / Ctrl+8: one page across, two, or a book's spreads.
     pub fn set_spread(&mut self, spread: Spread, cx: &mut Context<Self>) {
-        // A book or Markdown flows to fit the window: say so, rather than
-        // doing nothing (the keys and the palette reached here silently).
+        // Markdown flows to fit the window: say so, rather than doing
+        // nothing (the keys and the palette reached here silently).
         if self.status == Status::Open && !self.can_spread() {
             cx.emit(ReaderEvent::Note(
-                "Books flow to fit the window, one page across. Two pages and book view are for PDFs, comics, XPS and DjVu.".into(),
+                "Markdown flows to fit the window, one page across. Two pages and book view are for PDFs, books and comics.".into(),
             ));
             return;
         }
@@ -1473,7 +1472,9 @@ impl Reader {
             return;
         }
         self.spread = spread;
-        if self.md.is_none() && self.info.as_ref().is_some_and(|i| !i.reflowable) {
+        if self.md.is_none() && self.info.is_some() {
+            // A book is laid out again at its new page width, at once.
+            self.book_now();
             self.relayout(cx);
         }
     }
@@ -1482,11 +1483,9 @@ impl Reader {
         self.spread
     }
 
-    /// Whether pages can go side by side here (paged documents).
+    /// Whether pages can go side by side here (all but Markdown).
     pub fn can_spread(&self) -> bool {
-        self.status == Status::Open
-            && self.md.is_none()
-            && self.info.as_ref().is_some_and(|i| !i.reflowable)
+        self.status == Status::Open && self.md.is_none() && self.info.is_some()
     }
 
     // ── page field ──

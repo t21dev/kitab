@@ -38,7 +38,7 @@ pub struct ToolButton {
 
 impl Reader {
     /// The buttons `tool` puts on a bar for this document; none when it
-    /// doesn't apply here (Password outside a PDF, Two pages in a book).
+    /// doesn't apply here (Password outside a PDF, Two pages in Markdown).
     pub fn tool_buttons(&self, tool: Tool, cx: &App) -> Vec<ToolButton> {
         let b = |k: usize, icon: &'static str, tip: &str, on: bool, click: Click| ToolButton {
             id: format!("tool-{tool:?}-{k}").into(),
@@ -149,14 +149,14 @@ impl Reader {
                 self.hand_on(),
                 act(Box::new(ToggleHand)),
             )],
-            Tool::TwoPages if paged => vec![b(
+            Tool::TwoPages if self.can_spread() => vec![b(
                 0,
                 "pages",
                 "Two pages  Ctrl+7",
                 self.spread() == super::Spread::Two,
                 act(Box::new(TwoPages)),
             )],
-            Tool::BookView if paged => vec![b(
+            Tool::BookView if self.can_spread() => vec![b(
                 0,
                 "book",
                 "Book view  Ctrl+8",

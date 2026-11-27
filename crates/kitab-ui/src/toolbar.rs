@@ -165,6 +165,23 @@ impl Tool {
         }
     }
 
+    /// Where it shows, for a tool that a bar leaves out in some documents
+    /// (Settings › Appearance › Toolbar says so, GitHub #32). Must agree with
+    /// `Reader::tool_buttons`.
+    pub fn only_in(self) -> Option<&'static str> {
+        match self {
+            Tool::Hand => Some("Shows for PDFs, comics, XPS and DjVu"),
+            Tool::Bookmark | Tool::Markup => {
+                Some("Shows for PDFs, comics, XPS and DjVu, not books")
+            }
+            Tool::TwoPages | Tool::BookView | Tool::Present | Tool::RotateLeft | Tool::Rotate => {
+                Some("Shows for all but Markdown")
+            }
+            Tool::Password => Some("Shows for PDFs"),
+            _ => None,
+        }
+    }
+
     /// The compact dock (and a narrow window) leaves these out first.
     pub fn trimmed_when_compact(self) -> bool {
         matches!(

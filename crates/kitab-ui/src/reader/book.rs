@@ -25,6 +25,9 @@ pub(super) struct BookState {
     /// The saved position (0..=1 through the book), applied after the first
     /// layout to the window: saved page numbers belong to an older layout.
     pub restore: Option<f32>,
+    /// The next layout runs at once, not after the window settles (two
+    /// pages turned on or off: a new page width, not a resize).
+    pub now: bool,
 }
 
 /// Where the reader is, in layout-free terms.
@@ -124,19 +127,33 @@ impl Reader {
             serial: 0,
             busy: false,
             restore,
+            now: false,
         });
     }
 
+    /// Lay the book out again at once on the next frame (`BookState::now`).
+    pub(super) fn book_now(&mut self) {
+        if let Some(book) = self.book.as_mut() {
+            book.now = true;
+        }
+    }
+
     /// The layout that fills the reading area at 100 %, at text size `em`,
-    /// in the reader's typography.
+    /// in the reader's typography: half of it for each page of a spread
+    /// (two pages, or book view).
     fn layout_for_window(&self, em: f32, style: kitab_core::BookStyle) -> Option<BookLayout> {
         let (vw, vh) = self.viewport;
         if vw <= 0.0 || vh <= 0.0 {
             return None;
         }
         let side = |v: f32| (v / PX_PER_PT_AT_100).round().clamp(100.0, 10_000.0);
+        let width = if self.spread_on() {
+            (vw - 2.0 * GAP - SPREAD_GAP) / 2.0
+        } else {
+            vw - 2.0 * GAP
+        };
         Some(BookLayout {
-            width: side(vw - 2.0 * GAP),
+            width: side(width),
             height: side(vh - 2.0 * GAP - self.top_inset),
             em: crate::settings::clamp_book_text(em),
             style,
@@ -158,20 +175,22 @@ impl Reader {
         let Some(book) = self.book.as_mut() else {
             return;
         };
-        let now = book.wanted.unwrap_or(book.layout);
+        let now = std::mem::take(&mut book.now);
+        let was = book.wanted.unwrap_or(book.layout);
         let resized =
-            (want.width - now.width).abs() > 4.0 || (want.height - now.height).abs() > 4.0;
+            (want.width - was.width).abs() > 4.0 || (want.height - was.height).abs() > 4.0;
         // New typography counts as new text: it runs at once.
-        let retexted = (want.em - now.em).abs() > 0.01 || want.style != now.style;
+        let retexted = (want.em - was.em).abs() > 0.01 || want.style != was.style;
         if !resized && !retexted {
             return;
         }
-        // The first layout to the window runs at once too.
+        // The first layout to the window runs at once too, and a new
+        // spread.
         let first = book.layout == BookLayout::DEFAULT && book.wanted.is_none();
         book.wanted = Some(want);
         book.serial += 1;
         let serial = book.serial;
-        let delay = if retexted || first {
+        let delay = if retexted || first || now {
             Duration::ZERO
         } else {
             SETTLE

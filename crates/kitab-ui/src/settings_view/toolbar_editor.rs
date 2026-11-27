@@ -266,7 +266,10 @@ fn tool_item(
         .when(selected, |d| d.bg(st.c(|c| c.raised)))
         .when(!selected, |d| d.hover(|d| d.bg(st.c(|c| c.hover))))
         .cursor(CursorStyle::OpenHand)
-        .tip(format!("{}: drag to move, click for options", tool.label()));
+        .tip(match tool.only_in() {
+            Some(only) => format!("{}: drag to move, click for options. {only}.", tool.label()),
+            None => format!("{}: drag to move, click for options", tool.label()),
+        });
     for part in parts(tool) {
         item = item.child(match part {
             Some(name) => div()
@@ -612,13 +615,27 @@ fn action_line(ws: &WeakEntity<Workspace>, st: &Style, tool: Tool) -> AnyElement
         .bg(st.c(|c| c.raised))
         .shadow(st.elev())
         .text_size(st.px(|m| m.ui_text))
-        .child(div().flex_1().text_color(text).child(format!(
-            "{} · {} of {} in the {}",
-            tool.label(),
-            i + 1,
-            n,
-            bar.name()
-        )))
+        .child(
+            div()
+                .flex_1()
+                .flex()
+                .flex_col()
+                .child(div().text_color(text).child(format!(
+                    "{} · {} of {} in the {}",
+                    tool.label(),
+                    i + 1,
+                    n,
+                    bar.name()
+                )))
+                .when_some(tool.only_in(), |d, only| {
+                    d.child(
+                        div()
+                            .text_size(px(11.5))
+                            .text_color(st.c(|c| c.muted))
+                            .child(only),
+                    )
+                }),
+        )
         .child(
             button("tb-earlier", "‹ Earlier".into(), i > 0, text).when(i > 0, |d| {
                 d.on_click(edit(ws, Some(tool), move |t| t.shift(tool, -1)))
