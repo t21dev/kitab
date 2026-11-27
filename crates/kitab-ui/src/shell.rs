@@ -1615,6 +1615,51 @@ impl Workspace {
                 })
                 .child(self.tabs.len().to_string())
         });
+        // Tabs hidden past an edge of the strip: that edge fades into the bar,
+        // with a hairline, so it reads as "more this way" rather than a tab
+        // cut off.
+        let (hidden_left, hidden_right) = {
+            let max = f32::from(self.tab_scroll.max_offset().width);
+            let off = -f32::from(self.tab_scroll.offset().x);
+            (overflowing && off > 0.5, overflowing && off < max - 0.5)
+        };
+        let bg = st.c(|c| c.bg);
+        let fade = |left: bool| {
+            let (from, to) = if left {
+                (bg, bg.opacity(0.0))
+            } else {
+                (bg.opacity(0.0), bg)
+            };
+            div()
+                .absolute()
+                .top_0()
+                .bottom_0()
+                .w(px(36.0))
+                .map(|d| if left { d.left_0() } else { d.right_0() })
+                .bg(gpui::linear_gradient(
+                    90.0,
+                    gpui::linear_color_stop(from, 0.0),
+                    gpui::linear_color_stop(to, 1.0),
+                ))
+                .child(
+                    div()
+                        .absolute()
+                        .top(px(8.0))
+                        .bottom(px(8.0))
+                        .w(px(1.0))
+                        .map(|d| if left { d.left_0() } else { d.right_0() })
+                        .bg(st.c(|c| c.line)),
+                )
+        };
+        let strip = div()
+            .relative()
+            .flex()
+            .flex_shrink()
+            .min_w_0()
+            .h_full()
+            .child(strip)
+            .when(hidden_left, |d| d.child(fade(true)))
+            .when(hidden_right, |d| d.child(fade(false)));
         bar = bar
             .child(strip)
             // New tab (Settings › Appearance › Tabs): Home, with Open file…

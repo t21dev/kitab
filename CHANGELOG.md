@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Markdown tables: drag the right edge of a column's header to make it wider or narrower (the pointer turns into the column-resize arrows). The other columns keep their width, and a table wider than the page scrolls sideways. Double-click an edge for the widths Kitab chose. The widths stay while the file is open.
+- When there are more tabs than fit, the tab bar's edge fades out with a thin divider on whichever side has tabs scrolled out of view, instead of the last tab looking cut off.
 
 ### Fixed
 - Selecting text in a Markdown table cell reaches its last character. The selection now ends at the character boundary nearest the pointer, instead of at the start of the character under it.
