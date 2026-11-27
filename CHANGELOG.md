@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.2] - 2026-11-27
+
+### Added
+- A Markdown table (or code block) wider than the page and taller than the window gets its sideways scroll bar pinned to the bottom of the reading area, above the dock, while its own bar is out of sight. No more scrolling to the end of a long table to scroll it sideways.
+- Pointing at a Markdown table's header shows every column edge, so it's clear where to drag to resize a column.
+
 ## [1.6.1] - 2026-11-27
 
 ### Added

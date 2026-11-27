@@ -3512,7 +3512,7 @@ checksum = "e2db585e1d738fc771bf08a151420d3ed193d9d895a36df7f6f8a9456b911ddc"
 
 [[package]]
 name = "kitab"
-version = "1.6.1"
+version = "1.6.2"
 dependencies = [
  "embed-resource",
  "gpui",
@@ -3532,7 +3532,7 @@ dependencies = [
 
 [[package]]
 name = "kitab-bench"
-version = "1.6.1"
+version = "1.6.2"
 dependencies = [
  "embed-resource",
  "kitab-os",
@@ -3544,7 +3544,7 @@ dependencies = [
 
 [[package]]
 name = "kitab-cli"
-version = "1.6.1"
+version = "1.6.2"
 dependencies = [
  "kitab-core",
  "kitab-mupdf",
@@ -3555,11 +3555,11 @@ dependencies = [
 
 [[package]]
 name = "kitab-core"
-version = "1.6.1"
+version = "1.6.2"
 
 [[package]]
 name = "kitab-md"
-version = "1.6.1"
+version = "1.6.2"
 dependencies = [
  "pulldown-cmark",
  "serde_json",
@@ -3568,7 +3568,7 @@ dependencies = [
 
 [[package]]
 name = "kitab-mupdf"
-version = "1.6.1"
+version = "1.6.2"
 dependencies = [
  "compcol",
  "djvu-rs",
@@ -3589,7 +3589,7 @@ dependencies = [
 
 [[package]]
 name = "kitab-os"
-version = "1.6.1"
+version = "1.6.2"
 dependencies = [
  "libc",
  "serde_json",
@@ -3599,7 +3599,7 @@ dependencies = [
 
 [[package]]
 name = "kitab-print"
-version = "1.6.1"
+version = "1.6.2"
 dependencies = [
  "ashpd 0.11.1",
  "futures-lite 2.6.1",
@@ -3609,7 +3609,7 @@ dependencies = [
 
 [[package]]
 name = "kitab-shell"
-version = "1.6.1"
+version = "1.6.2"
 dependencies = [
  "kitab-os",
  "windows 0.61.3",
@@ -3618,7 +3618,7 @@ dependencies = [
 
 [[package]]
 name = "kitab-sign"
-version = "1.6.1"
+version = "1.6.2"
 dependencies = [
  "cms 0.2.3",
  "const-oid 0.9.6",
@@ -3639,7 +3639,7 @@ dependencies = [
 
 [[package]]
 name = "kitab-speech"
-version = "1.6.1"
+version = "1.6.2"
 dependencies = [
  "libloading",
  "log",
@@ -3649,7 +3649,7 @@ dependencies = [
 
 [[package]]
 name = "kitab-store"
-version = "1.6.1"
+version = "1.6.2"
 dependencies = [
  "file-id",
  "kitab-core",
@@ -3662,7 +3662,7 @@ dependencies = [
 
 [[package]]
 name = "kitab-theme"
-version = "1.6.1"
+version = "1.6.2"
 dependencies = [
  "serde",
  "serde_json",
@@ -3670,7 +3670,7 @@ dependencies = [
 
 [[package]]
 name = "kitab-thumb"
-version = "1.6.1"
+version = "1.6.2"
 dependencies = [
  "kitab-core",
  "kitab-md",
@@ -3682,7 +3682,7 @@ dependencies = [
 
 [[package]]
 name = "kitab-ui"
-version = "1.6.1"
+version = "1.6.2"
 dependencies = [
  "anyhow",
  "gpui",
