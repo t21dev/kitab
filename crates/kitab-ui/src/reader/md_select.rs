@@ -94,7 +94,8 @@ impl MdSelect {
                 x: p.x.clamp(b.left(), b.right()),
                 y: p.y.clamp(b.top(), b.bottom() - px(1.0)),
             };
-            u.layout.index_for_position(at).unwrap_or_else(|i| i)
+            let i = u.layout.index_for_position(at).unwrap_or_else(|i| i);
+            nearest_boundary(&u.layout, i, at)
         };
         Some((u.key, offset.min(len)))
     }
@@ -137,6 +138,43 @@ impl MdSelect {
         }
         Some(out).filter(|t| !t.trim().is_empty())
     }
+}
+
+/// gpui gives the character under `at` (`i`, its start): the boundary after
+/// it is nearer when the pointer is past its middle. Without this, the last
+/// character of a text that fills its box (a table cell) couldn't be
+/// selected: the pointer can't get past its end there.
+fn nearest_boundary(layout: &TextLayout, i: usize, at: Point<Pixels>) -> usize {
+    let text = layout.text();
+    let Some(c) = text.get(i..).and_then(|t| t.chars().next()) else {
+        return i;
+    };
+    // A line break is no character to pass over.
+    if c == '\n' {
+        return i;
+    }
+    let j = i + c.len_utf8();
+    match (layout.position_for_index(i), layout.position_for_index(j)) {
+        // Same row (a wrapped row ends where the next starts).
+        (Some(a), Some(b)) if a.y == b.y && past_middle(at.x, a.x, b.x) => j,
+        _ => i,
+    }
+}
+
+/// The columns' widths after column `col`'s right edge moved `dx` pixels
+/// from where it was in `from`: that column grows or shrinks (never below
+/// `min`), and the others stay as they were.
+fn drag_widths(from: &[f32], col: usize, dx: f32, min: f32) -> Vec<f32> {
+    let mut w = from.to_vec();
+    if let Some(c) = w.get_mut(col) {
+        *c = (*c + dx).max(min.min(*c));
+    }
+    w
+}
+
+/// `x` is nearer `b` than `a` (either way round: right-to-left text too).
+fn past_middle(x: Pixels, a: Pixels, b: Pixels) -> bool {
+    (f32::from(x) - f32::from(b)).abs() < (f32::from(x) - f32::from(a)).abs()
 }
 
 fn part_of(((k0, o0), (k1, o1)): (End, End), key: Key, len: usize) -> Option<Range<usize>> {
@@ -249,6 +287,25 @@ impl super::Reader {
         cx.notify();
     }
 
+    /// A table's column edge dragged to pointer x `x`: that column takes the
+    /// difference, the others keep the widths they had (the table scrolls
+    /// sideways when it outgrows the page).
+    pub(super) fn md_coldrag_to(
+        &mut self,
+        g: &super::ColDrag,
+        x: f32,
+        cx: &mut gpui::Context<Self>,
+    ) {
+        let scale = self.md_scale().max(0.1);
+        let Some(md) = self.md.as_mut() else { return };
+        let widths = drag_widths(&g.from, g.col, x - g.from_x, 48.0 * scale);
+        let at_100: Vec<f32> = widths.iter().map(|w| w / scale).collect();
+        if md.col_widths.get(&g.key) != Some(&at_100) {
+            md.col_widths.insert(g.key, at_100);
+            cx.notify();
+        }
+    }
+
     /// A code block's scroll bar thumb dragged to pointer x `x`.
     pub(super) fn md_hdrag_to(&mut self, g: super::HDrag, x: f32, cx: &mut gpui::Context<Self>) {
         let Some(md) = self.md.as_ref() else { return };
@@ -286,6 +343,36 @@ impl super::Reader {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn dragging_a_column_edge_moves_only_that_column() {
+        let from = [200.0, 300.0, 100.0];
+        assert_eq!(drag_widths(&from, 1, 50.0, 48.0), vec![200.0, 350.0, 100.0]);
+        assert_eq!(
+            drag_widths(&from, 0, -80.0, 48.0),
+            vec![120.0, 300.0, 100.0]
+        );
+        // Never narrower than the least width...
+        assert_eq!(
+            drag_widths(&from, 2, -500.0, 48.0),
+            vec![200.0, 300.0, 48.0]
+        );
+        // ...unless it already was: it doesn't jump wider.
+        assert_eq!(drag_widths(&[30.0], 0, -10.0, 48.0), vec![30.0]);
+        // A column that isn't there changes nothing.
+        assert_eq!(drag_widths(&from, 5, 10.0, 48.0), from.to_vec());
+    }
+
+    #[test]
+    fn the_nearer_boundary_wins() {
+        // A character from x 100 to 110: at 106 the end is nearer.
+        assert!(past_middle(px(106.0), px(100.0), px(110.0)));
+        assert!(!past_middle(px(104.0), px(100.0), px(110.0)));
+        // The right edge of the box (the last character's end).
+        assert!(past_middle(px(110.0), px(100.0), px(110.0)));
+        // Right to left: the next boundary is to the left.
+        assert!(past_middle(px(103.0), px(110.0), px(100.0)));
+    }
 
     #[test]
     fn words_and_parts() {
