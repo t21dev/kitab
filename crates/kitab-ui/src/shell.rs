@@ -1542,6 +1542,22 @@ impl Workspace {
                 })
                 .tip(tip)
                 .on_click(cx.listener(move |ws, _, window, cx| ws.activate(ix, window, cx)))
+                // A divider in the gap before it, as browsers draw them, so
+                // where one title ends and the next begins is plain. None
+                // beside the open tab (its raised look is enough) or the
+                // one under the pointer.
+                .when(ix > 0 && !on && self.active != Some(ix - 1), |d| {
+                    d.child(
+                        div()
+                            .absolute()
+                            .left(px(-2.5))
+                            .top(px(9.0))
+                            .bottom(px(9.0))
+                            .w(px(1.0))
+                            .bg(st.c(|c| c.line))
+                            .group_hover("tab", |d| d.invisible()),
+                    )
+                })
                 .child(svg().path(icon(tab_icon)).size(px(14.0)).text_color(if on {
                     st.c(|c| c.accent)
                 } else {
