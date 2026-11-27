@@ -36,6 +36,9 @@ an environment switch to turn it off so it can still be benchmarked:
           held whose y is 200 x ln(ratio), which the app reads as a zoom factor.
           A wheel message's own Ctrl and Shift flags decide (a touchpad pinch says
           Ctrl; a key let go in another window can't leave Kitab zooming).
+  X11Max  Linux X11: a window opened maximised sets _NET_WM_STATE itself before
+          it's mapped (the message gpui sent was ignored), so Kitab reopens
+          maximised.
   Atlas   Linux: a texture freed before the frame that would fill it (a tab
           closed just after its pages were drawn) takes its queued upload and
           start-up with it. The frame looked the texture up afterwards and
@@ -665,8 +668,97 @@ struct WindowInvalidatorInner {"""),
     zed_backports()
     hand_cursor_patch()
     taskbar_patch()
+    x11_maximize_patch()
     print(f"patched gpui copy: {DEST}")
     xim_ctext_fix()
+
+
+def x11_maximize_patch() -> None:
+    """X11: a window opened maximised (or full screen) is. gpui asks for it with
+    a _NET_WM_STATE message before the window is mapped, and window managers
+    ignore that for an unmapped window (EWMH: the client sets the property
+    itself then), so Kitab reopened at its normal size every time."""
+    rel = "src/platform/linux/x11/window.rs"
+    edit(rel, [
+        ("""    maximized_horizontal: bool,
+    hidden: bool,
+""",
+         """    maximized_horizontal: bool,
+    hidden: bool,
+    // Kitab patch: mapped yet (until then, state is set as a property).
+    kitab_mapped: bool,
+"""),
+        ("""                maximized_horizontal: false,
+                hidden: false,
+""",
+         """                maximized_horizontal: false,
+                hidden: false,
+                kitab_mapped: false,
+"""),
+        ("""    fn zoom(&self) {
+        let state = self.0.state.borrow();
+        self.set_wm_hints(""",
+         """    fn zoom(&self) {
+        // Kitab patch: not mapped yet, the window manager ignores the message.
+        if self.kitab_preset_state(&[
+            self.0.state.borrow().atoms._NET_WM_STATE_MAXIMIZED_VERT,
+            self.0.state.borrow().atoms._NET_WM_STATE_MAXIMIZED_HORZ,
+        ]) {
+            return;
+        }
+        let state = self.0.state.borrow();
+        self.set_wm_hints("""),
+        ("""    fn toggle_fullscreen(&self) {
+        let state = self.0.state.borrow();
+        self.set_wm_hints(""",
+         """    fn toggle_fullscreen(&self) {
+        // Kitab patch: as zoom.
+        if self.kitab_preset_state(&[self.0.state.borrow().atoms._NET_WM_STATE_FULLSCREEN]) {
+            return;
+        }
+        let state = self.0.state.borrow();
+        self.set_wm_hints("""),
+        ("""    fn map_window(&mut self) -> anyhow::Result<()> {
+        check_reply(
+            || "X11 MapWindow failed.",
+            self.0.xcb.map_window(self.0.x_window),
+        )?;
+        Ok(())
+    }""",
+         """    fn map_window(&mut self) -> anyhow::Result<()> {
+        check_reply(
+            || "X11 MapWindow failed.",
+            self.0.xcb.map_window(self.0.x_window),
+        )?;
+        self.0.state.borrow_mut().kitab_mapped = true;
+        Ok(())
+    }"""),
+        ("""    fn set_wm_hints<C: Display + Send + Sync + 'static, F: FnOnce() -> C>(""",
+         """    /// Kitab patch: before the window is mapped, add `atoms` to its
+    /// _NET_WM_STATE property (the window manager reads it on mapping).
+    /// False once it's mapped: then only a message to the root window works.
+    fn kitab_preset_state(&self, atoms: &[u32]) -> bool {
+        let state = self.0.state.borrow();
+        if state.kitab_mapped {
+            return false;
+        }
+        check_reply(
+            || "X11 ChangeProperty32 presetting _NET_WM_STATE failed.",
+            self.0.xcb.change_property32(
+                xproto::PropMode::APPEND,
+                self.0.x_window,
+                state.atoms._NET_WM_STATE,
+                xproto::AtomEnum::ATOM,
+                atoms,
+            ),
+        )
+        .log_err();
+        xcb_flush(&self.0.xcb);
+        true
+    }
+
+    fn set_wm_hints<C: Display + Send + Sync + 'static, F: FnOnce() -> C>("""),
+    ])
 
 
 def hand_cursor_patch() -> None:
