@@ -1030,9 +1030,20 @@ impl Reader {
             cx.notify();
             return;
         }
-        let Some((mark, _)) = self.markup.drawing.take() else {
+        let Some((mut mark, _)) = self.markup.drawing.take() else {
             return;
         };
+        // The pen's line is kept as it was seen: the curve through its
+        // points, every 2 px or so, so other readers (which join the points
+        // with straight lines) draw it as smooth as Kitab does.
+        let step = 2.0 / self.px_per_pt(mark.page as usize).max(0.01);
+        if let MarkShape::Ink { strokes } = &mut mark.shape {
+            let smooth: Vec<Vec<PointPt>> =
+                strokes.iter().map(|s| smooth_stroke(s, step)).collect();
+            if smooth.iter().map(Vec::len).sum::<usize>() <= kitab_core::MAX_POINTS {
+                *strokes = smooth;
+            }
+        }
         if worth_keeping(&mark) {
             self.place(mark.clone(), cx);
             self.markup.undo.push(Edit::Added(mark));
@@ -2013,6 +2024,49 @@ impl Reader {
     }
 }
 
+/// The curve a pen line is drawn as (quadratic pieces through the midpoints
+/// between its points, as `paint_mark` draws them), sampled about every
+/// `step` points.
+fn smooth_stroke(points: &[PointPt], step: f32) -> Vec<PointPt> {
+    if points.len() < 3 || step <= 0.0 {
+        return points.to_vec();
+    }
+    let mid = |a: PointPt, b: PointPt| PointPt {
+        x: (a.x + b.x) / 2.0,
+        y: (a.y + b.y) / 2.0,
+    };
+    let dist = |a: PointPt, b: PointPt| (b.x - a.x).hypot(b.y - a.y);
+    let mut out = vec![points[0]];
+    let mut from = points[0];
+    for w in points[1..].windows(2) {
+        let (ctrl, to) = (w[0], mid(w[0], w[1]));
+        let n = ((dist(from, ctrl) + dist(ctrl, to)) / step)
+            .ceil()
+            .clamp(1.0, 32.0) as usize;
+        for i in 1..=n {
+            let t = i as f32 / n as f32;
+            let u = 1.0 - t;
+            out.push(PointPt {
+                x: u * u * from.x + 2.0 * u * t * ctrl.x + t * t * to.x,
+                y: u * u * from.y + 2.0 * u * t * ctrl.y + t * t * to.y,
+            });
+        }
+        from = to;
+    }
+    // From the last midpoint, straight to the end (as the screen draws it).
+    if let Some(&last) = points.last() {
+        let n = (dist(from, last) / step).ceil().clamp(1.0, 32.0) as usize;
+        for i in 1..=n {
+            let t = i as f32 / n as f32;
+            out.push(PointPt {
+                x: from.x + (last.x - from.x) * t,
+                y: from.y + (last.y - from.y) * t,
+            });
+        }
+    }
+    out
+}
+
 /// Paint one mark onto the page sheet whose bounds are `bounds`.
 #[allow(clippy::too_many_arguments)]
 fn paint_mark(
@@ -2036,55 +2090,71 @@ fn paint_mark(
         a: m.opacity,
     };
     let width = (m.width * ppt).max(1.0);
-    let stroke = |points: &[gpui::Point<Pixels>], closed: bool, window: &mut Window| {
-        // Built at the page's corner and cached: tessellating every stroke on
-        // every frame made scrolling a marked-up page much slower.
-        let origin = bounds.origin;
-        let key = {
-            use std::hash::{Hash, Hasher};
-            let mut h = std::collections::hash_map::DefaultHasher::new();
-            (width.to_bits(), closed, points.len()).hash(&mut h);
-            for p in points {
-                (
-                    f32::from(p.x - origin.x).to_bits(),
-                    f32::from(p.y - origin.y).to_bits(),
-                )
-                    .hash(&mut h);
+    // `smooth`: a pen line, drawn as curves through the midpoints between its
+    // points, so a fast stroke (few, far-apart points) bends instead of
+    // turning sharp corners. Shapes keep their straight sides.
+    let stroke =
+        |points: &[gpui::Point<Pixels>], closed: bool, smooth: bool, window: &mut Window| {
+            // Built at the page's corner and cached: tessellating every stroke on
+            // every frame made scrolling a marked-up page much slower.
+            let origin = bounds.origin;
+            let key = {
+                use std::hash::{Hash, Hasher};
+                let mut h = std::collections::hash_map::DefaultHasher::new();
+                (width.to_bits(), closed, smooth, points.len()).hash(&mut h);
+                for p in points {
+                    (
+                        f32::from(p.x - origin.x).to_bits(),
+                        f32::from(p.y - origin.y).to_bits(),
+                    )
+                        .hash(&mut h);
+                }
+                h.finish()
+            };
+            if let Some(path) = strokes.borrow().get(&key) {
+                window.paint_path(path.kitab_offset(origin), colour);
+                return;
             }
-            h.finish()
+            let points: Vec<gpui::Point<Pixels>> = points
+                .iter()
+                .map(|p| gpui::point(p.x - origin.x, p.y - origin.y))
+                .collect();
+            let [first, rest @ ..] = points.as_slice() else {
+                return;
+            };
+            let options = StrokeOptions::default()
+                .with_line_width(width)
+                .with_line_cap(LineCap::Round)
+                .with_line_join(LineJoin::Round);
+            let mut path = PathBuilder::stroke(px(width)).with_style(PathStyle::Stroke(options));
+            path.move_to(*first);
+            if rest.is_empty() {
+                // A dot: a stroke needs some length to have round caps.
+                path.line_to(gpui::point(first.x + px(0.01), first.y));
+            }
+            if smooth && rest.len() >= 2 {
+                let mid = |a: gpui::Point<Pixels>, b: gpui::Point<Pixels>| {
+                    gpui::point((a.x + b.x) / 2.0, (a.y + b.y) / 2.0)
+                };
+                for w in rest.windows(2) {
+                    path.curve_to(mid(w[0], w[1]), w[0]);
+                }
+                if let Some(last) = rest.last() {
+                    path.line_to(*last);
+                }
+            } else {
+                for p in rest {
+                    path.line_to(*p);
+                }
+            }
+            if closed {
+                path.close();
+            }
+            if let Ok(path) = path.build() {
+                window.paint_path(path.kitab_offset(origin), colour);
+                strokes.borrow_mut().insert(key, path);
+            }
         };
-        if let Some(path) = strokes.borrow().get(&key) {
-            window.paint_path(path.kitab_offset(origin), colour);
-            return;
-        }
-        let points: Vec<gpui::Point<Pixels>> = points
-            .iter()
-            .map(|p| gpui::point(p.x - origin.x, p.y - origin.y))
-            .collect();
-        let [first, rest @ ..] = points.as_slice() else {
-            return;
-        };
-        let options = StrokeOptions::default()
-            .with_line_width(width)
-            .with_line_cap(LineCap::Round)
-            .with_line_join(LineJoin::Round);
-        let mut path = PathBuilder::stroke(px(width)).with_style(PathStyle::Stroke(options));
-        path.move_to(*first);
-        if rest.is_empty() {
-            // A dot: a stroke needs some length to have round caps.
-            path.line_to(gpui::point(first.x + px(0.01), first.y));
-        }
-        for p in rest {
-            path.line_to(*p);
-        }
-        if closed {
-            path.close();
-        }
-        if let Ok(path) = path.build() {
-            window.paint_path(path.kitab_offset(origin), colour);
-            strokes.borrow_mut().insert(key, path);
-        }
-    };
     let quad = |r: RectPt, window: &mut Window| {
         let v = rect_to_view(r, page, rotation, ppt);
         window.paint_quad(gpui::fill(
@@ -2100,11 +2170,11 @@ fn paint_mark(
         MarkShape::Ink { strokes } => {
             for s in strokes {
                 let pts: Vec<_> = s.iter().map(|p| to_px(*p)).collect();
-                stroke(&pts, false, window);
+                stroke(&pts, false, true, window);
             }
         }
         MarkShape::Line { from, to, arrow } => {
-            stroke(&[to_px(*from), to_px(*to)], false, window);
+            stroke(&[to_px(*from), to_px(*to)], false, false, window);
             if *arrow {
                 let (dx, dy) = (to.x - from.x, to.y - from.y);
                 let len = dx.hypot(dy).max(0.001);
@@ -2116,7 +2186,7 @@ fn paint_mark(
                         x: to.x + head * a.cos(),
                         y: to.y + head * a.sin(),
                     };
-                    stroke(&[to_px(tip), to_px(*to)], false, window);
+                    stroke(&[to_px(tip), to_px(*to)], false, false, window);
                 }
             }
         }
@@ -2140,7 +2210,7 @@ fn paint_mark(
                 },
             ];
             let pts: Vec<_> = c.iter().map(|p| to_px(*p)).collect();
-            stroke(&pts, true, window);
+            stroke(&pts, true, false, window);
         }
         MarkShape::Ellipse { rect } => {
             let (rx, ry) = (rect.w / 2.0, rect.h / 2.0);
@@ -2154,7 +2224,7 @@ fn paint_mark(
                     })
                 })
                 .collect();
-            stroke(&pts, true, window);
+            stroke(&pts, true, false, window);
         }
         MarkShape::Highlight { rects } => rects.iter().for_each(|r| quad(*r, window)),
         MarkShape::Underline { rects } => rects.iter().for_each(|r| {
@@ -2164,6 +2234,7 @@ fn paint_mark(
                     to_px(PointPt { x: r.x, y }),
                     to_px(PointPt { x: r.x + r.w, y }),
                 ],
+                false,
                 false,
                 window,
             )
@@ -2175,6 +2246,7 @@ fn paint_mark(
                     to_px(PointPt { x: r.x, y }),
                     to_px(PointPt { x: r.x + r.w, y }),
                 ],
+                false,
                 false,
                 window,
             )
@@ -2252,6 +2324,24 @@ mod tests {
 
     fn pt(x: f32, y: f32) -> PointPt {
         PointPt { x, y }
+    }
+
+    #[test]
+    fn pen_lines_are_kept_as_their_curve() {
+        // A sharp corner from three far-apart points rounds off.
+        let corner = [pt(0.0, 0.0), pt(20.0, 0.0), pt(20.0, 20.0)];
+        let s = smooth_stroke(&corner, 1.0);
+        assert!(s.len() > 10, "{}", s.len());
+        assert_eq!(s.first(), Some(&pt(0.0, 0.0)));
+        assert_eq!(s.last(), Some(&pt(20.0, 20.0)));
+        // Never further than `step` (and a bit) between points...
+        for w in s.windows(2) {
+            assert!((w[1].x - w[0].x).hypot(w[1].y - w[0].y) <= 1.5);
+        }
+        // ...and the corner itself is cut.
+        assert!(!s.contains(&pt(20.0, 0.0)));
+        // A dot and a straight two-point line stay as they are.
+        assert_eq!(smooth_stroke(&corner[..2], 1.0), corner[..2].to_vec());
     }
 
     #[test]

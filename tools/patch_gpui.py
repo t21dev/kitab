@@ -12,8 +12,8 @@ an environment switch to turn it off so it can still be benchmarked:
           Source: stofu5678/ume_editor#23.
   Adapter No throwaway probe device per adapter. KITAB_GPU=low-power|high-performance|warp
           picks by preference (warp = software Direct3D); default is the first adapter.
-  Lean    Single-sampled path texture instead of a window-sized 4x MSAA one, and 2
-          swap-chain buffers instead of 3. Off: KITAB_GPUI_FULL=1.
+  Lean    2 swap-chain buffers instead of 3. Off: KITAB_GPUI_FULL=1. (Paths kept
+          their 4x MSAA from 1.5.2: single-sampled, pen ink was jagged, #31.)
   Heap    The manifest enables the Windows segment heap.
   Fallback When Direct3D 11 fails on the chosen adapter, every other one is tried,
           then WARP (software). KITAB_GPU=test-fallback goes straight to WARP.
@@ -28,8 +28,9 @@ an environment switch to turn it off so it can still be benchmarked:
           origin and advance leftwards, instead of left to right.
   Paths   The two window-sized textures paths are drawn through are 1x1 until
           a frame has a path to draw (ink, a drawn shape), and go back after 30
-          frames without one. They were 8 bytes per window pixel, always: 29 MB
-          in a 2400x1500 window, 66 MB at 4K.
+          frames without one. With 4x MSAA they are 20 bytes per window pixel
+          (72 MB in a 2400x1500 window), paid only while ink or a shape that
+          isn't saved yet is on screen; saved marks are drawn by MuPDF.
   Touch   Windows touch screens. A finger pans (WM_GESTURE GID_PAN, with inertia)
           as fine scroll steps; a pinch (GID_ZOOM) arrives as a scroll with Ctrl
           held whose y is 200 x ln(ratio), which the app reads as a zoom factor.
@@ -182,12 +183,12 @@ def main() -> None:
     }
     for adapter_index in 0.. {""",
     )])
-    # 3. Lean GPU memory (KITAB_LEAN=1): a single-sampled path texture instead of a
-    #    full-window 4x MSAA one (resolved with a plain copy), and 2 swap-chain
-    #    buffers instead of 3. A reader draws few vector paths in its chrome.
+    # 3. Lean GPU memory: 2 swap-chain buffers instead of 3. Paths keep gpui's 4x
+    #    MSAA: single-sampled, pen ink was jagged (GitHub #31), and the Paths
+    #    patch already keeps the path textures 1x1 while nothing draws a path.
     lean_fn = """
 
-/// Kitab patch (ADR 0002): lean mode (default; KITAB_GPUI_FULL=1 turns it off) trades path anti-aliasing quality and one
+/// Kitab patch (ADR 0002): lean mode (default; KITAB_GPUI_FULL=1 turns it off) trades one
 /// back buffer for less GPU memory.
 fn kitab_lean() -> bool {
     std::env::var_os("KITAB_GPUI_FULL").is_none()
@@ -203,33 +204,6 @@ fn kitab_buffer_count() -> u32 {
         sys.exit("directx_renderer.rs: expected 3 uses of BUFFER_COUNT as u32")
     s = s.replace("BUFFER_COUNT as u32", "kitab_buffer_count()")
     p.write_text(s + lean_fn, encoding="utf8")
-    edit("src/platform/windows/directx_renderer.rs", [
-        ("""            self.devices.device_context.ResolveSubresource(
-                &self.resources.path_intermediate_texture,
-                0,
-                &self.resources.path_intermediate_msaa_texture,
-                0,
-                RENDER_TARGET_FORMAT,
-            );""",
-         """            if kitab_lean() {
-                self.devices.device_context.CopyResource(
-                    &self.resources.path_intermediate_texture,
-                    &self.resources.path_intermediate_msaa_texture,
-                );
-            } else {
-                self.devices.device_context.ResolveSubresource(
-                    &self.resources.path_intermediate_texture,
-                    0,
-                    &self.resources.path_intermediate_msaa_texture,
-                    0,
-                    RENDER_TARGET_FORMAT,
-                );
-            }"""),
-        ("""                Count: PATH_MULTISAMPLE_COUNT,
-                Quality: D3D11_STANDARD_MULTISAMPLE_PATTERN.0 as u32,""",
-         """                Count: if kitab_lean() { 1 } else { PATH_MULTISAMPLE_COUNT },
-                Quality: if kitab_lean() { 0 } else { D3D11_STANDARD_MULTISAMPLE_PATTERN.0 as u32 },"""),
-    ])
     # 4. Segment heap (Windows 10 2004+): the process heap (Rust's System allocator)
     #    commits less and fragments less. zed#54538 measured 124 -> 91 MB.
     edit("resources/windows/gpui.manifest.xml", [(
@@ -1646,7 +1620,7 @@ def path_patch() -> None:
     }
 
     /// Kitab patch: the path textures at window size while frames draw
-    /// paths, 1x1 otherwise (they cost 8 bytes per window pixel).
+    /// paths, 1x1 otherwise (they cost 20 bytes per window pixel).
     fn kitab_fit_path_textures(
         &mut self,
         devices: &DirectXRendererDevices,
