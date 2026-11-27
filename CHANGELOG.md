@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-11-27
+
 ### Added
 - **Two pages** and **Book view** for EPUB, MOBI, FB2 and other books: each page is laid out at half the width, side by side ([#32](https://github.com/t21dev/kitab/issues/32)). Ctrl+7, Ctrl+8, the dock and the View menu all work; Ctrl+6 goes back to one page.
 - The AppImage carries update information, and each release has its `.zsync` file, so AppImageUpdate, Gear Lever and AppImageLauncher update it by downloading only what changed.
