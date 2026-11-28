@@ -4,6 +4,7 @@ import { SITE } from "../content";
 import type { SiteTheme } from "../themes";
 import { Icon } from "./Icon";
 import { CommandPalette } from "./CommandPalette";
+import { AppSwitcher } from "./AppSwitcher";
 
 export const THEME_KEY = "kitab-theme";
 type Choice = SiteTheme | "system";
@@ -92,12 +93,15 @@ function Header({ onSearch }: { onSearch: () => void }) {
   return (
     <header className="nav">
       <div className="wrap nav__in">
-        <a href="/" className="brand" aria-label="Kitab Reader home">
-          <span className="brand__mark">
-            <Icon name="logo" size={16} />
-          </span>
-          Kitab
-        </a>
+        <div className="brand-group">
+          <a href="/" className="brand" aria-label="Kitab Reader home">
+            <span className="brand__mark">
+              <Icon name="logo" size={16} />
+            </span>
+            Kitab
+          </a>
+          <AppSwitcher current="kitab" home="/" />
+        </div>
         {/* The site search pill is hidden for now; Ctrl+K still opens the palette. */}
         {SHOW_SEARCH ? (
           <button type="button" className="pill" onClick={onSearch} aria-label="Search the site (Ctrl K)" aria-haspopup="dialog">

@@ -3,6 +3,7 @@ import { hydrateRoot } from "react-dom/client";
 import { App } from "./App";
 import type { PageData } from "./data";
 import "./styles.css";
+import "./switcher.css";
 
 const root = document.getElementById("root");
 const raw = document.getElementById("__data")?.textContent;
