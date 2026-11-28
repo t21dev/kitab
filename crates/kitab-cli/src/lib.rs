@@ -247,7 +247,13 @@ pub fn run(args: Vec<OsString>) -> i32 {
 
 /// Arguments the app takes: files to open and its own flags.
 fn opens_app(args: &[OsString]) -> bool {
-    const APP_FLAGS: &[&str] = &["--print", "--thumbnail", "--unregister", "--stdin"];
+    const APP_FLAGS: &[&str] = &[
+        "--print",
+        "--thumbnail",
+        "--unregister",
+        "--relink",
+        "--stdin",
+    ];
     let first = args.first().map(|a| a.to_string_lossy().to_string());
     if first.as_deref().is_some_and(|f| APP_FLAGS.contains(&f)) {
         return true;

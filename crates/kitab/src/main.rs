@@ -37,6 +37,14 @@ fn main() {
         kitab_os::assoc::unregister();
         return;
     }
+    // Installing (Windows setup, as the signed-in user): file types and
+    // right-click tools whose program moved point at this one, then stop.
+    // Kitab moved from %LOCALAPPDATA%\Programs to Program Files in 1.7.0.
+    if std::env::args_os().nth(1).is_some_and(|a| a == "--relink") {
+        let _ = kitab_os::assoc::relink();
+        let _ = kitab_os::context_menu::relink();
+        return;
+    }
     // Print without a window (Explorer's Print verb, PLAN.md §3.8).
     if std::env::args_os().nth(1).is_some_and(|a| a == "--print") {
         let args: Option<Vec<String>> = std::env::args_os()
@@ -149,6 +157,11 @@ fn main() {
             .spawn(move || {
                 if let Err(e) = kitab_os::context_menu::sync(on) {
                     log::warn!("right-click tools: {e}");
+                }
+                // File types registered for a Kitab that moved (or was
+                // reinstalled elsewhere) point at this one again.
+                if let Err(e) = kitab_os::assoc::relink() {
+                    log::warn!("file types: {e}");
                 }
             });
     }

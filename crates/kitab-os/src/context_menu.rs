@@ -133,6 +133,27 @@ fn kitab_command() -> Option<std::path::PathBuf> {
     std::env::current_exe().ok()
 }
 
+/// Re-point the right-click tools at this Kitab when the Kitab they name is
+/// gone (it moved; its kitab_shell.dll may linger until a restart while
+/// Explorer holds it). The installer runs it as part of `kitab.exe
+/// --relink`, before Kitab's first start syncs the setting.
+pub fn relink() -> Result<bool, String> {
+    #[cfg(windows)]
+    {
+        let gone = imp::registered_dll()
+            .is_some_and(|dll| !dll.is_file() || !dll.with_file_name("kitab.exe").is_file());
+        if !manages_menu() || !gone {
+            return Ok(false);
+        }
+        install()?;
+        Ok(true)
+    }
+    #[cfg(not(windows))]
+    {
+        Ok(false)
+    }
+}
+
 #[cfg(windows)]
 pub use imp::install_for;
 pub use imp::{install, installed, uninstall};
@@ -279,7 +300,7 @@ mod imp {
     }
 
     /// The DLL the menu class points at now.
-    fn registered_dll() -> Option<std::path::PathBuf> {
+    pub(super) fn registered_dll() -> Option<std::path::PathBuf> {
         use windows::Win32::System::Registry::{RRF_RT_REG_SZ, RegGetValueW};
         let path = HSTRING::from(format!(
             r"Software\Classes\CLSID\{MENU_CLSID}\InprocServer32"

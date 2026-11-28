@@ -7,7 +7,9 @@
 //! version), so nothing is replaced while Kitab is running.
 //!
 //! - Windows, installed with the setup program: the new setup runs silently
-//!   (per user, no administrator prompt) over the old version.
+//!   over the old version, after Windows' administrator prompt (Kitab is in
+//!   Program Files; 1.6.3 and older were per user, and that setup moves
+//!   them there).
 //! - macOS: the new `Kitab.app` from the release's disk image replaces the
 //!   running one where it is (usually /Applications).
 //!

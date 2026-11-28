@@ -47,7 +47,7 @@ jobs:
           ## Downloads
           | System | File |
           |---|---|
-          | Windows (Intel, AMD) | \`Kitab_${VERSION}_x64_setup.exe\` installs for your account, with no administrator prompt. \`Kitab_${VERSION}_x64_portable.zip\` runs without installing. |
+          | Windows (Intel, AMD) | \`Kitab_${VERSION}_x64_setup.exe\` installs for everyone on the computer, in Program Files (Windows asks for administrator permission). \`Kitab_${VERSION}_x64_portable.zip\` runs without installing. |
           | Windows on Arm | The x64 downloads; Windows runs them through its emulation. |
           | macOS, Apple silicon | \`Kitab_${VERSION}_aarch64.dmg\` |
           | macOS, Intel | \`Kitab_${VERSION}_x86_64.dmg\` |

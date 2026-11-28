@@ -183,6 +183,7 @@ fn is_command_only_for_commands() {
         "--thumbnail",
         "--print",
         "--unregister",
+        "--relink",
         "--stdin",
         "--json",
         "",

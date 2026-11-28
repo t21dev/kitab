@@ -434,6 +434,40 @@ mod imp {
         }
     }
 
+    /// Point the file types this user registered at this kitab.exe when the
+    /// one they name is gone: Kitab moved (1.6 and older installed per user
+    /// in %LOCALAPPDATA%\Programs\Kitab, later versions in Program Files).
+    /// Only types already registered are touched, and only when their
+    /// program no longer exists, so a portable copy run beside an installed
+    /// one never takes the types over. Returns whether anything was written.
+    pub fn relink() -> Result<bool, String> {
+        if crate::packaged() {
+            return Ok(false);
+        }
+        let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+        let stale: Vec<&super::FileType> = FILE_TYPES
+            .iter()
+            .filter(|t| {
+                let command = format!(r"Software\Classes\{}\shell\open\command", t.prog_id);
+                get(&command, None)
+                    .as_deref()
+                    .and_then(super::command_exe)
+                    .is_some_and(|old| {
+                        let old = std::path::Path::new(old);
+                        !old.is_file()
+                            && !old
+                                .to_string_lossy()
+                                .eq_ignore_ascii_case(&exe.to_string_lossy())
+                    })
+            })
+            .collect();
+        if stale.is_empty() {
+            return Ok(false);
+        }
+        register_types(&stale)?;
+        Ok(true)
+    }
+
     /// Where the user picks the default (Windows 10+ asks the user).
     pub const DEFAULTS_PAGE: &str = "ms-settings:defaultapps?registeredAppUser=Kitab";
 }
@@ -800,6 +834,53 @@ pub fn defaults_page() -> &'static str {
 }
 #[cfg(windows)]
 pub use imp::{register_thumbnails, unregister_thumbnails};
+
+/// Re-point registered file types at this Kitab when the program they name
+/// was moved or removed (Windows; elsewhere nothing to do). The installer
+/// runs it (`kitab.exe --relink`) and so does every start-up, off the UI
+/// thread.
+pub fn relink() -> Result<bool, String> {
+    #[cfg(windows)]
+    {
+        imp::relink()
+    }
+    #[cfg(not(windows))]
+    {
+        Ok(false)
+    }
+}
+
+/// The program in an open command: `"C:\…\kitab.exe" "%1"` (quoted, as
+/// Kitab writes it) or `C:\…\kitab.exe %1`.
+#[cfg_attr(not(windows), allow(dead_code))]
+fn command_exe(command: &str) -> Option<&str> {
+    let command = command.trim();
+    let exe = match command.strip_prefix('"') {
+        Some(rest) => &rest[..rest.find('"')?],
+        None => command.split_whitespace().next()?,
+    };
+    (!exe.is_empty()).then_some(exe)
+}
+
+#[cfg(test)]
+mod command_tests {
+    use super::command_exe;
+
+    #[test]
+    fn finds_the_program_in_an_open_command() {
+        assert_eq!(
+            command_exe(r#""C:\Users\a\AppData\Local\Programs\Kitab\kitab.exe" "%1""#),
+            Some(r"C:\Users\a\AppData\Local\Programs\Kitab\kitab.exe")
+        );
+        assert_eq!(
+            command_exe(r"C:\Kitab\kitab.exe %1"),
+            Some(r"C:\Kitab\kitab.exe")
+        );
+        assert_eq!(command_exe(r#""unclosed"#), None);
+        assert_eq!(command_exe(r#""" "%1""#), None);
+        assert_eq!(command_exe("  "), None);
+    }
+}
 
 #[cfg(all(test, windows))]
 mod tests {
