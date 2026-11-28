@@ -399,7 +399,11 @@ const SLOW_SETTLE: Duration = Duration::from_millis(350);
 const GLIDE_FRAME: Duration = Duration::from_micros(16_667);
 
 /// Smooth scrolling covers 63 % of what is left in this many seconds.
-const GLIDE_TIME: f32 = 0.045;
+const GLIDE_TIME: f32 = 0.07;
+
+/// How far one line of a mouse wheel scrolls the pages, in pixels: a notch
+/// is usually three lines, so about 100 px, as a web browser scrolls.
+const WHEEL_LINE: f32 = 33.0;
 
 /// What a page render is for: the reading view (a quick preview or the sharp
 /// page) or a thumbnail in the Pages pane, with its own test for whether it
@@ -1586,7 +1590,7 @@ impl Reader {
 
     /// One frame of smooth scrolling: cover a share of what is left that
     /// depends only on the time gone by (the same glide at 60 and 144 Hz),
-    /// fast at first and easing out; about 150 ms in all.
+    /// fast at first and easing out; about 250 ms in all.
     fn glide_step(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some(glide) = self.glide.as_mut() else {
             return;
@@ -3122,17 +3126,15 @@ impl Reader {
                         let gpui::ScrollDelta::Lines(lines) = e.delta else {
                             return;
                         };
-                        let st = Style::get(cx);
-                        if !(st.smooth_scroll && st.animations)
-                            || lines.x != 0.0
+                        if lines.x != 0.0
                             || lines.y == 0.0
                             || r.present.is_some()
                             || !r.list.viewport_bounds().contains(&e.position)
                         {
                             return;
                         }
-                        // The list's own step: 20 px a line.
-                        r.glide_by(-lines.y * 20.0, cx);
+                        // At once when smooth scrolling is off.
+                        r.glide_by(-lines.y * WHEEL_LINE, cx);
                         cx.stop_propagation();
                     })),
             )
