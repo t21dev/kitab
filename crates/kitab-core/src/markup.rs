@@ -185,6 +185,9 @@ pub struct FileAnnot {
 pub enum AnnotEdit {
     /// Take the page's `index`th annotation out of the file.
     Delete { page: u32, index: u32 },
+    /// Change the text (`/Contents`) of the page's `index`th annotation: a
+    /// note's, a text box's or a highlight's comment, made here or elsewhere.
+    Text { page: u32, index: u32, text: String },
     /// Fill in a form field (its widget is the page's `index`th widget).
     Field(crate::FieldEdit),
 }
@@ -192,7 +195,7 @@ pub enum AnnotEdit {
 impl AnnotEdit {
     pub fn page(&self) -> u32 {
         match self {
-            AnnotEdit::Delete { page, .. } => *page,
+            AnnotEdit::Delete { page, .. } | AnnotEdit::Text { page, .. } => *page,
             AnnotEdit::Field(f) => f.page,
         }
     }

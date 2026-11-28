@@ -8,7 +8,7 @@ use super::*;
 use kitab_core::{MarkShape, RectPt};
 
 /// Where a row comes from.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum MarkSource {
     /// Drawn in Kitab: in a PDF not saved into the file yet, elsewhere kept in Kitab.
     Kitab(u64),
@@ -110,7 +110,10 @@ impl Reader {
         let mut rows = Vec::new();
         let mut want_chars = Vec::new();
         for a in self.file_annots.clone().unwrap_or_default() {
-            let text = a.text.clone().or_else(|| {
+            let edited = self
+                .file_annot_new_text(a.page, a.index)
+                .map(str::to_string);
+            let text = edited.or(a.text.clone()).or_else(|| {
                 let markup = matches!(
                     a.kind.as_str(),
                     "Highlight" | "Underline" | "StrikeOut" | "Squiggly"

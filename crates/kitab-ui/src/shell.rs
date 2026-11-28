@@ -69,6 +69,9 @@ impl gpui::Global for SettingsSink {}
 
 /// Closed tabs remembered for Ctrl+Shift+T.
 const CLOSED_MAX: usize = 20;
+
+/// Line height of a Marks panel row's text, in pixels.
+const MARK_TEXT_LINE: f32 = 17.0;
 /// How long after it opens a tab may still slide in: its slide takes
 /// [`motion::BASE`] from its first frame, with room for a slow first frame.
 const TAB_FRESH: std::time::Duration = std::time::Duration::from_millis(600);
@@ -2140,8 +2143,85 @@ impl Workspace {
                 {
                     Some("Deleted from the PDF when you save (Ctrl+S)")
                 }
+                crate::reader::MarkSource::File { page, index }
+                    if reader.read(cx).file_annot_new_text(page, index).is_some() =>
+                {
+                    Some("Text changed. Saved into the PDF when you save (Ctrl+S)")
+                }
                 crate::reader::MarkSource::File { .. } => None,
             };
+            // Annotations the PDF already has (made here or in another app)
+            // can have their text edited, and the edit taken back.
+            let (edit, revert) = match row.source {
+                crate::reader::MarkSource::File { page, index }
+                    if !reader.read(cx).is_annot_deleted(page, index) =>
+                {
+                    let changed = reader.read(cx).file_annot_new_text(page, index).is_some();
+                    let r = reader.clone();
+                    // Shows when the row is pointed at, like Delete.
+                    let edit = div()
+                        .id(("mark-edit", ix))
+                        .size(px(22.0))
+                        .flex_none()
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .rounded(px(6.0))
+                        .opacity(0.0)
+                        .group_hover("mark-row", |s| s.opacity(1.0))
+                        .hover(|d| d.bg(st.c(|c| c.raised)))
+                        .tip("Edit its text")
+                        .child(
+                            svg()
+                                .path(icon("edit"))
+                                .size(px(12.0))
+                                .text_color(st.c(|c| c.muted)),
+                        )
+                        .on_click(move |_, window, cx| {
+                            cx.stop_propagation();
+                            r.update(cx, |r, cx| r.edit_file_annot(page, index, true, window, cx));
+                        });
+                    // Under the "Text changed" line, so the row's buttons
+                    // don't narrow its text.
+                    let r = reader.clone();
+                    let revert = changed.then(|| {
+                        div()
+                            .id(("mark-revert", ix))
+                            .text_size(px(11.5))
+                            .text_color(st.c(|c| c.accent))
+                            .hover(|d| d.underline())
+                            .child("Keep its own text")
+                            .on_click(move |_, _, cx| {
+                                cx.stop_propagation();
+                                r.update(cx, |r, cx| r.revert_file_annot_text(page, index, cx));
+                            })
+                    });
+                    (Some(edit), revert)
+                }
+                _ => (None, None),
+            };
+            // Long text shows its first lines, and all of it on request. The
+            // panel fits about 35 characters a line, so past ~90 it's more
+            // than three lines.
+            let source = row.source;
+            let expanded = reader.read(cx).is_mark_expanded(source);
+            let long = row
+                .text
+                .as_deref()
+                .is_some_and(|t| t.chars().count() > 90 || t.lines().count() > 3);
+            let more = long.then(|| {
+                let r = reader.clone();
+                div()
+                    .id(("mark-more", ix))
+                    .text_size(px(11.5))
+                    .text_color(st.c(|c| c.accent))
+                    .hover(|d| d.underline())
+                    .child(if expanded { "Show less" } else { "Show more" })
+                    .on_click(move |_, _, cx| {
+                        cx.stop_propagation();
+                        r.update(cx, |r, cx| r.toggle_mark_expanded(source, cx));
+                    })
+            });
             let delete = match row.source {
                 crate::reader::MarkSource::Kitab(local) => {
                     let r = reader.clone();
@@ -2255,16 +2335,26 @@ impl Workspace {
                                 div()
                                     .text_size(px(12.0))
                                     .text_color(st.c(|c| c.muted))
-                                    .line_clamp(3)
+                                    .line_height(px(MARK_TEXT_LINE))
+                                    // Three lines by height, not `line_clamp`:
+                                    // gpui caches wrapped text without its
+                                    // line limit, so after a clamp "Show
+                                    // more" would get the clamped layout back.
+                                    .when(!expanded, |d| {
+                                        d.max_h(px(MARK_TEXT_LINE * 3.0)).overflow_hidden()
+                                    })
                                     .child(t)
                             }))
+                            .children(more)
                             .children(pending.map(|p| {
                                 div()
                                     .text_size(px(11.0))
                                     .text_color(st.c(|c| c.faint))
                                     .child(p)
-                            })),
+                            }))
+                            .children(revert),
                     )
+                    .children(edit)
                     .children(delete),
             );
         }

@@ -106,6 +106,68 @@ fn fill(a: &mut PdfAnnotation, m: &Mark) -> Result<(), mupdf::Error> {
     Ok(())
 }
 
+/// Put `text` in an annotation already in the file, keeping everything
+/// else it has (author, date, replies, popup). Rich text (`/RC`, which
+/// Acrobat shows before `/Contents`) goes, so every reader shows the new
+/// text, and a text box is drawn again with it.
+fn retext(doc: &mut PdfDocument, a: &mut PdfAnnotation, text: &str) -> Result<(), String> {
+    a.set_contents(text).map_err(|e| e.to_string())?;
+    let mut obj = a.object();
+    obj.dict_delete("RC").map_err(|e| e.to_string())?;
+    let free_text = matches!(a.r#type(), Ok(PdfAnnotationType::FreeText));
+    if free_text {
+        // MuPDF draws a text box from its /DA when the old look is gone.
+        obj.dict_delete("AP").map_err(|e| e.to_string())?;
+    }
+    a.update().map_err(|e| e.to_string())?;
+    if free_text && !crate::script_ap::mupdf_draws(text) {
+        let da = obj
+            .get_dict("DA")
+            .ok()
+            .flatten()
+            .and_then(|d| d.as_string().ok())
+            .unwrap_or_default();
+        let (size, rgb) = da_look(&da);
+        crate::script_ap::draw_text_box(
+            doc,
+            &mut obj,
+            text,
+            size,
+            rgb,
+            kitab_core::TextStyle::default(),
+        )?;
+    }
+    Ok(())
+}
+
+/// The font size and fill colour in a default appearance string
+/// ("/Helv 12 Tf 1 0 0 rg"); 12 points and black when it has none.
+fn da_look(da: &str) -> (f32, (f32, f32, f32)) {
+    let words: Vec<&str> = da.split_whitespace().collect();
+    let num = |i: usize| words.get(i).and_then(|w| w.parse::<f32>().ok());
+    let mut size = 12.0;
+    let mut rgb = (0.0, 0.0, 0.0);
+    for (i, w) in words.iter().enumerate() {
+        match *w {
+            "Tf" if i >= 1 => {
+                size = num(i - 1).filter(|s| *s > 0.0).unwrap_or(size);
+            }
+            "rg" if i >= 3 => {
+                if let (Some(r), Some(g), Some(b)) = (num(i - 3), num(i - 2), num(i - 1)) {
+                    rgb = (r, g, b);
+                }
+            }
+            "g" if i >= 1 => {
+                if let Some(v) = num(i - 1) {
+                    rgb = (v, v, v);
+                }
+            }
+            _ => {}
+        }
+    }
+    (size, rgb)
+}
+
 /// Write `marks` into a copy of the PDF at `src`, apply `edits` to the
 /// annotations it already has, and put it at `out` (which may be `src`
 /// itself). Returns how many changes were made. Nothing is changed if any
@@ -171,7 +233,7 @@ fn annotate(
         .iter()
         .filter_map(|e| match e {
             kitab_core::AnnotEdit::Field(f) => Some(f.clone()),
-            kitab_core::AnnotEdit::Delete { .. } => None,
+            _ => None,
         })
         .collect();
     if !fields.is_empty() && !crate::doc::can_fill_forms(&doc) {
@@ -188,11 +250,38 @@ fn annotate(
         .iter()
         .filter_map(|e| match e {
             kitab_core::AnnotEdit::Delete { page, index } => Some((*page, *index)),
-            kitab_core::AnnotEdit::Field(_) => None,
+            _ => None,
         })
         .collect();
     gone.sort_unstable();
     gone.dedup();
+    // New text for annotations already in the file (one made in another
+    // app too), before any deletion moves them: the newest text of each,
+    // and none for one being deleted anyway.
+    let mut texts: Vec<(u32, u32, &str)> = Vec::new();
+    for e in edits.iter().rev() {
+        if let kitab_core::AnnotEdit::Text { page, index, text } = e
+            && !texts.iter().any(|t| (t.0, t.1) == (*page, *index))
+            && gone.binary_search(&(*page, *index)).is_err()
+        {
+            texts.push((*page, *index, text));
+        }
+    }
+    texts.sort_unstable_by_key(|t| (t.0, t.1));
+    for group in texts.chunk_by(|a, b| a.0 == b.0) {
+        let index = i32::try_from(group[0].0).map_err(|e| e.to_string())?;
+        let page = doc.load_pdf_page(index).map_err(|e| e.to_string())?;
+        let mut annots: Vec<Option<PdfAnnotation>> = page.annotations().map(Some).collect();
+        for &(_, n, text) in group {
+            let mut annot = annots
+                .get_mut(n as usize)
+                .and_then(Option::take)
+                .ok_or("an annotation to change isn't in the PDF any more")?;
+            retext(&mut doc, &mut annot, text)
+                .map_err(|e| format!("could not change an annotation's text: {e}"))?;
+            written += 1;
+        }
+    }
     for group in gone.chunk_by(|a, b| a.0 == b.0) {
         let index = i32::try_from(group[0].0).map_err(|e| e.to_string())?;
         let mut page = doc.load_pdf_page(index).map_err(|e| e.to_string())?;
@@ -648,6 +737,106 @@ mod tests {
         // Other pages untouched.
         assert!(annots(&out, None, 0).is_empty());
         let _ = std::fs::remove_file(&out);
+    }
+
+    /// A PDF with a note and a text box another app made: an author, and
+    /// rich text (`/RC`) beside the plain text.
+    fn annotated_elsewhere(path: &Path) {
+        std::fs::copy(fixture("01-text-outline.pdf"), path).expect("copy");
+        let name = path.to_str().expect("utf-8");
+        let doc = PdfDocument::open(name).expect("opens");
+        let mut page = doc.load_pdf_page(0).expect("page");
+        for (kind, rect) in [
+            (
+                PdfAnnotationType::Text,
+                Rect::new(100.0, 100.0, 118.0, 118.0),
+            ),
+            (
+                PdfAnnotationType::FreeText,
+                Rect::new(100.0, 300.0, 300.0, 340.0),
+            ),
+        ] {
+            let mut a = page.create_annotation(kind).expect("annot");
+            a.set_rect(rect).expect("rect");
+            a.set_author("Someone else").expect("author");
+            a.set_contents("A long comment written somewhere else")
+                .expect("contents");
+            a.object()
+                .dict_put(
+                    "RC",
+                    mupdf::pdf::PdfObject::new_string("<body><p>old</p></body>").expect("rc"),
+                )
+                .expect("put");
+            a.update().expect("update");
+        }
+        let mut options = PdfWriteOptions::default();
+        options.set_incremental(true);
+        doc.save_with_options(name, options).expect("save");
+    }
+
+    #[test]
+    fn text_of_annotations_made_elsewhere_is_changed_in_place() {
+        use kitab_core::AnnotEdit;
+        let src = temp("elsewhere.pdf");
+        annotated_elsewhere(&src);
+        let out = temp("elsewhere-edited.pdf");
+        let text = |index, t: &str| AnnotEdit::Text {
+            page: 0,
+            index,
+            text: t.into(),
+        };
+        // The newest text of each wins.
+        let edits = [
+            text(0, "first try"),
+            text(0, "Edited note"),
+            text(1, "Edited box"),
+        ];
+        assert_eq!(
+            write_marks(&src, None, &[], &edits, &out).expect("writes"),
+            2
+        );
+        {
+            // Closed again before the next save (Windows locks open files).
+            let doc = PdfDocument::open(out.to_str().expect("utf-8")).expect("opens");
+            let page = doc.load_pdf_page(0).expect("page");
+            let found: Vec<_> = page.annotations().collect();
+            assert_eq!(found.len(), 2, "changed, not added");
+            for (a, want) in found.iter().zip(["Edited note", "Edited box"]) {
+                assert_eq!(a.contents().expect("contents"), Some(want));
+                assert_eq!(a.author().expect("author"), Some("Someone else"));
+                assert!(
+                    a.object().get_dict("RC").expect("rc").is_none(),
+                    "stale rich text goes"
+                );
+            }
+        }
+        // Incremental: the original bytes stay.
+        let before = std::fs::read(&src).expect("src");
+        assert!(std::fs::read(&out).expect("out").starts_with(&before));
+        // A deleted one isn't given text, and nothing else moves.
+        let both = [
+            text(0, "gone anyway"),
+            AnnotEdit::Delete { page: 0, index: 0 },
+        ];
+        assert_eq!(
+            write_marks(&src, None, &[], &both, &out).expect("writes"),
+            1
+        );
+        assert_eq!(annots(&out, None, 0).len(), 1);
+        // An annotation that isn't there changes nothing.
+        let missing = temp("elsewhere-missing.pdf");
+        assert!(write_marks(&src, None, &[], &[text(9, "x")], &missing).is_err());
+        assert!(!missing.exists());
+        for f in [src, out] {
+            let _ = std::fs::remove_file(f);
+        }
+    }
+
+    #[test]
+    fn default_appearance_gives_size_and_colour() {
+        assert_eq!(da_look("/Helv 14 Tf 1 0 0 rg"), (14.0, (1.0, 0.0, 0.0)));
+        assert_eq!(da_look("0.5 g /Helv 9 Tf"), (9.0, (0.5, 0.5, 0.5)));
+        assert_eq!(da_look(""), (12.0, (0.0, 0.0, 0.0)));
     }
 
     #[test]

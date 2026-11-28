@@ -101,6 +101,8 @@ pub(super) struct Writing {
     pub field: Entity<crate::text_field::TextField>,
     /// The mark this replaces (editing an existing note or text).
     pub replaces: Option<u64>,
+    /// The annotation already in the PDF whose text this edits: (page, index).
+    pub file: Option<(u32, u32)>,
     pub colour: (u8, u8, u8),
     pub size: f32,
     /// Bold, italic and alignment, for a text box.
@@ -179,6 +181,11 @@ pub(super) struct MarkupState {
     /// Annotations already in the PDF, deleted here: (page, index), written
     /// out on save.
     pub deleted: Vec<(u32, u32)>,
+    /// Annotations already in the PDF given new text here: (page, index,
+    /// text), written into them on save.
+    pub retexted: Vec<(u32, u32, String)>,
+    /// Rows of the Marks panel showing all of their text.
+    pub expanded: std::collections::HashSet<super::MarkSource>,
     next_local: u64,
 }
 
@@ -748,6 +755,7 @@ impl Reader {
             self.unplace(l, cx);
         }
         self.markup.deleted.clear();
+        self.markup.retexted.clear();
         self.markup.undo.clear();
         self.markup.redo.clear();
         self.markup.selected = None;
@@ -832,6 +840,28 @@ impl Reader {
         })
     }
 
+    /// The topmost annotation the PDF already has at `at` on `page` (a few
+    /// pixels of slack), as (page, index).
+    fn file_annot_at(&self, page: u32, at: PointPt, ix: usize) -> Option<(u32, u32)> {
+        if !self.is_pdf() {
+            return None;
+        }
+        let slack = 5.0 / self.px_per_pt(ix).max(0.01);
+        self.file_annots.as_ref().and_then(|v| {
+            v.iter()
+                .rev()
+                .find(|a| {
+                    let r = a.rect;
+                    a.page == page
+                        && at.x >= r.x - slack
+                        && at.x <= r.x + r.w + slack
+                        && at.y >= r.y - slack
+                        && at.y <= r.y + r.h + slack
+                })
+                .map(|a| (a.page, a.index))
+        })
+    }
+
     /// Left button down on page `ix` with a tool: start drawing, or erase.
     /// Returns false when no tool is active (the click selects text).
     pub(super) fn markup_down(
@@ -856,6 +886,10 @@ impl Reader {
         if tool == Tool::Select {
             if self.markup.selected.take().is_some() {
                 cx.notify();
+            } else if let Some((p, i)) = self.file_annot_at(page, at, ix) {
+                // One the PDF already has (made here or in another app):
+                // edit its text.
+                self.edit_file_annot(p, i, false, window, cx);
             }
             return true;
         }
@@ -872,25 +906,9 @@ impl Reader {
             if let Some(mark) = hit.and_then(|local| self.unplace(local, cx)) {
                 self.markup.undo.push(Edit::Removed(mark));
                 self.markup.redo.clear();
-            } else if self.is_pdf() {
+            } else if let Some((p, i)) = self.file_annot_at(page, at, ix) {
                 // Not one of Kitab's: an annotation the PDF already has.
-                let file_hit = self
-                    .file_annots
-                    .as_ref()
-                    .and_then(|v| {
-                        v.iter().rev().find(|a| {
-                            let r = a.rect;
-                            a.page == page
-                                && at.x >= r.x - slack
-                                && at.x <= r.x + r.w + slack
-                                && at.y >= r.y - slack
-                                && at.y <= r.y + r.h + slack
-                        })
-                    })
-                    .map(|a| (a.page, a.index));
-                if let Some((p, i)) = file_hit {
-                    self.delete_file_annot(p, i, cx);
-                }
+                self.delete_file_annot(p, i, cx);
             }
             return true;
         }
@@ -1097,6 +1115,7 @@ impl Reader {
             note,
             field,
             replaces,
+            file: None,
             colour: m.colour(false),
             size: TEXT_SIZES[m.size % 3],
             style,
@@ -1117,6 +1136,10 @@ impl Reader {
             return;
         };
         let text = w.field.read(cx).text().trim_end().to_string();
+        if let Some((page, index)) = w.file {
+            self.retext_file_annot(page, index, text, cx);
+            return;
+        }
         if let Some(old) = w.replaces.and_then(|l| self.unplace(l, cx)) {
             self.markup.undo.push(Edit::Removed(old));
         }
@@ -1281,7 +1304,12 @@ impl Reader {
         let (u, v) = point_to_view(w.at.x, w.at.y, self.raw_page_size(ix), self.rotation);
         let ppt = self.px_per_pt(ix);
         let at = gpui::point(b.origin.x + px(u * ppt), b.origin.y + px(v * ppt + 22.0));
-        let title = if w.note { "Note" } else { "Text" };
+        let title = match (w.file.is_some(), w.note) {
+            (true, true) => "Edit note",
+            (true, false) => "Edit text",
+            (false, true) => "Note",
+            (false, false) => "Text",
+        };
         let button = |id: &'static str, label: &'static str, primary: bool| {
             div()
                 .id(id)
@@ -1407,6 +1435,13 @@ impl Reader {
                     .iter()
                     .map(|&(page, index)| kitab_core::AnnotEdit::Delete { page, index }),
             )
+            .chain(self.markup.retexted.iter().map(|(page, index, text)| {
+                kitab_core::AnnotEdit::Text {
+                    page: *page,
+                    index: *index,
+                    text: text.clone(),
+                }
+            }))
             .collect();
         (marks, edits)
     }
@@ -1419,7 +1454,10 @@ impl Reader {
     /// deletions of its own annotations and form fields filled in.
     pub fn unsaved_marks(&self) -> usize {
         if self.is_pdf() {
-            self.markup.marks.len() + self.markup.deleted.len() + self.unsaved_fields()
+            self.markup.marks.len()
+                + self.markup.deleted.len()
+                + self.markup.retexted.len()
+                + self.unsaved_fields()
         } else {
             0
         }
@@ -1442,6 +1480,100 @@ impl Reader {
 
     pub fn is_annot_deleted(&self, page: u32, index: u32) -> bool {
         self.markup.deleted.contains(&(page, index))
+    }
+
+    /// The new text given here to an annotation the PDF already has, if any.
+    pub fn file_annot_new_text(&self, page: u32, index: u32) -> Option<&str> {
+        self.markup
+            .retexted
+            .iter()
+            .find(|t| (t.0, t.1) == (page, index))
+            .map(|t| t.2.as_str())
+    }
+
+    /// Edit the text of an annotation the PDF already has (made here or in
+    /// another app): the writer opens over it, and Save (Ctrl+S) writes the
+    /// text into the annotation itself, keeping its author, date and replies.
+    pub fn edit_file_annot(
+        &mut self,
+        page: u32,
+        index: u32,
+        reveal: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(a) = self
+            .file_annots
+            .as_ref()
+            .and_then(|v| v.iter().find(|a| (a.page, a.index) == (page, index)))
+            .cloned()
+        else {
+            return;
+        };
+        let text = self
+            .file_annot_new_text(page, index)
+            .map(str::to_string)
+            .or(a.text.clone())
+            .unwrap_or_default();
+        if reveal {
+            // From the Marks panel: bring the annotation into view, a third
+            // of the way down, so the writer opens beside it.
+            self.jump_to(page, cx);
+            let ix = page as usize;
+            let lead = self.row_lead(ix);
+            let view = super::geom::rect_to_view(
+                a.rect,
+                self.raw_page_size(ix),
+                self.rotation,
+                self.px_per_pt(ix),
+            );
+            let offset = (self.sheet_top_pad(lead) + view.y - self.viewport.1 * 0.33).max(0.0);
+            self.list.scroll_to(gpui::ListOffset {
+                item_ix: lead,
+                offset_in_item: px(offset),
+            });
+        }
+        let at = PointPt {
+            x: a.rect.x,
+            y: a.rect.y + a.rect.h,
+        };
+        self.start_writing(page, at, a.kind == "Text", None, text, window, cx);
+        if let Some(w) = self.markup.writing.as_mut() {
+            w.file = Some((page, index));
+        }
+    }
+
+    /// Keep new text for an annotation the PDF already has; its own text
+    /// again drops the change.
+    fn retext_file_annot(&mut self, page: u32, index: u32, text: String, cx: &mut Context<Self>) {
+        self.markup.retexted.retain(|t| (t.0, t.1) != (page, index));
+        let own = self
+            .file_annots
+            .as_ref()
+            .and_then(|v| v.iter().find(|a| (a.page, a.index) == (page, index)))
+            .map(|a| a.text.clone().unwrap_or_default());
+        if own.is_some_and(|own| own.trim() != text.trim()) {
+            self.markup.retexted.push((page, index, text));
+        }
+        cx.notify();
+    }
+
+    /// Drop the new text given to an annotation the PDF already has.
+    pub fn revert_file_annot_text(&mut self, page: u32, index: u32, cx: &mut Context<Self>) {
+        self.markup.retexted.retain(|t| (t.0, t.1) != (page, index));
+        cx.notify();
+    }
+
+    /// Show all of a Marks panel row's text, or only its first lines again.
+    pub fn toggle_mark_expanded(&mut self, source: super::MarkSource, cx: &mut Context<Self>) {
+        if !self.markup.expanded.remove(&source) {
+            self.markup.expanded.insert(source);
+        }
+        cx.notify();
+    }
+
+    pub fn is_mark_expanded(&self, source: super::MarkSource) -> bool {
+        self.markup.expanded.contains(&source)
     }
 
     /// Red outlines over the file's annotations deleted but not saved yet.
@@ -1481,6 +1613,7 @@ impl Reader {
             || self.markup.saving
             || (self.markup.marks.is_empty()
                 && self.markup.deleted.is_empty()
+                && self.markup.retexted.is_empty()
                 && self.form.edits.is_empty())
         {
             return;
@@ -1489,17 +1622,7 @@ impl Reader {
         self.markup.saving = true;
         self.markup.note = Some("Saving…".into());
         self.save_now(cx);
-        let marks: Vec<Mark> = self.markup.marks.iter().map(|p| p.mark.clone()).collect();
-        let edits: Vec<kitab_core::AnnotEdit> = kitab_core::latest_edits(&self.form.edits)
-            .into_iter()
-            .map(kitab_core::AnnotEdit::Field)
-            .chain(
-                self.markup
-                    .deleted
-                    .iter()
-                    .map(|&(page, index)| kitab_core::AnnotEdit::Delete { page, index }),
-            )
-            .collect();
+        let (marks, edits) = self.pending_marks();
         let (engine, library, path) =
             (self.engine.clone(), self.library.clone(), self.path.clone());
         let password = self.unlock.clone();
@@ -1534,6 +1657,7 @@ impl Reader {
                 // The file draws them now, and lists them.
                 self.markup.marks.clear();
                 self.markup.deleted.clear();
+                self.markup.retexted.clear();
                 self.form.edits.clear();
                 self.file_annots = None;
                 self.markup.undo.clear();
