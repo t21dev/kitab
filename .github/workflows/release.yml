@@ -28,7 +28,7 @@ jobs:
     outputs:
       release_id: ${{ steps.create.outputs.id }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Create the draft release
         id: create
         shell: bash
@@ -78,8 +78,8 @@ jobs:
         os: [windows-latest, macos-latest, macos-15-intel, ubuntu-22.04, ubuntu-22.04-arm]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - uses: dtolnay/rust-toolchain@stable
@@ -138,7 +138,7 @@ jobs:
       - name: Store package artifact (Windows)
         if: runner.os == 'Windows'
         continue-on-error: true
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: kitab-msstore
           path: dist/*.msix
@@ -153,7 +153,7 @@ jobs:
           ls -la out
       - name: Artifacts (dry run)
         if: github.event_name != 'push'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: kitab-${{ matrix.os }}
           path: out/*
@@ -192,7 +192,7 @@ jobs:
         run: |
           rm -rf /hostfree/dotnet/* /hostfree/android/* /hostfree/ghc/* /hostfree/toolcache/* || true
           df -h / | tail -1
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Patched gpui and offline crate sources
         run: |
           python3 tools/patch_gpui.py
@@ -209,7 +209,7 @@ jobs:
             repo "Kitab_${VERSION}_x86_64.flatpak" dev.t21.kitab
       - name: Artifact (dry run)
         if: github.event_name != 'push'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: kitab-flatpak
           path: ${{ env.BUNDLE }}
@@ -279,11 +279,11 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: landing
           fetch-depth: 0
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -361,3 +361,56 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -am "kitab ${VERSION}"
           git push origin HEAD
+
+  # The Scoop manifest (t21dev/scoop-bucket) follows the release at once
+  # rather than at the bucket's next hourly Excavator run. The token is
+  # SCOOP_BUCKET_TOKEN, or HOMEBREW_TAP_TOKEN when that one can push to the
+  # bucket too (a classic token with public_repo scope can).
+  scoop:
+    needs: [publish]
+    if: always() && github.event_name == 'push' && needs.publish.result == 'success' && !contains(github.ref_name, '-')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Update the manifest
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BUCKET_TOKEN: ${{ secrets.SCOOP_BUCKET_TOKEN || secrets.HOMEBREW_TAP_TOKEN }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          if [ -z "$BUCKET_TOKEN" ]; then
+            echo "::warning::No token for the Scoop bucket; its hourly Excavator will catch up instead"
+            exit 0
+          fi
+          BUCKET_TOKEN=$(printf '%s' "$BUCKET_TOKEN" | tr -d '[:space:]')
+          VERSION="${TAG#v}"
+          ZIP="Kitab_${VERSION}_x64_portable.zip"
+          gh release download "$TAG" -R "$REPO" -p SHA256SUMS.txt
+          HASH=$(awk -v f="$ZIP" '$2 == f || $2 == "*" f { print $1 }' SHA256SUMS.txt)
+          if [ ${#HASH} -ne 64 ]; then
+            echo "::warning::$ZIP is missing from the release; the manifest is left as it is"
+            exit 0
+          fi
+          if ! git clone --depth 1 "https://x-access-token:${BUCKET_TOKEN}@github.com/t21dev/scoop-bucket.git" bucket; then
+            echo "::warning::Couldn't reach the Scoop bucket with this token; its hourly Excavator will catch up instead"
+            exit 0
+          fi
+          cd bucket
+          URL="https://github.com/${REPO}/releases/download/${TAG}/${ZIP}"
+          jq --indent 4 --arg v "$VERSION" --arg u "$URL" --arg h "$HASH" \
+            '.version = $v | .architecture."64bit".url = $u | .architecture."64bit".hash = $h' \
+            bucket/kitab.json > kitab.json.new
+          mv kitab.json.new bucket/kitab.json
+          if git diff --quiet; then
+            echo "The manifest already has $VERSION"
+            exit 0
+          fi
+          git diff
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "kitab: Update to version ${VERSION}"
+          if ! git push origin HEAD; then
+            echo "::warning::This token can't push to the Scoop bucket; its hourly Excavator will catch up instead"
+          fi
