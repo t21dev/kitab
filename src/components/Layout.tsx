@@ -100,7 +100,7 @@ function Header({ onSearch }: { onSearch: () => void }) {
             </span>
             Kitab
           </a>
-          <AppSwitcher current="kitab" home="/" />
+          <AppSwitcher current="kitab" home="/" homeLabel="Home" />
         </div>
         {/* The site search pill is hidden for now; Ctrl+K still opens the palette. */}
         {SHOW_SEARCH ? (
