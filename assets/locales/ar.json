@@ -135,7 +135,6 @@
   "New documents open at": "تُفتح المستندات الجديدة بحجم",
   "How a PDF, comic or XPS file is sized the first time you open it. One you’ve read before comes back the way you left it.": "حجم عرض ملف PDF أو القصة المصورة أو ملف XPS عند فتحه أول مرة. أما الملف الذي قرأته من قبل فيعود كما تركته.",
   "Page colour": "لون الصفحة",
-  "For PDFs, comics, DjVu and XPS. Dark turns white paper dark and keeps pictures' colours; Theme colours use your theme's page and text colours. Books and Markdown follow the theme already.": "لملفات PDF والقصص المصورة وDjVu وXPS. يحوّل «داكن» الورق الأبيض إلى داكن ويحافظ على ألوان الصور، و«ألوان السمة» يستخدم لوني الصفحة والنص في السمة. الكتب وMarkdown تتبع السمة أصلًا.",
   "Comics": "القصص المصورة",
   "For manga and other comics read from right to left: the left arrow key goes to the next page, and two pages side by side start from the right.": "للمانغا والقصص المصورة الأخرى التي تُقرأ من اليمين إلى اليسار: مفتاح السهم الأيسر ينتقل إلى الصفحة التالية، وعرض صفحتين جنبًا إلى جنب يبدأ من اليمين.",
   "At the end of a book": "في نهاية الكتاب",

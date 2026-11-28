@@ -7,6 +7,9 @@
 
 use crate::settings::PageColour;
 
+/// Page colour › Soft grey: the paper white becomes.
+pub(crate) const SOFT_GREY: [u8; 3] = [0xDE, 0xDE, 0xDC];
+
 /// How a rendered page is recoloured.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) enum Tint {
@@ -22,6 +25,10 @@ impl Tint {
     pub(crate) fn from_setting(c: PageColour, paper: [u8; 3], ink: [u8; 3]) -> Option<Tint> {
         match c {
             PageColour::Original => None,
+            PageColour::Grey => Some(Tint::Theme {
+                paper: SOFT_GREY,
+                ink: [0, 0, 0],
+            }),
             PageColour::Dark => Some(Tint::Dark),
             PageColour::Theme => Some(Tint::Theme { paper, ink }),
         }
@@ -88,5 +95,14 @@ mod tests {
         let mut alpha = [0, 0, 0, 128];
         t.apply(&mut alpha);
         assert_eq!(alpha[3], 128);
+    }
+
+    #[test]
+    fn soft_grey_dims_paper_and_keeps_ink() {
+        let t = Tint::from_setting(PageColour::Grey, [9, 9, 9], [200, 200, 200]).unwrap();
+        assert_eq!(px(t, [255, 255, 255]), SOFT_GREY);
+        assert_eq!(px(t, [0, 0, 0]), [0, 0, 0]);
+        let red = px(t, [220, 30, 30]);
+        assert!(red[0] > red[1] + 100, "red stays red: {red:?}");
     }
 }

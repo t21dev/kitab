@@ -863,7 +863,7 @@ fn reading(ws: &WeakEntity<Workspace>, st: &Style) -> AnyElement {
         ))
         .child(group(
             "Page colour",
-            Some("For PDFs, comics, DjVu and XPS. Dark turns white paper dark and keeps pictures' colours; Theme colours use your theme's page and text colours. Books and Markdown follow the theme already."),
+            Some("For PDFs, comics, DjVu and XPS. Soft grey dims white paper to a light grey, for less glare; Dark turns white paper dark and keeps pictures' colours; Theme colours use your theme's page and text colours. Books and Markdown follow the theme already."),
             div()
                 .id("page-colour")
                 .flex()

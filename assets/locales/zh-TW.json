@@ -134,7 +134,6 @@
   "New documents open at": "新文件的開啟方式",
   "How a PDF, comic or XPS file is sized the first time you open it. One you’ve read before comes back the way you left it.": "第一次開啟 PDF、漫畫或 XPS 檔案時的顯示大小。讀過的檔案會恢復成上次離開時的樣子。",
   "Page colour": "頁面顏色",
-  "For PDFs, comics, DjVu and XPS. Dark turns white paper dark and keeps pictures' colours; Theme colours use your theme's page and text colours. Books and Markdown follow the theme already.": "適用於 PDF、漫畫、DjVu 和 XPS。「深色」會將白色紙張變暗，同時保留圖片的顏色；「主題色彩」使用主題的頁面顏色和文字顏色。書籍和 Markdown 本來就會依照主題。",
   "Comics": "漫畫",
   "For manga and other comics read from right to left: the left arrow key goes to the next page, and two pages side by side start from the right.": "適用於由右向左閱讀的日本漫畫等漫畫：左方向鍵會翻到下一頁，雙頁並排會從右側開始。",
   "At the end of a book": "讀到書末時",

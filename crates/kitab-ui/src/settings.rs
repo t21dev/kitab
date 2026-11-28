@@ -146,10 +146,11 @@ impl Startup {
 }
 
 impl PageColour {
-    pub const ALL: [PageColour; 3] = [Self::Original, Self::Dark, Self::Theme];
+    pub const ALL: [PageColour; 4] = [Self::Original, Self::Grey, Self::Dark, Self::Theme];
     pub fn label(self) -> &'static str {
         match self {
             Self::Original => "As the file has them",
+            Self::Grey => "Soft grey",
             Self::Dark => "Dark",
             Self::Theme => "Theme colours",
         }
@@ -164,6 +165,8 @@ pub enum PageColour {
     /// As the file draws them.
     #[default]
     Original,
+    /// White paper softened to a light grey, ink kept (less glare).
+    Grey,
     /// Light and dark swapped, colours kept (night reading).
     Dark,
     /// White paper takes the theme's page colour, black ink its text colour.

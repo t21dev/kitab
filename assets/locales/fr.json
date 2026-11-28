@@ -134,7 +134,6 @@
   "New documents open at": "Les nouveaux documents s’ouvrent en",
   "How a PDF, comic or XPS file is sized the first time you open it. One you’ve read before comes back the way you left it.": "La taille d’affichage d’un fichier PDF, bande dessinée ou XPS à sa première ouverture. Un fichier déjà lu revient tel que vous l’avez laissé.",
   "Page colour": "Couleur de page",
-  "For PDFs, comics, DjVu and XPS. Dark turns white paper dark and keeps pictures' colours; Theme colours use your theme's page and text colours. Books and Markdown follow the theme already.": "Pour les PDF, bandes dessinées, DjVu et XPS. Sombre assombrit le papier blanc et conserve les couleurs des images ; Couleurs du thème utilise les couleurs de page et de texte de votre thème. Les livres et le Markdown suivent déjà le thème.",
   "Comics": "Bandes dessinées",
   "For manga and other comics read from right to left: the left arrow key goes to the next page, and two pages side by side start from the right.": "Pour les mangas et autres bandes dessinées lus de droite à gauche : la flèche gauche passe à la page suivante, et deux pages côte à côte commencent par la droite.",
   "At the end of a book": "À la fin d’un livre",

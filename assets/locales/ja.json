@@ -134,7 +134,6 @@
   "New documents open at": "新しいドキュメントを開くときの表示",
   "How a PDF, comic or XPS file is sized the first time you open it. One you’ve read before comes back the way you left it.": "PDF、コミック、XPSファイルを初めて開くときの表示サイズです。以前に読んだファイルは、前回の状態で開きます。",
   "Page colour": "ページの色",
-  "For PDFs, comics, DjVu and XPS. Dark turns white paper dark and keeps pictures' colours; Theme colours use your theme's page and text colours. Books and Markdown follow the theme already.": "PDF、コミック、DjVu、XPSに適用されます。「ダーク」は白い紙面を暗くし、画像の色はそのまま保ちます。「テーマの色」はテーマのページ色と文字色を使います。書籍とMarkdownは、もともとテーマに従います。",
   "Comics": "コミック",
   "For manga and other comics read from right to left: the left arrow key goes to the next page, and two pages side by side start from the right.": "右から左へ読むマンガなどのコミック向けです。左矢印キーで次のページへ進み、2ページ表示は右側から始まります。",
   "At the end of a book": "本の最後で",
