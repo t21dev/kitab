@@ -18,7 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Markdown's **Mono** typeface uses your code font, so text and code match.
 - Scoop: the `kitab` command is the terminal program, so `kitab help` and the tools print their output, and `kitab report.pdf` still opens Kitab. `scoop uninstall kitab` takes off the file types and right-click tools that open that copy. A new Scoop version reaches `scoop update` within minutes of the release.
-- Newer libraries: SQLite (library database), the DjVu and 7-Zip readers and the XML parser, with the rest of the dependencies updated to their latest compatible versions.
+- Newer libraries: SQLite (library database), the DjVu and 7-Zip readers and the XML parser.
 
 ### Fixed
 - Uninstalling on Windows takes away Kitab's right-click tools too. Removing a copy (the setup's uninstaller, or Scoop) leaves the file types and right-click tools of another Kitab on the computer alone, rather than removing them.
