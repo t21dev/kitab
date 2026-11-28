@@ -68,7 +68,10 @@ fn method_for(exe: &Path) -> Option<Method> {
         let dir = exe.parent()?;
         let text = dir.to_string_lossy().to_lowercase();
         // Scoop has its own `scoop update`; the portable zip has no uninstaller.
-        if text.contains("\\scoop\\") || !dir.join("unins000.exe").is_file() {
+        if text.contains("\\scoop\\")
+            || crate::update::scoop()
+            || !dir.join("unins000.exe").is_file()
+        {
             return None;
         }
         Some(Method::WindowsSetup {

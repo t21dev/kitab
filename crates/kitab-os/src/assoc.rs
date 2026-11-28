@@ -440,6 +440,21 @@ mod imp {
     /// Only types already registered are touched, and only when their
     /// program no longer exists, so a portable copy run beside an installed
     /// one never takes the types over. Returns whether anything was written.
+    /// Whether Kitab's file types are `exe`'s to remove: they open it, or a
+    /// Kitab that's gone. Not when they open another Kitab that's still there.
+    pub fn removable_by(exe: &std::path::Path) -> bool {
+        FILE_TYPES.iter().any(|t| {
+            let command = format!(r"Software\Classes\{}\shell\open\command", t.prog_id);
+            get(&command, None)
+                .as_deref()
+                .and_then(super::command_exe)
+                .is_some_and(|old| {
+                    let old = std::path::Path::new(old);
+                    !old.is_file() || crate::same_file(old, exe)
+                })
+        })
+    }
+
     pub fn relink() -> Result<bool, String> {
         if crate::packaged() {
             return Ok(false);
@@ -834,6 +849,22 @@ pub fn defaults_page() -> &'static str {
 }
 #[cfg(windows)]
 pub use imp::{register_thumbnails, unregister_thumbnails};
+
+/// Uninstalling (`kitab.exe --unregister`, from the Windows uninstaller or
+/// Scoop): take Kitab's file types off this account when they open this copy
+/// (or a Kitab that's gone), so removing one copy leaves another's alone.
+pub fn unregister_on_uninstall() {
+    #[cfg(windows)]
+    {
+        let Ok(exe) = std::env::current_exe() else {
+            return;
+        };
+        if !imp::removable_by(&exe) {
+            return;
+        }
+    }
+    unregister();
+}
 
 /// Re-point registered file types at this Kitab when the program they name
 /// was moved or removed (Windows; elsewhere nothing to do). The installer

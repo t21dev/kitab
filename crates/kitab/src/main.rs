@@ -28,13 +28,15 @@ fn main() {
     {
         std::process::exit(kitab_cli::run(std::env::args_os().skip(1).collect()));
     }
-    // Uninstalling: take Kitab's file types and thumbnails off this account
-    // (the Windows uninstaller runs this), then stop.
+    // Uninstalling: take Kitab's file types, thumbnails and right-click
+    // tools off this account (the Windows uninstaller and Scoop run this),
+    // then stop.
     if std::env::args_os()
         .nth(1)
         .is_some_and(|a| a == "--unregister")
     {
-        kitab_os::assoc::unregister();
+        kitab_os::assoc::unregister_on_uninstall();
+        kitab_os::context_menu::uninstall_if_here();
         return;
     }
     // Installing (Windows setup, as the signed-in user): file types and

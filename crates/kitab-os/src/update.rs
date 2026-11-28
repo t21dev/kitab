@@ -25,6 +25,53 @@ pub fn managed_by() -> Option<&'static str> {
     std::env::var_os("FLATPAK_ID").map(|_| "Flatpak")
 }
 
+/// What updates a Kitab that Scoop installed (`…\scoop\apps\kitab\…`).
+pub const SCOOP_UPDATE: &str = "scoop update kitab";
+
+/// Whether Scoop installed this Kitab. Kitab still looks for new versions,
+/// and the update dialog offers `scoop update kitab` instead of the download
+/// page.
+pub fn scoop() -> bool {
+    static SCOOP: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *SCOOP.get_or_init(|| {
+        cfg!(windows)
+            && std::env::current_exe()
+                .ok()
+                .is_some_and(|exe| in_scoop(&exe.to_string_lossy()))
+    })
+}
+
+/// A path inside a Scoop app folder: `…\scoop\apps\<app>\…`, for the
+/// user's Scoop or the machine-wide one (`ProgramData\scoop`), or a custom
+/// root named in `SCOOP`/`SCOOP_GLOBAL`.
+fn in_scoop(exe: &str) -> bool {
+    let exe = exe.to_lowercase().replace('/', "\\");
+    if exe.contains("\\scoop\\apps\\") {
+        return true;
+    }
+    ["SCOOP", "SCOOP_GLOBAL"].iter().any(|var| {
+        std::env::var(var).is_ok_and(|root| {
+            let root = root.trim_end_matches(['\\', '/']).to_lowercase();
+            !root.is_empty() && exe.starts_with(&format!("{}\\apps\\", root.replace('/', "\\")))
+        })
+    })
+}
+
+#[cfg(test)]
+mod scoop_tests {
+    #[test]
+    fn knows_a_scoop_install() {
+        assert!(super::in_scoop(
+            r"C:\Users\a\scoop\apps\kitab\current\kitab.exe"
+        ));
+        assert!(super::in_scoop(
+            r"C:\ProgramData\scoop\apps\kitab\1.7.1\kitab.exe"
+        ));
+        assert!(!super::in_scoop(r"C:\Program Files\Kitab\kitab.exe"));
+        assert!(!super::in_scoop(r"D:\scoop-notes\kitab.exe"));
+    }
+}
+
 /// How to get a new version from `managed_by`, for Settings › About.
 pub fn managed_hint(by: &str) -> &'static str {
     if by == "Flatpak" {

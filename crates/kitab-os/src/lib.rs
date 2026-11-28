@@ -161,6 +161,19 @@ pub fn portable_dir() -> Option<PathBuf> {
     dir.join("portable").is_file().then(|| dir.to_path_buf())
 }
 
+/// Whether two paths name the same file. Links and junctions are resolved
+/// first, so Scoop's `apps\kitab\current\kitab.exe` matches the version folder it
+/// points at. When a path can't be resolved, its text is compared
+/// ignoring case.
+pub fn same_file(a: &std::path::Path, b: &std::path::Path) -> bool {
+    match (std::fs::canonicalize(a), std::fs::canonicalize(b)) {
+        (Ok(a), Ok(b)) => a == b,
+        _ => a
+            .to_string_lossy()
+            .eq_ignore_ascii_case(&b.to_string_lossy()),
+    }
+}
+
 /// Kitab's data folder (PRIVACY.md): `%APPDATA%\t21\Kitab`,
 /// `~/Library/Application Support/dev.t21.kitab`, `$XDG_DATA_HOME/kitab`.
 /// A `portable` file next to the executable puts it in `data/` beside it.

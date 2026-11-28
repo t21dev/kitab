@@ -701,6 +701,23 @@ impl Workspace {
         }
     }
 
+    /// Scoop: copy `scoop update kitab` for the terminal. Scoop can't
+    /// replace Kitab while it's open, so the toast says to quit first.
+    pub(crate) fn copy_scoop_update(&mut self, cx: &mut Context<Self>) {
+        cx.write_to_clipboard(gpui::ClipboardItem::new_string(
+            kitab_os::update::SCOOP_UPDATE.to_string(),
+        ));
+        self.toast(
+            format!(
+                "Copied. Quit Kitab, then run {} in a terminal",
+                kitab_os::update::SCOOP_UPDATE
+            ),
+            false,
+            None,
+            cx,
+        );
+    }
+
     fn close_update(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if !self.system.update_open {
             return;
@@ -1027,6 +1044,14 @@ impl Workspace {
                         _ if can_install => dialog_button(st, "update-install", "Install", true)
                             .tip("Download the update and check it; it goes in when Kitab restarts")
                             .on_click(cx.listener(|ws, _, _, cx| ws.install_update(cx))),
+                        _ if kitab_os::update::scoop() => {
+                            dialog_button(st, "update-scoop", "Copy update command", true)
+                                .tip("Scoop installed Kitab: quit it, then run scoop update kitab in a terminal")
+                                .on_click(cx.listener(|ws, _, window, cx| {
+                                    ws.copy_scoop_update(cx);
+                                    ws.close_update(window, cx);
+                                }))
+                        }
                         _ => dialog_button(st, "update-download", "Download", true)
                             .tip("Open the release page in your browser")
                             .on_click(cx.listener(|ws, _, window, cx| ws.download_update(window, cx))),

@@ -862,6 +862,20 @@ pub(super) fn about(ws: &WeakEntity<Workspace>, info: &SystemInfo, st: &Style) -
                 act(ws, |ws, cx| ws.install_update(cx)),
             ),
         ),
+        UpdateState::Available(r) if kitab_os::update::scoop() => (
+            format!(
+                "Kitab {} is available. You have {version}. Quit Kitab, then run {} in a terminal.",
+                r.version,
+                kitab_os::update::SCOOP_UPDATE
+            ),
+            button(
+                "update-scoop",
+                "Copy command",
+                false,
+                st,
+                act(ws, |ws, cx| ws.copy_scoop_update(cx)),
+            ),
+        ),
         UpdateState::Available(r) => (
             format!("Kitab {} is available. You have {version}.", r.version),
             button(

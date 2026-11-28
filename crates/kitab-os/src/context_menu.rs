@@ -133,6 +133,26 @@ fn kitab_command() -> Option<std::path::PathBuf> {
     std::env::current_exe().ok()
 }
 
+/// Uninstalling (`kitab.exe --unregister`): take the right-click tools away
+/// when they are this copy's (its `kitab_shell.dll`) or a removed Kitab's,
+/// and leave another Kitab's in place.
+pub fn uninstall_if_here() {
+    #[cfg(windows)]
+    {
+        let Some(dll) = std::env::current_exe()
+            .ok()
+            .map(|exe| exe.with_file_name("kitab_shell.dll"))
+        else {
+            return;
+        };
+        if manages_menu()
+            && imp::registered_dll().is_some_and(|d| !d.is_file() || crate::same_file(&d, &dll))
+        {
+            uninstall();
+        }
+    }
+}
+
 /// Re-point the right-click tools at this Kitab when the Kitab they name is
 /// gone (it moved; its kitab_shell.dll may linger until a restart while
 /// Explorer holds it). The installer runs it as part of `kitab.exe
