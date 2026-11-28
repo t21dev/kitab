@@ -142,7 +142,6 @@
   "Many books number their front matter i, ii, iii and start 1 at the first chapter. With this on, Kitab shows those labels in the page box, the status bar and the contents list, and Go to page takes them (\"iv\" or a plain number).": "多くの本では、前付けのページにi、ii、iiiと番号を振り、最初の章から1を始めます。オンにすると、Kitabはページ欄、ステータスバー、目次にこれらのラベルを表示し、「ページへ移動」でも入力できます（\"iv\"または通常の数字）。",
   "Ctrl+Shift+U, or the speaker in the dock, reads from the selection or from the top of the page in view, and the pages follow along. The voices are your system's own: add more in its speech or language settings.": "Ctrl+Shift+U、またはドックのスピーカーボタンで、選択範囲か表示中のページの先頭から読み上げ、ページも合わせて進みます。音声はシステムのものを使います。音声はシステムの音声または言語の設定で追加できます。",
   "Markdown typeface": "Markdownの書体",
-  "The font Markdown is read in. The Aa button in the dock switches it too.": "Markdownを表示するフォントです。ドックのAaボタンでも切り替えられます。",
   "Markdown text size": "Markdownの文字サイズ",
   "The size Markdown files open at. Ctrl+= and Ctrl+- (or the Aa button in the dock) change it for one file; Default size comes back here.": "Markdownファイルを開くときの文字サイズです。Ctrl+=とCtrl+-（またはドックのAaボタン）で、ファイルごとに変更できます。「既定のサイズ」でここの設定に戻ります。",
   "Code colours": "コードの配色",

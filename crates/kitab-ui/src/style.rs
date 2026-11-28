@@ -73,6 +73,8 @@ pub struct Style {
     pub ui_scale: u16,
     pub toast_at: crate::settings::ToastAt,
     pub md_face: crate::settings::MdFace,
+    pub md_font: String,
+    pub md_custom: bool,
     /// Markdown text size in percent (Settings › Reading).
     pub md_text: u16,
     pub open_zoom: crate::settings::OpenZoom,
@@ -131,6 +133,25 @@ impl Style {
             self.code_font.clone().into()
         }
     }
+
+    /// The font Markdown is read in: the user's own font when one is
+    /// chosen, else the preset. Mono is the code font, so the two match.
+    /// A font that is no longer installed falls back to the system's.
+    pub fn md_family(&self) -> gpui::SharedString {
+        use crate::settings::MdFace;
+        if self.md_custom && !self.md_font.trim().is_empty() {
+            return self.md_font.clone().into();
+        }
+        match self.md_face {
+            MdFace::Mono => self.code_font(),
+            face => face.family().into(),
+        }
+    }
+
+    /// Whether Markdown uses `face` (and not the user's own font).
+    pub fn md_face_is(&self, face: crate::settings::MdFace) -> bool {
+        self.md_face == face && !(self.md_custom && !self.md_font.trim().is_empty())
+    }
 }
 
 impl Style {
@@ -184,6 +205,8 @@ impl Style {
             ui_scale: s.ui_scale,
             toast_at: s.toast_at,
             md_face: s.md_face,
+            md_font: s.md_font.clone(),
+            md_custom: s.md_custom,
             md_text: s.md_text,
             open_zoom: s.open_zoom,
             new_tab: s.new_tab,
@@ -282,6 +305,8 @@ impl Style {
             ui_scale: self.ui_scale,
             toast_at: self.toast_at,
             md_face: self.md_face,
+            md_font: self.md_font.clone(),
+            md_custom: self.md_custom,
             md_text: self.md_text,
             open_zoom: self.open_zoom,
             new_tab: self.new_tab,
@@ -407,4 +432,40 @@ pub fn hsla(c: kitab_theme::Rgba) -> Hsla {
         a: c.a,
     }
     .into()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Style;
+    use crate::settings::MdFace;
+
+    fn style() -> Style {
+        Style::new(kitab_theme::builtin("dark").expect("a built-in theme"))
+    }
+
+    #[test]
+    fn markdown_reads_in_the_chosen_font_or_the_preset() {
+        let mut st = style();
+        st.md_face = MdFace::Serif;
+        assert_eq!(st.md_family(), MdFace::Serif.family());
+        assert!(st.md_face_is(MdFace::Serif));
+        // Mono is the code font, so Markdown text and code match.
+        st.md_face = MdFace::Mono;
+        st.code_font = "Fira Code".into();
+        assert_eq!(st.md_family(), "Fira Code");
+        // The user's own font wins while chosen; no preset shows as picked.
+        st.md_font = "Literata".into();
+        st.md_custom = true;
+        assert_eq!(st.md_family(), "Literata");
+        assert!(!st.md_face_is(MdFace::Mono));
+        // Turned off, the preset is back and the name is kept for later.
+        st.md_custom = false;
+        assert_eq!(st.md_family(), "Fira Code");
+        assert_eq!(st.md_font, "Literata");
+        // On with no name (hand-edited file): the preset.
+        st.md_font = "  ".into();
+        st.md_custom = true;
+        assert_eq!(st.md_family(), "Fira Code");
+        assert!(st.md_face_is(MdFace::Mono));
+    }
 }

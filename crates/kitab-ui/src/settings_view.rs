@@ -939,23 +939,33 @@ fn reading(ws: &WeakEntity<Workspace>, st: &Style) -> AnyElement {
         ))
         .child(group(
             "Markdown typeface",
-            Some("The font Markdown is read in. The Aa button in the dock switches it too."),
+            Some("The font Markdown is read in: System, Serif or Mono (the code font below), or any font on your computer under Other font. The Aa button in the dock switches it too."),
             div()
-                .id("md-face")
                 .flex()
-                .child(segmented(
-                    crate::settings::MdFace::ALL
-                        .into_iter()
-                        .map(|v| {
-                            (
-                                SharedString::from(v.label()),
-                                st.md_face == v,
-                                change(ws, move |s: &mut Style| s.md_face = v),
-                            )
-                        })
-                        .collect(),
-                    st,
-                ))
+                .flex_col()
+                .gap(px(8.0))
+                .child(
+                    div()
+                        .id("md-face")
+                        .flex()
+                        .child(segmented(
+                            crate::settings::MdFace::ALL
+                                .into_iter()
+                                .map(|v| {
+                                    (
+                                        SharedString::from(v.label()),
+                                        st.md_face_is(v),
+                                        change(ws, move |s: &mut Style| {
+                                            s.md_face = v;
+                                            s.md_custom = false;
+                                        }),
+                                    )
+                                })
+                                .collect(),
+                            st,
+                        )),
+                )
+                .child(md_font_row(ws, st))
                 .into_any_element(),
             st,
         ))
@@ -1159,7 +1169,51 @@ fn code_font_row(ws: &WeakEntity<Workspace>, st: &Style) -> AnyElement {
         st.code_font.clone()
     };
     let ws = ws.clone();
-    let pick = crate::kbd::stop_solid(div().id("code-font"), st)
+    let pick = font_button(
+        "code-font",
+        name,
+        st.code_font(),
+        st,
+        move |at, window, cx| {
+            let _ = ws.update(cx, |ws, cx| ws.code_font_menu(at, window, cx));
+        },
+    );
+    well_row("Font", "", pick, st)
+}
+
+/// Markdown typeface › Other font: any font on the computer. Shown in that
+/// font once chosen; "Choose a font" before.
+fn md_font_row(ws: &WeakEntity<Workspace>, st: &Style) -> AnyElement {
+    let own = st.md_font.trim();
+    let (name, family) = if own.is_empty() {
+        (
+            "Choose a font".to_string(),
+            crate::settings::MdFace::System.family().into(),
+        )
+    } else {
+        (own.to_string(), SharedString::from(own.to_string()))
+    };
+    let ws = ws.clone();
+    let pick = font_button("md-font", name, family, st, move |at, window, cx| {
+        let _ = ws.update(cx, |ws, cx| ws.md_font_menu(at, window, cx));
+    });
+    let on = if st.md_custom && !own.is_empty() {
+        "In use"
+    } else {
+        ""
+    };
+    well_row("Other font", on, pick, st)
+}
+
+/// A button showing a font's name in that font, opening a list of fonts.
+fn font_button(
+    id: &'static str,
+    name: String,
+    family: SharedString,
+    st: &Style,
+    open: impl Fn(gpui::Point<gpui::Pixels>, &mut Window, &mut App) + 'static,
+) -> AnyElement {
+    crate::kbd::stop_solid(div().id(id), st)
         .h(st.px(|m| m.control_height))
         .max_w(px(300.0))
         .px(px(12.0))
@@ -1175,7 +1229,7 @@ fn code_font_row(ws: &WeakEntity<Workspace>, st: &Style) -> AnyElement {
         .text_size(st.px(|m| m.ui_text))
         .text_color(st.c(|c| c.text))
         .hover(|d| d.bg(st.raised_hover()))
-        .child(div().truncate().font_family(st.code_font()).child(name))
+        .child(div().truncate().font_family(family).child(name))
         .child(
             svg()
                 .path(icon("chevron-down"))
@@ -1183,11 +1237,8 @@ fn code_font_row(ws: &WeakEntity<Workspace>, st: &Style) -> AnyElement {
                 .flex_none()
                 .text_color(st.c(|c| c.muted)),
         )
-        .on_click(move |e: &gpui::ClickEvent, window, cx| {
-            let at = e.position();
-            let _ = ws.update(cx, |ws, cx| ws.code_font_menu(at, window, cx));
-        });
-    well_row("Font", "", pick.into_any_element(), st)
+        .on_click(move |e: &gpui::ClickEvent, window, cx| open(e.position(), window, cx))
+        .into_any_element()
 }
 
 /// "Match the system": a switch, and (when on) which light and which dark

@@ -142,7 +142,6 @@
   "Many books number their front matter i, ii, iii and start 1 at the first chapter. With this on, Kitab shows those labels in the page box, the status bar and the contents list, and Go to page takes them (\"iv\" or a plain number).": "許多書的前言部分以 i、ii、iii 編號，從第一章才開始以 1 編號。開啟後，Kitab 會在頁碼框、狀態列和目錄中顯示這些標籤，「前往頁面」也可以輸入它們（「iv」或一般數字）。",
   "Ctrl+Shift+U, or the speaker in the dock, reads from the selection or from the top of the page in view, and the pages follow along. The voices are your system's own: add more in its speech or language settings.": "按 Ctrl+Shift+U 或按一下工具列中的喇叭，會從所選內容或目前頁面頂端開始朗讀，頁面也會跟著翻動。語音來自系統：可以在系統的語音或語言設定中新增更多語音。",
   "Markdown typeface": "Markdown 字體",
-  "The font Markdown is read in. The Aa button in the dock switches it too.": "閱讀 Markdown 所用的字體。工具列中的 Aa 按鈕也可以切換。",
   "Markdown text size": "Markdown 文字大小",
   "The size Markdown files open at. Ctrl+= and Ctrl+- (or the Aa button in the dock) change it for one file; Default size comes back here.": "Markdown 檔案開啟時的文字大小。Ctrl+= 和 Ctrl+-（或工具列中的 Aa 按鈕）可以變更單一檔案的大小；選擇「預設大小」會回到這裡的設定。",
   "Code colours": "程式碼配色",

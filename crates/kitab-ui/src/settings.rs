@@ -813,6 +813,12 @@ pub struct Settings {
     pub toast_at: ToastAt,
     /// Markdown's typeface.
     pub md_face: MdFace,
+    /// A font of the user's own for Markdown (Settings › Reading ›
+    /// Markdown typeface › Other font). Kept when a preset is picked again,
+    /// so the dock's Aa button can come back to it.
+    pub md_font: String,
+    /// Markdown is read in `md_font` instead of `md_face`.
+    pub md_custom: bool,
     /// Markdown's text size in percent (one of `MD_TEXT_SIZES`).
     pub md_text: u16,
     /// How a document is sized the first time it is opened.
@@ -931,6 +937,8 @@ impl Default for Settings {
             ui_scale: 100,
             toast_at: ToastAt::TopCenter,
             md_face: MdFace::System,
+            md_font: String::new(),
+            md_custom: false,
             md_text: 100,
             open_zoom: OpenZoom::FitWidth,
             new_tab: NewTab::Home,
@@ -1011,6 +1019,10 @@ struct File {
     ui_scale: u16,
     toast_at: ToastAt,
     md_face: MdFace,
+    /// Newer than 1.7.0: an older Kitab ignores them (a new `md_face` variant
+    /// would make it reset every setting).
+    md_font: String,
+    md_custom: bool,
     /// Percent.
     md_text_size: u16,
     open_zoom: OpenZoom,
@@ -1137,6 +1149,8 @@ impl From<Settings> for File {
             ui_scale: s.ui_scale,
             toast_at: s.toast_at,
             md_face: s.md_face,
+            md_font: s.md_font,
+            md_custom: s.md_custom,
             md_text_size: s.md_text,
             open_zoom: s.open_zoom,
             new_tab: s.new_tab,
@@ -1217,6 +1231,8 @@ impl Settings {
             },
             toast_at: f.toast_at,
             md_face: f.md_face,
+            md_font: f.md_font.chars().take(200).collect(),
+            md_custom: f.md_custom,
             // A size Kitab doesn't offer (hand-edited, older file) is 100 %.
             md_text: if MD_TEXT_SIZES.contains(&f.md_text_size) {
                 f.md_text_size
@@ -1347,6 +1363,8 @@ mod tests {
             ui_scale: 125,
             toast_at: ToastAt::BottomRight,
             md_face: MdFace::Mono,
+            md_font: "Literata".into(),
+            md_custom: true,
             md_text: 175,
             open_zoom: OpenZoom::FitPage,
             new_tab: NewTab::OpenFile,
@@ -1400,6 +1418,32 @@ mod tests {
         assert!(Settings::from_json("{}").expect("parses").home_progress);
         let s = Settings::from_json(r#"{"home_progress": false}"#).expect("parses");
         assert!(!s.home_progress);
+    }
+
+    #[test]
+    fn markdown_font_is_kept_and_older_files_have_none() {
+        // A file from 1.7.0 or older reads Markdown in its preset.
+        let s = Settings::from_json(r#"{"md_face": "serif"}"#).expect("parses");
+        assert_eq!(
+            (s.md_face, s.md_custom, s.md_font.as_str()),
+            (MdFace::Serif, false, "")
+        );
+        let s =
+            Settings::from_json(r#"{"md_face": "mono", "md_font": "Literata", "md_custom": true}"#)
+                .expect("parses");
+        assert!(s.md_custom);
+        assert_eq!(s.md_font, "Literata");
+        // md_face stays a preset an older Kitab knows, so it can still read
+        // the whole file (an unknown variant would reset every setting).
+        let saved: serde_json::Value = serde_json::from_str(&s.to_json()).expect("json");
+        assert_eq!(saved["md_face"], "mono");
+        assert_eq!(saved["md_font"], "Literata");
+        // A hand-edited name past 200 characters is cut.
+        let long = format!(r#"{{"md_font": "{}"}}"#, "x".repeat(500));
+        assert_eq!(
+            Settings::from_json(&long).expect("parses").md_font.len(),
+            200
+        );
     }
 
     #[test]

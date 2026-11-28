@@ -1012,8 +1012,11 @@ fn md_paper(
         .parent()
         .map(std::path::Path::to_path_buf)
         .unwrap_or_default();
-    // MuPDF lays out with its own fonts, picked by generic family.
-    let body = match Style::get(cx).md_face {
+    // MuPDF lays out with its own fonts, picked by generic family: a font
+    // of the user's own prints in its sans-serif.
+    let st = Style::get(cx);
+    let body = match st.md_face {
+        _ if !st.md_face_is(st.md_face) => "sans-serif",
         crate::settings::MdFace::System => "sans-serif",
         crate::settings::MdFace::Serif => "serif",
         crate::settings::MdFace::Mono => "monospace",

@@ -112,7 +112,7 @@ const INDEX: &[(Section, &str, &str)] = &[
     (
         Section::Reading,
         "Markdown typeface",
-        "font face serif sans mono system markdown text",
+        "font face serif sans mono system markdown text other own custom installed typeface family",
     ),
     (
         Section::Reading,

@@ -1618,7 +1618,7 @@ fn text_el(d: &Draw, inlines: &[Inline], base: Base, _cx: &mut Context<Reader>) 
         } else if style.math {
             crate::style::math_font().into()
         } else {
-            st.md_face.family().into()
+            st.md_family()
         };
         let color = if bad_math {
             st.c(|c| c.bad)
@@ -1706,7 +1706,7 @@ fn text_el(d: &Draw, inlines: &[Inline], base: Base, _cx: &mut Context<Reader>) 
         .cursor(gpui::CursorStyle::IBeam)
         .text_size(d.px(base.size))
         .line_height(relative(1.6))
-        .font_family(d.st.md_face.family())
+        .font_family(d.st.md_family())
         // A paragraph whose first strong letter is Arabic or Hebrew reads from the right.
         .when(rtl, |c| c.text_right());
     if links.is_empty() {

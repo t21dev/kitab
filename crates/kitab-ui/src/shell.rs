@@ -4017,7 +4017,23 @@ impl Workspace {
                 ws.change_style(&|st: &mut Style| st.file_info = !st.file_info, cx);
             }))
             .on_action(cx.listener(|ws, _: &CycleMdFace, _, cx| {
-                ws.change_style(&|st: &mut Style| st.md_face = st.md_face.next(), cx);
+                // System, Serif, Mono, then the user's own font if they
+                // chose one, and round again.
+                ws.change_style(
+                    &|st: &mut Style| {
+                        if st.md_custom {
+                            st.md_custom = false;
+                            st.md_face = crate::settings::MdFace::System;
+                        } else if st.md_face == crate::settings::MdFace::Mono
+                            && !st.md_font.trim().is_empty()
+                        {
+                            st.md_custom = true;
+                        } else {
+                            st.md_face = st.md_face.next();
+                        }
+                    },
+                    cx,
+                );
             }))
             .on_action(cx.listener(|ws, _: &ToggleDock, _, cx| {
                 // Remembered across launches (settings.json `dock_hidden`).
@@ -5395,12 +5411,35 @@ impl Workspace {
                     let ws = ws.clone();
                     let click: crate::settings_view::Click = Box::new(move |_, cx| {
                         let _ = ws.update(cx, |ws, cx| {
-                            ws.change_style(&|s: &mut Style| s.md_face = f, cx)
+                            ws.change_style(
+                                &|s: &mut Style| {
+                                    s.md_face = f;
+                                    s.md_custom = false;
+                                },
+                                cx,
+                            )
                         });
                     });
-                    (SharedString::from(f.label()), st.md_face == f, click)
+                    (SharedString::from(f.label()), st.md_face_is(f), click)
                 })
-                .collect();
+                .collect::<Vec<_>>();
+            // The user's own font (Settings › Reading), once they chose one.
+            let mut choices = choices;
+            let own = st.md_font.trim().to_string();
+            if !own.is_empty() {
+                let ws = ws.clone();
+                let click: crate::settings_view::Click = Box::new(move |_, cx| {
+                    let _ = ws.update(cx, |ws, cx| {
+                        ws.change_style(&|s: &mut Style| s.md_custom = true, cx)
+                    });
+                });
+                let label = if own.chars().count() > 12 {
+                    format!("{}…", own.chars().take(11).collect::<String>())
+                } else {
+                    own
+                };
+                choices.push((SharedString::from(label), st.md_custom, click));
+            }
             div()
                 .px(px(6.0))
                 .py(px(4.0))
@@ -5706,6 +5745,18 @@ impl Workspace {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        self.code_font_list(at, false, window, cx);
+    }
+
+    /// The code font menu: the fonts that look monospace by name, or (`all`,
+    /// from its "Show all fonts") every font, for one named otherwise.
+    fn code_font_list(
+        &mut self,
+        at: Point<Pixels>,
+        all: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         const KNOWN: [&str; 14] = [
             "mono",
             "code",
@@ -5722,18 +5773,13 @@ impl Workspace {
             "fixed",
             "source code",
         ];
-        let mut names: Vec<String> = cx
-            .text_system()
-            .all_font_names()
+        let names: Vec<String> = font_names(cx)
             .into_iter()
             .filter(|n| {
                 let l = n.to_lowercase();
-                !l.starts_with('.') && KNOWN.iter().any(|k| l.contains(k))
+                all || KNOWN.iter().any(|k| l.contains(k))
             })
             .collect();
-        names.sort_by_key(|n| n.to_lowercase());
-        names.dedup();
-        names.truncate(200);
         let current = Style::get(cx).code_font.clone();
         let mut items = vec![
             MenuItem::new(
@@ -5754,6 +5800,50 @@ impl Workspace {
                     self.on_ws(cx, move |ws, _, cx| {
                         let pick = pick.clone();
                         ws.change_style(&move |s: &mut Style| s.code_font = pick.clone(), cx)
+                    }),
+                )
+                .checked(checked),
+            );
+        }
+        if !all {
+            items.push(MenuItem::Separator);
+            items.push(MenuItem::new(
+                "Show all fonts",
+                self.on_ws(cx, move |ws, window, cx| {
+                    ws.code_font_list(at, true, window, cx)
+                }),
+            ));
+        }
+        self.open_menu(at, false, 280.0, items, window, cx);
+    }
+
+    /// Settings › Reading › Markdown typeface › Other font: every font on the
+    /// computer. Names are listed in the interface's font: drawing each in
+    /// its own would load hundreds of fonts just to open the list.
+    pub(crate) fn md_font_menu(
+        &mut self,
+        at: Point<Pixels>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let st = Style::get(cx);
+        let current = st.md_custom.then(|| st.md_font.clone());
+        let mut items = Vec::new();
+        for name in font_names(cx) {
+            let checked = current.as_deref() == Some(name.as_str());
+            let pick = name.clone();
+            items.push(
+                MenuItem::new(
+                    name,
+                    self.on_ws(cx, move |ws, _, cx| {
+                        let pick = pick.clone();
+                        ws.change_style(
+                            &move |s: &mut Style| {
+                                s.md_font = pick.clone();
+                                s.md_custom = true;
+                            },
+                            cx,
+                        )
                     }),
                 )
                 .checked(checked),
@@ -6474,6 +6564,21 @@ fn tab_icon_for(path: &std::path::Path) -> &'static str {
         Some(Format::Xps | Format::Djvu) => "pages",
         _ => "file",
     }
+}
+
+/// The computer's fonts by family name, sorted, without the system's hidden
+/// ones (".SF NS…"). Asked for only when a font list opens.
+fn font_names(cx: &App) -> Vec<String> {
+    let mut names: Vec<String> = cx
+        .text_system()
+        .all_font_names()
+        .into_iter()
+        .filter(|n| !n.starts_with('.') && !n.trim().is_empty())
+        .collect();
+    names.sort_by_key(|n| n.to_lowercase());
+    names.dedup();
+    names.truncate(1000);
+    names
 }
 
 #[cfg(test)]

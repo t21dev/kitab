@@ -143,7 +143,6 @@
   "Many books number their front matter i, ii, iii and start 1 at the first chapter. With this on, Kitab shows those labels in the page box, the status bar and the contents list, and Go to page takes them (\"iv\" or a plain number).": "ترقّم كتب كثيرة صفحاتها التمهيدية i وii وiii وتبدأ بالرقم 1 في الفصل الأول. عند تشغيل هذا الخيار يعرض Kitab هذه التسميات في مربع الصفحة وشريط الحالة وقائمة المحتويات، ويقبلها «الانتقال إلى صفحة» (\"iv\" أو رقم عادي).",
   "Ctrl+Shift+U, or the speaker in the dock, reads from the selection or from the top of the page in view, and the pages follow along. The voices are your system's own: add more in its speech or language settings.": "يقرأ Ctrl+Shift+U، أو زر مكبر الصوت في الشريط العائم، من النص المحدد أو من أعلى الصفحة المعروضة، وتتابع الصفحات القراءة. الأصوات هي أصوات النظام: أضف المزيد من إعدادات الكلام أو اللغة فيه.",
   "Markdown typeface": "خط Markdown",
-  "The font Markdown is read in. The Aa button in the dock switches it too.": "الخط الذي يُقرأ به Markdown. يمكن تبديله أيضًا بزر Aa في الشريط العائم.",
   "Markdown text size": "حجم نص Markdown",
   "The size Markdown files open at. Ctrl+= and Ctrl+- (or the Aa button in the dock) change it for one file; Default size comes back here.": "الحجم الذي تُفتح به ملفات Markdown. يغيّره Ctrl+= وCtrl+- (أو زر Aa في الشريط العائم) لملف واحد، و«الحجم الافتراضي» يعيده إلى القيمة المحددة هنا.",
   "Code colours": "ألوان التعليمات البرمجية",

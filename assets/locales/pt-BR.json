@@ -142,7 +142,6 @@
   "Many books number their front matter i, ii, iii and start 1 at the first chapter. With this on, Kitab shows those labels in the page box, the status bar and the contents list, and Go to page takes them (\"iv\" or a plain number).": "Muitos livros numeram as páginas iniciais como i, ii, iii e começam em 1 no primeiro capítulo. Com isto ativado, o Kitab mostra esses rótulos na caixa de página, na barra de status e no sumário, e Ir para a página aceita esses rótulos (\"iv\" ou um número simples).",
   "Ctrl+Shift+U, or the speaker in the dock, reads from the selection or from the top of the page in view, and the pages follow along. The voices are your system's own: add more in its speech or language settings.": "Ctrl+Shift+U, ou o alto-falante na barra flutuante, lê a partir da seleção ou do topo da página visível, e as páginas acompanham a leitura. As vozes são as do seu sistema: adicione mais nas configurações de fala ou de idioma dele.",
   "Markdown typeface": "Fonte do Markdown",
-  "The font Markdown is read in. The Aa button in the dock switches it too.": "A fonte usada para ler Markdown. O botão Aa na barra flutuante também a troca.",
   "Markdown text size": "Tamanho do texto do Markdown",
   "The size Markdown files open at. Ctrl+= and Ctrl+- (or the Aa button in the dock) change it for one file; Default size comes back here.": "O tamanho com que os arquivos Markdown abrem. Ctrl+= e Ctrl+- (ou o botão Aa na barra flutuante) mudam o tamanho de um arquivo; Tamanho padrão volta a este valor.",
   "Code colours": "Cores do código",
