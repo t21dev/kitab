@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-11-28
+
+### Added
+- **Edit the text of annotations a PDF already has**: notes, text boxes and highlight comments, including ones made in another app. Click one with the Select tool, or the edit button on its row in the Marks panel, and change the text where it opens. Save (Ctrl+S) writes it into the annotation itself, keeping its author, date and replies. Until then the Marks panel says "Text changed", and **Keep its own text** takes the change back.
+- Long text in the Marks panel shows its first three lines, with **Show more** for the rest.
+- **Soft grey** in Settings › Reading › Page colour turns white paper light grey and keeps text and pictures as they are, for less glare ([#30](https://github.com/t21dev/kitab/issues/30)).
+
+### Changed
+- One notch of the mouse wheel scrolls the pages further (about 100 pixels, as a web browser does), and smooth scrolling glides for longer, easing out instead of stopping short ([#30](https://github.com/t21dev/kitab/issues/30)). With smooth scrolling off, the wheel moves the same distance at once.
+- On Windows, Kitab installs to Program Files for everyone on the computer, so Setup and updates ask for administrator permission. A copy installed by 1.6.3 or older (in your AppData folder) moves there by itself. Your file types, thumbnails, right-click tools, the `kitab` command, desktop icon and taskbar pin carry over. Settings, the library and reading positions stay where they are.
+
 ## [1.6.3] - 2026-11-27
 
 ### Added
