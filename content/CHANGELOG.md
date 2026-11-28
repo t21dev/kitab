@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.1] - 2026-11-28
+
+### Added
+- Markdown in any font on your computer: Settings › Reading › Markdown typeface › **Other font**. The dock's Aa button goes round System, Serif, Mono and your font, and the font is remembered when you switch back to a preset.
+- **Show all fonts** at the end of the Code font list, for a monospace font whose name doesn't say so.
+
+- Scoop: when Kitab installed with Scoop has an update, the Update dialog and Settings › About offer **Copy update command** (`scoop update kitab`) instead of the download page.
+
+### Changed
+- Markdown's **Mono** typeface uses your code font, so text and code match.
+- Scoop: the `kitab` command is the terminal program, so `kitab help` and the tools print their output, and `kitab report.pdf` still opens Kitab. `scoop uninstall kitab` takes off the file types and right-click tools that open that copy. A new Scoop version reaches `scoop update` within minutes of the release.
+- Newer libraries: SQLite (library database), the DjVu and 7-Zip readers and the XML parser.
+
+### Fixed
+- Uninstalling on Windows takes away Kitab's right-click tools too. Removing a copy (the setup's uninstaller, or Scoop) leaves the file types and right-click tools of another Kitab on the computer alone, rather than removing them.
+
 ## [1.7.0] - 2026-11-28
 
 ### Added
